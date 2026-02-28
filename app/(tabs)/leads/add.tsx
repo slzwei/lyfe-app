@@ -1,0 +1,302 @@
+import { useTheme } from '@/contexts/ThemeContext';
+import { PRODUCT_LABELS, SOURCE_LABELS, type LeadSource, type ProductInterest } from '@/types/lead';
+import { Ionicons } from '@expo/vector-icons';
+import { useRouter } from 'expo-router';
+import React, { useState } from 'react';
+import {
+    Alert,
+    KeyboardAvoidingView,
+    Platform,
+    SafeAreaView,
+    ScrollView,
+    StyleSheet,
+    Text,
+    TextInput,
+    TouchableOpacity,
+    View,
+} from 'react-native';
+
+const SOURCES: LeadSource[] = ['referral', 'walk_in', 'online', 'event', 'cold_call', 'other'];
+const PRODUCTS: ProductInterest[] = ['life', 'health', 'ilp', 'general'];
+
+export default function AddLeadScreen() {
+    const { colors } = useTheme();
+    const router = useRouter();
+
+    const [name, setName] = useState('');
+    const [phone, setPhone] = useState('');
+    const [email, setEmail] = useState('');
+    const [source, setSource] = useState<LeadSource>('referral');
+    const [product, setProduct] = useState<ProductInterest>('general');
+    const [notes, setNotes] = useState('');
+    const [errors, setErrors] = useState<Record<string, string>>({});
+
+    const validate = (): boolean => {
+        const newErrors: Record<string, string> = {};
+        if (!name.trim()) newErrors.name = 'Name is required';
+        if (!phone.trim()) newErrors.phone = 'Phone is required';
+        else if (!/^\+?\d[\d\s-]{6,}$/.test(phone.trim())) newErrors.phone = 'Invalid phone number';
+        if (email.trim() && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim())) {
+            newErrors.email = 'Invalid email address';
+        }
+        setErrors(newErrors);
+        return Object.keys(newErrors).length === 0;
+    };
+
+    const handleSave = () => {
+        if (!validate()) return;
+
+        // In mock mode, just show success and go back
+        Alert.alert('Lead Created', `${name} has been added to your leads.`, [
+            { text: 'OK', onPress: () => router.back() },
+        ]);
+    };
+
+    return (
+        <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]}>
+            {/* Header */}
+            <View style={[styles.headerBar, { borderBottomColor: colors.borderLight }]}>
+                <TouchableOpacity onPress={() => router.back()} style={styles.cancelBtn}>
+                    <Text style={[styles.cancelText, { color: colors.textSecondary }]}>Cancel</Text>
+                </TouchableOpacity>
+                <Text style={[styles.headerTitle, { color: colors.textPrimary }]}>New Lead</Text>
+                <TouchableOpacity
+                    onPress={handleSave}
+                    style={[styles.saveBtn, { backgroundColor: colors.accent }]}
+                >
+                    <Text style={styles.saveBtnText}>Save</Text>
+                </TouchableOpacity>
+            </View>
+
+            <KeyboardAvoidingView
+                style={{ flex: 1 }}
+                behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+                keyboardVerticalOffset={100}
+            >
+                <ScrollView style={styles.scrollView} contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
+                    {/* Contact Info */}
+                    <View style={[styles.card, { backgroundColor: colors.cardBackground, borderColor: colors.cardBorder }]}>
+                        <Text style={[styles.sectionTitle, { color: colors.textPrimary }]}>Contact Information</Text>
+
+                        <FormField
+                            label="Full Name *"
+                            value={name}
+                            onChangeText={setName}
+                            placeholder="e.g. Sarah Tan"
+                            error={errors.name}
+                            colors={colors}
+                            icon="person-outline"
+                        />
+                        <FormField
+                            label="Phone *"
+                            value={phone}
+                            onChangeText={setPhone}
+                            placeholder="+65 9123 4567"
+                            error={errors.phone}
+                            colors={colors}
+                            icon="call-outline"
+                            keyboardType="phone-pad"
+                        />
+                        <FormField
+                            label="Email"
+                            value={email}
+                            onChangeText={setEmail}
+                            placeholder="sarah@email.com"
+                            error={errors.email}
+                            colors={colors}
+                            icon="mail-outline"
+                            keyboardType="email-address"
+                            autoCapitalize="none"
+                        />
+                    </View>
+
+                    {/* Source */}
+                    <View style={[styles.card, { backgroundColor: colors.cardBackground, borderColor: colors.cardBorder }]}>
+                        <Text style={[styles.sectionTitle, { color: colors.textPrimary }]}>Source</Text>
+                        <View style={styles.chipGroup}>
+                            {SOURCES.map((s) => (
+                                <TouchableOpacity
+                                    key={s}
+                                    style={[
+                                        styles.chip,
+                                        {
+                                            backgroundColor: source === s ? colors.accentLight : colors.surfacePrimary,
+                                            borderColor: source === s ? colors.accent : colors.borderLight,
+                                            borderWidth: source === s ? 1.5 : 0.5,
+                                        },
+                                    ]}
+                                    onPress={() => setSource(s)}
+                                >
+                                    <Text
+                                        style={[
+                                            styles.chipText,
+                                            { color: source === s ? colors.accent : colors.textSecondary },
+                                        ]}
+                                    >
+                                        {SOURCE_LABELS[s]}
+                                    </Text>
+                                </TouchableOpacity>
+                            ))}
+                        </View>
+                    </View>
+
+                    {/* Product Interest */}
+                    <View style={[styles.card, { backgroundColor: colors.cardBackground, borderColor: colors.cardBorder }]}>
+                        <Text style={[styles.sectionTitle, { color: colors.textPrimary }]}>Product Interest</Text>
+                        <View style={styles.chipGroup}>
+                            {PRODUCTS.map((p) => (
+                                <TouchableOpacity
+                                    key={p}
+                                    style={[
+                                        styles.chip,
+                                        {
+                                            backgroundColor: product === p ? colors.accentLight : colors.surfacePrimary,
+                                            borderColor: product === p ? colors.accent : colors.borderLight,
+                                            borderWidth: product === p ? 1.5 : 0.5,
+                                        },
+                                    ]}
+                                    onPress={() => setProduct(p)}
+                                >
+                                    <Text
+                                        style={[
+                                            styles.chipText,
+                                            { color: product === p ? colors.accent : colors.textSecondary },
+                                        ]}
+                                    >
+                                        {PRODUCT_LABELS[p]}
+                                    </Text>
+                                </TouchableOpacity>
+                            ))}
+                        </View>
+                    </View>
+
+                    {/* Notes */}
+                    <View style={[styles.card, { backgroundColor: colors.cardBackground, borderColor: colors.cardBorder }]}>
+                        <Text style={[styles.sectionTitle, { color: colors.textPrimary }]}>Notes</Text>
+                        <TextInput
+                            style={[styles.notesInput, { color: colors.textPrimary, borderColor: colors.borderLight, backgroundColor: colors.surfacePrimary }]}
+                            placeholder="Any initial notes about this lead..."
+                            placeholderTextColor={colors.textTertiary}
+                            value={notes}
+                            onChangeText={setNotes}
+                            multiline
+                            numberOfLines={4}
+                            textAlignVertical="top"
+                        />
+                    </View>
+                </ScrollView>
+            </KeyboardAvoidingView>
+        </SafeAreaView>
+    );
+}
+
+// ── Reusable Form Field ──
+function FormField({
+    label,
+    value,
+    onChangeText,
+    placeholder,
+    error,
+    colors,
+    icon,
+    keyboardType,
+    autoCapitalize,
+}: {
+    label: string;
+    value: string;
+    onChangeText: (v: string) => void;
+    placeholder: string;
+    error?: string;
+    colors: any;
+    icon: string;
+    keyboardType?: 'default' | 'phone-pad' | 'email-address';
+    autoCapitalize?: 'none' | 'sentences' | 'words';
+}) {
+    return (
+        <View style={styles.fieldContainer}>
+            <Text style={[styles.fieldLabel, { color: colors.textSecondary }]}>{label}</Text>
+            <View
+                style={[
+                    styles.fieldInputRow,
+                    {
+                        backgroundColor: colors.surfacePrimary,
+                        borderColor: error ? '#EF4444' : colors.borderLight,
+                    },
+                ]}
+            >
+                <Ionicons name={icon as any} size={18} color={error ? '#EF4444' : colors.textTertiary} />
+                <TextInput
+                    style={[styles.fieldInput, { color: colors.textPrimary }]}
+                    value={value}
+                    onChangeText={onChangeText}
+                    placeholder={placeholder}
+                    placeholderTextColor={colors.textTertiary}
+                    keyboardType={keyboardType}
+                    autoCapitalize={autoCapitalize}
+                />
+            </View>
+            {error && <Text style={styles.fieldError}>{error}</Text>}
+        </View>
+    );
+}
+
+const styles = StyleSheet.create({
+    container: { flex: 1 },
+    headerBar: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'space-between',
+        paddingHorizontal: 16,
+        paddingVertical: 10,
+        borderBottomWidth: 0.5,
+    },
+    cancelBtn: { paddingVertical: 4, paddingHorizontal: 4 },
+    cancelText: { fontSize: 15, fontWeight: '500' },
+    headerTitle: { fontSize: 16, fontWeight: '700' },
+    saveBtn: {
+        paddingHorizontal: 16,
+        paddingVertical: 7,
+        borderRadius: 8,
+    },
+    saveBtnText: { color: '#FFFFFF', fontSize: 14, fontWeight: '700' },
+    scrollView: { flex: 1 },
+    scrollContent: { padding: 16, paddingBottom: 40 },
+    card: {
+        borderRadius: 14,
+        borderWidth: 0.5,
+        padding: 16,
+        marginBottom: 12,
+    },
+    sectionTitle: { fontSize: 15, fontWeight: '700', marginBottom: 12 },
+    fieldContainer: { marginBottom: 14 },
+    fieldLabel: { fontSize: 12, fontWeight: '600', marginBottom: 6 },
+    fieldInputRow: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 8,
+        borderRadius: 10,
+        borderWidth: 0.5,
+        paddingHorizontal: 12,
+        paddingVertical: 10,
+    },
+    fieldInput: { flex: 1, fontSize: 14, padding: 0 },
+    fieldError: { color: '#EF4444', fontSize: 11, marginTop: 4, fontWeight: '500' },
+    chipGroup: {
+        flexDirection: 'row',
+        flexWrap: 'wrap',
+        gap: 8,
+    },
+    chip: {
+        paddingHorizontal: 14,
+        paddingVertical: 8,
+        borderRadius: 8,
+    },
+    chipText: { fontSize: 13, fontWeight: '600' },
+    notesInput: {
+        borderWidth: 0.5,
+        borderRadius: 10,
+        padding: 12,
+        fontSize: 14,
+        minHeight: 90,
+    },
+});
