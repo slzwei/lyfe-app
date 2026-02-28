@@ -2,15 +2,15 @@ import LyfeLogo from '@/components/LyfeLogo';
 import { useAuth } from '@/contexts/AuthContext';
 import { useTheme } from '@/contexts/ThemeContext';
 import { Ionicons } from '@expo/vector-icons';
-import React from 'react';
+import React, { useState } from 'react';
 import {
-    Alert,
+    Modal,
     SafeAreaView,
     ScrollView,
     StyleSheet,
     Text,
     TouchableOpacity,
-    View,
+    View
 } from 'react-native';
 
 const ROLE_LABELS: Record<string, string> = {
@@ -25,12 +25,15 @@ const ROLE_LABELS: Record<string, string> = {
 export default function ProfileScreen() {
     const { colors, isDark, mode, setMode } = useTheme();
     const { user, signOut } = useAuth();
+    const [showSignOutModal, setShowSignOutModal] = useState(false);
 
     const handleSignOut = () => {
-        Alert.alert('Sign Out', 'Are you sure you want to sign out?', [
-            { text: 'Cancel', style: 'cancel' },
-            { text: 'Sign Out', style: 'destructive', onPress: signOut },
-        ]);
+        setShowSignOutModal(true);
+    };
+
+    const confirmSignOut = () => {
+        setShowSignOutModal(false);
+        signOut();
     };
 
     const themeOptions: Array<{ value: 'system' | 'light' | 'dark'; label: string; icon: keyof typeof Ionicons.glyphMap }> = [
@@ -139,6 +142,37 @@ export default function ProfileScreen() {
                     <Text style={[styles.signOutText, { color: colors.danger }]}>Sign Out</Text>
                 </TouchableOpacity>
             </ScrollView>
+
+            {/* Sign Out Confirmation Modal */}
+            <Modal
+                visible={showSignOutModal}
+                transparent
+                animationType="fade"
+                onRequestClose={() => setShowSignOutModal(false)}
+            >
+                <View style={styles.modalOverlay}>
+                    <View style={[styles.modalContent, { backgroundColor: colors.cardBackground }]}>
+                        <Text style={[styles.modalTitle, { color: colors.textPrimary }]}>Sign Out</Text>
+                        <Text style={[styles.modalMessage, { color: colors.textSecondary }]}>
+                            Are you sure you want to sign out?
+                        </Text>
+                        <View style={styles.modalActions}>
+                            <TouchableOpacity
+                                style={[styles.modalBtn, { backgroundColor: colors.surfacePrimary }]}
+                                onPress={() => setShowSignOutModal(false)}
+                            >
+                                <Text style={[styles.modalBtnText, { color: colors.textPrimary }]}>Cancel</Text>
+                            </TouchableOpacity>
+                            <TouchableOpacity
+                                style={[styles.modalBtn, { backgroundColor: colors.danger }]}
+                                onPress={confirmSignOut}
+                            >
+                                <Text style={[styles.modalBtnText, { color: '#FFFFFF' }]}>Sign Out</Text>
+                            </TouchableOpacity>
+                        </View>
+                    </View>
+                </View>
+            </Modal>
         </SafeAreaView>
     );
 }
@@ -242,6 +276,45 @@ const styles = StyleSheet.create({
     },
     signOutText: {
         fontSize: 15,
+        fontWeight: '600',
+    },
+    modalOverlay: {
+        flex: 1,
+        backgroundColor: 'rgba(0,0,0,0.5)',
+        alignItems: 'center',
+        justifyContent: 'center',
+        padding: 32,
+    },
+    modalContent: {
+        width: '100%',
+        maxWidth: 340,
+        borderRadius: 16,
+        padding: 24,
+        alignItems: 'center',
+    },
+    modalTitle: {
+        fontSize: 18,
+        fontWeight: '700',
+        marginBottom: 8,
+    },
+    modalMessage: {
+        fontSize: 14,
+        marginBottom: 24,
+        textAlign: 'center',
+    },
+    modalActions: {
+        flexDirection: 'row',
+        gap: 12,
+        width: '100%',
+    },
+    modalBtn: {
+        flex: 1,
+        paddingVertical: 12,
+        borderRadius: 10,
+        alignItems: 'center',
+    },
+    modalBtnText: {
+        fontSize: 14,
         fontWeight: '600',
     },
 });

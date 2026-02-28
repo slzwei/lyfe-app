@@ -4,8 +4,8 @@ import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import React, { useState } from 'react';
 import {
-    Alert,
     KeyboardAvoidingView,
+    Modal,
     Platform,
     SafeAreaView,
     ScrollView,
@@ -30,6 +30,7 @@ export default function AddLeadScreen() {
     const [product, setProduct] = useState<ProductInterest>('general');
     const [notes, setNotes] = useState('');
     const [errors, setErrors] = useState<Record<string, string>>({});
+    const [showSuccessModal, setShowSuccessModal] = useState(false);
 
     const validate = (): boolean => {
         const newErrors: Record<string, string> = {};
@@ -45,11 +46,12 @@ export default function AddLeadScreen() {
 
     const handleSave = () => {
         if (!validate()) return;
+        setShowSuccessModal(true);
+    };
 
-        // In mock mode, just show success and go back
-        Alert.alert('Lead Created', `${name} has been added to your leads.`, [
-            { text: 'OK', onPress: () => router.back() },
-        ]);
+    const handleSuccessDismiss = () => {
+        setShowSuccessModal(false);
+        router.back();
     };
 
     return (
@@ -186,6 +188,30 @@ export default function AddLeadScreen() {
                     </View>
                 </ScrollView>
             </KeyboardAvoidingView>
+
+            {/* Success Modal */}
+            <Modal
+                visible={showSuccessModal}
+                transparent
+                animationType="fade"
+                onRequestClose={handleSuccessDismiss}
+            >
+                <View style={styles.modalOverlay}>
+                    <View style={[styles.modalContent, { backgroundColor: colors.cardBackground }]}>
+                        <Ionicons name="checkmark-circle" size={48} color="#22C55E" />
+                        <Text style={[styles.modalTitle, { color: colors.textPrimary }]}>Lead Created</Text>
+                        <Text style={[styles.modalMessage, { color: colors.textSecondary }]}>
+                            {name} has been added to your leads.
+                        </Text>
+                        <TouchableOpacity
+                            style={[styles.modalOkBtn, { backgroundColor: colors.accent }]}
+                            onPress={handleSuccessDismiss}
+                        >
+                            <Text style={styles.modalOkBtnText}>OK</Text>
+                        </TouchableOpacity>
+                    </View>
+                </View>
+            </Modal>
         </SafeAreaView>
     );
 }
@@ -298,5 +324,41 @@ const styles = StyleSheet.create({
         padding: 12,
         fontSize: 14,
         minHeight: 90,
+    },
+    modalOverlay: {
+        flex: 1,
+        backgroundColor: 'rgba(0,0,0,0.5)',
+        alignItems: 'center',
+        justifyContent: 'center',
+        padding: 32,
+    },
+    modalContent: {
+        width: '100%',
+        maxWidth: 340,
+        borderRadius: 16,
+        padding: 24,
+        alignItems: 'center',
+    },
+    modalTitle: {
+        fontSize: 18,
+        fontWeight: '700',
+        marginTop: 12,
+        marginBottom: 8,
+    },
+    modalMessage: {
+        fontSize: 14,
+        marginBottom: 24,
+        textAlign: 'center',
+    },
+    modalOkBtn: {
+        width: '100%',
+        paddingVertical: 12,
+        borderRadius: 10,
+        alignItems: 'center',
+    },
+    modalOkBtnText: {
+        color: '#FFFFFF',
+        fontSize: 14,
+        fontWeight: '600',
     },
 });
