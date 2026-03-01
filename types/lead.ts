@@ -34,12 +34,12 @@ export interface LeadActivity {
 
 /** Status display config */
 export const STATUS_CONFIG: Record<LeadStatus, { label: string; color: string; bgColor: string; icon: string }> = {
-    new: { label: 'New', color: '#2563EB', bgColor: '#DBEAFE', icon: 'sparkles' },
-    contacted: { label: 'Contacted', color: '#D97706', bgColor: '#FEF3C7', icon: 'chatbubble' },
-    qualified: { label: 'Qualified', color: '#0D9488', bgColor: '#CCFBF1', icon: 'checkmark-circle' },
-    proposed: { label: 'Proposed', color: '#DC6B4A', bgColor: '#FEE2E2', icon: 'document-text' },
-    won: { label: 'Won', color: '#16A34A', bgColor: '#DCFCE7', icon: 'trophy' },
-    lost: { label: 'Lost', color: '#6B7280', bgColor: '#F3F4F6', icon: 'close-circle' },
+    new: { label: 'New', color: '#007AFF', bgColor: '#E5F1FF', icon: 'sparkles' },
+    contacted: { label: 'Contacted', color: '#FF9500', bgColor: '#FFF4E5', icon: 'chatbubble' },
+    qualified: { label: 'Qualified', color: '#34C759', bgColor: '#E8F9ED', icon: 'checkmark-circle' },
+    proposed: { label: 'Proposed', color: '#AF52DE', bgColor: '#F5EAFC', icon: 'document-text' },
+    won: { label: 'Won', color: '#34C759', bgColor: '#E8F9ED', icon: 'trophy' },
+    lost: { label: 'Lost', color: '#8E8E93', bgColor: '#F2F2F7', icon: 'close-circle' },
 };
 
 /** Product interest labels */
@@ -62,12 +62,12 @@ export const SOURCE_LABELS: Record<LeadSource, string> = {
 
 /** Activity type icons */
 export const ACTIVITY_ICONS: Record<LeadActivityType, { icon: string; color: string }> = {
-    created: { icon: 'add-circle', color: '#2563EB' },
-    note: { icon: 'document-text', color: '#6B7280' },
-    call: { icon: 'call', color: '#16A34A' },
-    status_change: { icon: 'swap-horizontal', color: '#D97706' },
-    reassignment: { icon: 'people', color: '#8B5CF6' },
-    email: { icon: 'mail', color: '#0EA5E9' },
-    meeting: { icon: 'calendar', color: '#DC6B4A' },
-    follow_up: { icon: 'time', color: '#0D9488' },
+    created: { icon: 'add-circle', color: '#007AFF' },
+    note: { icon: 'document-text', color: '#8E8E93' },
+    call: { icon: 'call', color: '#34C759' },
+    status_change: { icon: 'swap-horizontal', color: '#FF9500' },
+    reassignment: { icon: 'people', color: '#AF52DE' },
+    email: { icon: 'mail', color: '#007AFF' },
+    meeting: { icon: 'calendar', color: '#FF3B30' },
+    follow_up: { icon: 'time', color: '#0A7E6B' },
 };

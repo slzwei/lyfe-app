@@ -140,6 +140,7 @@ function WebMathRenderer({ content, isDark, fontSize }: { content: string; isDar
                 border: 'none',
                 overflow: 'hidden',
                 backgroundColor: 'transparent',
+                pointerEvents: 'none' as any, // Let clicks pass through to parent TouchableOpacity
             }}
             scrolling="no"
             onLoad={(e: any) => {

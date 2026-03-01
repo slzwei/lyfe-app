@@ -7,6 +7,7 @@ import 'react-native-reanimated';
 
 import { AuthProvider, useAuth } from '@/contexts/AuthContext';
 import { ThemeProvider, useTheme } from '@/contexts/ThemeContext';
+import { ViewModeProvider } from '@/contexts/ViewModeContext';
 
 export { ErrorBoundary } from 'expo-router';
 
@@ -75,7 +76,9 @@ export default function RootLayout() {
   return (
     <ThemeProvider>
       <AuthProvider>
-        <RootLayoutContent />
+        <ViewModeProvider>
+          <RootLayoutContent />
+        </ViewModeProvider>
       </AuthProvider>
     </ThemeProvider>
   );

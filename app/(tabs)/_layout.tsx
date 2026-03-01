@@ -1,6 +1,7 @@
-import { ROLE_TABS, type UserRole } from '@/constants/Roles';
+import { getVisibleTabs, type UserRole } from '@/constants/Roles';
 import { useAuth } from '@/contexts/AuthContext';
 import { useTheme } from '@/contexts/ThemeContext';
+import { useViewMode } from '@/contexts/ViewModeContext';
 import { Ionicons } from '@expo/vector-icons';
 import { Tabs } from 'expo-router';
 import React from 'react';
@@ -9,6 +10,7 @@ const TAB_ICONS: Record<string, keyof typeof Ionicons.glyphMap> = {
   home: 'home-outline',
   leads: 'people-outline',
   exams: 'school-outline',
+  candidates: 'document-text-outline',
   team: 'briefcase-outline',
   pa: 'clipboard-outline',
   admin: 'settings-outline',
@@ -19,6 +21,7 @@ const TAB_ICONS_FOCUSED: Record<string, keyof typeof Ionicons.glyphMap> = {
   home: 'home',
   leads: 'people',
   exams: 'school',
+  candidates: 'document-text',
   team: 'briefcase',
   pa: 'clipboard',
   admin: 'settings',
@@ -29,6 +32,7 @@ const TAB_LABELS: Record<string, string> = {
   home: 'Home',
   leads: 'Leads',
   exams: 'Exams',
+  candidates: 'Candidates',
   team: 'Team',
   pa: 'PA',
   admin: 'Admin',
@@ -38,9 +42,10 @@ const TAB_LABELS: Record<string, string> = {
 export default function TabLayout() {
   const { colors } = useTheme();
   const { user } = useAuth();
+  const { viewMode } = useViewMode();
 
   const role: UserRole = user?.role || 'agent';
-  const visibleTabs = ROLE_TABS[role] || ['profile'];
+  const visibleTabs = getVisibleTabs(role, viewMode);
 
   return (
     <Tabs
@@ -53,9 +58,9 @@ export default function TabLayout() {
           borderTopColor: colors.tabBarBorder,
           borderTopWidth: 0.5,
           elevation: 0,
-          paddingBottom: 4,
-          paddingTop: 4,
-          height: 56,
+          paddingBottom: 20,
+          paddingTop: 6,
+          height: 72,
         },
         tabBarLabelStyle: {
           fontSize: 11,
@@ -100,6 +105,20 @@ export default function TabLayout() {
           tabBarIcon: ({ focused, color, size }) => (
             <Ionicons
               name={focused ? TAB_ICONS_FOCUSED.exams : TAB_ICONS.exams}
+              size={size}
+              color={color}
+            />
+          ),
+        }}
+      />
+      <Tabs.Screen
+        name="candidates"
+        options={{
+          title: TAB_LABELS.candidates,
+          href: visibleTabs.includes('candidates') ? '/candidates' : null,
+          tabBarIcon: ({ focused, color, size }) => (
+            <Ionicons
+              name={focused ? TAB_ICONS_FOCUSED.candidates : TAB_ICONS.candidates}
               size={size}
               color={color}
             />
@@ -152,7 +171,7 @@ export default function TabLayout() {
         name="profile"
         options={{
           title: TAB_LABELS.profile,
-          href: '/profile',
+          href: visibleTabs.includes('profile') ? '/profile' : null,
           tabBarIcon: ({ focused, color, size }) => (
             <Ionicons
               name={focused ? TAB_ICONS_FOCUSED.profile : TAB_ICONS.profile}

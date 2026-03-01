@@ -13,6 +13,7 @@ export default function ExamsLayout() {
             }}
         >
             <Stack.Screen name="index" />
+            <Stack.Screen name="study" />
             <Stack.Screen
                 name="take/[paperId]"
                 options={{

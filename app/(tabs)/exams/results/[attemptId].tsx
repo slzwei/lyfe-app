@@ -309,7 +309,13 @@ const styles = StyleSheet.create({
         justifyContent: 'space-between',
         marginBottom: 16,
     },
-    backBtn: { padding: 4 },
+    backBtn: {
+        padding: 8,
+        minWidth: 44,
+        minHeight: 44,
+        alignItems: 'center',
+        justifyContent: 'center',
+    },
     headerTitle: { fontSize: 18, fontWeight: '700' },
     scrollContent: {
         padding: 16,

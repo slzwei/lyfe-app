@@ -20,13 +20,13 @@ export interface CandidateStatusConfig {
 }
 
 export const CANDIDATE_STATUS_CONFIG: Record<CandidateStatus, CandidateStatusConfig> = {
-    applied: { label: 'Applied', color: '#0969DA', icon: 'person-add', order: 0 },
-    interview_scheduled: { label: 'Interview', color: '#BF8700', icon: 'calendar', order: 1 },
-    interviewed: { label: 'Interviewed', color: '#8250DF', icon: 'checkmark-circle', order: 2 },
-    approved: { label: 'Approved', color: '#1A7F37', icon: 'shield-checkmark', order: 3 },
-    exam_prep: { label: 'Exam Prep', color: '#E8614D', icon: 'school', order: 4 },
-    licensed: { label: 'Licensed', color: '#0550AE', icon: 'ribbon', order: 5 },
-    active_agent: { label: 'Active Agent', color: '#1A7F37', icon: 'star', order: 6 },
+    applied: { label: 'Applied', color: '#007AFF', icon: 'person-add', order: 0 },
+    interview_scheduled: { label: 'Interview', color: '#FF9500', icon: 'calendar', order: 1 },
+    interviewed: { label: 'Interviewed', color: '#AF52DE', icon: 'checkmark-circle', order: 2 },
+    approved: { label: 'Approved', color: '#34C759', icon: 'shield-checkmark', order: 3 },
+    exam_prep: { label: 'Exam Prep', color: '#FF3B30', icon: 'school', order: 4 },
+    licensed: { label: 'Licensed', color: '#007AFF', icon: 'ribbon', order: 5 },
+    active_agent: { label: 'Active Agent', color: '#0A7E6B', icon: 'star', order: 6 },
 };
 
 export const CANDIDATE_STATUSES: CandidateStatus[] = [

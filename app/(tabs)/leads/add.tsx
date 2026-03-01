@@ -1,9 +1,12 @@
+import { useAuth } from '@/contexts/AuthContext';
 import { useTheme } from '@/contexts/ThemeContext';
+import { createLead, type CreateLeadInput } from '@/lib/leads';
 import { PRODUCT_LABELS, SOURCE_LABELS, type LeadSource, type ProductInterest } from '@/types/lead';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import React, { useState } from 'react';
 import {
+    ActivityIndicator,
     KeyboardAvoidingView,
     Modal,
     Platform,
@@ -16,11 +19,13 @@ import {
     View,
 } from 'react-native';
 
+const MOCK_OTP = process.env.EXPO_PUBLIC_MOCK_OTP === 'true';
 const SOURCES: LeadSource[] = ['referral', 'walk_in', 'online', 'event', 'cold_call', 'other'];
 const PRODUCTS: ProductInterest[] = ['life', 'health', 'ilp', 'general'];
 
 export default function AddLeadScreen() {
     const { colors } = useTheme();
+    const { user } = useAuth();
     const router = useRouter();
 
     const [name, setName] = useState('');
@@ -31,6 +36,8 @@ export default function AddLeadScreen() {
     const [notes, setNotes] = useState('');
     const [errors, setErrors] = useState<Record<string, string>>({});
     const [showSuccessModal, setShowSuccessModal] = useState(false);
+    const [isSaving, setIsSaving] = useState(false);
+    const [saveError, setSaveError] = useState<string | null>(null);
 
     const validate = (): boolean => {
         const newErrors: Record<string, string> = {};
@@ -44,8 +51,39 @@ export default function AddLeadScreen() {
         return Object.keys(newErrors).length === 0;
     };
 
-    const handleSave = () => {
+    const handleSave = async () => {
         if (!validate()) return;
+        setSaveError(null);
+
+        if (MOCK_OTP) {
+            // Mock mode: just show success
+            setShowSuccessModal(true);
+            return;
+        }
+
+        if (!user?.id) {
+            setSaveError('Not authenticated');
+            return;
+        }
+
+        setIsSaving(true);
+        const input: CreateLeadInput = {
+            full_name: name.trim(),
+            phone: phone.trim() || null,
+            email: email.trim() || null,
+            source,
+            product_interest: product,
+            notes: notes.trim() || null,
+        };
+
+        const { error } = await createLead(input, user.id);
+        setIsSaving(false);
+
+        if (error) {
+            setSaveError(error);
+            return;
+        }
+
         setShowSuccessModal(true);
     };
 
@@ -64,9 +102,14 @@ export default function AddLeadScreen() {
                 <Text style={[styles.headerTitle, { color: colors.textPrimary }]}>New Lead</Text>
                 <TouchableOpacity
                     onPress={handleSave}
-                    style={[styles.saveBtn, { backgroundColor: colors.accent }]}
+                    style={[styles.saveBtn, { backgroundColor: colors.accent, opacity: isSaving ? 0.6 : 1 }]}
+                    disabled={isSaving}
                 >
-                    <Text style={styles.saveBtnText}>Save</Text>
+                    {isSaving ? (
+                        <ActivityIndicator size="small" color="#FFFFFF" />
+                    ) : (
+                        <Text style={styles.saveBtnText}>Save</Text>
+                    )}
                 </TouchableOpacity>
             </View>
 
@@ -76,6 +119,14 @@ export default function AddLeadScreen() {
                 keyboardVerticalOffset={100}
             >
                 <ScrollView style={styles.scrollView} contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
+                    {/* Save Error */}
+                    {saveError && (
+                        <View style={[styles.errorBanner, { backgroundColor: '#FEE2E2' }]}>
+                            <Ionicons name="alert-circle" size={16} color="#DC2626" />
+                            <Text style={styles.errorBannerText}>{saveError}</Text>
+                        </View>
+                    )}
+
                     {/* Contact Info */}
                     <View style={[styles.card, { backgroundColor: colors.cardBackground, borderColor: colors.cardBorder }]}>
                         <Text style={[styles.sectionTitle, { color: colors.textPrimary }]}>Contact Information</Text>
@@ -283,10 +334,21 @@ const styles = StyleSheet.create({
         paddingHorizontal: 16,
         paddingVertical: 7,
         borderRadius: 8,
+        minWidth: 60,
+        alignItems: 'center',
     },
     saveBtnText: { color: '#FFFFFF', fontSize: 14, fontWeight: '700' },
     scrollView: { flex: 1 },
     scrollContent: { padding: 16, paddingBottom: 40 },
+    errorBanner: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 8,
+        padding: 12,
+        borderRadius: 10,
+        marginBottom: 12,
+    },
+    errorBannerText: { flex: 1, fontSize: 13, color: '#DC2626' },
     card: {
         borderRadius: 14,
         borderWidth: 0.5,

@@ -1,5 +1,4 @@
 import { STATUS_CONFIG, type LeadStatus } from '@/types/lead';
-import { Ionicons } from '@expo/vector-icons';
 import React from 'react';
 import { StyleSheet, Text, View } from 'react-native';
 
@@ -9,7 +8,7 @@ interface StatusBadgeProps {
     showIcon?: boolean;
 }
 
-export default function StatusBadge({ status, size = 'small', showIcon = false }: StatusBadgeProps) {
+export default function StatusBadge({ status, size = 'small' }: StatusBadgeProps) {
     const config = STATUS_CONFIG[status];
     const isSmall = size === 'small';
 
@@ -18,25 +17,18 @@ export default function StatusBadge({ status, size = 'small', showIcon = false }
             style={[
                 styles.badge,
                 {
-                    backgroundColor: config.bgColor,
-                    paddingHorizontal: isSmall ? 8 : 12,
-                    paddingVertical: isSmall ? 3 : 5,
+                    backgroundColor: config.color + '14',
+                    paddingHorizontal: isSmall ? 10 : 12,
+                    paddingVertical: isSmall ? 4 : 5,
                 },
             ]}
         >
-            {showIcon && (
-                <Ionicons
-                    name={config.icon as any}
-                    size={isSmall ? 12 : 14}
-                    color={config.color}
-                />
-            )}
             <Text
                 style={[
                     styles.text,
                     {
                         color: config.color,
-                        fontSize: isSmall ? 11 : 13,
+                        fontSize: isSmall ? 12 : 13,
                     },
                 ]}
             >
@@ -51,10 +43,9 @@ const styles = StyleSheet.create({
         flexDirection: 'row',
         alignItems: 'center',
         gap: 4,
-        borderRadius: 6,
+        borderRadius: 12,
     },
     text: {
-        fontWeight: '700',
-        letterSpacing: 0.3,
+        fontWeight: '600',
     },
 });

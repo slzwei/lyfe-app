@@ -1,4 +1,5 @@
 import ExamCard from '@/components/ExamCard';
+import ScreenHeader from '@/components/ScreenHeader';
 import { useAuth } from '@/contexts/AuthContext';
 import { useTheme } from '@/contexts/ThemeContext';
 import { supabase } from '@/lib/supabase';
@@ -134,12 +135,13 @@ export default function ExamsListScreen() {
                 }
             >
                 {/* Header */}
-                <View style={styles.header}>
-                    <Text style={[styles.title, { color: colors.textPrimary }]}>Exams</Text>
-                    <Text style={[styles.subtitle, { color: colors.textSecondary }]}>
-                        Complete all 4 mandatory papers to get licensed
-                    </Text>
-                </View>
+                <ScreenHeader
+                    showBack
+                    backLabel="Home"
+                    onBack={() => router.replace('/(tabs)/home' as any)}
+                    title="Exams"
+                    subtitle="Complete all 4 mandatory papers to get licensed"
+                />
 
                 {/* Progress Overview */}
                 <View style={[styles.progressCard, { backgroundColor: colors.cardBackground, borderColor: colors.cardBorder }]}>
@@ -226,12 +228,6 @@ const styles = StyleSheet.create({
         gap: 12,
     },
     loadingText: { fontSize: 14 },
-    header: {
-        paddingTop: 16,
-        paddingBottom: 16,
-    },
-    title: { fontSize: 28, fontWeight: '800', letterSpacing: -0.5, marginBottom: 4 },
-    subtitle: { fontSize: 14, lineHeight: 20 },
     progressCard: {
         borderRadius: 12,
         borderWidth: 0.5,

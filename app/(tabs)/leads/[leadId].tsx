@@ -1,10 +1,16 @@
 import LeadActivityItem from '@/components/LeadActivityItem';
+import LoadingState from '@/components/LoadingState';
+import ScreenHeader from '@/components/ScreenHeader';
 import StatusBadge from '@/components/StatusBadge';
+import { useAuth } from '@/contexts/AuthContext';
 import { useTheme } from '@/contexts/ThemeContext';
+import { useViewMode } from '@/contexts/ViewModeContext';
+import { addLeadNote, fetchLead, fetchLeadActivities, updateLeadStatus } from '@/lib/leads';
+import type { Lead } from '@/types/lead';
 import { PRODUCT_LABELS, SOURCE_LABELS, STATUS_CONFIG, type LeadActivity, type LeadStatus } from '@/types/lead';
 import { Ionicons } from '@expo/vector-icons';
 import { useLocalSearchParams, useRouter } from 'expo-router';
-import React, { useState } from 'react';
+import React, { useCallback, useEffect, useState } from 'react';
 import {
     KeyboardAvoidingView,
     Linking,
@@ -18,7 +24,9 @@ import {
     View
 } from 'react-native';
 
-// Import mock data from list screen
+const MOCK_OTP = process.env.EXPO_PUBLIC_MOCK_OTP === 'true';
+
+// Import mock data for dev mode
 import { MOCK_ACTIVITIES, MOCK_LEADS } from './index';
 
 const STATUS_ORDER: LeadStatus[] = ['new', 'contacted', 'qualified', 'proposed', 'won', 'lost'];
@@ -26,17 +34,64 @@ const STATUS_ORDER: LeadStatus[] = ['new', 'contacted', 'qualified', 'proposed',
 export default function LeadDetailScreen() {
     const { leadId } = useLocalSearchParams<{ leadId: string }>();
     const { colors } = useTheme();
+    const { user } = useAuth();
+    const { viewMode, canToggle } = useViewMode();
     const router = useRouter();
+    const isManagerView = canToggle && viewMode === 'manager';
 
-    const lead = MOCK_LEADS.find((l) => l.id === leadId);
-    const [activities, setActivities] = useState<LeadActivity[]>(
-        () => (MOCK_ACTIVITIES[leadId || ''] || [])
-            .sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())
-    );
-    const [currentStatus, setCurrentStatus] = useState(lead?.status || 'new');
+    const [lead, setLead] = useState<Lead | null>(null);
+    const [activities, setActivities] = useState<LeadActivity[]>([]);
+    const [currentStatus, setCurrentStatus] = useState<LeadStatus>('new');
+    const [isLoading, setIsLoading] = useState(true);
     const [showNoteInput, setShowNoteInput] = useState(false);
     const [noteText, setNoteText] = useState('');
     const [showStatusPicker, setShowStatusPicker] = useState(false);
+    const [isSavingNote, setIsSavingNote] = useState(false);
+    const [isUpdatingStatus, setIsUpdatingStatus] = useState(false);
+
+    const loadData = useCallback(async () => {
+        if (!leadId) return;
+
+        if (MOCK_OTP) {
+            // Mock mode
+            const mockLead = MOCK_LEADS.find((l) => l.id === leadId) || null;
+            setLead(mockLead);
+            setCurrentStatus(mockLead?.status || 'new');
+            const mockActs = (MOCK_ACTIVITIES[leadId] || [])
+                .sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
+            setActivities(mockActs);
+            setIsLoading(false);
+            return;
+        }
+
+        // Real mode
+        const [leadResult, activitiesResult] = await Promise.all([
+            fetchLead(leadId),
+            fetchLeadActivities(leadId),
+        ]);
+
+        if (leadResult.data) {
+            setLead(leadResult.data);
+            setCurrentStatus(leadResult.data.status);
+        }
+        if (activitiesResult.data) {
+            setActivities(activitiesResult.data);
+        }
+        setIsLoading(false);
+    }, [leadId]);
+
+    useEffect(() => {
+        loadData();
+    }, [loadData]);
+
+    if (isLoading) {
+        return (
+            <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]}>
+                <ScreenHeader showBack backLabel="Leads" title="Loading..." />
+                <LoadingState />
+            </SafeAreaView>
+        );
+    }
 
     if (!lead) {
         return (
@@ -65,47 +120,88 @@ export default function LeadDetailScreen() {
         }
     };
 
-    const addNote = () => {
+    const handleAddNote = async () => {
         if (!noteText.trim()) return;
-        const newActivity: LeadActivity = {
-            id: `a_${Date.now()}`,
-            lead_id: lead.id,
-            user_id: 'me',
-            type: 'note',
-            description: noteText.trim(),
-            metadata: {},
-            created_at: new Date().toISOString(),
-        };
-        setActivities((prev) => [newActivity, ...prev]);
-        setNoteText('');
-        setShowNoteInput(false);
+
+        if (MOCK_OTP) {
+            // Mock mode: local-only
+            const newActivity: LeadActivity = {
+                id: `a_${Date.now()}`,
+                lead_id: lead.id,
+                user_id: 'me',
+                type: 'note',
+                description: noteText.trim(),
+                metadata: {},
+                created_at: new Date().toISOString(),
+            };
+            setActivities((prev) => [newActivity, ...prev]);
+            setNoteText('');
+            setShowNoteInput(false);
+            return;
+        }
+
+        if (!user?.id) return;
+        setIsSavingNote(true);
+        const { data, error } = await addLeadNote(lead.id, noteText.trim(), user.id);
+        setIsSavingNote(false);
+
+        if (data) {
+            setActivities((prev) => [data, ...prev]);
+            setNoteText('');
+            setShowNoteInput(false);
+        } else if (error) {
+            console.error('Failed to add note:', error);
+        }
     };
 
-    const changeStatus = (newStatus: LeadStatus) => {
+    const handleChangeStatus = async (newStatus: LeadStatus) => {
         if (newStatus === currentStatus) return;
-        const newActivity: LeadActivity = {
-            id: `a_${Date.now()}`,
-            lead_id: lead.id,
-            user_id: 'me',
-            type: 'status_change',
-            description: null,
-            metadata: { from_status: currentStatus, to_status: newStatus },
-            created_at: new Date().toISOString(),
-        };
-        setActivities((prev) => [newActivity, ...prev]);
-        setCurrentStatus(newStatus);
-        setShowStatusPicker(false);
+
+        if (MOCK_OTP) {
+            // Mock mode: local-only
+            const newActivity: LeadActivity = {
+                id: `a_${Date.now()}`,
+                lead_id: lead.id,
+                user_id: 'me',
+                type: 'status_change',
+                description: null,
+                metadata: { from_status: currentStatus, to_status: newStatus },
+                created_at: new Date().toISOString(),
+            };
+            setActivities((prev) => [newActivity, ...prev]);
+            setCurrentStatus(newStatus);
+            setShowStatusPicker(false);
+            return;
+        }
+
+        if (!user?.id) return;
+        setIsUpdatingStatus(true);
+        const { error } = await updateLeadStatus(lead.id, newStatus, currentStatus, user.id);
+        setIsUpdatingStatus(false);
+
+        if (!error) {
+            // Re-fetch activities to get the new status_change activity
+            const { data: updatedActivities } = await fetchLeadActivities(lead.id);
+            if (updatedActivities) setActivities(updatedActivities);
+            setCurrentStatus(newStatus);
+            setShowStatusPicker(false);
+        } else {
+            console.error('Failed to update status:', error);
+        }
     };
 
     return (
         <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]}>
             {/* Header Bar */}
-            <View style={[styles.headerBar, { borderBottomColor: colors.borderLight }]}>
-                <TouchableOpacity onPress={() => router.back()} style={styles.backBtn}>
-                    <Ionicons name="chevron-back" size={22} color={colors.textPrimary} />
-                    <Text style={[styles.backText, { color: colors.textPrimary }]}>Leads</Text>
-                </TouchableOpacity>
-            </View>
+            <ScreenHeader
+                showBack
+                backLabel="Leads"
+                title={lead.full_name}
+                banner={isManagerView ? {
+                    text: 'Manager View — Read-only. Switch to Agent View to edit this lead.',
+                    icon: 'shield-outline',
+                } : undefined}
+            />
 
             <KeyboardAvoidingView
                 style={{ flex: 1 }}
@@ -178,24 +274,36 @@ export default function LeadDetailScreen() {
                             onPress={handleWhatsApp}
                             disabled={!lead.phone}
                         />
-                        <QuickAction
-                            icon="swap-horizontal"
-                            label="Status"
-                            color="#D97706"
-                            bgColor="#FEF3C7"
-                            onPress={() => setShowStatusPicker(!showStatusPicker)}
-                        />
-                        <QuickAction
-                            icon="create-outline"
-                            label="Note"
-                            color="#6B7280"
-                            bgColor={colors.surfacePrimary}
-                            onPress={() => setShowNoteInput(!showNoteInput)}
-                        />
+                        {isManagerView ? (
+                            <QuickAction
+                                icon="git-compare-outline"
+                                label="Reassign"
+                                color="#7C3AED"
+                                bgColor="#EDE9FE"
+                                onPress={() => { }}
+                            />
+                        ) : (
+                            <>
+                                <QuickAction
+                                    icon="swap-horizontal"
+                                    label="Status"
+                                    color="#D97706"
+                                    bgColor="#FEF3C7"
+                                    onPress={() => setShowStatusPicker(!showStatusPicker)}
+                                />
+                                <QuickAction
+                                    icon="create-outline"
+                                    label="Note"
+                                    color="#6B7280"
+                                    bgColor={colors.surfacePrimary}
+                                    onPress={() => setShowNoteInput(!showNoteInput)}
+                                />
+                            </>
+                        )}
                     </View>
 
                     {/* Status Picker */}
-                    {showStatusPicker && (
+                    {!isManagerView && showStatusPicker && (
                         <View style={[styles.card, { backgroundColor: colors.cardBackground, borderColor: colors.cardBorder }]}>
                             <Text style={[styles.sectionTitle, { color: colors.textPrimary }]}>Change Status</Text>
                             <View style={styles.statusGrid}>
@@ -211,9 +319,11 @@ export default function LeadDetailScreen() {
                                                     backgroundColor: isActive ? cfg.bgColor : colors.surfacePrimary,
                                                     borderColor: isActive ? cfg.color : colors.borderLight,
                                                     borderWidth: isActive ? 1.5 : 0.5,
+                                                    opacity: isUpdatingStatus ? 0.5 : 1,
                                                 },
                                             ]}
-                                            onPress={() => changeStatus(s)}
+                                            onPress={() => handleChangeStatus(s)}
+                                            disabled={isUpdatingStatus}
                                         >
                                             <Ionicons name={cfg.icon as any} size={16} color={isActive ? cfg.color : colors.textTertiary} />
                                             <Text style={[styles.statusOptionText, { color: isActive ? cfg.color : colors.textSecondary }]}>
@@ -227,7 +337,7 @@ export default function LeadDetailScreen() {
                     )}
 
                     {/* Add Note Input */}
-                    {showNoteInput && (
+                    {!isManagerView && showNoteInput && (
                         <View style={[styles.card, { backgroundColor: colors.cardBackground, borderColor: colors.cardBorder }]}>
                             <Text style={[styles.sectionTitle, { color: colors.textPrimary }]}>Add Note</Text>
                             <TextInput
@@ -248,11 +358,11 @@ export default function LeadDetailScreen() {
                                     <Text style={[styles.noteCancelText, { color: colors.textSecondary }]}>Cancel</Text>
                                 </TouchableOpacity>
                                 <TouchableOpacity
-                                    style={[styles.noteSave, { backgroundColor: colors.accent, opacity: noteText.trim() ? 1 : 0.4 }]}
-                                    onPress={addNote}
-                                    disabled={!noteText.trim()}
+                                    style={[styles.noteSave, { backgroundColor: colors.accent, opacity: noteText.trim() && !isSavingNote ? 1 : 0.4 }]}
+                                    onPress={handleAddNote}
+                                    disabled={!noteText.trim() || isSavingNote}
                                 >
-                                    <Text style={styles.noteSaveText}>Save Note</Text>
+                                    <Text style={styles.noteSaveText}>{isSavingNote ? 'Saving...' : 'Save Note'}</Text>
                                 </TouchableOpacity>
                             </View>
                         </View>
@@ -272,6 +382,11 @@ export default function LeadDetailScreen() {
                                     isLast={idx === activities.length - 1}
                                 />
                             ))}
+                            {activities.length === 0 && (
+                                <Text style={[styles.noActivityText, { color: colors.textTertiary }]}>
+                                    No activity recorded yet
+                                </Text>
+                            )}
                         </View>
                     </View>
                 </ScrollView>
@@ -312,19 +427,6 @@ function QuickAction({
 
 const styles = StyleSheet.create({
     container: { flex: 1 },
-    headerBar: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        paddingHorizontal: 12,
-        paddingVertical: 10,
-        borderBottomWidth: 0.5,
-    },
-    backBtn: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        gap: 2,
-    },
-    backText: { fontSize: 16, fontWeight: '500' },
     scrollView: { flex: 1 },
     scrollContent: { padding: 16, paddingBottom: 40 },
     card: {
@@ -442,6 +544,7 @@ const styles = StyleSheet.create({
     },
     activityCount: { fontSize: 12 },
     timelineContent: { marginTop: 4 },
+    noActivityText: { fontSize: 14, textAlign: 'center', paddingVertical: 16 },
     notFound: {
         flex: 1,
         alignItems: 'center',

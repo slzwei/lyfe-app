@@ -1,129 +1,135 @@
 /**
- * Lyfe App — Semantic Color Tokens
- * Accent: Coral #E8614D
- * Inspired by GitHub Mobile's clean aesthetic
+ * Lyfe App — iOS-Native Color System
+ * Accent: Deep Teal #0A7E6B
+ * Inspired by Apple Health, iOS Settings, Notion
+ *
+ * Design principles:
+ * - Restrained color — accent only for interactive elements
+ * - iOS system backgrounds (#F2F2F7 grouped, #FFFFFF cards)
+ * - No card borders — contrast between bg layers
+ * - Typography-driven hierarchy
  */
 
-const coral = {
-  primary: '#E8614D',
-  light: '#FEF0ED',
-  dark: '#C24A38',
-  muted: '#F5A898',
+const teal = {
+  primary: '#0A7E6B',
+  light: '#E8F5F2',
+  dark: '#06594C',
+  muted: '#7BBFB3',
 };
 
 export const Colors = {
   light: {
-    // Backgrounds
-    background: '#FFFFFF',
-    surfacePrimary: '#F6F8FA',
-    surfaceSecondary: '#FFFFFF',
+    // Backgrounds — iOS system grouped
+    background: '#F2F2F7',
+    surfacePrimary: '#FFFFFF',
+    surfaceSecondary: '#F2F2F7',
     surfaceElevated: '#FFFFFF',
 
-    // Text
-    textPrimary: '#1F2328',
-    textSecondary: '#656D76',
-    textTertiary: '#8B949E',
+    // Text — true black hierarchy
+    textPrimary: '#000000',
+    textSecondary: '#3C3C43',
+    textTertiary: '#8E8E93',
     textInverse: '#FFFFFF',
 
-    // Accent
-    accent: coral.primary,
-    accentLight: coral.light,
-    accentDark: coral.dark,
-    accentMuted: coral.muted,
+    // Accent — deep teal
+    accent: teal.primary,
+    accentLight: teal.light,
+    accentDark: teal.dark,
+    accentMuted: teal.muted,
 
     // Semantic
-    success: '#1A7F37',
-    successLight: '#DAFBE1',
-    warning: '#BF8700',
-    warningLight: '#FFF8C5',
-    danger: '#CF222E',
-    dangerLight: '#FFEBE9',
-    info: '#0969DA',
-    infoLight: '#DDF4FF',
+    success: '#34C759',
+    successLight: '#E8F9ED',
+    warning: '#FF9500',
+    warningLight: '#FFF4E5',
+    danger: '#FF3B30',
+    dangerLight: '#FFEDEC',
+    info: '#007AFF',
+    infoLight: '#E5F1FF',
 
     // Borders & Dividers
-    border: '#D0D7DE',
-    borderLight: '#E8ECEF',
-    divider: '#D8DEE4',
+    border: '#E5E5EA',
+    borderLight: '#F2F2F7',
+    divider: '#C6C6C8',
 
-    // Cards & Components
+    // Cards & Components — borderless design
     cardBackground: '#FFFFFF',
-    cardBorder: '#D0D7DE',
+    cardBorder: 'transparent',
     tabBar: '#FFFFFF',
-    tabBarBorder: '#D0D7DE',
-    inputBackground: '#F6F8FA',
-    inputBorder: '#D0D7DE',
+    tabBarBorder: '#E5E5EA',
+    inputBackground: '#FFFFFF',
+    inputBorder: '#E5E5EA',
 
-    // Status pills
-    statusNew: '#0969DA',
-    statusContacted: '#BF8700',
-    statusQualified: '#1A7F37',
-    statusProposed: '#8250DF',
-    statusWon: '#1A7F37',
-    statusLost: '#CF222E',
+    // Status pills — muted tones
+    statusNew: '#007AFF',
+    statusContacted: '#FF9500',
+    statusQualified: '#34C759',
+    statusProposed: '#AF52DE',
+    statusWon: '#34C759',
+    statusLost: '#FF3B30',
 
     // Shadows (iOS)
-    shadow: 'rgba(31, 35, 40, 0.08)',
+    shadow: 'rgba(0, 0, 0, 0.04)',
 
     // Tab bar icons
-    tabIconDefault: '#8B949E',
-    tabIconSelected: coral.primary,
+    tabIconDefault: '#8E8E93',
+    tabIconSelected: teal.primary,
   },
   dark: {
-    // Backgrounds
-    background: '#0D1117',
-    surfacePrimary: '#161B22',
-    surfaceSecondary: '#21262D',
-    surfaceElevated: '#1C2129',
+    // Backgrounds — true black
+    background: '#000000',
+    surfacePrimary: '#1C1C1E',
+    surfaceSecondary: '#000000',
+    surfaceElevated: '#2C2C2E',
 
     // Text
-    textPrimary: '#E6EDF3',
-    textSecondary: '#8B949E',
-    textTertiary: '#6E7681',
-    textInverse: '#1F2328',
+    textPrimary: '#FFFFFF',
+    textSecondary: '#EBEBF5',
+    textTertiary: '#8E8E93',
+    textInverse: '#000000',
 
     // Accent
-    accent: '#F0816F',
-    accentLight: '#2D1A16',
-    accentDark: coral.primary,
-    accentMuted: '#7A3D33',
+    accent: '#2EAF97',
+    accentLight: '#1A2E2A',
+    accentDark: teal.primary,
+    accentMuted: '#3D7A6F',
 
     // Semantic
-    success: '#3FB950',
-    successLight: '#12261E',
-    warning: '#D29922',
-    warningLight: '#272115',
-    danger: '#F85149',
-    dangerLight: '#2D1216',
-    info: '#58A6FF',
-    infoLight: '#12243B',
+    success: '#30D158',
+    successLight: '#0E2916',
+    warning: '#FF9F0A',
+    warningLight: '#2A1F0A',
+    danger: '#FF453A',
+    dangerLight: '#2D1214',
+    info: '#0A84FF',
+    infoLight: '#0A1A2D',
 
     // Borders & Dividers
-    border: '#30363D',
-    borderLight: '#21262D',
-    divider: '#21262D',
+    border: '#38383A',
+    borderLight: '#2C2C2E',
+    divider: '#38383A',
 
     // Cards & Components
-    cardBackground: '#161B22',
-    cardBorder: '#30363D',
-    tabBar: '#161B22',
-    tabBarBorder: '#30363D',
-    inputBackground: '#0D1117',
-    inputBorder: '#30363D',
+    cardBackground: '#1C1C1E',
+    cardBorder: 'transparent',
+    tabBar: '#1C1C1E',
+    tabBarBorder: '#38383A',
+    inputBackground: '#2C2C2E',
+    inputBorder: '#38383A',
 
     // Status pills
-    statusNew: '#58A6FF',
-    statusContacted: '#D29922',
-    statusQualified: '#3FB950',
-    statusProposed: '#BC8CFF',
-    statusWon: '#3FB950',
-    statusLost: '#F85149',
+    statusNew: '#0A84FF',
+    statusContacted: '#FF9F0A',
+    statusQualified: '#30D158',
+    statusProposed: '#BF5AF2',
+    statusWon: '#30D158',
+    statusLost: '#FF453A',
 
     // Shadows
-    shadow: 'rgba(0, 0, 0, 0.3)',
+    shadow: 'rgba(0, 0, 0, 0.5)',
 
     // Tab bar icons
-    tabIconDefault: '#6E7681',
-    tabIconSelected: '#F0816F',
+    tabIconDefault: '#8E8E93',
+    tabIconSelected: '#2EAF97',
   },
 };

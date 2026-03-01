@@ -1,15 +1,15 @@
+import ConfirmDialog, { type ConfirmDialogButton } from '@/components/ConfirmDialog';
 import MathRenderer from '@/components/MathRenderer';
 import { useAuth } from '@/contexts/AuthContext';
 import { useTheme } from '@/contexts/ThemeContext';
 import { supabase } from '@/lib/supabase';
-import type { ActiveExamState, ExamQuestion } from '@/types/exam';
+import type { ExamQuestion } from '@/types/exam';
 import { Ionicons } from '@expo/vector-icons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import {
     ActivityIndicator,
-    Alert,
     AppState,
     SafeAreaView,
     ScrollView,
@@ -73,44 +73,85 @@ export default function TakeExamScreen() {
     const [isLoading, setIsLoading] = useState(true);
     const [isSubmitting, setIsSubmitting] = useState(false);
     const [showGrid, setShowGrid] = useState(false);
+    const [dialogConfig, setDialogConfig] = useState<{
+        visible: boolean;
+        title: string;
+        message: string;
+        buttons: ConfirmDialogButton[];
+    }>({ visible: false, title: '', message: '', buttons: [] });
+
+    const showDialog = (title: string, message: string, buttons: ConfirmDialogButton[]) => {
+        setDialogConfig({ visible: true, title, message, buttons });
+    };
+    const hideDialog = () => setDialogConfig(prev => ({ ...prev, visible: false }));
 
     const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
     const appStateRef = useRef<AppStateStatus>(AppState.currentState);
     const pausedAtRef = useRef<number | null>(null);
+    const startedAtRef = useRef<number>(Date.now());
+    const hasRestoredRef = useRef(false);
 
-    // Load questions
+    // Load questions + restore saved progress
     useEffect(() => {
         const loadQuestions = async () => {
+            let questionsData: ExamQuestion[] = [];
+            let duration = 60;
+
             if (MOCK_OTP) {
-                const mockQs = ALL_MOCK_QUESTIONS[paperId || ''] || [];
-                setQuestions(mockQs);
-                setTimeLeft((PAPER_DURATIONS[paperId || ''] || 60) * 60);
-                setIsLoading(false);
-                return;
+                questionsData = ALL_MOCK_QUESTIONS[paperId || ''] || [];
+                duration = PAPER_DURATIONS[paperId || ''] || 60;
+            } else {
+                const { data, error } = await supabase
+                    .from('exam_questions')
+                    .select('*')
+                    .eq('paper_id', paperId)
+                    .order('question_number');
+
+                if (error) {
+                    router.back();
+                    return;
+                }
+                questionsData = data as ExamQuestion[];
+
+                const { data: paper } = await supabase
+                    .from('exam_papers')
+                    .select('duration_minutes')
+                    .eq('id', paperId)
+                    .single();
+
+                duration = paper?.duration_minutes || 60;
             }
 
-            const { data, error } = await supabase
-                .from('exam_questions')
-                .select('*')
-                .eq('paper_id', paperId)
-                .order('question_number');
+            setQuestions(questionsData);
 
-            if (error) {
-                Alert.alert('Error', 'Failed to load questions');
-                router.back();
-                return;
-            }
-            setQuestions(data as ExamQuestion[]);
+            // Try to restore saved progress
+            try {
+                const saved = await AsyncStorage.getItem(STORAGE_KEY);
+                if (saved) {
+                    const state = JSON.parse(saved);
+                    if (state.paperId === paperId) {
+                        setAnswers(state.answers || {});
+                        setCurrentIndex(state.currentIndex || 0);
+                        startedAtRef.current = state.startedAt || Date.now();
+                        if (typeof state.timeLeft === 'number' && state.timeLeft > 0) {
+                            setTimeLeft(state.timeLeft);
+                        } else {
+                            const elapsed = Math.floor((Date.now() - state.startedAt) / 1000);
+                            setTimeLeft(Math.max(0, duration * 60 - elapsed));
+                        }
+                        setIsLoading(false);
+                        setTimeout(() => { hasRestoredRef.current = true; }, 0);
+                        return;
+                    }
+                }
+            } catch { }
 
-            // Get paper duration
-            const { data: paper } = await supabase
-                .from('exam_papers')
-                .select('duration_minutes')
-                .eq('id', paperId)
-                .single();
-
-            setTimeLeft((paper?.duration_minutes || 60) * 60);
+            // No saved state — start fresh
+            startedAtRef.current = Date.now();
+            setTimeLeft(duration * 60);
             setIsLoading(false);
+            // Mark restoration complete after a tick so state settles
+            setTimeout(() => { hasRestoredRef.current = true; }, 0);
         };
 
         loadQuestions();
@@ -153,21 +194,22 @@ export default function TakeExamScreen() {
         return () => subscription.remove();
     }, []);
 
-    // Auto-save answers to AsyncStorage (UX risk 3.2)
+    // Auto-save answers + timer to AsyncStorage
     useEffect(() => {
-        if (questions.length === 0) return;
-        const state: ActiveExamState = {
+        if (questions.length === 0 || !hasRestoredRef.current) return;
+        const state = {
             attemptId: `${user?.id}_${paperId}`,
             paperId: paperId || '',
             paperCode: PAPER_CODES[paperId || ''] || '',
             answers,
             currentIndex,
-            startedAt: Date.now(),
+            startedAt: startedAtRef.current,
             durationMinutes: PAPER_DURATIONS[paperId || ''] || 60,
             totalQuestions: questions.length,
+            timeLeft,
         };
         AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(state)).catch(() => { });
-    }, [answers, currentIndex]);
+    }, [answers, currentIndex, timeLeft]);
 
     const handleSelectAnswer = (questionId: string, answer: string) => {
         setAnswers((prev) => ({ ...prev, [questionId]: answer }));
@@ -175,11 +217,10 @@ export default function TakeExamScreen() {
 
     const handleAutoSubmit = useCallback(() => {
         if (timerRef.current) clearInterval(timerRef.current);
-        Alert.alert(
+        showDialog(
             "Time's Up!",
             'Your exam has been automatically submitted.',
-            [{ text: 'View Results', onPress: () => submitExam('auto_submitted') }],
-            { cancelable: false }
+            [{ text: 'View Results', onPress: () => { hideDialog(); submitExam('auto_submitted'); } }],
         );
     }, [answers, questions]);
 
@@ -187,22 +228,22 @@ export default function TakeExamScreen() {
         const unanswered = questions.filter((q) => !answers[q.id]).length;
 
         if (unanswered > 0) {
-            Alert.alert(
+            showDialog(
                 'Unanswered Questions',
                 `You have ${unanswered} unanswered question${unanswered > 1 ? 's' : ''}. Unanswered questions will be marked incorrect. Submit anyway?`,
                 [
-                    { text: 'Review', style: 'cancel' },
-                    { text: 'Submit', style: 'destructive', onPress: () => submitExam('submitted') },
-                ]
+                    { text: 'Review', style: 'cancel', onPress: hideDialog },
+                    { text: 'Submit', style: 'destructive', onPress: () => { hideDialog(); submitExam('submitted'); } },
+                ],
             );
         } else {
-            Alert.alert(
+            showDialog(
                 'Submit Exam',
                 'Are you sure you want to submit? You cannot change your answers after submission.',
                 [
-                    { text: 'Cancel', style: 'cancel' },
-                    { text: 'Submit', onPress: () => submitExam('submitted') },
-                ]
+                    { text: 'Cancel', style: 'cancel', onPress: hideDialog },
+                    { text: 'Submit', onPress: () => { hideDialog(); submitExam('submitted'); } },
+                ],
             );
         }
     };
@@ -245,15 +286,16 @@ export default function TakeExamScreen() {
     };
 
     const handleBack = () => {
-        Alert.alert(
+        showDialog(
             'Leave Exam?',
             'Your progress is saved. You can resume later.',
             [
-                { text: 'Stay', style: 'cancel' },
+                { text: 'Stay', style: 'cancel', onPress: hideDialog },
                 {
                     text: 'Leave',
                     style: 'destructive',
                     onPress: () => {
+                        hideDialog();
                         if (timerRef.current) clearInterval(timerRef.current);
                         router.back();
                     },
@@ -509,6 +551,15 @@ export default function TakeExamScreen() {
                     </View>
                 </View>
             )}
+
+            {/* Confirmation Dialog */}
+            <ConfirmDialog
+                visible={dialogConfig.visible}
+                title={dialogConfig.title}
+                message={dialogConfig.message}
+                buttons={dialogConfig.buttons}
+                onDismiss={hideDialog}
+            />
         </SafeAreaView>
     );
 }
@@ -525,7 +576,13 @@ const styles = StyleSheet.create({
         paddingVertical: 10,
         borderBottomWidth: 0.5,
     },
-    backButton: { padding: 4 },
+    backButton: {
+        padding: 8,
+        minWidth: 44,
+        minHeight: 44,
+        alignItems: 'center',
+        justifyContent: 'center',
+    },
     topCenter: { alignItems: 'center' },
     paperCode: { fontSize: 14, fontWeight: '700' },
     questionCount: { fontSize: 12, marginTop: 2 },
@@ -581,8 +638,9 @@ const styles = StyleSheet.create({
         flexDirection: 'row',
         alignItems: 'center',
         gap: 4,
-        paddingVertical: 8,
-        paddingHorizontal: 4,
+        paddingVertical: 10,
+        paddingHorizontal: 12,
+        minHeight: 44,
     },
     navButtonText: { fontSize: 14, fontWeight: '600' },
     gridButton: {

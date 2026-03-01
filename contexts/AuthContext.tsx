@@ -1,5 +1,6 @@
 import { supabase } from '@/lib/supabase';
 import type { User } from '@/types/database';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import type { Session } from '@supabase/supabase-js';
 import React, { createContext, useCallback, useContext, useEffect, useState } from 'react';
 
@@ -34,19 +35,42 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         isAuthenticated: false,
     });
 
-    /** Fetch the user profile from public.users */
-    const fetchUserProfile = useCallback(async (userId: string): Promise<User | null> => {
+    /** Fetch the user profile from public.users, creating it if needed */
+    const fetchUserProfile = useCallback(async (userId: string, phone?: string | null): Promise<User | null> => {
+        // Try to fetch existing profile
         const { data, error } = await supabase
             .from('users')
             .select('*')
             .eq('id', userId)
             .single();
 
+        if (data) return data as User;
+
+        // Profile doesn't exist — create it (backup for cases where trigger didn't fire)
+        if (error?.code === 'PGRST116') {
+            const { data: newUser, error: insertError } = await supabase
+                .from('users')
+                .insert({
+                    id: userId,
+                    phone: phone || null,
+                    full_name: 'New User',
+                    role: 'candidate',
+                })
+                .select()
+                .single();
+
+            if (insertError) {
+                console.error('Error creating user profile:', insertError.message);
+                return null;
+            }
+            return newUser as User;
+        }
+
         if (error) {
             console.error('Error fetching user profile:', error.message);
             return null;
         }
-        return data as User;
+        return null;
     }, []);
 
     /** Update last_login_at timestamp */
@@ -69,7 +93,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
                 const { data: { session } } = await supabase.auth.getSession();
                 if (session?.user) {
-                    const profile = await fetchUserProfile(session.user.id);
+                    const phone = session.user.phone || null;
+                    const profile = await fetchUserProfile(session.user.id, phone);
                     if (profile) {
                         await updateLastLogin(session.user.id);
                     }
@@ -92,7 +117,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         // Listen for auth state changes
         const { data: { subscription } } = supabase.auth.onAuthStateChange(async (_event, session) => {
             if (session?.user) {
-                const profile = await fetchUserProfile(session.user.id);
+                const profile = await fetchUserProfile(session.user.id, session.user.phone || null);
                 setState({
                     session,
                     user: profile,
@@ -120,20 +145,34 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }, []);
 
     /** Verify OTP code */
+    /** Mock phone → role mapping for development testing */
+    const MOCK_ROLES: Record<string, { role: User['role']; name: string; stage?: string }> = {
+        '+6580000001': { role: 'admin', name: 'Admin User' },
+        '+6580000002': { role: 'director', name: 'Dir. Rachel Tan' },
+        '+6580000003': { role: 'manager', name: 'Mgr. David Lim' },
+        '+6580000004': { role: 'agent', name: 'Agent Sarah Lee' },
+        '+6580000005': { role: 'pa', name: 'PA Jessica Ng' },
+        '+6580000006': { role: 'candidate', name: 'Candidate Jason', stage: 'exam_prep' },
+    };
+
     const verifyOtp = useCallback(async (phone: string, token: string) => {
         if (MOCK_OTP) {
             if (token === MOCK_OTP_CODE) {
-                // Create a mock session for development
-                // In real mode, Supabase would handle this
+                // Resolve role from phone number, default to manager
+                const match = MOCK_ROLES[phone];
+                const mockRole = match?.role || 'manager';
+                const mockName = match?.name || 'Test User';
+                const mockStage = match?.stage || null;
+
                 const mockUser: User = {
                     id: 'mock-user-id',
                     email: null,
                     phone,
-                    full_name: 'Test User',
+                    full_name: mockName,
                     avatar_url: null,
-                    role: 'manager', // Default mock role — change for testing different roles
+                    role: mockRole,
                     reports_to: null,
-                    lifecycle_stage: null,
+                    lifecycle_stage: mockStage as User['lifecycle_stage'],
                     date_of_birth: null,
                     last_login_at: new Date().toISOString(),
                     is_active: true,
@@ -161,6 +200,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
     /** Sign out */
     const signOut = useCallback(async () => {
+        await AsyncStorage.removeItem('lyfe_view_mode');
         if (MOCK_OTP) {
             setState({ session: null, user: null, isLoading: false, isAuthenticated: false });
             return;

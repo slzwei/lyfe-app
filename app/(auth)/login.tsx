@@ -1,7 +1,6 @@
 import LyfeLogo from '@/components/LyfeLogo';
 import { useAuth } from '@/contexts/AuthContext';
 import { useTheme } from '@/contexts/ThemeContext';
-import { Ionicons } from '@expo/vector-icons';
 import React, { useRef, useState } from 'react';
 import {
     ActivityIndicator,
@@ -19,11 +18,11 @@ import {
 type Step = 'phone' | 'otp';
 
 export default function LoginScreen() {
-    const { colors, isDark } = useTheme();
+    const { colors } = useTheme();
     const { signInWithOtp, verifyOtp } = useAuth();
 
     const [step, setStep] = useState<Step>('phone');
-    const [phone, setPhone] = useState('+65');
+    const [phone, setPhone] = useState('');
     const [otp, setOtp] = useState(['', '', '', '', '', '']);
     const [isLoading, setIsLoading] = useState(false);
     const [error, setError] = useState<string | null>(null);
@@ -40,13 +39,19 @@ export default function LoginScreen() {
     };
 
     const handleSendOtp = async () => {
-        if (phone.length < 10) {
-            setError('Please enter a valid phone number');
+        const cleanedPhone = phone.replace(/\D/g, '');
+        if (cleanedPhone.length !== 8) {
+            setError('Please enter a valid 8-digit phone number');
+            return;
+        }
+        if (!/^[89]/.test(cleanedPhone)) {
+            setError('Singapore mobile numbers must start with 8 or 9');
             return;
         }
         setError(null);
         setIsLoading(true);
-        const { error: otpError } = await signInWithOtp(phone);
+        const fullPhoneNumber = `+65${cleanedPhone}`;
+        const { error: otpError } = await signInWithOtp(fullPhoneNumber);
         setIsLoading(false);
         if (otpError) {
             setError(otpError.message);
@@ -59,18 +64,12 @@ export default function LoginScreen() {
         const newOtp = [...otp];
         newOtp[index] = value;
         setOtp(newOtp);
-
-        // Auto-focus next input
         if (value && index < 5) {
             otpRefs.current[index + 1]?.focus();
         }
-
-        // Auto-submit when all 6 digits entered
         if (value && index === 5) {
             const code = newOtp.join('');
-            if (code.length === 6) {
-                handleVerifyOtp(code);
-            }
+            if (code.length === 6) handleVerifyOtp(code);
         }
     };
 
@@ -88,7 +87,9 @@ export default function LoginScreen() {
         }
         setError(null);
         setIsLoading(true);
-        const { error: verifyError } = await verifyOtp(phone, otpCode);
+        const cleanedPhone = phone.replace(/\D/g, '');
+        const fullPhoneNumber = `+65${cleanedPhone}`;
+        const { error: verifyError } = await verifyOtp(fullPhoneNumber, otpCode);
         setIsLoading(false);
         if (verifyError) {
             setError(verifyError.message);
@@ -98,7 +99,7 @@ export default function LoginScreen() {
     };
 
     return (
-        <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]}>
+        <SafeAreaView style={[styles.container, { backgroundColor: colors.surfacePrimary }]}>
             <KeyboardAvoidingView
                 style={styles.keyboardView}
                 behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
@@ -107,7 +108,7 @@ export default function LoginScreen() {
                     {/* Logo */}
                     <View style={styles.logoContainer}>
                         <LyfeLogo size="lg" />
-                        <Text style={[styles.tagline, { color: colors.textSecondary }]}>
+                        <Text style={[styles.tagline, { color: colors.textTertiary }]}>
                             Insurance, simplified.
                         </Text>
                     </View>
@@ -119,7 +120,7 @@ export default function LoginScreen() {
                                 <Text style={[styles.heading, { color: colors.textPrimary }]}>
                                     Welcome back
                                 </Text>
-                                <Text style={[styles.subheading, { color: colors.textSecondary }]}>
+                                <Text style={[styles.subheading, { color: colors.textTertiary }]}>
                                     Enter your phone number to continue
                                 </Text>
 
@@ -127,19 +128,36 @@ export default function LoginScreen() {
                                     style={[
                                         styles.phoneInputContainer,
                                         {
-                                            backgroundColor: colors.inputBackground,
-                                            borderColor: error ? colors.danger : colors.inputBorder,
+                                            backgroundColor: colors.background,
+                                            borderColor: error ? colors.danger : colors.border,
                                         },
                                     ]}
                                 >
-                                    <Ionicons name="phone-portrait-outline" size={18} color={colors.textSecondary} style={{ marginRight: 12 }} />
+                                    <View style={styles.countryCodeContainer}>
+                                        <Text style={styles.countryFlag}>🇸🇬</Text>
+                                        <Text style={[styles.countryCodeText, { color: colors.textPrimary }]}>+65</Text>
+                                    </View>
+                                    <View style={[styles.divider, { backgroundColor: colors.border }]} />
                                     <TextInput
                                         style={[styles.phoneInput, { color: colors.textPrimary }]}
                                         value={phone}
-                                        onChangeText={setPhone}
-                                        keyboardType="phone-pad"
-                                        placeholder="+65 9XXX XXXX"
+                                        onChangeText={(text) => {
+                                            let cleaned = text.replace(/\D/g, '');
+                                            if (cleaned.startsWith('65') && cleaned.length > 8) {
+                                                cleaned = cleaned.substring(2);
+                                            }
+                                            const truncated = cleaned.slice(0, 8);
+                                            let formatted = truncated;
+                                            if (truncated.length > 4) {
+                                                formatted = `${truncated.slice(0, 4)} ${truncated.slice(4)}`;
+                                            }
+                                            setPhone(formatted);
+                                            setError(null);
+                                        }}
+                                        keyboardType="number-pad"
+                                        placeholder="9XXX XXXX"
                                         placeholderTextColor={colors.textTertiary}
+                                        maxLength={9}
                                         autoFocus
                                     />
                                 </View>
@@ -164,8 +182,8 @@ export default function LoginScreen() {
                                 <Text style={[styles.heading, { color: colors.textPrimary }]}>
                                     Verify your number
                                 </Text>
-                                <Text style={[styles.subheading, { color: colors.textSecondary }]}>
-                                    Enter the 6-digit code sent to {phone}
+                                <Text style={[styles.subheading, { color: colors.textTertiary }]}>
+                                    Enter the 6-digit code sent to +65 {phone}
                                 </Text>
 
                                 <View style={styles.otpContainer}>
@@ -176,12 +194,12 @@ export default function LoginScreen() {
                                             style={[
                                                 styles.otpInput,
                                                 {
-                                                    backgroundColor: colors.inputBackground,
+                                                    backgroundColor: colors.background,
                                                     borderColor: digit
                                                         ? colors.accent
                                                         : error
                                                             ? colors.danger
-                                                            : colors.inputBorder,
+                                                            : colors.border,
                                                     color: colors.textPrimary,
                                                 },
                                             ]}
@@ -238,12 +256,8 @@ export default function LoginScreen() {
 }
 
 const styles = StyleSheet.create({
-    container: {
-        flex: 1,
-    },
-    keyboardView: {
-        flex: 1,
-    },
+    container: { flex: 1 },
+    keyboardView: { flex: 1 },
     content: {
         flex: 1,
         paddingHorizontal: 32,
@@ -264,32 +278,50 @@ const styles = StyleSheet.create({
         alignSelf: 'center',
     },
     heading: {
-        fontSize: 24,
+        fontSize: 28,
         fontWeight: '700',
         marginBottom: 8,
+        letterSpacing: -0.5,
     },
     subheading: {
         fontSize: 15,
-        marginBottom: 24,
+        marginBottom: 28,
         lineHeight: 22,
     },
     phoneInputContainer: {
         flexDirection: 'row',
         alignItems: 'center',
-        borderWidth: 1,
-        borderRadius: 12,
+        borderWidth: 1.5,
+        borderRadius: 16,
         paddingHorizontal: 16,
-        height: 52,
+        height: 56,
         marginBottom: 8,
     },
-    phonePrefix: {
-        fontSize: 18,
+    countryCodeContainer: {
+        flexDirection: 'row',
+        alignItems: 'center',
         marginRight: 12,
+    },
+    countryFlag: {
+        fontSize: 20,
+        marginRight: 6,
+    },
+    countryCodeText: {
+        fontSize: 16,
+        fontWeight: '600',
+        letterSpacing: 0.5,
+    },
+    divider: {
+        width: 1,
+        height: 24,
+        marginRight: 12,
+        opacity: 0.5,
     },
     phoneInput: {
         flex: 1,
-        fontSize: 17,
-        letterSpacing: 0.5,
+        fontSize: 18,
+        fontWeight: '500',
+        letterSpacing: 1,
     },
     otpContainer: {
         flexDirection: 'row',

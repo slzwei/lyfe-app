@@ -8,7 +8,8 @@ import { StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 interface LeadCardProps {
     lead: Lead;
     onPress: () => void;
-    lastActivity?: string; // e.g. "Added note 2h ago"
+    lastActivity?: string;
+    agentName?: string;
 }
 
 function timeAgo(dateStr: string): string {
@@ -24,12 +25,12 @@ function timeAgo(dateStr: string): string {
     return new Date(dateStr).toLocaleDateString('en-SG', { day: 'numeric', month: 'short' });
 }
 
-export default function LeadCard({ lead, onPress, lastActivity }: LeadCardProps) {
+export default function LeadCard({ lead, onPress, lastActivity, agentName }: LeadCardProps) {
     const { colors } = useTheme();
 
     return (
         <TouchableOpacity
-            style={[styles.card, { backgroundColor: colors.cardBackground, borderColor: colors.cardBorder }]}
+            style={[styles.card, { backgroundColor: colors.cardBackground }]}
             onPress={onPress}
             activeOpacity={0.7}
             accessibilityRole="button"
@@ -56,15 +57,32 @@ export default function LeadCard({ lead, onPress, lastActivity }: LeadCardProps)
             </View>
 
             {/* Bottom Row */}
-            <View style={[styles.bottomRow, { borderTopColor: colors.borderLight }]}>
-                <View style={styles.tag}>
-                    <Ionicons name="shield-outline" size={13} color={colors.textTertiary} />
-                    <Text style={[styles.tagText, { color: colors.textSecondary }]}>
-                        {PRODUCT_LABELS[lead.product_interest]}
-                    </Text>
+            <View style={[styles.bottomRow, { borderTopColor: colors.border }]}>
+                <View style={styles.bottomLeft}>
+                    <View style={styles.tagsRow}>
+                        <View style={styles.tag}>
+                            <Ionicons name="shield-outline" size={13} color={colors.textTertiary} />
+                            <Text style={[styles.tagText, { color: colors.textTertiary }]}>
+                                {PRODUCT_LABELS[lead.product_interest]}
+                            </Text>
+                        </View>
+                        {agentName && (
+                            <View style={styles.tag}>
+                                <Ionicons name="person-outline" size={13} color={colors.accent} />
+                                <Text style={[styles.tagText, { color: colors.accent, fontWeight: '600' }]}>
+                                    {agentName}
+                                </Text>
+                            </View>
+                        )}
+                    </View>
+                    {lastActivity && (
+                        <Text style={[styles.activityPreview, { color: colors.textTertiary }]} numberOfLines={1}>
+                            {lastActivity}
+                        </Text>
+                    )}
                 </View>
                 <Text style={[styles.timeText, { color: colors.textTertiary }]}>
-                    {lastActivity || timeAgo(lead.updated_at)}
+                    {timeAgo(lead.updated_at)}
                 </Text>
             </View>
         </TouchableOpacity>
@@ -74,9 +92,8 @@ export default function LeadCard({ lead, onPress, lastActivity }: LeadCardProps)
 const styles = StyleSheet.create({
     card: {
         borderRadius: 12,
-        borderWidth: 0.5,
         padding: 14,
-        marginBottom: 8,
+        marginBottom: 6,
     },
     topRow: {
         flexDirection: 'row',
@@ -91,29 +108,36 @@ const styles = StyleSheet.create({
         marginRight: 8,
     },
     avatar: {
-        width: 36,
-        height: 36,
-        borderRadius: 10,
+        width: 38,
+        height: 38,
+        borderRadius: 19,
         alignItems: 'center',
         justifyContent: 'center',
     },
-    avatarText: { fontSize: 16, fontWeight: '800' },
+    avatarText: { fontSize: 15, fontWeight: '600' },
     nameCol: { flex: 1 },
-    name: { fontSize: 15, fontWeight: '700' },
-    phone: { fontSize: 12, marginTop: 1 },
+    name: { fontSize: 16, fontWeight: '600', letterSpacing: -0.2 },
+    phone: { fontSize: 13, marginTop: 1 },
     bottomRow: {
         flexDirection: 'row',
         alignItems: 'center',
         justifyContent: 'space-between',
         marginTop: 10,
         paddingTop: 10,
-        borderTopWidth: 0.5,
+        borderTopWidth: StyleSheet.hairlineWidth,
     },
     tag: {
         flexDirection: 'row',
         alignItems: 'center',
         gap: 4,
     },
+    tagsRow: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 10,
+    },
     tagText: { fontSize: 12, fontWeight: '500' },
-    timeText: { fontSize: 11 },
+    timeText: { fontSize: 12 },
+    bottomLeft: { flex: 1, marginRight: 8, gap: 4 },
+    activityPreview: { fontSize: 11, fontStyle: 'italic' },
 });
