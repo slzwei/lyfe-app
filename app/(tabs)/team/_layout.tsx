@@ -13,6 +13,14 @@ export default function TeamLayout() {
             }}
         >
             <Stack.Screen name="index" />
+            <Stack.Screen
+                name="candidate/[candidateId]"
+                options={{ presentation: 'card' }}
+            />
+            <Stack.Screen
+                name="add-candidate"
+                options={{ presentation: 'modal' }}
+            />
         </Stack>
     );
 }

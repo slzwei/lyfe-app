@@ -131,7 +131,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
                     phone,
                     full_name: 'Test User',
                     avatar_url: null,
-                    role: 'agent', // Default mock role — change for testing different roles
+                    role: 'manager', // Default mock role — change for testing different roles
                     reports_to: null,
                     lifecycle_stage: null,
                     date_of_birth: null,
