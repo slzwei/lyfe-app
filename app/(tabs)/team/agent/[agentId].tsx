@@ -1,11 +1,13 @@
 import LeadCard from '@/components/LeadCard';
+import LoadingState from '@/components/LoadingState';
 import ScreenHeader from '@/components/ScreenHeader';
 import { useTheme } from '@/contexts/ThemeContext';
-import type { LeadStatus } from '@/types/lead';
+import { fetchTeamMember, type TeamMember } from '@/lib/team';
+import type { Lead, LeadStatus } from '@/types/lead';
 import { STATUS_CONFIG } from '@/types/lead';
 import { Ionicons } from '@expo/vector-icons';
 import { useLocalSearchParams, useRouter } from 'expo-router';
-import React, { useMemo } from 'react';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import {
     Linking,
     SafeAreaView,
@@ -16,35 +18,9 @@ import {
     View
 } from 'react-native';
 
-// Re-import mock leads
-import { MOCK_LEADS } from '../../../(tabs)/leads/index';
-
-// ── Agent data (matches team/index.tsx) ──
-interface AgentData {
-    id: string;
-    name: string;
-    role: 'manager' | 'agent';
-    phone: string;
-    email: string | null;
-    leadsCount: number;
-    wonCount: number;
-    conversionRate: number;
-    status: 'active' | 'inactive';
-    joinedDate: string;
-    assignedToKey: string; // maps to Lead.assigned_to
-}
-
-const AGENTS_MAP: Record<string, AgentData> = {
-    a1: { id: 'a1', name: 'Alice Tan', role: 'agent', phone: '+65 9111 2222', email: 'alice.tan@lyfe.sg', leadsCount: 12, wonCount: 4, conversionRate: 33, status: 'active', joinedDate: '2024-09-15', assignedToKey: 'agent-alice' },
-    a2: { id: 'a2', name: 'Bob Lee', role: 'agent', phone: '+65 8222 3333', email: 'bob.lee@lyfe.sg', leadsCount: 8, wonCount: 2, conversionRate: 25, status: 'active', joinedDate: '2024-11-01', assignedToKey: 'agent-bob' },
-    a3: { id: 'a3', name: 'Charlie Lim', role: 'agent', phone: '+65 9333 4444', email: null, leadsCount: 5, wonCount: 1, conversionRate: 20, status: 'active', joinedDate: '2025-01-10', assignedToKey: 'agent-charlie' },
-    a4: { id: 'a4', name: 'Diana Ng', role: 'agent', phone: '+65 8444 5555', email: 'diana.ng@lyfe.sg', leadsCount: 3, wonCount: 0, conversionRate: 0, status: 'inactive', joinedDate: '2024-08-20', assignedToKey: 'agent-diana' },
-    m1: { id: 'm1', name: 'Emily Koh', role: 'manager', phone: '+65 9555 6666', email: 'emily.koh@lyfe.sg', leadsCount: 24, wonCount: 8, conversionRate: 33, status: 'active', joinedDate: '2024-03-01', assignedToKey: 'manager-emily' },
-    m2: { id: 'm2', name: 'Frank Goh', role: 'manager', phone: '+65 8666 7777', email: 'frank.goh@lyfe.sg', leadsCount: 18, wonCount: 5, conversionRate: 28, status: 'active', joinedDate: '2024-06-15', assignedToKey: 'manager-frank' },
-};
+const MOCK_OTP = process.env.EXPO_PUBLIC_MOCK_OTP === 'true';
 
 const AVATAR_COLORS = ['#6366F1', '#0D9488', '#E11D48', '#F59E0B', '#8B5CF6', '#06B6D4'];
-
 const PIPELINE_STATUSES: LeadStatus[] = ['new', 'contacted', 'qualified', 'proposed', 'won', 'lost'];
 
 function formatDate(dateStr: string) {
@@ -56,12 +32,40 @@ export default function AgentDetailScreen() {
     const router = useRouter();
     const { agentId } = useLocalSearchParams<{ agentId: string }>();
 
-    const agent = AGENTS_MAP[agentId ?? ''];
+    const [agent, setAgent] = useState<TeamMember | null>(null);
+    const [agentLeads, setAgentLeads] = useState<Lead[]>([]);
+    const [isLoading, setIsLoading] = useState(true);
 
-    const agentLeads = useMemo(() => {
-        if (!agent) return [];
-        return MOCK_LEADS.filter((l) => l.assigned_to === agent.assignedToKey);
-    }, [agent]);
+    const loadAgent = useCallback(async () => {
+        if (MOCK_OTP) {
+            // Import mock data from team index
+            const { MOCK_AGENTS, MOCK_MANAGERS } = require('../index');
+            const allMock = [...MOCK_MANAGERS, ...MOCK_AGENTS];
+            const found = allMock.find((m: TeamMember) => m.id === agentId);
+            setAgent(found || null);
+            // Mock leads — import from leads screen
+            try {
+                const { MOCK_LEADS } = require('../../leads/index');
+                setAgentLeads(MOCK_LEADS || []);
+            } catch {
+                setAgentLeads([]);
+            }
+            setIsLoading(false);
+            return;
+        }
+
+        if (!agentId) return;
+        const { member, leads, error } = await fetchTeamMember(agentId);
+        if (!error && member) {
+            setAgent(member);
+            setAgentLeads(leads);
+        }
+        setIsLoading(false);
+    }, [agentId]);
+
+    useEffect(() => {
+        loadAgent();
+    }, [loadAgent]);
 
     const pipelineCounts = useMemo(() => {
         const counts: Record<string, number> = {};
@@ -71,6 +75,15 @@ export default function AgentDetailScreen() {
     }, [agentLeads]);
 
     const totalPipelineLeads = agentLeads.length;
+
+    if (isLoading) {
+        return (
+            <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]}>
+                <ScreenHeader title="Team Member" showBack backLabel="Team" />
+                <LoadingState />
+            </SafeAreaView>
+        );
+    }
 
     if (!agent) {
         return (
@@ -87,10 +100,13 @@ export default function AgentDetailScreen() {
     const avatarColor = AVATAR_COLORS[agent.name.charCodeAt(0) % AVATAR_COLORS.length];
     const initials = agent.name.split(' ').map((n) => n[0]).join('');
     const isManager = agent.role === 'manager';
+    const lostCount = pipelineCounts['lost'] || 0;
 
     const handleCall = () => {
-        const tel = agent.phone.replace(/\s/g, '');
-        Linking.openURL(`tel:${tel}`);
+        if (agent.phone) {
+            const tel = agent.phone.replace(/\s/g, '');
+            Linking.openURL(`tel:${tel}`);
+        }
     };
 
     const handleEmail = () => {
@@ -122,17 +138,17 @@ export default function AgentDetailScreen() {
                                 </View>
                                 <View style={[
                                     styles.statusPill,
-                                    { backgroundColor: agent.status === 'active' ? colors.successLight : colors.surfaceSecondary }
+                                    { backgroundColor: agent.isActive ? colors.successLight : colors.surfaceSecondary }
                                 ]}>
                                     <View style={[
                                         styles.statusDot,
-                                        { backgroundColor: agent.status === 'active' ? colors.success : colors.textTertiary }
+                                        { backgroundColor: agent.isActive ? colors.success : colors.textTertiary }
                                     ]} />
                                     <Text style={[
                                         styles.statusText,
-                                        { color: agent.status === 'active' ? colors.success : colors.textTertiary }
+                                        { color: agent.isActive ? colors.success : colors.textTertiary }
                                     ]}>
-                                        {agent.status === 'active' ? 'Active' : 'Inactive'}
+                                        {agent.isActive ? 'Active' : 'Inactive'}
                                     </Text>
                                 </View>
                             </View>
@@ -148,6 +164,7 @@ export default function AgentDetailScreen() {
                             style={[styles.actionBtn, { backgroundColor: colors.accent }]}
                             onPress={handleCall}
                             activeOpacity={0.8}
+                            disabled={!agent.phone}
                         >
                             <Ionicons name="call" size={18} color="#FFF" />
                             <Text style={styles.actionBtnText}>Call</Text>
@@ -184,7 +201,7 @@ export default function AgentDetailScreen() {
                     </View>
                     <View style={[styles.statCard, { backgroundColor: colors.cardBackground, shadowColor: colors.textPrimary }]}>
                         <Text style={[styles.statValue, { color: colors.textPrimary }]}>
-                            {agent.leadsCount - agent.wonCount - (pipelineCounts['lost'] || 0)}
+                            {agent.leadsCount - agent.wonCount - lostCount}
                         </Text>
                         <Text style={[styles.statLabel, { color: colors.textTertiary }]}>In Pipeline</Text>
                     </View>

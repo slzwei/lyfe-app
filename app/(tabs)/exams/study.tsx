@@ -67,13 +67,13 @@ export default function StudyScreen() {
 
     return (
         <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]}>
+            <ScreenHeader
+                showBack
+                backLabel="Home"
+                title="Study Materials"
+                subtitle={`${totalChapters} chapters · ~${Math.round(totalMinutes / 60)}h total`}
+            />
             <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
-                <ScreenHeader
-                    showBack
-                    backLabel="Home"
-                    title="Study Materials"
-                    subtitle={`${totalChapters} chapters · ~${Math.round(totalMinutes / 60)}h total`}
-                />
 
                 {/* Overview Card */}
                 <View style={[styles.overviewCard, { backgroundColor: colors.accent }]}>
@@ -167,7 +167,7 @@ export default function StudyScreen() {
 
 const styles = StyleSheet.create({
     container: { flex: 1 },
-    scrollContent: { paddingHorizontal: 16, paddingBottom: 40 },
+    scrollContent: { paddingHorizontal: 16, paddingBottom: 40, paddingTop: 12 },
     overviewCard: {
         borderRadius: 20,
         padding: 24,

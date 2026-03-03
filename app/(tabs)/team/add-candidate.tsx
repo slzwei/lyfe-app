@@ -1,8 +1,11 @@
+import { useAuth } from '@/contexts/AuthContext';
 import { useTheme } from '@/contexts/ThemeContext';
+import { createCandidate, type CreateCandidateInput } from '@/lib/recruitment';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import React, { useState } from 'react';
 import {
+    ActivityIndicator,
     Alert,
     KeyboardAvoidingView,
     Modal,
@@ -16,8 +19,11 @@ import {
     View,
 } from 'react-native';
 
+const MOCK_OTP = process.env.EXPO_PUBLIC_MOCK_OTP === 'true';
+
 export default function AddCandidateScreen() {
     const { colors } = useTheme();
+    const { user } = useAuth();
     const router = useRouter();
     const [name, setName] = useState('');
     const [phone, setPhone] = useState('');
@@ -26,6 +32,8 @@ export default function AddCandidateScreen() {
     const [errors, setErrors] = useState<Record<string, string>>({});
     const [showSuccess, setShowSuccess] = useState(false);
     const [inviteLink, setInviteLink] = useState('');
+    const [isSaving, setIsSaving] = useState(false);
+    const [saveError, setSaveError] = useState<string | null>(null);
 
     const validate = (): boolean => {
         const newErrors: Record<string, string> = {};
@@ -35,10 +43,40 @@ export default function AddCandidateScreen() {
         return Object.keys(newErrors).length === 0;
     };
 
-    const handleSubmit = () => {
+    const handleSubmit = async () => {
         if (!validate()) return;
-        const token = `inv_${Math.random().toString(36).substring(2, 12)}`;
-        setInviteLink(`https://lyfe.app/invite/${token}`);
+        setSaveError(null);
+
+        if (MOCK_OTP) {
+            // Mock mode: just show success
+            const token = `inv_${Math.random().toString(36).substring(2, 12)}`;
+            setInviteLink(`https://lyfe.app/invite/${token}`);
+            setShowSuccess(true);
+            return;
+        }
+
+        if (!user?.id) {
+            setSaveError('Not authenticated');
+            return;
+        }
+
+        setIsSaving(true);
+        const input: CreateCandidateInput = {
+            name: name.trim(),
+            phone: phone.trim(),
+            email: email.trim() || null,
+            notes: notes.trim() || null,
+        };
+
+        const { inviteToken, error } = await createCandidate(input, user.id);
+        setIsSaving(false);
+
+        if (error) {
+            setSaveError(error);
+            return;
+        }
+
+        setInviteLink(`https://lyfe.app/invite/${inviteToken}`);
         setShowSuccess(true);
     };
 
@@ -63,6 +101,14 @@ export default function AddCandidateScreen() {
                 behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
             >
                 <ScrollView contentContainerStyle={styles.scrollContent}>
+                    {/* Save Error */}
+                    {saveError && (
+                        <View style={[styles.errorBanner, { backgroundColor: '#FEE2E2' }]}>
+                            <Ionicons name="alert-circle" size={16} color="#DC2626" />
+                            <Text style={styles.errorBannerText}>{saveError}</Text>
+                        </View>
+                    )}
+
                     {/* Form Card */}
                     <View style={[styles.formCard, { backgroundColor: colors.cardBackground }]}>
                         <FormField
@@ -117,12 +163,19 @@ export default function AddCandidateScreen() {
                 {/* Submit Button */}
                 <View style={styles.submitContainer}>
                     <TouchableOpacity
-                        style={[styles.submitButton, { backgroundColor: colors.accent }]}
+                        style={[styles.submitButton, { backgroundColor: colors.accent, opacity: isSaving ? 0.6 : 1 }]}
                         onPress={handleSubmit}
                         activeOpacity={0.8}
+                        disabled={isSaving}
                     >
-                        <Ionicons name="person-add-outline" size={18} color="#FFFFFF" />
-                        <Text style={styles.submitText}>Create Candidate</Text>
+                        {isSaving ? (
+                            <ActivityIndicator size="small" color="#FFFFFF" />
+                        ) : (
+                            <>
+                                <Ionicons name="person-add-outline" size={18} color="#FFFFFF" />
+                                <Text style={styles.submitText}>Create Candidate</Text>
+                            </>
+                        )}
                     </TouchableOpacity>
                 </View>
             </KeyboardAvoidingView>
@@ -193,6 +246,16 @@ const styles = StyleSheet.create({
     closeBtn: { padding: 8 },
     navTitle: { fontSize: 17, fontWeight: '600' },
     scrollContent: { paddingBottom: 20 },
+    errorBanner: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 8,
+        padding: 12,
+        borderRadius: 10,
+        marginHorizontal: 16,
+        marginBottom: 12,
+    },
+    errorBannerText: { flex: 1, fontSize: 13, color: '#DC2626' },
 
     // Form Card — iOS grouped style
     formCard: {

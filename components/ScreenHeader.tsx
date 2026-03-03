@@ -10,12 +10,12 @@ interface BannerConfig {
 }
 
 interface ScreenHeaderProps {
-    /** Primary title — iOS Large Title style (34px, 800 weight) */
+    /** Title — compact semibold style (Instagram-style nav bar) */
     title: string;
-    /** Optional subtitle below the title */
+    /** Optional custom element to render instead of the title text (e.g. a logo) */
+    titleElement?: ReactNode;
+    /** Optional subtitle below the title (for sub-screens only) */
     subtitle?: string;
-    /** Greeting line above the title (e.g. "Good afternoon") */
-    greeting?: string;
     /** Custom right-side element (button, avatar, etc.) */
     rightAction?: ReactNode;
     /** Show iOS-style back chevron */
@@ -26,20 +26,17 @@ interface ScreenHeaderProps {
     onBack?: () => void;
     /** Optional contextual banner above the title */
     banner?: BannerConfig;
-    /** If true, render without the bar surface (transparent background, no border) */
-    transparent?: boolean;
 }
 
 export default function ScreenHeader({
     title,
+    titleElement,
     subtitle,
-    greeting,
     rightAction,
     showBack,
     backLabel,
     onBack,
     banner,
-    transparent,
 }: ScreenHeaderProps) {
     const { colors } = useTheme();
     const router = useRouter();
@@ -56,8 +53,8 @@ export default function ScreenHeader({
         <View
             style={[
                 styles.container,
-                !transparent && {
-                    backgroundColor: colors.surfacePrimary,
+                {
+                    backgroundColor: colors.background,
                     borderBottomWidth: StyleSheet.hairlineWidth,
                     borderBottomColor: colors.border,
                 },
@@ -75,46 +72,52 @@ export default function ScreenHeader({
                 </View>
             )}
 
-            {/* Back Navigation */}
-            {showBack && (
-                <TouchableOpacity
-                    onPress={handleBack}
-                    style={styles.backBtn}
-                    hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-                    accessibilityRole="button"
-                    accessibilityLabel={backLabel ? `Back to ${backLabel}` : 'Go back'}
-                >
-                    <Ionicons name="chevron-back" size={22} color={colors.accent} />
-                    {backLabel && (
-                        <Text style={[styles.backLabel, { color: colors.accent }]}>{backLabel}</Text>
-                    )}
-                </TouchableOpacity>
-            )}
+            {/* Main row: back / title / right action */}
+            <View style={styles.row}>
+                {/* Left: back button or spacer */}
+                {showBack ? (
+                    <TouchableOpacity
+                        onPress={handleBack}
+                        style={styles.backBtn}
+                        hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                        accessibilityRole="button"
+                        accessibilityLabel={backLabel ? `Back to ${backLabel}` : 'Go back'}
+                    >
+                        <Ionicons name="chevron-back" size={22} color={colors.accent} />
+                        {backLabel && (
+                            <Text style={[styles.backLabel, { color: colors.accent }]}>{backLabel}</Text>
+                        )}
+                    </TouchableOpacity>
+                ) : (
+                    <View style={styles.leftSpacer} />
+                )}
 
-            {/* Title Row */}
-            <View style={styles.titleRow}>
-                <View style={styles.titleCol}>
-                    {greeting && (
-                        <Text style={[styles.greeting, { color: colors.textTertiary }]}>
-                            {greeting}
+                {/* Center: title (or left-aligned when no back) */}
+                <View style={[styles.titleContainer, !showBack && styles.titleContainerLeft]}>
+                    {titleElement || (
+                        <Text
+                            style={[
+                                showBack ? styles.detailTitle : styles.title,
+                                { color: colors.textPrimary },
+                            ]}
+                            numberOfLines={1}
+                        >
+                            {title}
                         </Text>
                     )}
-                    <Text
-                        style={[
-                            showBack ? styles.detailTitle : styles.title,
-                            { color: colors.textPrimary },
-                        ]}
-                        numberOfLines={1}
-                    >
-                        {title}
-                    </Text>
                     {subtitle && (
-                        <Text style={[styles.subtitle, { color: colors.textSecondary }]}>
+                        <Text style={[styles.subtitle, { color: colors.textSecondary }]} numberOfLines={1}>
                             {subtitle}
                         </Text>
                     )}
                 </View>
-                {rightAction && <View style={styles.rightAction}>{rightAction}</View>}
+
+                {/* Right: action or spacer */}
+                {rightAction ? (
+                    <View style={styles.rightAction}>{rightAction}</View>
+                ) : (
+                    <View style={styles.rightSpacer} />
+                )}
             </View>
         </View>
     );
@@ -122,64 +125,71 @@ export default function ScreenHeader({
 
 const styles = StyleSheet.create({
     container: {
-        paddingHorizontal: 20,
-        paddingTop: 12,
-        paddingBottom: 14,
+        zIndex: 10,
     },
     banner: {
         flexDirection: 'row',
         alignItems: 'center',
         gap: 6,
-        paddingHorizontal: 12,
+        paddingHorizontal: 16,
         paddingVertical: 8,
+        marginHorizontal: 16,
+        marginTop: 8,
         borderRadius: 8,
-        marginBottom: 8,
     },
     bannerText: {
         fontSize: 12,
         fontWeight: '500',
         flex: 1,
     },
+    row: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        minHeight: 44,
+        paddingHorizontal: 16,
+        paddingVertical: 8,
+    },
     backBtn: {
         flexDirection: 'row',
         alignItems: 'center',
         gap: 2,
-        height: 32,
         marginLeft: -8,
-        marginBottom: 4,
+        minWidth: 44,
     },
     backLabel: {
         fontSize: 16,
         fontWeight: '500',
     },
-    titleRow: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        justifyContent: 'space-between',
+    leftSpacer: {
+        width: 0,
     },
-    titleCol: {
+    titleContainer: {
         flex: 1,
-        marginRight: 12,
+        alignItems: 'center',
+        justifyContent: 'center',
     },
-    greeting: {
-        fontSize: 15,
-        fontWeight: '400',
+    titleContainerLeft: {
+        alignItems: 'flex-start',
     },
     title: {
-        fontSize: 28,
-        fontWeight: '800',
-        letterSpacing: -0.5,
-    },
-    detailTitle: {
-        fontSize: 20,
-        fontWeight: '800',
+        fontSize: 18,
+        fontWeight: '700',
         letterSpacing: -0.3,
     },
+    detailTitle: {
+        fontSize: 17,
+        fontWeight: '600',
+        letterSpacing: -0.2,
+    },
     subtitle: {
-        fontSize: 14,
-        marginTop: 2,
+        fontSize: 13,
+        marginTop: 1,
     },
     rightAction: {
         flexShrink: 0,
+        marginLeft: 12,
+    },
+    rightSpacer: {
+        width: 0,
     },
 });

@@ -1,3 +1,4 @@
+import LyfeLogo from '@/components/LyfeLogo';
 import ScreenHeader from '@/components/ScreenHeader';
 import { useAuth } from '@/contexts/AuthContext';
 import { useTheme } from '@/contexts/ThemeContext';
@@ -112,6 +113,22 @@ export default function HomeScreen() {
 
     return (
         <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]}>
+            {/* Sticky Header */}
+            <ScreenHeader
+                title="Lyfe"
+                titleElement={<LyfeLogo size="sm" />}
+                rightAction={
+                    <TouchableOpacity
+                        style={[styles.avatarCircle, { backgroundColor: colors.accentLight }]}
+                        onPress={() => router.push('/(tabs)/profile' as any)}
+                        activeOpacity={0.7}
+                    >
+                        <Text style={[styles.avatarText, { color: colors.accent }]}>
+                            {user?.full_name?.charAt(0)?.toUpperCase() || '?'}
+                        </Text>
+                    </TouchableOpacity>
+                }
+            />
             <ScrollView
                 contentContainerStyle={styles.scrollContent}
                 showsVerticalScrollIndicator={false}
@@ -119,22 +136,8 @@ export default function HomeScreen() {
                     <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={colors.accent} />
                 }
             >
-                {/* Header */}
-                <ScreenHeader
-                    greeting={greeting}
-                    title={firstName}
-                    rightAction={
-                        <TouchableOpacity
-                            style={[styles.avatarCircle, { backgroundColor: colors.accentLight }]}
-                            onPress={() => router.push('/(tabs)/profile' as any)}
-                            activeOpacity={0.7}
-                        >
-                            <Text style={[styles.avatarText, { color: colors.accent }]}>
-                                {user?.full_name?.charAt(0)?.toUpperCase() || '?'}
-                            </Text>
-                        </TouchableOpacity>
-                    }
-                />
+                {/* Greeting */}
+                <Text style={[styles.greetingText, { color: colors.textSecondary }]}>{greeting}, {firstName}</Text>
 
                 {/* Hero Stats */}
                 <View style={styles.heroStatsContainer}>
@@ -305,7 +308,8 @@ function QuickActionBtn({ icon, label, colors, onPress }: { icon: string; label:
 // ── Styles ──
 const styles = StyleSheet.create({
     container: { flex: 1 },
-    scrollContent: { paddingBottom: 40 },
+    scrollContent: { paddingBottom: 40, paddingTop: 4 },
+    greetingText: { fontSize: 15, fontWeight: '400', paddingHorizontal: 20, marginBottom: 4 },
 
     // Header
     avatarCircle: {

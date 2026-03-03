@@ -128,20 +128,16 @@ export default function ExamsListScreen() {
 
     return (
         <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]}>
+            <ScreenHeader
+                title="Exams"
+                subtitle="Complete all 4 mandatory papers to get licensed"
+            />
             <ScrollView
                 contentContainerStyle={styles.scrollContent}
                 refreshControl={
                     <RefreshControl refreshing={isRefreshing} onRefresh={onRefresh} tintColor={colors.accent} />
                 }
             >
-                {/* Header */}
-                <ScreenHeader
-                    showBack
-                    backLabel="Home"
-                    onBack={() => router.replace('/(tabs)/home' as any)}
-                    title="Exams"
-                    subtitle="Complete all 4 mandatory papers to get licensed"
-                />
 
                 {/* Progress Overview */}
                 <View style={[styles.progressCard, { backgroundColor: colors.cardBackground, borderColor: colors.cardBorder }]}>
@@ -220,6 +216,7 @@ const styles = StyleSheet.create({
     scrollContent: {
         paddingHorizontal: 16,
         paddingBottom: 32,
+        paddingTop: 12,
     },
     loadingContainer: {
         flex: 1,

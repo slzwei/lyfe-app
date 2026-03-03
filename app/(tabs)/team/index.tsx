@@ -1,9 +1,12 @@
+import EmptyState from '@/components/EmptyState';
+import LoadingState from '@/components/LoadingState';
 import ScreenHeader from '@/components/ScreenHeader';
 import { useAuth } from '@/contexts/AuthContext';
 import { useTheme } from '@/contexts/ThemeContext';
+import { fetchTeamMembers, type TeamMember } from '@/lib/team';
 import { Ionicons } from '@expo/vector-icons';
-import { useRouter } from 'expo-router';
-import React, { useMemo, useState } from 'react';
+import { useFocusEffect, useRouter } from 'expo-router';
+import React, { useCallback, useState } from 'react';
 import {
     FlatList,
     RefreshControl,
@@ -15,32 +18,23 @@ import {
     View,
 } from 'react-native';
 
-// ── Types ──
-interface TeamMember {
-    id: string;
-    name: string;
-    role: 'manager' | 'agent';
-    phone: string;
-    email: string | null;
-    leadsCount: number;
-    wonCount: number;
-    conversionRate: number;
-    status: 'active' | 'inactive';
-    joinedDate: string;
-}
+const MOCK_OTP = process.env.EXPO_PUBLIC_MOCK_OTP === 'true';
 
-// ── Mock Data ──
+// ── Mock Data (dev only) ──
 const MOCK_AGENTS: TeamMember[] = [
-    { id: 'a1', name: 'Alice Tan', role: 'agent', phone: '+65 9111 2222', email: 'alice.tan@lyfe.sg', leadsCount: 12, wonCount: 4, conversionRate: 33, status: 'active', joinedDate: '2024-09-15' },
-    { id: 'a2', name: 'Bob Lee', role: 'agent', phone: '+65 8222 3333', email: 'bob.lee@lyfe.sg', leadsCount: 8, wonCount: 2, conversionRate: 25, status: 'active', joinedDate: '2024-11-01' },
-    { id: 'a3', name: 'Charlie Lim', role: 'agent', phone: '+65 9333 4444', email: null, leadsCount: 5, wonCount: 1, conversionRate: 20, status: 'active', joinedDate: '2025-01-10' },
-    { id: 'a4', name: 'Diana Ng', role: 'agent', phone: '+65 8444 5555', email: 'diana.ng@lyfe.sg', leadsCount: 3, wonCount: 0, conversionRate: 0, status: 'inactive', joinedDate: '2024-08-20' },
+    { id: 'a1', name: 'Alice Tan', role: 'agent', phone: '+65 9111 2222', email: 'alice.tan@lyfe.sg', avatarUrl: null, isActive: true, joinedDate: '2024-09-15', leadsCount: 12, wonCount: 4, conversionRate: 33 },
+    { id: 'a2', name: 'Bob Lee', role: 'agent', phone: '+65 8222 3333', email: 'bob.lee@lyfe.sg', avatarUrl: null, isActive: true, joinedDate: '2024-11-01', leadsCount: 8, wonCount: 2, conversionRate: 25 },
+    { id: 'a3', name: 'Charlie Lim', role: 'agent', phone: '+65 9333 4444', email: null, avatarUrl: null, isActive: true, joinedDate: '2025-01-10', leadsCount: 5, wonCount: 1, conversionRate: 20 },
+    { id: 'a4', name: 'Diana Ng', role: 'agent', phone: '+65 8444 5555', email: 'diana.ng@lyfe.sg', avatarUrl: null, isActive: false, joinedDate: '2024-08-20', leadsCount: 3, wonCount: 0, conversionRate: 0 },
 ];
 
 const MOCK_MANAGERS: TeamMember[] = [
-    { id: 'm1', name: 'Emily Koh', role: 'manager', phone: '+65 9555 6666', email: 'emily.koh@lyfe.sg', leadsCount: 24, wonCount: 8, conversionRate: 33, status: 'active', joinedDate: '2024-03-01' },
-    { id: 'm2', name: 'Frank Goh', role: 'manager', phone: '+65 8666 7777', email: 'frank.goh@lyfe.sg', leadsCount: 18, wonCount: 5, conversionRate: 28, status: 'active', joinedDate: '2024-06-15' },
+    { id: 'm1', name: 'Emily Koh', role: 'manager', phone: '+65 9555 6666', email: 'emily.koh@lyfe.sg', avatarUrl: null, isActive: true, joinedDate: '2024-03-01', leadsCount: 24, wonCount: 8, conversionRate: 33 },
+    { id: 'm2', name: 'Frank Goh', role: 'manager', phone: '+65 8666 7777', email: 'frank.goh@lyfe.sg', avatarUrl: null, isActive: true, joinedDate: '2024-06-15', leadsCount: 18, wonCount: 5, conversionRate: 28 },
 ];
+
+// Export mock data for agent detail screen
+export { MOCK_AGENTS, MOCK_MANAGERS };
 
 const AVATAR_COLORS = ['#6366F1', '#0D9488', '#E11D48', '#F59E0B', '#8B5CF6', '#06B6D4'];
 
@@ -53,46 +47,67 @@ export default function TeamScreen() {
     const [refreshing, setRefreshing] = useState(false);
     const [filter, setFilter] = useState<FilterKey>('all');
     const [search, setSearch] = useState('');
+    const [members, setMembers] = useState<TeamMember[]>([]);
+    const [isLoading, setIsLoading] = useState(!MOCK_OTP);
+    const [error, setError] = useState<string | null>(null);
 
-    const isDirector = user?.role === 'director';
+    const isDirector = user?.role === 'director' || user?.role === 'admin';
 
-    const allMembers = useMemo(() => {
-        return isDirector
-            ? [...MOCK_MANAGERS, ...MOCK_AGENTS]
-            : [...MOCK_AGENTS];
-    }, [isDirector]);
-
-    const filteredMembers = useMemo(() => {
-        let members = allMembers;
-        if (filter !== 'all') {
-            members = members.filter((m) => m.role === filter);
+    const loadMembers = useCallback(async () => {
+        if (MOCK_OTP) {
+            const mockData = isDirector
+                ? [...MOCK_MANAGERS, ...MOCK_AGENTS]
+                : [...MOCK_AGENTS];
+            setMembers(mockData);
+            return;
         }
+
+        if (!user?.id) return;
+        setError(null);
+        const { data, error: fetchError } = await fetchTeamMembers(user.id, user.role || 'agent');
+        if (fetchError) {
+            setError(fetchError);
+        } else {
+            setMembers(data);
+        }
+        setIsLoading(false);
+    }, [user?.id, user?.role, isDirector]);
+
+    useFocusEffect(
+        useCallback(() => {
+            loadMembers();
+        }, [loadMembers])
+    );
+
+    const filteredMembers = members.filter((m) => {
+        if (filter !== 'all' && m.role !== filter) return false;
         if (search.trim()) {
             const q = search.toLowerCase();
-            members = members.filter((m) =>
-                m.name.toLowerCase().includes(q) ||
-                m.phone.includes(q) ||
-                m.email?.toLowerCase().includes(q)
-            );
+            if (
+                !m.name.toLowerCase().includes(q) &&
+                !m.phone?.includes(q) &&
+                !m.email?.toLowerCase().includes(q)
+            ) return false;
         }
-        return members;
-    }, [allMembers, filter, search]);
+        return true;
+    });
 
-    const counts = useMemo(() => ({
-        all: allMembers.length,
-        manager: allMembers.filter((m) => m.role === 'manager').length,
-        agent: allMembers.filter((m) => m.role === 'agent').length,
-        active: allMembers.filter((m) => m.status === 'active').length,
-    }), [allMembers]);
-
-    const totalLeads = useMemo(() => allMembers.reduce((sum, m) => sum + m.leadsCount, 0), [allMembers]);
-    const totalWon = useMemo(() => allMembers.reduce((sum, m) => sum + m.wonCount, 0), [allMembers]);
-    const avgConversion = allMembers.length > 0 ? Math.round(totalWon / totalLeads * 100) : 0;
-
-    const onRefresh = () => {
-        setRefreshing(true);
-        setTimeout(() => setRefreshing(false), 800);
+    const counts = {
+        all: members.length,
+        manager: members.filter((m) => m.role === 'manager').length,
+        agent: members.filter((m) => m.role === 'agent').length,
+        active: members.filter((m) => m.isActive).length,
     };
+
+    const totalLeads = members.reduce((sum, m) => sum + m.leadsCount, 0);
+    const totalWon = members.reduce((sum, m) => sum + m.wonCount, 0);
+    const avgConversion = totalLeads > 0 ? Math.round(totalWon / totalLeads * 100) : 0;
+
+    const onRefresh = useCallback(async () => {
+        setRefreshing(true);
+        await loadMembers();
+        setRefreshing(false);
+    }, [loadMembers]);
 
     const filters: { key: FilterKey; label: string }[] = isDirector
         ? [{ key: 'all', label: 'All' }, { key: 'manager', label: 'Managers' }, { key: 'agent', label: 'Agents' }]
@@ -102,6 +117,15 @@ export default function TeamScreen() {
         const index = name.charCodeAt(0) % AVATAR_COLORS.length;
         return AVATAR_COLORS[index];
     };
+
+    if (isLoading) {
+        return (
+            <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]}>
+                <ScreenHeader title="Team" />
+                <LoadingState />
+            </SafeAreaView>
+        );
+    }
 
     const renderMember = ({ item }: { item: TeamMember }) => {
         const avatarColor = getAvatarColor(item.name);
@@ -148,17 +172,17 @@ export default function TeamScreen() {
 
                     <View style={[
                         styles.statusPill,
-                        { backgroundColor: item.status === 'active' ? colors.successLight : colors.surfaceSecondary }
+                        { backgroundColor: item.isActive ? colors.successLight : colors.surfaceSecondary }
                     ]}>
                         <View style={[
                             styles.statusDot,
-                            { backgroundColor: item.status === 'active' ? colors.success : colors.textTertiary }
+                            { backgroundColor: item.isActive ? colors.success : colors.textTertiary }
                         ]} />
                         <Text style={[
                             styles.statusText,
-                            { color: item.status === 'active' ? colors.success : colors.textTertiary }
+                            { color: item.isActive ? colors.success : colors.textTertiary }
                         ]}>
-                            {item.status === 'active' ? 'Active' : 'Inactive'}
+                            {item.isActive ? 'Active' : 'Inactive'}
                         </Text>
                     </View>
                 </View>
@@ -235,6 +259,18 @@ export default function TeamScreen() {
                             )}
                         </View>
 
+                        {/* Error Banner */}
+                        {error && (
+                            <TouchableOpacity
+                                style={[styles.errorBanner, { backgroundColor: '#FEE2E2' }]}
+                                onPress={loadMembers}
+                            >
+                                <Ionicons name="alert-circle" size={16} color="#DC2626" />
+                                <Text style={styles.errorText}>{error}</Text>
+                                <Text style={styles.retryText}>Tap to retry</Text>
+                            </TouchableOpacity>
+                        )}
+
                         {/* Filter Chips */}
                         {filters.length > 1 && (
                             <View style={styles.filterRow}>
@@ -274,13 +310,11 @@ export default function TeamScreen() {
                     </View>
                 }
                 ListEmptyComponent={
-                    <View style={styles.emptyContainer}>
-                        <Ionicons name="people-outline" size={48} color={colors.textTertiary} />
-                        <Text style={[styles.emptyTitle, { color: colors.textSecondary }]}>No members found</Text>
-                        <Text style={[styles.emptySubtitle, { color: colors.textTertiary }]}>
-                            {search.trim() ? `No results for "${search}"` : 'Try a different filter'}
-                        </Text>
-                    </View>
+                    <EmptyState
+                        icon="people-outline"
+                        title="No members found"
+                        subtitle={search.trim() ? `No results for "${search}"` : 'Try a different filter'}
+                    />
                 }
             />
         </SafeAreaView>
@@ -339,6 +373,18 @@ const styles = StyleSheet.create({
         fontSize: 15,
         padding: 0,
     },
+
+    // ── Error ──
+    errorBanner: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 8,
+        padding: 12,
+        borderRadius: 10,
+        marginBottom: 12,
+    },
+    errorText: { flex: 1, fontSize: 13, color: '#DC2626' },
+    retryText: { fontSize: 12, fontWeight: '600', color: '#DC2626' },
 
     // ── Filters ──
     filterRow: {
@@ -466,14 +512,4 @@ const styles = StyleSheet.create({
         width: StyleSheet.hairlineWidth,
         height: '100%',
     },
-
-    // ── Empty ──
-    emptyContainer: {
-        alignItems: 'center',
-        justifyContent: 'center',
-        paddingVertical: 64,
-        gap: 8,
-    },
-    emptyTitle: { fontSize: 16, fontWeight: '600' },
-    emptySubtitle: { fontSize: 14 },
 });

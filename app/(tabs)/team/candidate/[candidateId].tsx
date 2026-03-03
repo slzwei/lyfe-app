@@ -1,9 +1,11 @@
+import LoadingState from '@/components/LoadingState';
 import PipelineStepper from '@/components/PipelineStepper';
 import { useTheme } from '@/contexts/ThemeContext';
-import { CANDIDATE_STATUS_CONFIG, MOCK_CANDIDATES } from '@/types/recruitment';
+import { fetchCandidate, syncAgentToMKTR, updateCandidateStatus } from '@/lib/recruitment';
+import { CANDIDATE_STATUS_CONFIG, type CandidateStatus, type RecruitmentCandidate } from '@/types/recruitment';
 import { Ionicons } from '@expo/vector-icons';
 import { useLocalSearchParams, useRouter } from 'expo-router';
-import React, { useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useState } from 'react';
 import {
     Alert,
     Linking,
@@ -16,16 +18,41 @@ import {
     View,
 } from 'react-native';
 
+const MOCK_OTP = process.env.EXPO_PUBLIC_MOCK_OTP === 'true';
+
 export default function CandidateDetailScreen() {
     const { colors } = useTheme();
     const router = useRouter();
     const { candidateId } = useLocalSearchParams<{ candidateId: string }>();
     const [showStatusModal, setShowStatusModal] = useState(false);
+    const [candidate, setCandidate] = useState<RecruitmentCandidate | null>(null);
+    const [isLoading, setIsLoading] = useState(true);
 
-    const candidate = useMemo(
-        () => MOCK_CANDIDATES.find((c) => c.id === candidateId),
-        [candidateId]
-    );
+    const loadCandidate = useCallback(async () => {
+        if (MOCK_OTP) {
+            const { MOCK_CANDIDATES } = require('../../candidates/index');
+            const found = MOCK_CANDIDATES.find((c: RecruitmentCandidate) => c.id === candidateId);
+            setCandidate(found || null);
+            setIsLoading(false);
+            return;
+        }
+        if (!candidateId) return;
+        const { data } = await fetchCandidate(candidateId);
+        setCandidate(data);
+        setIsLoading(false);
+    }, [candidateId]);
+
+    useEffect(() => {
+        loadCandidate();
+    }, [loadCandidate]);
+
+    if (isLoading) {
+        return (
+            <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]}>
+                <LoadingState />
+            </SafeAreaView>
+        );
+    }
 
     if (!candidate) {
         return (
@@ -197,8 +224,33 @@ export default function CandidateDetailScreen() {
                                     { borderBottomColor: colors.border },
                                     key === candidate.status && { backgroundColor: colors.accentLight },
                                 ]}
-                                onPress={() => {
+                                onPress={async () => {
                                     setShowStatusModal(false);
+                                    if (!MOCK_OTP) {
+                                        const { error } = await updateCandidateStatus(candidate.id, key as CandidateStatus);
+                                        if (error) {
+                                            Alert.alert('Error', error);
+                                            return;
+                                        }
+                                        // Sync to MKTR when agent becomes active
+                                        if (key === 'active_agent') {
+                                            syncAgentToMKTR({
+                                                email: candidate.email,
+                                                name: candidate.name,
+                                                phone: candidate.phone,
+                                            }).then((result: { success: boolean; error?: string }) => {
+                                                if (result.success) {
+                                                    Alert.alert('Agent Activated', `${candidate.name} is now active and synced to MKTR for lead assignment.`);
+                                                } else {
+                                                    Alert.alert('Status Updated', `Changed to ${config.label}\n\n⚠️ MKTR sync failed: ${result.error}. The agent may need to be manually added to MKTR.`);
+                                                }
+                                            });
+                                        } else {
+                                            Alert.alert('Status Updated', `Changed to ${config.label}`);
+                                        }
+                                        loadCandidate();
+                                        return;
+                                    }
                                     Alert.alert('Status Updated', `Changed to ${config.label}`);
                                 }}
                             >

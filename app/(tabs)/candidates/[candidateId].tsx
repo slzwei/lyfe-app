@@ -1,9 +1,11 @@
+import LoadingState from '@/components/LoadingState';
 import ScreenHeader from '@/components/ScreenHeader';
 import { useTheme } from '@/contexts/ThemeContext';
-import { CANDIDATE_STATUS_CONFIG, MOCK_CANDIDATES, type CandidateStatus, type Interview } from '@/types/recruitment';
+import { fetchCandidate } from '@/lib/recruitment';
+import { CANDIDATE_STATUS_CONFIG, type CandidateStatus, type Interview, type RecruitmentCandidate } from '@/types/recruitment';
 import { Ionicons } from '@expo/vector-icons';
 import { useLocalSearchParams, useRouter } from 'expo-router';
-import React from 'react';
+import React, { useCallback, useEffect, useState } from 'react';
 import {
     Linking,
     SafeAreaView,
@@ -13,6 +15,8 @@ import {
     TouchableOpacity,
     View,
 } from 'react-native';
+
+const MOCK_OTP = process.env.EXPO_PUBLIC_MOCK_OTP === 'true';
 
 // ── Helpers ──
 
@@ -92,7 +96,7 @@ function InterviewCard({ interview, colors }: { interview: Interview; colors: an
                         {formatDateTime(interview.datetime)}
                     </Text>
                     <Text style={[interviewStyles.typeText, { color: colors.textTertiary }]}>
-                        {interview.type === 'zoom' ? '📹 Zoom' : '🏢 In-Person'}
+                        {interview.type === 'zoom' ? 'Zoom' : 'In-Person'}
                     </Text>
                 </View>
                 <View style={[interviewStyles.statusPill, { backgroundColor: statusColor + '18' }]}>
@@ -118,9 +122,12 @@ function InterviewCard({ interview, colors }: { interview: Interview; colors: an
                 </TouchableOpacity>
             )}
             {interview.notes && (
-                <Text style={[interviewStyles.notesText, { color: colors.textSecondary }]}>
-                    💬 {interview.notes}
-                </Text>
+                <View style={interviewStyles.detailRow}>
+                    <Ionicons name="chatbubble-outline" size={14} color={colors.textTertiary} />
+                    <Text style={[interviewStyles.detailText, { color: colors.textSecondary }]}>
+                        {interview.notes}
+                    </Text>
+                </View>
             )}
         </View>
     );
@@ -133,14 +140,53 @@ export default function CandidateDetailScreen() {
     const { colors } = useTheme();
     const router = useRouter();
 
-    const candidate = MOCK_CANDIDATES.find((c) => c.id === candidateId);
+    const [candidate, setCandidate] = useState<RecruitmentCandidate | null>(null);
+    const [isLoading, setIsLoading] = useState(true);
+    const [error, setError] = useState<string | null>(null);
+
+    const loadCandidate = useCallback(async () => {
+        if (MOCK_OTP) {
+            // Import mock data from the candidates list screen
+            const { MOCK_CANDIDATES } = require('./index');
+            const found = MOCK_CANDIDATES.find((c: RecruitmentCandidate) => c.id === candidateId);
+            setCandidate(found || null);
+            setIsLoading(false);
+            return;
+        }
+
+        if (!candidateId) return;
+        setError(null);
+        const { data, error: fetchError } = await fetchCandidate(candidateId);
+        if (fetchError) {
+            setError(fetchError);
+        } else {
+            setCandidate(data);
+        }
+        setIsLoading(false);
+    }, [candidateId]);
+
+    useEffect(() => {
+        loadCandidate();
+    }, [loadCandidate]);
+
+    if (isLoading) {
+        return (
+            <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]}>
+                <ScreenHeader showBack backLabel="Candidates" title="Loading..." />
+                <LoadingState />
+            </SafeAreaView>
+        );
+    }
 
     if (!candidate) {
         return (
             <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]}>
+                <ScreenHeader showBack backLabel="Candidates" title="Not Found" />
                 <View style={styles.notFound}>
                     <Ionicons name="alert-circle-outline" size={48} color={colors.textTertiary} />
-                    <Text style={[styles.notFoundText, { color: colors.textSecondary }]}>Candidate not found</Text>
+                    <Text style={[styles.notFoundText, { color: colors.textSecondary }]}>
+                        {error || 'Candidate not found'}
+                    </Text>
                     <TouchableOpacity onPress={() => router.back()}>
                         <Text style={{ color: colors.accent, fontWeight: '600' }}>Go Back</Text>
                     </TouchableOpacity>
@@ -452,5 +498,4 @@ const interviewStyles = StyleSheet.create({
         marginTop: 8,
     },
     detailText: { fontSize: 13 },
-    notesText: { fontSize: 13, marginTop: 8, fontStyle: 'italic' },
 });

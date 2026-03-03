@@ -167,7 +167,6 @@ export default function LeadsListScreen() {
             {/* Header */}
             <ScreenHeader
                 title="Leads"
-                subtitle={`${leads.length} total · ${counts.new || 0} new`}
                 rightAction={!isManagerView ? (
                     <TouchableOpacity
                         style={[styles.addButton, { backgroundColor: colors.accent }]}

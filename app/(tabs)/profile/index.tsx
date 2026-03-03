@@ -93,9 +93,8 @@ export default function ProfileScreen() {
 
     return (
         <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]}>
+            <ScreenHeader title="Profile" />
             <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
-                {/* Header */}
-                <ScreenHeader title="Profile" />
 
                 {/* Hero User Card */}
                 <View style={[styles.card, styles.userCard, { backgroundColor: colors.cardBackground, shadowColor: colors.textPrimary }]}>
@@ -359,7 +358,7 @@ export default function ProfileScreen() {
 
 const styles = StyleSheet.create({
     container: { flex: 1 },
-    scrollContent: { paddingBottom: 120 },
+    scrollContent: { paddingBottom: 120, paddingTop: 8 },
 
     // ── Cards ──
     card: {
