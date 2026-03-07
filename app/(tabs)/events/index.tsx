@@ -9,7 +9,7 @@ import type { AgencyEvent } from '@/types/event';
 import { EVENT_TYPE_COLORS, EVENT_TYPE_LABELS } from '@/types/event';
 import { Ionicons } from '@expo/vector-icons';
 import { useFocusEffect, useRouter } from 'expo-router';
-import React, { useCallback, useMemo, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
     Animated,
     FlatList,
@@ -34,7 +34,9 @@ const MOCK_EVENTS: AgencyEvent[] = [
     { id: 'e1', title: 'Agency Kickoff 2026', description: 'Annual agency kickoff event for all staff.', event_type: 'agency_event', event_date: fd(0), start_time: '09:00', end_time: '12:00', location: 'Marina Bay Sands Convention Centre', created_by: 'mock-user-id', creator_name: 'Mgr. David Lim', created_at: _today.toISOString(), updated_at: _today.toISOString(), attendees: [{ id: 'a1', event_id: 'e1', user_id: 'u1', attendee_role: 'attendee', full_name: 'Alice Tan' }, { id: 'a2', event_id: 'e1', user_id: 'u2', attendee_role: 'host', full_name: 'David Lim' }, { id: 'a3', event_id: 'e1', user_id: 'u3', attendee_role: 'attendee', full_name: 'Bob Lee' }, { id: 'a4', event_id: 'e1', user_id: 'u4', attendee_role: 'attendee', full_name: 'Sarah Wong' }], external_attendees: [{ name: 'John Smith (Client)', attendee_role: 'attendee' }] },
     { id: 'e2', title: 'M9 Exam Training', description: 'Prepare for the M9 certification paper.', event_type: 'training', event_date: fd(2), start_time: '14:00', end_time: '17:00', location: 'Lyfe Office, Level 12', created_by: 'mock-user-id', creator_name: 'Mgr. David Lim', created_at: _today.toISOString(), updated_at: _today.toISOString(), attendees: [{ id: 'a5', event_id: 'e2', user_id: 'u5', attendee_role: 'presenter', full_name: 'Dr. Ng Wei' }, { id: 'a6', event_id: 'e2', user_id: 'u6', attendee_role: 'attendee', full_name: 'Jason Teo' }], external_attendees: [] },
     { id: 'e3', title: 'Team Weekly Sync', description: null, event_type: 'team_meeting', event_date: fd(5), start_time: '10:00', end_time: '11:00', location: 'Zoom', created_by: 'mock-user-id', creator_name: 'Mgr. David Lim', created_at: _today.toISOString(), updated_at: _today.toISOString(), attendees: [{ id: 'a7', event_id: 'e3', user_id: 'u7', attendee_role: 'attendee', full_name: 'Emily Koh' }], external_attendees: [] },
-    { id: 'e4', title: 'Roadshow @ Tampines', description: null, event_type: 'roadshow', event_date: fd(7), start_time: '11:00', end_time: '18:00', location: 'Tampines Mall Atrium', created_by: 'mock-user-id', creator_name: 'Mgr. David Lim', created_at: _today.toISOString(), updated_at: _today.toISOString(), attendees: [], external_attendees: [] },
+    { id: 'e4', title: 'Roadshow @ Tampines', description: null, event_type: 'roadshow', event_date: fd(7), start_time: '10:00', end_time: '18:00', location: 'Tampines Mall Atrium', created_by: 'mock-user-id', creator_name: 'Mgr. David Lim', created_at: _today.toISOString(), updated_at: _today.toISOString(), attendees: [{ id: 'a8', event_id: 'e4', user_id: 'u1', attendee_role: 'attendee', full_name: 'Sarah Lee' }, { id: 'a9', event_id: 'e4', user_id: 'u2', attendee_role: 'attendee', full_name: 'James Tan' }], external_attendees: [] },
+    { id: 'e4live', title: 'Roadshow @ Hillion Mall', description: null, event_type: 'roadshow', event_date: fd(0), start_time: '10:00', end_time: '18:00', location: 'Hillion Mall FairPrice', created_by: 'mock-user-id', creator_name: 'Mgr. David Lim', created_at: _today.toISOString(), updated_at: _today.toISOString(), attendees: [{ id: 'a8l', event_id: 'e4live', user_id: 'mock-user-id', attendee_role: 'attendee', full_name: 'Sarah Lee' }], external_attendees: [] },
+    { id: 'e4past', title: 'Roadshow @ Jurong Point', description: null, event_type: 'roadshow', event_date: fd(-7), start_time: '10:00', end_time: '18:00', location: 'Jurong Point', created_by: 'mock-user-id', creator_name: 'Mgr. David Lim', created_at: _today.toISOString(), updated_at: _today.toISOString(), attendees: [], external_attendees: [] },
     { id: 'e5', title: 'Director Review', description: null, event_type: 'team_meeting', event_date: fd(14), start_time: '16:00', end_time: null, location: 'HQ Board Room', created_by: 'mock-user-id', creator_name: 'Mgr. David Lim', created_at: _today.toISOString(), updated_at: _today.toISOString(), attendees: [], external_attendees: [] },
 ];
 
@@ -411,6 +413,21 @@ interface EventCardProps {
 
 function EventCard({ event, onPress, colors }: EventCardProps) {
     const typeColor = EVENT_TYPE_COLORS[event.event_type];
+    const todayStr = toDateStr(new Date());
+    const isLiveRoadshow = event.event_type === 'roadshow' && event.event_date === todayStr;
+
+    const livePulse = useRef(new Animated.Value(1)).current;
+    useEffect(() => {
+        if (!isLiveRoadshow) return;
+        const anim = Animated.loop(
+            Animated.sequence([
+                Animated.timing(livePulse, { toValue: 0.3, duration: 600, useNativeDriver: true }),
+                Animated.timing(livePulse, { toValue: 1, duration: 600, useNativeDriver: true }),
+            ]),
+        );
+        anim.start();
+        return () => anim.stop();
+    }, [isLiveRoadshow]);
 
     const formatTime = (time: string) => {
         const [h, m] = time.split(':').map(Number);
@@ -440,10 +457,18 @@ function EventCard({ event, onPress, colors }: EventCardProps) {
                         {formatTime(event.start_time)}
                         {event.end_time ? ` – ${formatTime(event.end_time)}` : ''}
                     </Text>
-                    <View style={[cardStyles.typeBadge, { backgroundColor: typeColor + '18' }]}>
-                        <Text style={[cardStyles.typeText, { color: typeColor }]}>
-                            {EVENT_TYPE_LABELS[event.event_type]}
-                        </Text>
+                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                        {isLiveRoadshow && (
+                            <View style={[cardStyles.livePill, { backgroundColor: '#22C55E18' }]}>
+                                <Animated.View style={[cardStyles.liveDot, { opacity: livePulse }]} />
+                                <Text style={cardStyles.liveText}>LIVE</Text>
+                            </View>
+                        )}
+                        <View style={[cardStyles.typeBadge, { backgroundColor: typeColor + '18' }]}>
+                            <Text style={[cardStyles.typeText, { color: typeColor }]}>
+                                {EVENT_TYPE_LABELS[event.event_type]}
+                            </Text>
+                        </View>
                     </View>
                 </View>
 
@@ -525,6 +550,9 @@ const cardStyles = StyleSheet.create({
         borderWidth: 1.5,
     },
     overflowText: { fontSize: 9, fontWeight: '700' },
+    livePill: { flexDirection: 'row', alignItems: 'center', gap: 4, paddingHorizontal: 6, paddingVertical: 2, borderRadius: 5 },
+    liveDot: { width: 6, height: 6, borderRadius: 3, backgroundColor: '#22C55E' },
+    liveText: { fontSize: 10, fontWeight: '800', color: '#22C55E', letterSpacing: 0.5 },
 });
 
 // ── Main Screen ────────────────────────────────────────────────

@@ -2,7 +2,8 @@ import Avatar from '@/components/Avatar';
 import ScreenHeader from '@/components/ScreenHeader';
 import { useAuth } from '@/contexts/AuthContext';
 import { useTheme } from '@/contexts/ThemeContext';
-import { createEvent, fetchAllUsers, fetchEventById, updateEvent, type SimpleUser } from '@/lib/events';
+import { createEvent, createRoadshowBulk, fetchAllUsers, fetchEventById, fetchRoadshowConfig, saveRoadshowConfig, updateEvent, type RoadshowConfigInput, type SimpleUser } from '@/lib/events';
+import { supabase } from '@/lib/supabase';
 import { isMockMode } from '@/lib/mockMode';
 import type { AttendeeRole, CreateEventInput, EventType, ExternalAttendee } from '@/types/event';
 import { EVENT_TYPE_COLORS, EVENT_TYPE_LABELS } from '@/types/event';
@@ -71,6 +72,30 @@ function isValidTime(s: string): boolean {
     return /^([01]?\d|2[0-3]):[0-5]\d$/.test(s);
 }
 
+/** Returns number of calendar days between two YYYY-MM-DD strings */
+function dateDiffDays(start: string, end: string): number {
+    const a = new Date(start + 'T00:00:00');
+    const b = new Date(end + 'T00:00:00');
+    return Math.round((b.getTime() - a.getTime()) / 86400000);
+}
+
+/** Generate YYYY-MM-DD strings for each day in [start, end] inclusive */
+function dateRange(start: string, end: string): string[] {
+    const dates: string[] = [];
+    const cur = new Date(start + 'T00:00:00');
+    const last = new Date(end + 'T00:00:00');
+    while (cur <= last) {
+        dates.push(cur.toISOString().split('T')[0]);
+        cur.setDate(cur.getDate() + 1);
+    }
+    return dates;
+}
+
+/** Format YYYY-MM-DD as "Weekday, D MMM" */
+function formatDateLabel(s: string): string {
+    return new Date(s + 'T00:00:00').toLocaleDateString('en-SG', { weekday: 'short', day: 'numeric', month: 'short' });
+}
+
 export default function CreateEventScreen() {
     const { colors } = useTheme();
     const { user } = useAuth();
@@ -96,6 +121,17 @@ export default function CreateEventScreen() {
     const [loadingEvent, setLoadingEvent] = useState(isEditing);
     const [errors, setErrors] = useState<Record<string, string>>({});
     const [usersError, setUsersError] = useState<string | null>(null);
+
+    // Roadshow-specific state
+    const [rsStartDate, setRsStartDate] = useState(todayStr());
+    const [rsEndDate, setRsEndDate] = useState(todayStr());
+    const [rsWeeklyCost, setRsWeeklyCost] = useState('');
+    const [rsSlots, setRsSlots] = useState(3);
+    const [rsGrace, setRsGrace] = useState(15);
+    const [rsSitdowns, setRsSitdowns] = useState(5);
+    const [rsPitches, setRsPitches] = useState(3);
+    const [rsClosed, setRsClosed] = useState(1);
+    const [rsConfigLocked, setRsConfigLocked] = useState(false);
 
     // External (non-user) attendees
     const [externalAttendees, setExternalAttendees] = useState<(ExternalAttendee & { _key: string })[]>([]);
@@ -145,7 +181,7 @@ export default function CreateEventScreen() {
             return;
         }
 
-        fetchEventById(eventId).then(({ data }) => {
+        fetchEventById(eventId).then(async ({ data }) => {
             if (data) {
                 setTitle(data.title);
                 setEventType(data.event_type);
@@ -166,6 +202,23 @@ export default function CreateEventScreen() {
                     name: a.name,
                     attendee_role: a.attendee_role,
                 })));
+
+                if (data.event_type === 'roadshow') {
+                    const { data: cfg } = await fetchRoadshowConfig(eventId);
+                    if (cfg) {
+                        setRsWeeklyCost(String(cfg.weekly_cost));
+                        setRsSlots(cfg.slots_per_day);
+                        setRsGrace(cfg.late_grace_minutes);
+                        setRsSitdowns(cfg.suggested_sitdowns);
+                        setRsPitches(cfg.suggested_pitches);
+                        setRsClosed(cfg.suggested_closed);
+                        setRsStartDate(data.event_date);
+                        setRsEndDate(data.event_date);
+                    }
+                    // Lock config if any attendance exists
+                    const { data: att } = await supabase.from('roadshow_attendance').select('id').eq('event_id', eventId).limit(1);
+                    setRsConfigLocked((att ?? []).length > 0);
+                }
             }
             setLoadingEvent(false);
         });
@@ -189,7 +242,17 @@ export default function CreateEventScreen() {
     const validate = (): boolean => {
         const e: Record<string, string> = {};
         if (!title.trim()) e.title = 'Title is required';
-        if (!isValidDate(eventDate)) e.eventDate = 'Enter a valid date (YYYY-MM-DD)';
+        if (eventType === 'roadshow') {
+            if (!isValidDate(rsStartDate)) e.rsStartDate = 'Enter a valid start date (YYYY-MM-DD)';
+            if (!isValidDate(rsEndDate)) e.rsEndDate = 'Enter a valid end date (YYYY-MM-DD)';
+            if (rsStartDate && rsEndDate && rsEndDate < rsStartDate) e.rsEndDate = 'End date must be on or after start date';
+            const dayCount = rsStartDate && rsEndDate ? dateDiffDays(rsStartDate, rsEndDate) + 1 : 0;
+            if (dayCount > 31) e.rsEndDate = 'Range cannot exceed 31 days';
+            if (!rsWeeklyCost || isNaN(Number(rsWeeklyCost)) || Number(rsWeeklyCost) <= 0) e.rsWeeklyCost = 'Enter a valid weekly cost';
+            if (rsSlots < 1) e.rsSlots = 'Slots must be at least 1';
+        } else {
+            if (!isValidDate(eventDate)) e.eventDate = 'Enter a valid date (YYYY-MM-DD)';
+        }
         if (!isValidTime(startTime)) e.startTime = 'Enter a valid time (HH:MM)';
         if (endTime && !isValidTime(endTime)) e.endTime = 'Enter a valid time (HH:MM)';
         setErrors(e);
@@ -201,6 +264,66 @@ export default function CreateEventScreen() {
 
         setSubmitting(true);
 
+        if (MOCK_OTP) {
+            setSubmitting(false);
+            Alert.alert('Success', isEditing ? 'Event updated (mock mode)' : 'Event created (mock mode)', [
+                { text: 'OK', onPress: () => router.back() },
+            ]);
+            return;
+        }
+
+        // ── Roadshow bulk create ───────────────────────────────
+        if (eventType === 'roadshow' && !isEditing) {
+            const dates = dateRange(rsStartDate, rsEndDate);
+            const dayCount = dates.length;
+
+            if (dayCount > 14) {
+                const confirmed = await new Promise<boolean>(resolve =>
+                    Alert.alert(
+                        'Large Roadshow',
+                        `This will create ${dayCount} events. Continue?`,
+                        [{ text: 'Cancel', onPress: () => resolve(false), style: 'cancel' }, { text: 'Create', onPress: () => resolve(true) }],
+                    )
+                );
+                if (!confirmed) { setSubmitting(false); return; }
+            }
+
+            const rsConfig: RoadshowConfigInput = {
+                weekly_cost: Number(rsWeeklyCost),
+                slots_per_day: rsSlots,
+                expected_start_time: startTime,
+                late_grace_minutes: rsGrace,
+                suggested_sitdowns: rsSitdowns,
+                suggested_pitches: rsPitches,
+                suggested_closed: rsClosed,
+            };
+
+            const events = dates.map(d => ({
+                title: title.trim(),
+                event_date: d,
+                start_time: startTime,
+                end_time: endTime || '',
+                location: location.trim(),
+            }));
+
+            const { error } = await createRoadshowBulk(
+                events,
+                rsConfig,
+                selectedAttendees.map(a => ({ user_id: a.user_id, attendee_role: a.attendee_role })),
+                user!.id,
+            );
+            setSubmitting(false);
+            if (error) {
+                setErrors(e => ({ ...e, _submit: error }));
+            } else {
+                Alert.alert('Created', `${dayCount} roadshow event${dayCount > 1 ? 's' : ''} created.`, [
+                    { text: 'OK', onPress: () => router.back() },
+                ]);
+            }
+            return;
+        }
+
+        // ── Normal create/edit ─────────────────────────────────
         const input: CreateEventInput = {
             title: title.trim(),
             description: description.trim() || null,
@@ -216,24 +339,38 @@ export default function CreateEventScreen() {
             external_attendees: externalAttendees.map(({ name, attendee_role }) => ({ name, attendee_role })),
         };
 
-        if (MOCK_OTP) {
+        const { error: eventError } = isEditing
+            ? await updateEvent(eventId!, input)
+            : await createEvent(input, user!.id);
+
+        if (eventError) {
             setSubmitting(false);
-            Alert.alert('Success', isEditing ? 'Event updated (mock mode)' : 'Event created (mock mode)', [
-                { text: 'OK', onPress: () => router.back() },
-            ]);
+            setErrors(e => ({ ...e, _submit: eventError }));
             return;
         }
 
-        const { error } = isEditing
-            ? await updateEvent(eventId!, input)
-            : await createEvent(input, user!.id);
-        setSubmitting(false);
-
-        if (error) {
-            Alert.alert('Error', error);
+        // Save roadshow config on edit
+        if (eventType === 'roadshow' && isEditing && eventId) {
+            const rsConfig: RoadshowConfigInput = {
+                weekly_cost: Number(rsWeeklyCost),
+                slots_per_day: rsSlots,
+                expected_start_time: startTime,
+                late_grace_minutes: rsGrace,
+                suggested_sitdowns: rsSitdowns,
+                suggested_pitches: rsPitches,
+                suggested_closed: rsClosed,
+            };
+            const { error: cfgError } = await saveRoadshowConfig(eventId, rsConfig);
+            setSubmitting(false);
+            if (cfgError) {
+                Alert.alert('Partial Save', 'Event saved, but roadshow config could not be updated. Please try again.');
+                return;
+            }
         } else {
-            router.back();
+            setSubmitting(false);
         }
+
+        router.back();
     };
 
     const filteredUsers = allUsers.filter(u =>
@@ -267,7 +404,11 @@ export default function CreateEventScreen() {
                     >
                         {submitting
                             ? <ActivityIndicator size="small" color="#FFFFFF" />
-                            : <Text style={styles.saveBtnText}>{isEditing ? 'Save' : 'Create'}</Text>
+                            : <Text style={styles.saveBtnText}>
+                                {isEditing ? 'Save' : (eventType === 'roadshow' && !isEditing && rsStartDate && rsEndDate && isValidDate(rsStartDate) && isValidDate(rsEndDate) && rsEndDate >= rsStartDate)
+                                    ? `Create ${dateDiffDays(rsStartDate, rsEndDate) + 1}`
+                                    : 'Create'}
+                              </Text>
                         }
                     </TouchableOpacity>
                 }
@@ -317,20 +458,187 @@ export default function CreateEventScreen() {
                         </View>
                     </View>
 
-                    {/* Date */}
-                    <View style={styles.field}>
-                        <Text style={labelStyle}>Date * (YYYY-MM-DD)</Text>
-                        <TextInput
-                            style={[inputStyle, errors.eventDate && { borderColor: colors.danger }]}
-                            placeholder="e.g. 2026-03-15"
-                            placeholderTextColor={colors.textTertiary}
-                            value={eventDate}
-                            onChangeText={v => { setEventDate(v); setErrors(e => ({ ...e, eventDate: '' })); }}
-                            keyboardType="numbers-and-punctuation"
-                            maxLength={10}
-                        />
-                        {errors.eventDate ? <Text style={[styles.errorText, { color: colors.danger }]}>{errors.eventDate}</Text> : null}
-                    </View>
+                    {/* Date — single for non-roadshow, date range for roadshow */}
+                    {eventType !== 'roadshow' ? (
+                        <View style={styles.field}>
+                            <Text style={labelStyle}>Date * (YYYY-MM-DD)</Text>
+                            <TextInput
+                                style={[inputStyle, errors.eventDate && { borderColor: colors.danger }]}
+                                placeholder="e.g. 2026-03-15"
+                                placeholderTextColor={colors.textTertiary}
+                                value={eventDate}
+                                onChangeText={v => { setEventDate(v); setErrors(e => ({ ...e, eventDate: '' })); }}
+                                keyboardType="numbers-and-punctuation"
+                                maxLength={10}
+                            />
+                            {errors.eventDate ? <Text style={[styles.errorText, { color: colors.danger }]}>{errors.eventDate}</Text> : null}
+                        </View>
+                    ) : (
+                        <View style={styles.field}>
+                            <Text style={labelStyle}>Date Range *</Text>
+                            <View style={styles.timeRow}>
+                                <View style={{ flex: 1 }}>
+                                    <Text style={[styles.label, { color: colors.textTertiary, fontSize: 11 }]}>From (YYYY-MM-DD)</Text>
+                                    <TextInput
+                                        style={[inputStyle, errors.rsStartDate && { borderColor: colors.danger }]}
+                                        placeholder="2026-03-09"
+                                        placeholderTextColor={colors.textTertiary}
+                                        value={rsStartDate}
+                                        onChangeText={v => { setRsStartDate(v); setErrors(e => ({ ...e, rsStartDate: '' })); }}
+                                        keyboardType="numbers-and-punctuation"
+                                        maxLength={10}
+                                    />
+                                    {errors.rsStartDate ? <Text style={[styles.errorText, { color: colors.danger }]}>{errors.rsStartDate}</Text> : null}
+                                </View>
+                                <View style={{ flex: 1 }}>
+                                    <Text style={[styles.label, { color: colors.textTertiary, fontSize: 11 }]}>To (YYYY-MM-DD)</Text>
+                                    <TextInput
+                                        style={[inputStyle, errors.rsEndDate && { borderColor: colors.danger }]}
+                                        placeholder="2026-03-15"
+                                        placeholderTextColor={colors.textTertiary}
+                                        value={rsEndDate}
+                                        onChangeText={v => { setRsEndDate(v); setErrors(e => ({ ...e, rsEndDate: '' })); }}
+                                        keyboardType="numbers-and-punctuation"
+                                        maxLength={10}
+                                    />
+                                    {errors.rsEndDate ? <Text style={[styles.errorText, { color: colors.danger }]}>{errors.rsEndDate}</Text> : null}
+                                </View>
+                            </View>
+                            {rsStartDate && rsEndDate && isValidDate(rsStartDate) && isValidDate(rsEndDate) && rsEndDate >= rsStartDate && (
+                                <Text style={[styles.rsPreviewHint, { color: colors.textTertiary }]}>
+                                    Creates {dateDiffDays(rsStartDate, rsEndDate) + 1} daily event{dateDiffDays(rsStartDate, rsEndDate) + 1 > 1 ? 's' : ''} · {formatDateLabel(rsStartDate)} – {formatDateLabel(rsEndDate)}
+                                </Text>
+                            )}
+                            {isEditing && (
+                                <View style={[styles.editNotice, { backgroundColor: colors.surfaceSecondary }]}>
+                                    <Ionicons name="information-circle-outline" size={14} color={colors.textTertiary} />
+                                    <Text style={[{ color: colors.textTertiary, fontSize: 12, flex: 1 }]}>Editing this day only. Other days in this campaign are unaffected.</Text>
+                                </View>
+                            )}
+                        </View>
+                    )}
+
+                    {/* Roadshow Settings */}
+                    {eventType === 'roadshow' && (
+                        <View style={[styles.rsSection, { backgroundColor: colors.cardBackground }]}>
+                            <Text style={[styles.rsSectionTitle, { color: colors.textPrimary }]}>Roadshow Settings</Text>
+                            {rsConfigLocked && (
+                                <View style={[styles.rsLockedBanner, { backgroundColor: colors.surfaceSecondary }]}>
+                                    <Ionicons name="lock-closed-outline" size={14} color={colors.textTertiary} />
+                                    <Text style={[{ color: colors.textTertiary, fontSize: 12, flex: 1 }]}>Config locked — agents have already checked in.</Text>
+                                </View>
+                            )}
+                            <View style={styles.field}>
+                                <Text style={labelStyle}>Weekly Cost ($) *</Text>
+                                <TextInput
+                                    style={[inputStyle, errors.rsWeeklyCost && { borderColor: colors.danger }, rsConfigLocked && { opacity: 0.5 }]}
+                                    placeholder="e.g. 1800"
+                                    placeholderTextColor={colors.textTertiary}
+                                    value={rsWeeklyCost}
+                                    onChangeText={v => { setRsWeeklyCost(v.replace(/[^0-9.]/g, '')); setErrors(e => ({ ...e, rsWeeklyCost: '' })); }}
+                                    keyboardType="decimal-pad"
+                                    editable={!rsConfigLocked}
+                                />
+                                {errors.rsWeeklyCost ? <Text style={[styles.errorText, { color: colors.danger }]}>{errors.rsWeeklyCost}</Text> : null}
+                            </View>
+                            <View style={styles.rsStepper}>
+                                <Text style={labelStyle}>Agents per slot / day</Text>
+                                <View style={styles.rsStepperRow}>
+                                    <TouchableOpacity
+                                        style={[styles.rsStepBtn, { backgroundColor: colors.surfaceSecondary }]}
+                                        onPress={() => setRsSlots(v => Math.max(1, v - 1))}
+                                        disabled={rsConfigLocked}
+                                        accessibilityLabel="Decrease agents per slot"
+                                    >
+                                        <Ionicons name="remove" size={18} color={colors.textPrimary} />
+                                    </TouchableOpacity>
+                                    <Text style={[styles.rsStepValue, { color: colors.textPrimary }]}>{rsSlots}</Text>
+                                    <TouchableOpacity
+                                        style={[styles.rsStepBtn, { backgroundColor: colors.surfaceSecondary }]}
+                                        onPress={() => setRsSlots(v => v + 1)}
+                                        disabled={rsConfigLocked}
+                                        accessibilityLabel="Increase agents per slot"
+                                    >
+                                        <Ionicons name="add" size={18} color={colors.textPrimary} />
+                                    </TouchableOpacity>
+                                </View>
+                            </View>
+                            <View style={styles.rsStepper}>
+                                <Text style={labelStyle}>Grace period (minutes)</Text>
+                                <View style={styles.rsStepperRow}>
+                                    <TouchableOpacity
+                                        style={[styles.rsStepBtn, { backgroundColor: colors.surfaceSecondary }]}
+                                        onPress={() => setRsGrace(v => Math.max(0, v - 5))}
+                                        accessibilityLabel="Decrease grace period"
+                                    >
+                                        <Ionicons name="remove" size={18} color={colors.textPrimary} />
+                                    </TouchableOpacity>
+                                    <Text style={[styles.rsStepValue, { color: colors.textPrimary }]}>{rsGrace}</Text>
+                                    <TouchableOpacity
+                                        style={[styles.rsStepBtn, { backgroundColor: colors.surfaceSecondary }]}
+                                        onPress={() => setRsGrace(v => v + 5)}
+                                        accessibilityLabel="Increase grace period"
+                                    >
+                                        <Ionicons name="add" size={18} color={colors.textPrimary} />
+                                    </TouchableOpacity>
+                                </View>
+                            </View>
+
+                            <Text style={[styles.rsSectionTitle, { color: colors.textPrimary, marginTop: 8 }]}>Suggested Daily Targets</Text>
+                            {(['sitdowns', 'pitches', 'closed'] as const).map(key => {
+                                const labels = { sitdowns: 'Sitdowns', pitches: 'Pitches', closed: 'Cases Closed' };
+                                const values = { sitdowns: rsSitdowns, pitches: rsPitches, closed: rsClosed };
+                                const setters = { sitdowns: setRsSitdowns, pitches: setRsPitches, closed: setRsClosed };
+                                return (
+                                    <View key={key} style={styles.rsStepper}>
+                                        <Text style={labelStyle}>{labels[key]}</Text>
+                                        <View style={styles.rsStepperRow}>
+                                            <TouchableOpacity
+                                                style={[styles.rsStepBtn, { backgroundColor: colors.surfaceSecondary }]}
+                                                onPress={() => setters[key](v => Math.max(0, v - 1))}
+                                                accessibilityLabel={`Decrease ${labels[key]} target`}
+                                            >
+                                                <Ionicons name="remove" size={18} color={colors.textPrimary} />
+                                            </TouchableOpacity>
+                                            <Text style={[styles.rsStepValue, { color: colors.textPrimary }]}>{values[key]}</Text>
+                                            <TouchableOpacity
+                                                style={[styles.rsStepBtn, { backgroundColor: colors.surfaceSecondary }]}
+                                                onPress={() => setters[key](v => v + 1)}
+                                                accessibilityLabel={`Increase ${labels[key]} target`}
+                                            >
+                                                <Ionicons name="add" size={18} color={colors.textPrimary} />
+                                            </TouchableOpacity>
+                                        </View>
+                                    </View>
+                                );
+                            })}
+
+                            {/* Cost preview */}
+                            {rsWeeklyCost && !isNaN(Number(rsWeeklyCost)) && Number(rsWeeklyCost) > 0 && (
+                                <View style={[styles.rsPreview, { backgroundColor: colors.background }]}>
+                                    <Text style={[styles.rsPreviewTitle, { color: colors.textSecondary }]}>Cost Preview</Text>
+                                    <View style={styles.rsPreviewRow}>
+                                        <Text style={[styles.rsPreviewLabel, { color: colors.textTertiary }]}>Daily cost</Text>
+                                        <Text style={[styles.rsPreviewValue, { color: colors.textPrimary }]}>
+                                            ${(Number(rsWeeklyCost) / 7).toFixed(2)}
+                                        </Text>
+                                    </View>
+                                    <View style={styles.rsPreviewRow}>
+                                        <Text style={[styles.rsPreviewLabel, { color: colors.textTertiary }]}>Per agent / slot</Text>
+                                        <Text style={[styles.rsPreviewValue, { color: '#EC4899', fontWeight: '700' }]}>
+                                            ${(Number(rsWeeklyCost) / 7 / Math.max(1, rsSlots)).toFixed(2)}
+                                        </Text>
+                                    </View>
+                                </View>
+                            )}
+                        </View>
+                    )}
+
+                    {errors._submit ? (
+                        <View style={[styles.submitError, { backgroundColor: '#FEE2E2' }]}>
+                            <Text style={{ color: '#DC2626', fontSize: 13 }}>{errors._submit}</Text>
+                        </View>
+                    ) : null}
 
                     {/* Times */}
                     <View style={styles.timeRow}>
@@ -760,4 +1068,21 @@ const styles = StyleSheet.create({
     externalForm: { borderRadius: 12, padding: 14, gap: 12 },
     externalAddBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6, borderRadius: 10, paddingVertical: 11 },
     externalAddBtnText: { color: '#FFFFFF', fontWeight: '700', fontSize: 14 },
+
+    // Roadshow
+    rsSection: { borderRadius: 14, padding: 16, gap: 12, marginBottom: 16 },
+    rsSectionTitle: { fontSize: 15, fontWeight: '700' },
+    rsLockedBanner: { flexDirection: 'row', alignItems: 'center', gap: 6, borderRadius: 8, padding: 10 },
+    rsStepper: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
+    rsStepperRow: { flexDirection: 'row', alignItems: 'center', gap: 12 },
+    rsStepBtn: { width: 34, height: 34, borderRadius: 8, alignItems: 'center', justifyContent: 'center' },
+    rsStepValue: { fontSize: 16, fontWeight: '700', minWidth: 28, textAlign: 'center' },
+    rsPreview: { borderRadius: 10, padding: 12, gap: 6, marginTop: 4 },
+    rsPreviewTitle: { fontSize: 12, fontWeight: '600', marginBottom: 2 },
+    rsPreviewRow: { flexDirection: 'row', justifyContent: 'space-between' },
+    rsPreviewLabel: { fontSize: 13 },
+    rsPreviewValue: { fontSize: 13, fontWeight: '600' },
+    rsPreviewHint: { fontSize: 12, marginTop: 6 },
+    editNotice: { flexDirection: 'row', alignItems: 'flex-start', gap: 6, borderRadius: 8, padding: 10, marginTop: 4 },
+    submitError: { borderRadius: 10, padding: 12, marginBottom: 8 },
 });

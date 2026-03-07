@@ -125,7 +125,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
                     const phone = session.user.phone || null;
                     const profile = await fetchUserProfile(session.user.id, phone);
-                    if (profile) await updateLastLogin(session.user.id);
+                    if (profile) {
+                        await updateLastLogin(session.user.id);
+                        registerPushToken(session.user.id);
+                    }
                     setState({
                         session,
                         user: profile,
@@ -168,6 +171,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
             if (session?.user) {
                 const profile = await fetchUserProfile(session.user.id, session.user.phone || null);
+                if (profile) registerPushToken(session.user.id);
                 const bioEnabled = await isBiometricsEnabled();
                 setState(prev => ({
                     ...prev,
@@ -230,6 +234,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
                     reports_to: null,
                     lifecycle_stage: mockStage as User['lifecycle_stage'],
                     date_of_birth: null,
+                    push_token: null,
                     last_login_at: new Date().toISOString(),
                     is_active: true,
                     created_at: new Date().toISOString(),
@@ -360,6 +365,29 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     /** Directly update the avatar URL in local state (after upload/remove) */
     const updateAvatarUrl = useCallback((url: string | null) => {
         setState(prev => prev.user ? { ...prev, user: { ...prev.user, avatar_url: url } } : prev);
+    }, []);
+
+    /** Register Expo push token and store to users table */
+    const registerPushToken = useCallback(async (userId: string) => {
+        try {
+            // Dynamic import so missing native module never crashes the app
+            const Notifications = await import('expo-notifications');
+            const { status } = await Notifications.getPermissionsAsync();
+            const finalStatus = status === 'granted'
+                ? status
+                : (await Notifications.requestPermissionsAsync()).status;
+            if (finalStatus !== 'granted') return;
+
+            const tokenData = await Notifications.getExpoPushTokenAsync();
+            if (!tokenData?.data) return;
+
+            await supabase
+                .from('users')
+                .update({ push_token: tokenData.data })
+                .eq('id', userId);
+        } catch {
+            // Push token registration is non-critical — never throw
+        }
     }, []);
 
     /** Refresh user profile */

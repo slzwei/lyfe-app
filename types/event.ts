@@ -52,6 +52,49 @@ export const EVENT_TYPE_LABELS: Record<EventType, string> = {
     other: 'Other',
 };
 
+export type RoadshowActivityType = 'sitdown' | 'pitch' | 'case_closed';
+
+export interface RoadshowConfig {
+    id: string;
+    event_id: string;
+    weekly_cost: number;
+    slots_per_day: number;
+    expected_start_time: string; // 'HH:MM'
+    late_grace_minutes: number;
+    suggested_sitdowns: number;
+    suggested_pitches: number;
+    suggested_closed: number;
+    // computed client-side
+    daily_cost: number;
+    slot_cost: number;
+}
+
+export interface RoadshowAttendance {
+    id: string;
+    event_id: string;
+    user_id: string;
+    full_name?: string;
+    checked_in_at: string;
+    late_reason: string | null;
+    checked_in_by: string | null;
+    is_late: boolean;
+    minutes_late: number;
+    pledged_sitdowns: number;
+    pledged_pitches: number;
+    pledged_closed: number;
+    pledged_afyc: number;
+}
+
+export interface RoadshowActivity {
+    id: string;
+    event_id: string;
+    user_id: string;
+    full_name?: string;
+    type: RoadshowActivityType;
+    afyc_amount: number | null;
+    logged_at: string;
+}
+
 export const EVENT_TYPE_COLORS: Record<EventType, string> = {
     team_meeting: '#6366F1',
     training: '#0A7E6B',

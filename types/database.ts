@@ -22,6 +22,7 @@ export interface User {
     | null;
     date_of_birth: string | null;
     last_login_at: string | null;
+    push_token: string | null;
     is_active: boolean;
     created_at: string;
     updated_at: string;
