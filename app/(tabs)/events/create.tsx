@@ -1,9 +1,12 @@
 import Avatar from '@/components/Avatar';
 import ScreenHeader from '@/components/ScreenHeader';
 import WheelPicker, { WHEEL_ITEM_H } from '@/components/WheelPicker';
+import { ATTENDEE_ROLES, AVATAR_COLORS, getAvatarColor, formatPickerTime, hhmm24ToPickerState, PICKER_AMPM, PICKER_HOURS, PICKER_MINUTES, pickerToHHMM24, TIME_PICKER_VISIBLE } from '@/constants/ui';
 import { useAuth } from '@/contexts/AuthContext';
 import { useTheme } from '@/contexts/ThemeContext';
+import { dateDiffDays, dateRange, formatDateLabel, isValidDate, todayStr } from '@/lib/dateTime';
 import { createEvent, createRoadshowBulk, fetchAllUsers, fetchEventById, fetchRoadshowConfig, saveRoadshowConfig, updateEvent, type RoadshowConfigInput, type SimpleUser } from '@/lib/events';
+import { MOCK_USERS } from '@/lib/mockData';
 import { supabase } from '@/lib/supabase';
 import { isMockMode } from '@/lib/mockMode';
 import type { AttendeeRole, CreateEventInput, EventType, ExternalAttendee } from '@/types/event';
@@ -27,28 +30,7 @@ import {
     View,
 } from 'react-native';
 
-const MOCK_USERS: SimpleUser[] = [
-    { id: 'u1', full_name: 'Alice Tan', role: 'agent' },
-    { id: 'u2', full_name: 'Bob Lee', role: 'agent' },
-    { id: 'u3', full_name: 'David Lim', role: 'manager' },
-    { id: 'u4', full_name: 'Emily Koh', role: 'manager' },
-    { id: 'u5', full_name: 'Jason Teo', role: 'candidate' },
-    { id: 'u6', full_name: 'Sarah Wong', role: 'agent' },
-];
-
 const EVENT_TYPES: EventType[] = ['team_meeting', 'training', 'agency_event', 'roadshow', 'other'];
-const ATTENDEE_ROLES: { key: AttendeeRole; label: string }[] = [
-    { key: 'attendee', label: 'Attendee' },
-    { key: 'host', label: 'Host' },
-    { key: 'duty_manager', label: 'Duty Mgr' },
-    { key: 'presenter', label: 'Presenter' },
-];
-
-const AVATAR_COLORS = ['#6366F1', '#0D9488', '#E11D48', '#F59E0B', '#8B5CF6'];
-
-function getAvatarColor(name: string) {
-    return AVATAR_COLORS[name.charCodeAt(0) % AVATAR_COLORS.length];
-}
 
 interface SelectedAttendee {
     user_id: string;
@@ -56,69 +38,6 @@ interface SelectedAttendee {
     role: string;
     attendee_role: AttendeeRole;
     avatar_url?: string | null;
-}
-
-/** Returns today as YYYY-MM-DD */
-function todayStr() {
-    return new Date().toISOString().split('T')[0];
-}
-
-/** Validates YYYY-MM-DD */
-function isValidDate(s: string): boolean {
-    return /^\d{4}-\d{2}-\d{2}$/.test(s) && !isNaN(new Date(s).getTime());
-}
-
-
-/** Returns number of calendar days between two YYYY-MM-DD strings */
-function dateDiffDays(start: string, end: string): number {
-    const a = new Date(start + 'T00:00:00');
-    const b = new Date(end + 'T00:00:00');
-    return Math.round((b.getTime() - a.getTime()) / 86400000);
-}
-
-/** Generate YYYY-MM-DD strings for each day in [start, end] inclusive */
-function dateRange(start: string, end: string): string[] {
-    const dates: string[] = [];
-    const cur = new Date(start + 'T00:00:00');
-    const last = new Date(end + 'T00:00:00');
-    while (cur <= last) {
-        dates.push(cur.toISOString().split('T')[0]);
-        cur.setDate(cur.getDate() + 1);
-    }
-    return dates;
-}
-
-/** Format YYYY-MM-DD as "Weekday, D MMM" */
-function formatDateLabel(s: string): string {
-    return new Date(s + 'T00:00:00').toLocaleDateString('en-SG', { weekday: 'short', day: 'numeric', month: 'short' });
-}
-
-// ── Time picker constants ──────────────────────────────────────
-const PICKER_HOURS = Array.from({ length: 12 }, (_, i) => String(i + 1));
-const PICKER_MINUTES = ['00', '05', '10', '15', '20', '25', '30', '35', '40', '45', '50', '55'];
-const PICKER_AMPM = ['AM', 'PM'];
-const TIME_PICKER_VISIBLE = 3; // visible rows in form pickers (compact)
-
-function formatPickerTime(hour: number, minIdx: number, ampm: number): string {
-    return `${hour + 1}:${PICKER_MINUTES[minIdx]} ${PICKER_AMPM[ampm]}`;
-}
-
-function hhmm24ToPickerState(hhmm: string): { hour: number; minIdx: number; ampm: number } {
-    const parts = hhmm.split(':');
-    let h = parseInt(parts[0] ?? '9', 10);
-    const rawMin = parseInt(parts[1] ?? '0', 10);
-    const ampm = h >= 12 ? 1 : 0;
-    if (h > 12) h -= 12;
-    if (h === 0) h = 12;
-    const minIdx = Math.max(0, Math.min(PICKER_MINUTES.length - 1, Math.round(rawMin / 5)));
-    return { hour: h - 1, minIdx, ampm };
-}
-
-function pickerToHHMM24(hour: number, minIdx: number, ampm: number): string {
-    let h = hour + 1; // 1–12
-    if (ampm === 1 && h !== 12) h += 12;
-    if (ampm === 0 && h === 12) h = 0;
-    return `${String(h).padStart(2, '0')}:${PICKER_MINUTES[minIdx]}`;
 }
 
 export default function CreateEventScreen() {

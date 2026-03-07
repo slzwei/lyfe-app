@@ -1,7 +1,7 @@
 /**
  * Events service — Supabase CRUD for agency events & attendees
  */
-import type { AgencyEvent, CreateEventInput, EventAttendee, RoadshowActivity, RoadshowActivityType, RoadshowAttendance, RoadshowConfig } from '@/types/event';
+import type { AgencyEvent, CreateEventInput, EventAttendee, EventType, ExternalAttendee, RoadshowActivity, RoadshowActivityType, RoadshowAttendance, RoadshowConfig } from '@/types/event';
 import { supabase } from './supabase';
 
 export interface SimpleUser {
@@ -26,8 +26,8 @@ export async function fetchEvents(
     if (attendeeError) return { data: [], error: attendeeError.message };
     if (createdError) return { data: [], error: createdError.message };
 
-    const attendeeIds = (attendeeRows || []).map((r: any) => r.event_id);
-    const createdIds = (createdRows || []).map((r: any) => r.id);
+    const attendeeIds = (attendeeRows || []).map((r: { event_id: string }) => r.event_id);
+    const createdIds = (createdRows || []).map((r: { id: string }) => r.id);
     const eventIds = [...new Set([...attendeeIds, ...createdIds])];
 
     if (eventIds.length === 0) return { data: [], error: null };
@@ -42,43 +42,6 @@ export async function fetchEvents(
     if (error) return { data: [], error: error.message };
 
     return { data: mapEvents(data || []), error: null };
-}
-
-/**
- * Fetch upcoming events created by a set of managers, tagged with which manager.
- * Used by the PA home screen to show manager-scoped schedules.
- */
-export interface ManagerEvent extends AgencyEvent {
-    managerId: string;
-    managerName: string;
-}
-
-export async function fetchEventsByManagerIds(
-    managerIds: string[],
-    managerNames: Record<string, string>,
-): Promise<{ data: ManagerEvent[]; error: string | null }> {
-    if (managerIds.length === 0) return { data: [], error: null };
-
-    const today = new Date().toISOString().split('T')[0];
-
-    const { data, error } = await supabase
-        .from('events')
-        .select('*, creator_user:users!created_by(full_name), event_attendees(id, event_id, user_id, attendee_role, users(full_name, avatar_url))')
-        .in('created_by', managerIds)
-        .gte('event_date', today)
-        .order('event_date', { ascending: true })
-        .order('start_time', { ascending: true })
-        .limit(5);
-
-    if (error) return { data: [], error: error.message };
-
-    const events: ManagerEvent[] = mapEvents(data || []).map(e => ({
-        ...e,
-        managerId: e.created_by,
-        managerName: managerNames[e.created_by] || 'Unknown',
-    }));
-
-    return { data: events, error: null };
 }
 
 /**
@@ -185,7 +148,32 @@ export async function fetchAllUsers(): Promise<{ data: SimpleUser[]; error: stri
 
 // ── Helpers ──────────────────────────────────────────────────
 
-function mapEvents(rows: any[]): AgencyEvent[] {
+interface EventRow {
+    id: string;
+    title: string;
+    description: string | null;
+    event_type: EventType;
+    event_date: string;
+    start_time: string;
+    end_time: string | null;
+    location: string | null;
+    created_by: string;
+    creator_user?: { full_name: string } | null;
+    created_at: string;
+    updated_at: string;
+    external_attendees: ExternalAttendee[];
+    event_attendees?: AttendeeRow[];
+}
+
+interface AttendeeRow {
+    id: string;
+    event_id: string;
+    user_id: string;
+    attendee_role: string;
+    users?: { full_name: string; avatar_url: string | null } | null;
+}
+
+function mapEvents(rows: EventRow[]): AgencyEvent[] {
     return rows.map(row => ({
         id: row.id,
         title: row.title,
@@ -200,7 +188,7 @@ function mapEvents(rows: any[]): AgencyEvent[] {
         created_at: row.created_at,
         updated_at: row.updated_at,
         external_attendees: row.external_attendees || [],
-        attendees: (row.event_attendees || []).map((a: any) => ({
+        attendees: (row.event_attendees || []).map((a: AttendeeRow) => ({
             id: a.id,
             event_id: a.event_id,
             user_id: a.user_id,
@@ -214,14 +202,14 @@ function mapEvents(rows: any[]): AgencyEvent[] {
 // ── Roadshow service functions ────────────────────────────────
 
 /** Helpers to compute daily/slot cost client-side */
-function computeCosts(config: any): { daily_cost: number; slot_cost: number } {
+function computeCosts(config: { weekly_cost: number; slots_per_day: number }): { daily_cost: number; slot_cost: number } {
     const daily = config.weekly_cost / 7;
     const slot = daily / (config.slots_per_day || 1);
     return { daily_cost: Math.round(daily * 100) / 100, slot_cost: Math.round(slot * 100) / 100 };
 }
 
 /** Compute is_late and minutes_late from attendance row vs config */
-function computeLate(attendance: any, config: RoadshowConfig | null): { is_late: boolean; minutes_late: number } {
+function computeLate(attendance: { checked_in_at: string }, config: RoadshowConfig | null): { is_late: boolean; minutes_late: number } {
     if (!config) return { is_late: false, minutes_late: 0 };
     const checkedInAt = new Date(attendance.checked_in_at);
     const [h, m] = config.expected_start_time.split(':').map(Number);
@@ -292,7 +280,21 @@ export async function fetchRoadshowAttendance(
 
     if (error) return { data: [], error: error.message };
 
-    const rows = (data || []).map((row: any) => {
+    interface AttendanceRow {
+        id: string;
+        event_id: string;
+        user_id: string;
+        checked_in_at: string;
+        late_reason: string | null;
+        checked_in_by: string | null;
+        pledged_sitdowns: number;
+        pledged_pitches: number;
+        pledged_closed: number;
+        pledged_afyc: number;
+        users?: { full_name: string } | null;
+    }
+
+    const rows = (data || []).map((row: AttendanceRow) => {
         const { is_late, minutes_late } = computeLate(row, config ?? null);
         return {
             id: row.id,
@@ -376,7 +378,17 @@ export async function fetchRoadshowActivities(
 
     if (error) return { data: [], error: error.message };
 
-    const rows = (data || []).map((row: any) => ({
+    interface ActivityRow {
+        id: string;
+        event_id: string;
+        user_id: string;
+        type: string;
+        afyc_amount: number | null;
+        logged_at: string;
+        users?: { full_name: string } | null;
+    }
+
+    const rows = (data || []).map((row: ActivityRow) => ({
         id: row.id,
         event_id: row.event_id,
         user_id: row.user_id,

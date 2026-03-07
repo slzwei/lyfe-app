@@ -2,11 +2,13 @@ import Avatar from '@/components/Avatar';
 import LyfeLogo from '@/components/LyfeLogo';
 import ScreenHeader from '@/components/ScreenHeader';
 import { useAuth } from '@/contexts/AuthContext';
+import { PA_MANAGER_COLORS, ROLE_LABELS } from '@/constants/ui';
 import { useTheme } from '@/contexts/ThemeContext';
 import { useViewMode, type ViewMode } from '@/contexts/ViewModeContext';
 import { getBiometryType, type BiometryType } from '@/lib/biometrics';
 import { pickAndUploadAvatar, removeAvatar, takeAndUploadAvatar } from '@/lib/storage';
 import { Ionicons } from '@expo/vector-icons';
+import { MOCK_ASSIGNED_MANAGERS, type AssignedManager } from '@/lib/mockData';
 import { isMockMode } from '@/lib/mockMode';
 import { supabase } from '@/lib/supabase';
 import { useFocusEffect, useRouter } from 'expo-router';
@@ -28,27 +30,6 @@ import {
     View,
 } from 'react-native';
 
-interface AssignedManager {
-    id: string;
-    full_name: string;
-    role: string;
-}
-
-const PA_MANAGER_COLORS = ['#6366F1', '#0D9488', '#E11D48', '#F59E0B', '#8B5CF6'];
-
-const MOCK_MANAGERS: AssignedManager[] = [
-    { id: 'm1', full_name: 'David Lim', role: 'manager' },
-    { id: 'm2', full_name: 'Emily Koh', role: 'manager' },
-];
-
-const ROLE_LABELS: Record<string, string> = {
-    admin: 'Administrator',
-    director: 'Director',
-    manager: 'Manager',
-    agent: 'Agent',
-    pa: 'Personal Assistant',
-    candidate: 'Candidate',
-};
 
 const VIEW_MODE_OPTIONS: Array<{ value: ViewMode; label: string; icon: keyof typeof Ionicons.glyphMap }> = [
     { value: 'agent', label: 'Agent View', icon: 'person-outline' },
@@ -99,7 +80,7 @@ export default function ProfileScreen() {
 
     const loadManagers = useCallback(async () => {
         if (user?.role !== 'pa') return;
-        if (MOCK_OTP) { setManagers(MOCK_MANAGERS); return; }
+        if (MOCK_OTP) { setManagers(MOCK_ASSIGNED_MANAGERS); return; }
         if (!user?.id) return;
         const { data } = await supabase
             .from('pa_manager_assignments')

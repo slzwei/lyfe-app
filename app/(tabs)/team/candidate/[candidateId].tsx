@@ -1,14 +1,14 @@
 import LoadingState from '@/components/LoadingState';
-import PipelineStepper from '@/components/PipelineStepper';
 import { useAuth } from '@/contexts/AuthContext';
 import { useTheme } from '@/contexts/ThemeContext';
 import { addCandidateActivity, fetchCandidate, syncAgentToMKTR, updateCandidateStatus } from '@/lib/recruitment';
 import { CANDIDATE_STATUS_CONFIG, type CandidateStatus, type RecruitmentCandidate } from '@/types/recruitment';
 import { Ionicons } from '@expo/vector-icons';
-import { useLocalSearchParams, useRouter } from 'expo-router';
-import React, { useCallback, useEffect, useState } from 'react';
+import { useLocalSearchParams, useRouter, useSegments } from 'expo-router';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import {
     Alert,
+    Animated,
     KeyboardAvoidingView,
     Linking,
     Modal,
@@ -29,12 +29,23 @@ export default function CandidateDetailScreen() {
     const { user } = useAuth();
     const router = useRouter();
     const { candidateId } = useLocalSearchParams<{ candidateId: string }>();
-    const [showStatusModal, setShowStatusModal] = useState(false);
+    const segments = useSegments();
+    const isPaStack = segments.includes('pa' as never);
     const [showNoteModal, setShowNoteModal] = useState(false);
     const [noteText, setNoteText] = useState('');
     const [isSavingNote, setIsSavingNote] = useState(false);
     const [candidate, setCandidate] = useState<RecruitmentCandidate | null>(null);
     const [isLoading, setIsLoading] = useState(true);
+
+    // Sheet slide-up animations (overlay appears instantly; only the sheet slides)
+    const noteSheetY = useRef(new Animated.Value(400)).current;
+
+    useEffect(() => {
+        if (showNoteModal) {
+            noteSheetY.setValue(400);
+            Animated.spring(noteSheetY, { toValue: 0, useNativeDriver: true, damping: 22, stiffness: 220 }).start();
+        }
+    }, [showNoteModal]);
 
     const loadCandidate = useCallback(async () => {
         if (MOCK_OTP) {
@@ -72,6 +83,38 @@ export default function CandidateDetailScreen() {
 
     const statusConfig = CANDIDATE_STATUS_CONFIG[candidate.status];
 
+    const handleStatusChange = async (newStatus: CandidateStatus) => {
+        if (newStatus === candidate.status) return;
+        const prevStatus = candidate.status;
+        setCandidate(prev => prev ? { ...prev, status: newStatus } : null);
+
+        if (!MOCK_OTP) {
+            const { error } = await updateCandidateStatus(candidate.id, newStatus);
+            if (error) {
+                setCandidate(prev => prev ? { ...prev, status: prevStatus } : null);
+                Alert.alert('Error', error);
+                return;
+            }
+            const newConfig = CANDIDATE_STATUS_CONFIG[newStatus];
+            if (newStatus === 'active_agent') {
+                syncAgentToMKTR({
+                    email: candidate.email,
+                    name: candidate.name,
+                    phone: candidate.phone,
+                }).then((result: { success: boolean; error?: string }) => {
+                    if (result.success) {
+                        Alert.alert('Agent Activated', `${candidate.name} is now active and synced to MKTR for lead assignment.`);
+                    } else {
+                        Alert.alert('Status Updated', `Changed to ${newConfig.label}\n\nMKTR sync failed: ${result.error}. The agent may need to be manually added to MKTR.`);
+                    }
+                });
+            } else {
+                Alert.alert('Status Updated', `Changed to ${newConfig.label}`);
+            }
+            loadCandidate();
+        }
+    };
+
     const handleSaveNote = async () => {
         if (!noteText.trim()) return;
         setIsSavingNote(true);
@@ -84,8 +127,7 @@ export default function CandidateDetailScreen() {
     };
 
     const actions = [
-        { icon: 'swap-horizontal-outline', label: 'Status', onPress: () => setShowStatusModal(true) },
-        { icon: 'calendar-outline', label: 'Schedule', onPress: () => router.push(`/(tabs)/candidates/${candidateId}` as any) },
+        { icon: 'calendar-outline', label: 'Schedule', onPress: () => router.push(isPaStack ? `/(tabs)/pa/candidate/${candidateId}` as any : `/(tabs)/candidates/${candidateId}` as any) },
         { icon: 'create-outline', label: 'Note', onPress: () => { setNoteText(''); setShowNoteModal(true); } },
         { icon: 'call-outline', label: 'Call', onPress: () => Linking.openURL(`tel:${candidate.phone}`) },
     ];
@@ -132,7 +174,7 @@ export default function CandidateDetailScreen() {
                 {/* Pipeline Progress */}
                 <View style={[styles.card, { backgroundColor: colors.cardBackground }]}>
                     <Text style={[styles.sectionTitle, { color: colors.textPrimary }]}>Pipeline Progress</Text>
-                    <PipelineStepper currentStatus={candidate.status} />
+                    <StatusStepper currentStatus={candidate.status} colors={colors} onStepPress={handleStatusChange} />
                 </View>
 
                 {/* Actions */}
@@ -228,10 +270,10 @@ export default function CandidateDetailScreen() {
             </ScrollView>
 
             {/* Note Modal */}
-            <Modal visible={showNoteModal} transparent animationType="slide" onRequestClose={() => setShowNoteModal(false)}>
+            <Modal visible={showNoteModal} transparent animationType="none" onRequestClose={() => setShowNoteModal(false)}>
                 <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} style={{ flex: 1 }}>
                     <TouchableOpacity style={styles.modalOverlay} activeOpacity={1} onPress={() => setShowNoteModal(false)}>
-                        <View style={[styles.noteSheet, { backgroundColor: colors.cardBackground }]}>
+                        <Animated.View style={[styles.noteSheet, { backgroundColor: colors.cardBackground, transform: [{ translateY: noteSheetY }] }]}>
                             <View style={[styles.noteHandle, { backgroundColor: colors.border }]} />
                             <Text style={[styles.noteTitle, { color: colors.textPrimary }]}>Add Note</Text>
                             <TextInput
@@ -251,79 +293,49 @@ export default function CandidateDetailScreen() {
                             >
                                 <Text style={styles.noteSaveBtnText}>{isSavingNote ? 'Saving…' : 'Save Note'}</Text>
                             </TouchableOpacity>
-                        </View>
+                        </Animated.View>
                     </TouchableOpacity>
                 </KeyboardAvoidingView>
             </Modal>
 
-            {/* Status Change Modal */}
-            <Modal visible={showStatusModal} transparent animationType="fade">
-                <View style={styles.modalOverlay}>
-                    <View style={[styles.modalContent, { backgroundColor: colors.cardBackground }]}>
-                        <Text style={[styles.modalTitle, { color: colors.textPrimary }]}>Change Status</Text>
-                        <Text style={[styles.modalSubtitle, { color: colors.textTertiary }]}>
-                            Current: {statusConfig.label}
-                        </Text>
-                        {Object.entries(CANDIDATE_STATUS_CONFIG).map(([key, config]) => (
-                            <TouchableOpacity
-                                key={key}
-                                style={[
-                                    styles.statusOption,
-                                    { borderBottomColor: colors.border },
-                                    key === candidate.status && { backgroundColor: colors.accentLight },
-                                ]}
-                                onPress={async () => {
-                                    setShowStatusModal(false);
-                                    if (!MOCK_OTP) {
-                                        const { error } = await updateCandidateStatus(candidate.id, key as CandidateStatus);
-                                        if (error) {
-                                            Alert.alert('Error', error);
-                                            return;
-                                        }
-                                        // Sync to MKTR when agent becomes active
-                                        if (key === 'active_agent') {
-                                            syncAgentToMKTR({
-                                                email: candidate.email,
-                                                name: candidate.name,
-                                                phone: candidate.phone,
-                                            }).then((result: { success: boolean; error?: string }) => {
-                                                if (result.success) {
-                                                    Alert.alert('Agent Activated', `${candidate.name} is now active and synced to MKTR for lead assignment.`);
-                                                } else {
-                                                    Alert.alert('Status Updated', `Changed to ${config.label}\n\n⚠️ MKTR sync failed: ${result.error}. The agent may need to be manually added to MKTR.`);
-                                                }
-                                            });
-                                        } else {
-                                            Alert.alert('Status Updated', `Changed to ${config.label}`);
-                                        }
-                                        loadCandidate();
-                                        return;
-                                    }
-                                    Alert.alert('Status Updated', `Changed to ${config.label}`);
-                                }}
-                            >
-                                <View style={[styles.statusDot, { backgroundColor: config.color }]} />
-                                <Text style={[
-                                    styles.statusOptionText,
-                                    { color: key === candidate.status ? colors.accent : colors.textPrimary },
-                                ]}>
-                                    {config.label}
-                                </Text>
-                                {key === candidate.status && (
-                                    <Ionicons name="checkmark" size={18} color={colors.accent} />
-                                )}
-                            </TouchableOpacity>
-                        ))}
-                        <TouchableOpacity
-                            style={[styles.cancelBtn, { backgroundColor: colors.background }]}
-                            onPress={() => setShowStatusModal(false)}
-                        >
-                            <Text style={[styles.cancelText, { color: colors.textPrimary }]}>Cancel</Text>
-                        </TouchableOpacity>
-                    </View>
-                </View>
-            </Modal>
         </SafeAreaView>
+    );
+}
+
+function StatusStepper({ currentStatus, colors, onStepPress }: { currentStatus: CandidateStatus; colors: any; onStepPress: (status: CandidateStatus) => void }) {
+    const steps: CandidateStatus[] = ['applied', 'interview_scheduled', 'interviewed', 'approved', 'exam_prep', 'licensed', 'active_agent'];
+    const currentIdx = steps.indexOf(currentStatus);
+
+    return (
+        <View style={stepperStyles.container}>
+            {steps.map((step, idx) => {
+                const cfg = CANDIDATE_STATUS_CONFIG[step];
+                const isComplete = idx < currentIdx;
+                const isCurrent = idx === currentIdx;
+                const dotColor = isComplete || isCurrent ? cfg.color : colors.border;
+
+                return (
+                    <TouchableOpacity key={step} style={stepperStyles.stepRow} activeOpacity={0.6} onPress={() => onStepPress(step)}>
+                        <View style={stepperStyles.dotCol}>
+                            <View style={[stepperStyles.dot, { backgroundColor: dotColor, borderColor: dotColor }]}>
+                                {isComplete && <Ionicons name="checkmark" size={10} color="#FFF" />}
+                                {isCurrent && <View style={stepperStyles.activeDotInner} />}
+                            </View>
+                            {idx < steps.length - 1 && (
+                                <View style={[stepperStyles.line, { backgroundColor: isComplete ? cfg.color : colors.border }]} />
+                            )}
+                        </View>
+                        <Text style={[
+                            stepperStyles.label,
+                            { color: isCurrent ? cfg.color : isComplete ? colors.textPrimary : colors.textTertiary },
+                            isCurrent && { fontWeight: '700' },
+                        ]}>
+                            {cfg.label}
+                        </Text>
+                    </TouchableOpacity>
+                );
+            })}
+        </View>
     );
 }
 
@@ -474,28 +486,29 @@ const styles = StyleSheet.create({
         backgroundColor: 'rgba(0,0,0,0.4)',
         justifyContent: 'flex-end',
     },
-    modalContent: {
-        borderTopLeftRadius: 16,
-        borderTopRightRadius: 16,
-        padding: 20,
-        paddingBottom: 36,
-    },
-    modalTitle: { fontSize: 20, fontWeight: '700', marginBottom: 4 },
-    modalSubtitle: { fontSize: 13, marginBottom: 16 },
-    statusOption: {
-        flexDirection: 'row',
+});
+
+const stepperStyles = StyleSheet.create({
+    container: { gap: 0 },
+    stepRow: { flexDirection: 'row', alignItems: 'flex-start' },
+    dotCol: { width: 24, alignItems: 'center' },
+    dot: {
+        width: 18,
+        height: 18,
+        borderRadius: 9,
+        borderWidth: 2,
         alignItems: 'center',
-        paddingVertical: 14,
-        borderBottomWidth: StyleSheet.hairlineWidth,
-        gap: 10,
+        justifyContent: 'center',
     },
-    statusDot: { width: 10, height: 10, borderRadius: 5 },
-    statusOptionText: { flex: 1, fontSize: 15, fontWeight: '500' },
-    cancelBtn: {
-        marginTop: 12,
-        paddingVertical: 14,
-        borderRadius: 12,
-        alignItems: 'center',
+    activeDotInner: {
+        width: 6,
+        height: 6,
+        borderRadius: 3,
+        backgroundColor: '#FFF',
     },
-    cancelText: { fontSize: 16, fontWeight: '600' },
+    line: {
+        width: 2,
+        height: 18,
+    },
+    label: { fontSize: 13, marginLeft: 10, marginTop: 1 },
 });

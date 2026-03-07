@@ -13,10 +13,13 @@ import {
     type BiometryType,
 } from '@/lib/biometrics';
 import { fetchLeadStats, fetchManagerDashboardStats, fetchRecentActivities, type LeadPipelineStats, type ManagerDashboardStats } from '@/lib/leads';
+import { formatDateShort, formatTime } from '@/lib/dateTime';
+import { PA_MANAGER_COLORS } from '@/constants/ui';
+import { MOCK_ACTIVITIES, MOCK_AGENT_STATS, MOCK_LEAD_PIPELINE, MOCK_MANAGER_ACTIVITIES, MOCK_MANAGER_STATS, PA_MOCK_CANDIDATE_COUNT, PA_MOCK_EVENTS, PA_MOCK_INTERVIEW_COUNT } from '@/lib/mockData';
 import { fetchUpcomingEvents } from '@/lib/events';
 import { EVENT_TYPE_COLORS, type AgencyEvent } from '@/types/event';
 import { supabase } from '@/lib/supabase';
-import { STATUS_CONFIG, type LeadActivity, type LeadActivityType, type LeadStatus } from '@/types/lead';
+import { STATUS_CONFIG, type LeadActivity, type LeadActivityType } from '@/types/lead';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
@@ -32,82 +35,6 @@ import {
 } from 'react-native';
 import { isMockMode } from '@/lib/mockMode';
 
-// ── Mock Data — Agent View ──
-const AGENT_STATS = {
-    totalLeads: 8,
-    newThisWeek: 3,
-    conversionRate: 25,
-    activeFollowUps: 4,
-};
-
-// ── Mock Data — Manager View ──
-const MANAGER_STATS = {
-    teamLeads: 24,
-    activeCandidates: 6,
-    agentsManaged: 4,
-    pendingInterviews: 3,
-};
-
-const MOCK_ACTIVITIES = [
-    { id: '1', type: 'status_change' as const, leadName: 'Sarah Tan', detail: 'New \u2192 Contacted', time: '2h ago', icon: 'swap-horizontal' as const },
-    { id: '2', type: 'note' as const, leadName: 'David Lim', detail: 'Added follow-up note', time: '3h ago', icon: 'create' as const },
-    { id: '3', type: 'call' as const, leadName: 'Amanda Lee', detail: 'Outbound call (5 min)', time: '5h ago', icon: 'call' as const },
-    { id: '4', type: 'new_lead' as const, leadName: 'Michael Wong', detail: 'New lead from referral', time: '1d ago', icon: 'person-add' as const },
-    { id: '5', type: 'status_change' as const, leadName: 'Jessica Ng', detail: 'Proposed \u2192 Won', time: '2d ago', icon: 'trophy' as const },
-];
-
-const MANAGER_ACTIVITIES = [
-    { id: '1', type: 'candidate' as const, leadName: 'Jason Teo', detail: 'Applied to join team', time: '1h ago', icon: 'person-add' as const },
-    { id: '2', type: 'reassign' as const, leadName: 'Sarah Tan', detail: 'Lead reassigned to Alice', time: '3h ago', icon: 'swap-horizontal' as const },
-    { id: '3', type: 'interview' as const, leadName: 'Priya Sharma', detail: 'Interview completed', time: '5h ago', icon: 'checkmark-circle' as const },
-    { id: '4', type: 'exam' as const, leadName: 'Wei Ming Chen', detail: 'Exam Prep started', time: '1d ago', icon: 'school' as const },
-];
-
-const LEAD_PIPELINE: { status: LeadStatus; count: number }[] = [
-    { status: 'new', count: 2 },
-    { status: 'contacted', count: 2 },
-    { status: 'qualified', count: 1 },
-    { status: 'proposed', count: 2 },
-    { status: 'won', count: 1 },
-    { status: 'lost', count: 0 },
-];
-
-// ── PA Colour Palette ──
-const PA_MANAGER_COLORS = ['#6366F1', '#0D9488', '#E11D48', '#F59E0B', '#8B5CF6'];
-
-// ── PA date helpers (same as pa/index.tsx) ──
-const _now = Date.now();
-const d = (days: number) => new Date(_now - days * 86400000).toISOString();
-const fd = (daysFromNow: number) => new Date(_now + daysFromNow * 86400000).toISOString().split('T')[0];
-
-// ── Mock Data — PA View ──
-const PA_MOCK_EVENTS: AgencyEvent[] = [
-    { id: 'pe1', title: 'Client Roadshow', event_type: 'roadshow', event_date: fd(1),
-      start_time: '09:00', end_time: '17:00', location: 'Hillion Mall',
-      created_by: 'm1', creator_name: 'David Lim',
-      description: null, created_at: d(1), updated_at: d(1), attendees: [], external_attendees: [] },
-    { id: 'pe2', title: 'Team Training', event_type: 'training', event_date: fd(3),
-      start_time: '14:00', end_time: '16:00', location: 'Lyfe Office',
-      created_by: 'm2', creator_name: 'Emily Koh',
-      description: null, created_at: d(0), updated_at: d(0), attendees: [], external_attendees: [] },
-    { id: 'pe3', title: 'Agency Meeting', event_type: 'agency_event', event_date: fd(6),
-      start_time: '10:00', end_time: null, location: 'Marina Bay Sands',
-      created_by: 'm1', creator_name: 'David Lim',
-      description: null, created_at: d(0), updated_at: d(0), attendees: [], external_attendees: [] },
-];
-const PA_MOCK_CANDIDATE_COUNT = 3;
-const PA_MOCK_INTERVIEW_COUNT = 1;
-
-// ── PA date format helpers ──
-const formatDate = (dateStr: string) => {
-    const dt = new Date(dateStr + 'T00:00:00');
-    return dt.toLocaleDateString('en-SG', { weekday: 'short', month: 'short', day: 'numeric' });
-};
-const formatTime = (time: string) => {
-    const [h, m] = time.split(':').map(Number);
-    return `${h % 12 || 12}:${m.toString().padStart(2, '0')} ${h >= 12 ? 'PM' : 'AM'}`;
-};
-
 function getGreeting(): string {
     const hour = new Date().getHours();
     if (hour < 12) return 'Good morning';
@@ -120,6 +47,7 @@ const ACTIVITY_ICONS: Record<LeadActivityType, string> = {
     created: 'person-add',
     note: 'create',
     call: 'call',
+    whatsapp: 'logo-whatsapp',
     status_change: 'swap-horizontal',
     reassignment: 'swap-horizontal',
     email: 'mail',
@@ -279,13 +207,13 @@ export default function HomeScreen() {
     }, [loadDashboardData]);
 
     // Use real stats or mock fallback
-    const agentStats = stats || AGENT_STATS;
-    const pipeline = stats?.pipeline || LEAD_PIPELINE;
+    const agentStats = stats || MOCK_AGENT_STATS;
+    const pipeline = stats?.pipeline || MOCK_LEAD_PIPELINE;
 
     // Normalize recent activities for display
     const displayActivities = (!MOCK_OTP && recentActivities.length > 0)
         ? formatActivities(recentActivities)
-        : (isManagerView ? MANAGER_ACTIVITIES : MOCK_ACTIVITIES);
+        : (isManagerView ? MOCK_MANAGER_ACTIVITIES : MOCK_ACTIVITIES);
 
     const totalPipeline = pipeline.reduce((n, s) => n + s.count, 0);
 
@@ -356,12 +284,12 @@ export default function HomeScreen() {
                             <View style={styles.statsRow}>
                                 <View style={[styles.heroCardPrimary, { backgroundColor: colors.accent }]}>
                                     <Ionicons name="people" size={80} color="rgba(255,255,255,0.15)" style={styles.heroIconBg} />
-                                    <Text style={[styles.heroStatValue, { color: '#FFFFFF' }]}>{isManagerView ? (stats?.totalLeads || MANAGER_STATS.teamLeads) : 0}</Text>
+                                    <Text style={[styles.heroStatValue, { color: '#FFFFFF' }]}>{isManagerView ? (stats?.totalLeads || MOCK_MANAGER_STATS.teamLeads) : 0}</Text>
                                     <Text style={[styles.heroStatLabel, { color: 'rgba(255,255,255,0.9)' }]}>Team Leads</Text>
                                 </View>
                                 <View style={styles.statsColumn}>
-                                    <StatCardSmall label="Candidates" value={(managerStats?.activeCandidates ?? MANAGER_STATS.activeCandidates).toString()} colors={colors} />
-                                    <StatCardSmall label="Agents" value={(managerStats?.agentsManaged ?? MANAGER_STATS.agentsManaged).toString()} colors={colors} />
+                                    <StatCardSmall label="Candidates" value={(managerStats?.activeCandidates ?? MOCK_MANAGER_STATS.activeCandidates).toString()} colors={colors} />
+                                    <StatCardSmall label="Agents" value={(managerStats?.agentsManaged ?? MOCK_MANAGER_STATS.agentsManaged).toString()} colors={colors} />
                                 </View>
                             </View>
                         </>
@@ -446,7 +374,7 @@ export default function HomeScreen() {
                                                 {event.title}
                                             </Text>
                                             <Text style={[styles.managerEventMeta, { color: colors.textTertiary }]}>
-                                                {formatDate(event.event_date)} · {formatTime(event.start_time)}
+                                                {formatDateShort(event.event_date)} · {formatTime(event.start_time)}
                                             </Text>
                                             {event.location ? (
                                                 <Text style={[styles.managerEventOwner, { color: typeColor }]} numberOfLines={1}>

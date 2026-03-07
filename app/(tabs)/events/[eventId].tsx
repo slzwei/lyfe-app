@@ -9,6 +9,9 @@ import {
     fetchRoadshowConfig, logRoadshowActivity, logRoadshowAttendanceWithPledge,
     managerCheckIn, type PledgeInput,
 } from '@/lib/events';
+import { formatActivityTime, formatCheckinTime, formatCreatedAt, formatDateLong, formatTime, todayLocalStr } from '@/lib/dateTime';
+import { activityLabel, activityTypeColor, ATTENDEE_ROLE_COLORS, ATTENDEE_ROLE_LABELS, ATTENDEE_ROLE_ORDER, AVATAR_COLORS, getAvatarColor, PICKER_HOURS, PICKER_MINUTES, PICKER_AMPM, ROADSHOW_PINK } from '@/constants/ui';
+import { MOCK_EVENTS, MOCK_RS_ACTIVITIES, MOCK_RS_ATTENDANCE, MOCK_RS_CONFIG, MOCK_RS_PAST_ACTIVITIES, MOCK_RS_PAST_ATTENDANCE } from '@/lib/mockData';
 import { isMockMode } from '@/lib/mockMode';
 import { supabase } from '@/lib/supabase';
 import type { AgencyEvent, AttendeeRole, EventAttendee, RoadshowActivity, RoadshowAttendance, RoadshowConfig } from '@/types/event';
@@ -34,131 +37,6 @@ import {
     View,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-
-// ── Time picker constants ──────────────────────────────────────
-const LOG_HOURS = Array.from({ length: 12 }, (_, i) => String(i + 1));
-const LOG_MINUTES = ['00', '05', '10', '15', '20', '25', '30', '35', '40', '45', '50', '55'];
-const LOG_AMPM = ['AM', 'PM'];
-
-// ── Mock data ─────────────────────────────────────────────────
-const today = new Date();
-const fd = (d: number) => {
-    const dt = new Date(today);
-    dt.setDate(dt.getDate() + d);
-    return dt.toISOString().split('T')[0];
-};
-
-const MOCK_EVENTS: AgencyEvent[] = [
-    { id: 'e1', title: 'Agency Kickoff 2026', description: 'Annual agency kickoff event for all staff. Please wear formal attire.', event_type: 'agency_event', event_date: fd(0), start_time: '09:00', end_time: '12:00', location: 'Marina Bay Sands Convention Centre', created_by: 'mock-user-id', creator_name: 'Mgr. David Lim', created_at: new Date().toISOString(), updated_at: new Date().toISOString(), attendees: [{ id: 'a1', event_id: 'e1', user_id: 'u1', attendee_role: 'host', full_name: 'David Lim' }, { id: 'a2', event_id: 'e1', user_id: 'u2', attendee_role: 'presenter', full_name: 'Dr. Ng Wei' }, { id: 'a3', event_id: 'e1', user_id: 'u3', attendee_role: 'attendee', full_name: 'Alice Tan' }, { id: 'a4', event_id: 'e1', user_id: 'u4', attendee_role: 'attendee', full_name: 'Bob Lee' }, { id: 'a5', event_id: 'e1', user_id: 'u5', attendee_role: 'attendee', full_name: 'Sarah Wong' }], external_attendees: [{ name: 'John Smith (Client)', attendee_role: 'attendee' }, { name: 'Jane Doe (Prospect)', attendee_role: 'attendee' }] },
-    { id: 'e2', title: 'M9 Exam Training', description: 'Prepare for the M9 certification paper.', event_type: 'training', event_date: fd(2), start_time: '14:00', end_time: '17:00', location: 'Lyfe Office, Level 12', created_by: 'mock-user-id', creator_name: 'Mgr. David Lim', created_at: new Date().toISOString(), updated_at: new Date().toISOString(), attendees: [{ id: 'a5', event_id: 'e2', user_id: 'u5', attendee_role: 'presenter', full_name: 'Dr. Ng Wei' }, { id: 'a6', event_id: 'e2', user_id: 'u6', attendee_role: 'attendee', full_name: 'Jason Teo' }], external_attendees: [] },
-    { id: 'e3', title: 'Team Weekly Sync', description: null, event_type: 'team_meeting', event_date: fd(5), start_time: '10:00', end_time: '11:00', location: 'Zoom', created_by: 'mock-user-id', creator_name: 'Mgr. David Lim', created_at: new Date().toISOString(), updated_at: new Date().toISOString(), attendees: [{ id: 'a7', event_id: 'e3', user_id: 'u7', attendee_role: 'attendee', full_name: 'Emily Koh' }], external_attendees: [] },
-    // Future roadshow (7 days from now)
-    { id: 'e4', title: 'Roadshow @ Tampines', description: null, event_type: 'roadshow', event_date: fd(7), start_time: '10:00', end_time: '18:00', location: 'Tampines Mall Atrium', created_by: 'mock-user-id', creator_name: 'Mgr. David Lim', created_at: new Date().toISOString(), updated_at: new Date().toISOString(), attendees: [{ id: 'a8', event_id: 'e4', user_id: 'u1', attendee_role: 'attendee', full_name: 'Sarah Lee' }, { id: 'a9', event_id: 'e4', user_id: 'u2', attendee_role: 'attendee', full_name: 'James Tan' }, { id: 'a10', event_id: 'e4', user_id: 'u3', attendee_role: 'attendee', full_name: 'Mei Ling' }], external_attendees: [] },
-    // Live roadshow (today)
-    { id: 'e4live', title: 'Roadshow @ Hillion Mall', description: null, event_type: 'roadshow', event_date: fd(0), start_time: '10:00', end_time: '18:00', location: 'Hillion Mall FairPrice', created_by: 'mock-user-id', creator_name: 'Mgr. David Lim', created_at: new Date().toISOString(), updated_at: new Date().toISOString(), attendees: [{ id: 'a8l', event_id: 'e4live', user_id: 'mock-user-id', attendee_role: 'attendee', full_name: 'Sarah Lee' }, { id: 'a9l', event_id: 'e4live', user_id: 'u2', attendee_role: 'attendee', full_name: 'James Tan' }, { id: 'a10l', event_id: 'e4live', user_id: 'u3', attendee_role: 'attendee', full_name: 'Mei Ling' }], external_attendees: [] },
-    // Past roadshow
-    { id: 'e4past', title: 'Roadshow @ Jurong Point', description: null, event_type: 'roadshow', event_date: fd(-7), start_time: '10:00', end_time: '18:00', location: 'Jurong Point', created_by: 'mock-user-id', creator_name: 'Mgr. David Lim', created_at: new Date().toISOString(), updated_at: new Date().toISOString(), attendees: [{ id: 'a8p', event_id: 'e4past', user_id: 'u1', attendee_role: 'attendee', full_name: 'Sarah Lee' }, { id: 'a9p', event_id: 'e4past', user_id: 'u2', attendee_role: 'attendee', full_name: 'James Tan' }, { id: 'a10p', event_id: 'e4past', user_id: 'u3', attendee_role: 'attendee', full_name: 'Mei Ling' }], external_attendees: [] },
-    { id: 'e5', title: 'Director Review', description: null, event_type: 'team_meeting', event_date: fd(14), start_time: '16:00', end_time: null, location: 'HQ Board Room', created_by: 'mock-user-id', creator_name: 'Mgr. David Lim', created_at: new Date().toISOString(), updated_at: new Date().toISOString(), attendees: [], external_attendees: [] },
-];
-
-const MOCK_RS_CONFIG: RoadshowConfig = {
-    id: 'cfg1', event_id: '', weekly_cost: 1800, slots_per_day: 3,
-    expected_start_time: '10:00', late_grace_minutes: 15,
-    suggested_sitdowns: 5, suggested_pitches: 3, suggested_closed: 1,
-    daily_cost: 257.14, slot_cost: 85.71,
-};
-
-const MOCK_RS_ATTENDANCE: RoadshowAttendance[] = [
-    { id: 'att1', event_id: 'e4live', user_id: 'mock-user-id', full_name: 'Sarah Lee', checked_in_at: `${fd(0)}T10:02:00.000Z`, late_reason: null, checked_in_by: null, is_late: false, minutes_late: 0, pledged_sitdowns: 5, pledged_pitches: 3, pledged_closed: 1, pledged_afyc: 2000 },
-    { id: 'att2', event_id: 'e4live', user_id: 'u2', full_name: 'James Tan', checked_in_at: `${fd(0)}T10:23:00.000Z`, late_reason: 'MRT delay', checked_in_by: null, is_late: true, minutes_late: 8, pledged_sitdowns: 5, pledged_pitches: 3, pledged_closed: 1, pledged_afyc: 3000 },
-];
-
-const MOCK_RS_ACTIVITIES: RoadshowActivity[] = [
-    { id: 'act1', event_id: 'e4live', user_id: 'u2', full_name: 'James Tan', type: 'case_closed', afyc_amount: 3200, logged_at: `${fd(0)}T03:03:00.000Z` },
-    { id: 'act2', event_id: 'e4live', user_id: 'mock-user-id', full_name: 'Sarah Lee', type: 'pitch', afyc_amount: null, logged_at: `${fd(0)}T02:45:00.000Z` },
-    { id: 'act3', event_id: 'e4live', user_id: 'u2', full_name: 'James Tan', type: 'sitdown', afyc_amount: null, logged_at: `${fd(0)}T02:15:00.000Z` },
-    { id: 'act4', event_id: 'e4live', user_id: 'mock-user-id', full_name: 'Sarah Lee', type: 'sitdown', afyc_amount: null, logged_at: `${fd(0)}T01:30:00.000Z` },
-    { id: 'act5', event_id: 'e4live', user_id: 'u2', full_name: 'James Tan', type: 'pitch', afyc_amount: null, logged_at: `${fd(0)}T01:10:00.000Z` },
-    { id: 'act6', event_id: 'e4live', user_id: 'u2', full_name: 'James Tan', type: 'sitdown', afyc_amount: null, logged_at: `${fd(0)}T00:32:00.000Z` },
-    { id: 'act7', event_id: 'e4live', user_id: 'mock-user-id', full_name: 'Sarah Lee', type: 'sitdown', afyc_amount: null, logged_at: `${fd(0)}T00:20:00.000Z` },
-    { id: 'act8', event_id: 'e4live', user_id: 'u2', full_name: 'James Tan', type: 'check_in', afyc_amount: null, logged_at: `${fd(0)}T10:23:00.000Z` },
-    { id: 'act9', event_id: 'e4live', user_id: 'mock-user-id', full_name: 'Sarah Lee', type: 'check_in', afyc_amount: null, logged_at: `${fd(0)}T10:02:00.000Z` },
-];
-
-const MOCK_RS_PAST_ATTENDANCE: RoadshowAttendance[] = [
-    { id: 'p1', event_id: 'e4past', user_id: 'u1', full_name: 'Sarah Lee', checked_in_at: `${fd(-7)}T09:55:00.000Z`, late_reason: null, checked_in_by: null, is_late: false, minutes_late: 0, pledged_sitdowns: 5, pledged_pitches: 3, pledged_closed: 1, pledged_afyc: 2000 },
-    { id: 'p2', event_id: 'e4past', user_id: 'u2', full_name: 'James Tan', checked_in_at: `${fd(-7)}T10:23:00.000Z`, late_reason: 'MRT delay', checked_in_by: null, is_late: true, minutes_late: 8, pledged_sitdowns: 5, pledged_pitches: 3, pledged_closed: 1, pledged_afyc: 3000 },
-    { id: 'p3', event_id: 'e4past', user_id: 'u3', full_name: 'Mei Ling', checked_in_at: `${fd(-7)}T09:55:00.000Z`, late_reason: null, checked_in_by: null, is_late: false, minutes_late: 0, pledged_sitdowns: 5, pledged_pitches: 3, pledged_closed: 1, pledged_afyc: 2000 },
-];
-
-const MOCK_RS_PAST_ACTIVITIES: RoadshowActivity[] = [
-    { id: 'pa1', event_id: 'e4past', user_id: 'u2', full_name: 'James Tan', type: 'case_closed', afyc_amount: 3200, logged_at: `${fd(-7)}T03:03:00.000Z` },
-    { id: 'pa2', event_id: 'e4past', user_id: 'u1', full_name: 'Sarah Lee', type: 'departure', afyc_amount: null, logged_at: `${fd(-7)}T19:00:00.000Z` },
-    { id: 'pa3', event_id: 'e4past', user_id: 'u2', full_name: 'James Tan', type: 'departure', afyc_amount: null, logged_at: `${fd(-7)}T19:00:00.000Z` },
-    { id: 'pa4', event_id: 'e4past', user_id: 'u3', full_name: 'Mei Ling', type: 'departure', afyc_amount: null, logged_at: `${fd(-7)}T19:00:00.000Z` },
-    { id: 'pa5', event_id: 'e4past', user_id: 'u1', full_name: 'Sarah Lee', type: 'pitch', afyc_amount: null, logged_at: `${fd(-7)}T02:45:00.000Z` },
-    { id: 'pa6', event_id: 'e4past', user_id: 'u3', full_name: 'Mei Ling', type: 'sitdown', afyc_amount: null, logged_at: `${fd(-7)}T02:30:00.000Z` },
-    { id: 'pa7', event_id: 'e4past', user_id: 'u1', full_name: 'Sarah Lee', type: 'sitdown', afyc_amount: null, logged_at: `${fd(-7)}T01:45:00.000Z` },
-    { id: 'pa8', event_id: 'e4past', user_id: 'u2', full_name: 'James Tan', type: 'pitch', afyc_amount: null, logged_at: `${fd(-7)}T01:30:00.000Z` },
-    { id: 'pa9', event_id: 'e4past', user_id: 'u3', full_name: 'Mei Ling', type: 'pitch', afyc_amount: null, logged_at: `${fd(-7)}T01:00:00.000Z` },
-    { id: 'pa10', event_id: 'e4past', user_id: 'u2', full_name: 'James Tan', type: 'sitdown', afyc_amount: null, logged_at: `${fd(-7)}T00:32:00.000Z` },
-    { id: 'pa11', event_id: 'e4past', user_id: 'u2', full_name: 'James Tan', type: 'sitdown', afyc_amount: null, logged_at: `${fd(-7)}T00:15:00.000Z` },
-    { id: 'pa12', event_id: 'e4past', user_id: 'u1', full_name: 'Sarah Lee', type: 'sitdown', afyc_amount: null, logged_at: `${fd(-7)}T00:05:00.000Z` },
-    { id: 'pa13', event_id: 'e4past', user_id: 'u1', full_name: 'Sarah Lee', type: 'check_in', afyc_amount: null, logged_at: `${fd(-7)}T09:55:00.000Z` },
-    { id: 'pa14', event_id: 'e4past', user_id: 'u2', full_name: 'James Tan', type: 'check_in', afyc_amount: null, logged_at: `${fd(-7)}T10:23:00.000Z` },
-    { id: 'pa15', event_id: 'e4past', user_id: 'u3', full_name: 'Mei Ling', type: 'check_in', afyc_amount: null, logged_at: `${fd(-7)}T09:55:00.000Z` },
-];
-
-// ── Constants ─────────────────────────────────────────────────
-const ROLE_ORDER: AttendeeRole[] = ['host', 'duty_manager', 'presenter', 'attendee'];
-const ROLE_LABELS: Record<AttendeeRole, string> = { host: 'Host', duty_manager: 'Duty Manager', presenter: 'Presenter', attendee: 'Attendee' };
-const ROLE_COLORS: Record<AttendeeRole, string> = { host: '#EC4899', duty_manager: '#6366F1', presenter: '#0A7E6B', attendee: '#8E8E93' };
-const AVATAR_COLORS = ['#6366F1', '#0D9488', '#E11D48', '#F59E0B', '#8B5CF6'];
-const ROADSHOW_PINK = '#EC4899';
-
-function avatarColor(name: string) { return AVATAR_COLORS[name.charCodeAt(0) % AVATAR_COLORS.length]; }
-
-// ── Helpers ───────────────────────────────────────────────────
-function todayLocalStr() { return new Date().toLocaleDateString('en-CA'); }
-
-function formatTime(time: string) {
-    const [h, m] = time.split(':').map(Number);
-    return `${h % 12 || 12}:${m.toString().padStart(2, '0')} ${h >= 12 ? 'PM' : 'AM'}`;
-}
-
-function formatCheckinTime(iso: string) {
-    const d = new Date(iso);
-    return `${d.getHours() % 12 || 12}:${d.getMinutes().toString().padStart(2, '0')} ${d.getHours() >= 12 ? 'PM' : 'AM'}`;
-}
-
-function formatActivityTime(iso: string) {
-    const d = new Date(iso);
-    return `${d.getHours().toString().padStart(2, '0')}:${d.getMinutes().toString().padStart(2, '0')}`;
-}
-
-function formatDate(dateStr: string) {
-    return new Date(dateStr + 'T00:00:00').toLocaleDateString('en-SG', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' });
-}
-
-function formatCreatedAt(iso: string) {
-    return new Date(iso).toLocaleDateString('en-SG', { month: 'short', day: 'numeric', year: 'numeric' });
-}
-
-function activityLabel(type: string) {
-    if (type === 'sitdown') return 'Sitdown';
-    if (type === 'pitch') return 'Pitch';
-    if (type === 'case_closed') return 'Case Closed';
-    if (type === 'check_in') return 'Checked in';
-    if (type === 'departure') return 'Left booth';
-    return type;
-}
-
-function activityTypeColor(type: string, fallback: string) {
-    if (type === 'case_closed') return '#F59E0B';
-    if (type === 'check_in') return '#0D9488';
-    if (type === 'departure') return '#8E8E93';
-    return fallback;
-}
 
 // ── Progress Ring ─────────────────────────────────────────────
 function ProgressRing({ actual, pledged, color, label, accessLabel }: {
@@ -237,8 +115,8 @@ export default function EventDetailScreen() {
     const [afycInput, setAfycInput] = useState('');
     const [loggingActivity, setLoggingActivity] = useState(false);
     // Log time picker state
-    const [logHour, setLogHour] = useState(0);       // index into LOG_HOURS (0=1, 11=12)
-    const [logMinuteIdx, setLogMinuteIdx] = useState(0); // index into LOG_MINUTES
+    const [logHour, setLogHour] = useState(0);       // index into PICKER_HOURS (0=1, 11=12)
+    const [logMinuteIdx, setLogMinuteIdx] = useState(0); // index into PICKER_MINUTES
     const [logAmPm, setLogAmPm] = useState(0);        // 0=AM, 1=PM
 
     // Manager override
@@ -516,8 +394,8 @@ export default function EventDetailScreen() {
         const ampm = h >= 12 ? 1 : 0;
         if (h > 12) h -= 12;
         if (h === 0) h = 12;
-        const minIdx = Math.min(Math.floor(roundedMin / 5), LOG_MINUTES.length - 1);
-        setLogHour(h - 1); // LOG_HOURS[0] = '1', so index = h - 1
+        const minIdx = Math.min(Math.floor(roundedMin / 5), PICKER_MINUTES.length - 1);
+        setLogHour(h - 1); // PICKER_HOURS[0] = '1', so index = h - 1
         setLogMinuteIdx(minIdx);
         setLogAmPm(ampm);
     };
@@ -526,7 +404,7 @@ export default function EventDetailScreen() {
         let h = logHour + 1; // 1-12
         if (logAmPm === 1 && h !== 12) h += 12;
         if (logAmPm === 0 && h === 12) h = 0;
-        const mins = Number(LOG_MINUTES[logMinuteIdx]);
+        const mins = Number(PICKER_MINUTES[logMinuteIdx]);
         const d = new Date();
         d.setHours(h, mins, 0, 0);
         return d.toISOString();
@@ -1022,7 +900,7 @@ export default function EventDetailScreen() {
                 {feed.map(act => (
                     <View key={act.id} style={rsStyles.feedRow}>
                         <Text style={[rsStyles.feedTime, { color: colors.textTertiary }]}>{formatCheckinTime(act.logged_at)}</Text>
-                        <Avatar name={act.full_name ?? '?'} avatarUrl={null} size={24} backgroundColor={avatarColor(act.full_name ?? '?') + '18'} textColor={avatarColor(act.full_name ?? '?')} />
+                        <Avatar name={act.full_name ?? '?'} avatarUrl={null} size={24} backgroundColor={getAvatarColor(act.full_name ?? '?') + '18'} textColor={getAvatarColor(act.full_name ?? '?')} />
                         <Text style={[rsStyles.feedName, { color: colors.textPrimary }]} numberOfLines={1}>{act.full_name}</Text>
                         <Text style={[rsStyles.feedType, { color: activityTypeColor(act.type, colors.textSecondary) }]}>
                             {act.type === 'case_closed' && act.afyc_amount != null && act.afyc_amount > 0
@@ -1053,7 +931,7 @@ export default function EventDetailScreen() {
                 {event.attendees.map(agent => {
                     const att = attendance.find(a => a.user_id === agent.user_id);
                     const counts = activityCounts(agent.user_id);
-                    const ac = avatarColor(agent.full_name ?? '?');
+                    const ac = getAvatarColor(agent.full_name ?? '?');
                     return (
                         <View key={agent.id} style={[rsStyles.agentCard, { backgroundColor: colors.surfaceSecondary }]}>
                             <View style={rsStyles.agentHeader}>
@@ -1330,7 +1208,7 @@ export default function EventDetailScreen() {
             {attendance.map(att => (
                 <View key={att.id} style={rsStyles.pastAttRow}>
                     <View style={rsStyles.pastAttTop}>
-                        <Avatar name={att.full_name ?? '?'} avatarUrl={null} size={28} backgroundColor={avatarColor(att.full_name ?? '?') + '18'} textColor={avatarColor(att.full_name ?? '?')} />
+                        <Avatar name={att.full_name ?? '?'} avatarUrl={null} size={28} backgroundColor={getAvatarColor(att.full_name ?? '?') + '18'} textColor={getAvatarColor(att.full_name ?? '?')} />
                         <Text style={[rsStyles.agentName, { color: colors.textPrimary }]}>{att.full_name}</Text>
                         <Text style={{ color: colors.textTertiary, fontSize: 12 }}>{formatCheckinTime(att.checked_in_at)}</Text>
                         <View style={[rsStyles.latePill, { backgroundColor: att.is_late ? colors.warningLight : colors.successLight }]}>
@@ -1420,7 +1298,7 @@ export default function EventDetailScreen() {
                     <Text style={[styles.heroTitle, { color: colors.textPrimary }]}>{event.title}</Text>
                     <View style={styles.metaRow}>
                         <Ionicons name="calendar-outline" size={16} color={colors.textTertiary} />
-                        <Text style={[styles.metaText, { color: colors.textSecondary }]}>{formatDate(event.event_date)}</Text>
+                        <Text style={[styles.metaText, { color: colors.textSecondary }]}>{formatDateLong(event.event_date)}</Text>
                     </View>
                     <View style={styles.metaRow}>
                         <Ionicons name="time-outline" size={16} color={colors.textTertiary} />
@@ -1468,17 +1346,17 @@ export default function EventDetailScreen() {
                             <Text style={[styles.noAttendees, { color: colors.textTertiary }]}>No attendees added yet</Text>
                         ) : (
                             <>
-                                {ROLE_ORDER.filter(r => grouped[r].length > 0).map(role => (
+                                {ATTENDEE_ROLE_ORDER.filter(r => grouped[r].length > 0).map(role => (
                                     <View key={role} style={styles.roleGroup}>
-                                        <Text style={[styles.roleGroupLabel, { color: colors.textTertiary }]}>{ROLE_LABELS[role]}</Text>
+                                        <Text style={[styles.roleGroupLabel, { color: colors.textTertiary }]}>{ATTENDEE_ROLE_LABELS[role]}</Text>
                                         {grouped[role].map(a => {
                                             const ac = AVATAR_COLORS[(a.full_name ?? '?').charCodeAt(0) % AVATAR_COLORS.length];
                                             return (
                                                 <View key={a.id} style={styles.attendeeRow}>
                                                     <Avatar name={a.full_name ?? '?'} avatarUrl={a.avatar_url} size={36} backgroundColor={ac + '18'} textColor={ac} />
                                                     <Text style={[styles.attendeeName, { color: colors.textPrimary }]}>{a.full_name}</Text>
-                                                    <View style={[styles.roleBadge, { backgroundColor: ROLE_COLORS[a.attendee_role] + '18' }]}>
-                                                        <Text style={[styles.roleText, { color: ROLE_COLORS[a.attendee_role] }]}>{ROLE_LABELS[a.attendee_role]}</Text>
+                                                    <View style={[styles.roleBadge, { backgroundColor: ATTENDEE_ROLE_COLORS[a.attendee_role] + '18' }]}>
+                                                        <Text style={[styles.roleText, { color: ATTENDEE_ROLE_COLORS[a.attendee_role] }]}>{ATTENDEE_ROLE_LABELS[a.attendee_role]}</Text>
                                                     </View>
                                                 </View>
                                             );
@@ -1494,9 +1372,9 @@ export default function EventDetailScreen() {
                                                 <View key={i} style={styles.attendeeRow}>
                                                     <Avatar name={a.name} avatarUrl={null} size={36} backgroundColor={ac + '18'} textColor={ac} />
                                                     <Text style={[styles.attendeeName, { color: colors.textPrimary }]}>{a.name}</Text>
-                                                    <View style={[styles.roleBadge, { backgroundColor: (ROLE_COLORS[a.attendee_role] ?? '#8E8E93') + '18' }]}>
-                                                        <Text style={[styles.roleText, { color: ROLE_COLORS[a.attendee_role] ?? '#8E8E93' }]}>
-                                                            {ROLE_LABELS[a.attendee_role] ?? a.attendee_role}
+                                                    <View style={[styles.roleBadge, { backgroundColor: (ATTENDEE_ROLE_COLORS[a.attendee_role] ?? '#8E8E93') + '18' }]}>
+                                                        <Text style={[styles.roleText, { color: ATTENDEE_ROLE_COLORS[a.attendee_role] ?? '#8E8E93' }]}>
+                                                            {ATTENDEE_ROLE_LABELS[a.attendee_role] ?? a.attendee_role}
                                                         </Text>
                                                     </View>
                                                 </View>
@@ -1602,9 +1480,9 @@ export default function EventDetailScreen() {
                                 </Text>
                                 <Text style={[rsStyles.confirmTimeLabel, { color: colors.textTertiary }]}>Time</Text>
                                 <View style={rsStyles.wheelRow}>
-                                    <WheelPicker items={LOG_HOURS} selectedIndex={logHour} onChange={setLogHour} colors={colors} width={52} />
-                                    <WheelPicker items={LOG_MINUTES} selectedIndex={logMinuteIdx} onChange={setLogMinuteIdx} colors={colors} width={52} />
-                                    <WheelPicker items={LOG_AMPM} selectedIndex={logAmPm} onChange={setLogAmPm} colors={colors} width={60} />
+                                    <WheelPicker items={PICKER_HOURS} selectedIndex={logHour} onChange={setLogHour} colors={colors} width={52} />
+                                    <WheelPicker items={PICKER_MINUTES} selectedIndex={logMinuteIdx} onChange={setLogMinuteIdx} colors={colors} width={52} />
+                                    <WheelPicker items={PICKER_AMPM} selectedIndex={logAmPm} onChange={setLogAmPm} colors={colors} width={60} />
                                 </View>
                                 <TouchableOpacity
                                     style={[rsStyles.confirmBtn, { backgroundColor: cfg.color }]}
@@ -1645,9 +1523,9 @@ export default function EventDetailScreen() {
                             />
                             <Text style={[rsStyles.pledgeLabel, { color: colors.textSecondary, marginTop: 20, marginBottom: 4 }]}>Time</Text>
                             <View style={[rsStyles.wheelRow, { marginBottom: 8 }]}>
-                                <WheelPicker items={LOG_HOURS} selectedIndex={logHour} onChange={setLogHour} colors={colors} width={52} />
-                                <WheelPicker items={LOG_MINUTES} selectedIndex={logMinuteIdx} onChange={setLogMinuteIdx} colors={colors} width={52} />
-                                <WheelPicker items={LOG_AMPM} selectedIndex={logAmPm} onChange={setLogAmPm} colors={colors} width={60} />
+                                <WheelPicker items={PICKER_HOURS} selectedIndex={logHour} onChange={setLogHour} colors={colors} width={52} />
+                                <WheelPicker items={PICKER_MINUTES} selectedIndex={logMinuteIdx} onChange={setLogMinuteIdx} colors={colors} width={52} />
+                                <WheelPicker items={PICKER_AMPM} selectedIndex={logAmPm} onChange={setLogAmPm} colors={colors} width={60} />
                             </View>
                             <TouchableOpacity
                                 style={[rsStyles.checkinBtn, { backgroundColor: '#F59E0B', marginTop: 12, opacity: loggingActivity ? 0.6 : 1 }]}

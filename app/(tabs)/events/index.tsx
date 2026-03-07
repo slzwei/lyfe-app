@@ -5,6 +5,9 @@ import { useAuth } from '@/contexts/AuthContext';
 import { useTheme } from '@/contexts/ThemeContext';
 import { fetchAllEvents, fetchEvents } from '@/lib/events';
 import { isMockMode } from '@/lib/mockMode';
+import { MOCK_EVENTS } from '@/lib/mockData';
+import { formatTime, toDateStr } from '@/lib/dateTime';
+import { AVATAR_COLORS } from '@/constants/ui';
 import type { AgencyEvent } from '@/types/event';
 import { EVENT_TYPE_COLORS, EVENT_TYPE_LABELS } from '@/types/event';
 import { Ionicons } from '@expo/vector-icons';
@@ -22,29 +25,6 @@ import {
     View,
 } from 'react-native';
 
-// ── Mock data ──────────────────────────────────────────────────
-const _today = new Date();
-const fd = (d: number) => {
-    const dt = new Date(_today);
-    dt.setDate(dt.getDate() + d);
-    return dt.toISOString().split('T')[0];
-};
-
-const MOCK_EVENTS: AgencyEvent[] = [
-    { id: 'e1', title: 'Agency Kickoff 2026', description: 'Annual agency kickoff event for all staff.', event_type: 'agency_event', event_date: fd(0), start_time: '09:00', end_time: '12:00', location: 'Marina Bay Sands Convention Centre', created_by: 'mock-user-id', creator_name: 'Mgr. David Lim', created_at: _today.toISOString(), updated_at: _today.toISOString(), attendees: [{ id: 'a1', event_id: 'e1', user_id: 'u1', attendee_role: 'attendee', full_name: 'Alice Tan' }, { id: 'a2', event_id: 'e1', user_id: 'u2', attendee_role: 'host', full_name: 'David Lim' }, { id: 'a3', event_id: 'e1', user_id: 'u3', attendee_role: 'attendee', full_name: 'Bob Lee' }, { id: 'a4', event_id: 'e1', user_id: 'u4', attendee_role: 'attendee', full_name: 'Sarah Wong' }], external_attendees: [{ name: 'John Smith (Client)', attendee_role: 'attendee' }] },
-    { id: 'e2', title: 'M9 Exam Training', description: 'Prepare for the M9 certification paper.', event_type: 'training', event_date: fd(2), start_time: '14:00', end_time: '17:00', location: 'Lyfe Office, Level 12', created_by: 'mock-user-id', creator_name: 'Mgr. David Lim', created_at: _today.toISOString(), updated_at: _today.toISOString(), attendees: [{ id: 'a5', event_id: 'e2', user_id: 'u5', attendee_role: 'presenter', full_name: 'Dr. Ng Wei' }, { id: 'a6', event_id: 'e2', user_id: 'u6', attendee_role: 'attendee', full_name: 'Jason Teo' }], external_attendees: [] },
-    { id: 'e3', title: 'Team Weekly Sync', description: null, event_type: 'team_meeting', event_date: fd(5), start_time: '10:00', end_time: '11:00', location: 'Zoom', created_by: 'mock-user-id', creator_name: 'Mgr. David Lim', created_at: _today.toISOString(), updated_at: _today.toISOString(), attendees: [{ id: 'a7', event_id: 'e3', user_id: 'u7', attendee_role: 'attendee', full_name: 'Emily Koh' }], external_attendees: [] },
-    { id: 'e4', title: 'Roadshow @ Tampines', description: null, event_type: 'roadshow', event_date: fd(7), start_time: '10:00', end_time: '18:00', location: 'Tampines Mall Atrium', created_by: 'mock-user-id', creator_name: 'Mgr. David Lim', created_at: _today.toISOString(), updated_at: _today.toISOString(), attendees: [{ id: 'a8', event_id: 'e4', user_id: 'u1', attendee_role: 'attendee', full_name: 'Sarah Lee' }, { id: 'a9', event_id: 'e4', user_id: 'u2', attendee_role: 'attendee', full_name: 'James Tan' }], external_attendees: [] },
-    { id: 'e4live', title: 'Roadshow @ Hillion Mall', description: null, event_type: 'roadshow', event_date: fd(0), start_time: '10:00', end_time: '18:00', location: 'Hillion Mall FairPrice', created_by: 'mock-user-id', creator_name: 'Mgr. David Lim', created_at: _today.toISOString(), updated_at: _today.toISOString(), attendees: [{ id: 'a8l', event_id: 'e4live', user_id: 'mock-user-id', attendee_role: 'attendee', full_name: 'Sarah Lee' }], external_attendees: [] },
-    { id: 'e4past', title: 'Roadshow @ Jurong Point', description: null, event_type: 'roadshow', event_date: fd(-7), start_time: '10:00', end_time: '18:00', location: 'Jurong Point', created_by: 'mock-user-id', creator_name: 'Mgr. David Lim', created_at: _today.toISOString(), updated_at: _today.toISOString(), attendees: [], external_attendees: [] },
-    { id: 'e5', title: 'Director Review', description: null, event_type: 'team_meeting', event_date: fd(14), start_time: '16:00', end_time: null, location: 'HQ Board Room', created_by: 'mock-user-id', creator_name: 'Mgr. David Lim', created_at: _today.toISOString(), updated_at: _today.toISOString(), attendees: [], external_attendees: [] },
-];
-
-// ── Helpers ────────────────────────────────────────────────────
-function toDateStr(d: Date): string {
-    return d.toISOString().split('T')[0];
-}
-
 // ── Calendar layout constants ──────────────────────────────────
 const CAL_HEADER_H = 44;   // nav row
 const CAL_LABELS_H = 24;   // Mon–Sun initials
@@ -55,8 +35,6 @@ const CAL_MONTH_H = CAL_HEADER_H + CAL_LABELS_H + CAL_ROW_H * 6 + CAL_HANDLE_H; 
 
 const HIT = { top: 12, bottom: 12, left: 12, right: 12 };
 const DAY_INITIALS = ['M', 'T', 'W', 'T', 'F', 'S', 'S'];
-const ATTENDEE_COLORS = ['#6366F1', '#0D9488', '#E11D48', '#F59E0B', '#8B5CF6'];
-
 /** Build a 6-row (42 cell) Mon-first calendar grid for a given month */
 function buildMonthGrid(year: number, month: number): (Date | null)[][] {
     const firstDay = new Date(year, month, 1);
@@ -440,12 +418,6 @@ function EventCard({ event, onPress, colors }: EventCardProps) {
         return () => anim.stop();
     }, [isLiveRoadshow]);
 
-    const formatTime = (time: string) => {
-        const [h, m] = time.split(':').map(Number);
-        const ampm = h >= 12 ? 'PM' : 'AM';
-        return `${h % 12 || 12}:${m.toString().padStart(2, '0')} ${ampm}`;
-    };
-
     const allAttendeeNames: { key: string; name: string; avatarUrl?: string | null }[] = [
         ...event.attendees.map(a => ({ key: a.id, name: a.full_name ?? '?', avatarUrl: a.avatar_url })),
         ...(event.external_attendees ?? []).map((a, i) => ({ key: `ext_${i}`, name: a.name, avatarUrl: null })),
@@ -499,7 +471,7 @@ function EventCard({ event, onPress, colors }: EventCardProps) {
                 {allAttendeeNames.length > 0 && (
                     <View style={cardStyles.attendees}>
                         {visibleAttendees.map((a, i) => {
-                            const color = ATTENDEE_COLORS[a.name.charCodeAt(0) % ATTENDEE_COLORS.length];
+                            const color = AVATAR_COLORS[a.name.charCodeAt(0) % AVATAR_COLORS.length];
                             return (
                                 <View
                                     key={a.key}
