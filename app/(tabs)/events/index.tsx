@@ -414,7 +414,18 @@ interface EventCardProps {
 function EventCard({ event, onPress, colors }: EventCardProps) {
     const typeColor = EVENT_TYPE_COLORS[event.event_type];
     const todayStr = toDateStr(new Date());
-    const isLiveRoadshow = event.event_type === 'roadshow' && event.event_date === todayStr;
+    const isLiveRoadshow = (() => {
+        if (event.event_type !== 'roadshow' || event.event_date !== todayStr) return false;
+        const now = new Date();
+        const nowMins = now.getHours() * 60 + now.getMinutes();
+        const [sh, sm] = event.start_time.split(':').map(Number);
+        if (nowMins < sh * 60 + sm) return false;
+        if (event.end_time) {
+            const [eh, em] = event.end_time.split(':').map(Number);
+            if (nowMins >= eh * 60 + em) return false;
+        }
+        return true;
+    })();
 
     const livePulse = useRef(new Animated.Value(1)).current;
     useEffect(() => {

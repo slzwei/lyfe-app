@@ -45,6 +45,43 @@ export async function fetchEvents(
 }
 
 /**
+ * Fetch upcoming events created by a set of managers, tagged with which manager.
+ * Used by the PA home screen to show manager-scoped schedules.
+ */
+export interface ManagerEvent extends AgencyEvent {
+    managerId: string;
+    managerName: string;
+}
+
+export async function fetchEventsByManagerIds(
+    managerIds: string[],
+    managerNames: Record<string, string>,
+): Promise<{ data: ManagerEvent[]; error: string | null }> {
+    if (managerIds.length === 0) return { data: [], error: null };
+
+    const today = new Date().toISOString().split('T')[0];
+
+    const { data, error } = await supabase
+        .from('events')
+        .select('*, creator_user:users!created_by(full_name), event_attendees(id, event_id, user_id, attendee_role, users(full_name, avatar_url))')
+        .in('created_by', managerIds)
+        .gte('event_date', today)
+        .order('event_date', { ascending: true })
+        .order('start_time', { ascending: true })
+        .limit(5);
+
+    if (error) return { data: [], error: error.message };
+
+    const events: ManagerEvent[] = mapEvents(data || []).map(e => ({
+        ...e,
+        managerId: e.created_by,
+        managerName: managerNames[e.created_by] || 'Unknown',
+    }));
+
+    return { data: events, error: null };
+}
+
+/**
  * Fetch all events (PA use), ordered by date ascending.
  */
 export async function fetchAllEvents(): Promise<{ data: AgencyEvent[]; error: string | null }> {

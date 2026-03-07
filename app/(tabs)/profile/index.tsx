@@ -7,8 +7,10 @@ import { useViewMode, type ViewMode } from '@/contexts/ViewModeContext';
 import { getBiometryType, type BiometryType } from '@/lib/biometrics';
 import { pickAndUploadAvatar, removeAvatar, takeAndUploadAvatar } from '@/lib/storage';
 import { Ionicons } from '@expo/vector-icons';
-import { useRouter } from 'expo-router';
-import React, { useEffect, useRef, useState } from 'react';
+import { isMockMode } from '@/lib/mockMode';
+import { supabase } from '@/lib/supabase';
+import { useFocusEffect, useRouter } from 'expo-router';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import {
     Animated,
     ActivityIndicator,
@@ -25,6 +27,19 @@ import {
     TouchableOpacity,
     View,
 } from 'react-native';
+
+interface AssignedManager {
+    id: string;
+    full_name: string;
+    role: string;
+}
+
+const PA_MANAGER_COLORS = ['#6366F1', '#0D9488', '#E11D48', '#F59E0B', '#8B5CF6'];
+
+const MOCK_MANAGERS: AssignedManager[] = [
+    { id: 'm1', full_name: 'David Lim', role: 'manager' },
+    { id: 'm2', full_name: 'Emily Koh', role: 'manager' },
+];
 
 const ROLE_LABELS: Record<string, string> = {
     admin: 'Administrator',
@@ -60,11 +75,13 @@ const SUPPORT_SETTINGS: SettingsRow[] = [
 ];
 
 export default function ProfileScreen() {
+    const MOCK_OTP = isMockMode();
     const { colors, isDark, mode, setMode } = useTheme();
     const { user, signOut, biometricsEnabled, enableBiometrics, disableBiometrics, updateAvatarUrl, updateProfile } = useAuth();
     const { viewMode, canToggle, setViewMode } = useViewMode();
     const router = useRouter();
     const [showSignOutModal, setShowSignOutModal] = useState(false);
+    const [managers, setManagers] = useState<AssignedManager[]>([]);
     const [showAvatarSheet, setShowAvatarSheet] = useState(false);
     const [avatarUploading, setAvatarUploading] = useState(false);
     const [biometryType, setBiometryType] = useState<BiometryType>('none');
@@ -79,6 +96,19 @@ export default function ProfileScreen() {
     useEffect(() => {
         getBiometryType().then(setBiometryType);
     }, []);
+
+    const loadManagers = useCallback(async () => {
+        if (user?.role !== 'pa') return;
+        if (MOCK_OTP) { setManagers(MOCK_MANAGERS); return; }
+        if (!user?.id) return;
+        const { data } = await supabase
+            .from('pa_manager_assignments')
+            .select('manager:users!pa_manager_assignments_manager_id_fkey(id, full_name, role)')
+            .eq('pa_id', user.id);
+        if (data) setManagers((data as any[]).map(r => r.manager).filter(Boolean));
+    }, [user?.id, user?.role]);
+
+    useFocusEffect(useCallback(() => { loadManagers(); }, [loadManagers]));
 
     // Sheet slide-up animations (overlay appears instantly; only the sheet slides)
     const avatarSheetY = useRef(new Animated.Value(400)).current;
@@ -246,6 +276,42 @@ export default function ProfileScreen() {
                         )}
                     </View>
                 </View>
+
+                {/* Assigned Managers — PA only */}
+                {user?.role === 'pa' && (
+                    <View style={[styles.card, { backgroundColor: colors.cardBackground, shadowColor: colors.textPrimary }]}>
+                        <Text style={[styles.sectionLabel, { color: colors.textTertiary }]}>ASSIGNED MANAGERS</Text>
+                        {managers.length === 0 ? (
+                            <View style={styles.mgrEmptyRow}>
+                                <Ionicons name="person-outline" size={16} color={colors.textTertiary} />
+                                <Text style={[styles.mgrEmptyText, { color: colors.textTertiary }]}>No managers assigned yet</Text>
+                            </View>
+                        ) : (
+                            managers.map((mgr, index) => {
+                                const sortedIds = [...managers].sort((a, b) => a.id.localeCompare(b.id)).map(m => m.id);
+                                const color = PA_MANAGER_COLORS[sortedIds.indexOf(mgr.id) % PA_MANAGER_COLORS.length];
+                                return (
+                                    <React.Fragment key={mgr.id}>
+                                        <View style={styles.settingsRow}>
+                                            <View style={[styles.mgrAvatar, { backgroundColor: color + '18' }]}>
+                                                <Text style={[styles.mgrAvatarText, { color }]}>
+                                                    {mgr.full_name.split(' ').map(n => n[0]).join('')}
+                                                </Text>
+                                            </View>
+                                            <View style={styles.settingsTextCol}>
+                                                <Text style={[styles.settingsLabel, { color: colors.textPrimary }]}>{mgr.full_name}</Text>
+                                                <Text style={[styles.settingsSubtitle, { color: colors.textTertiary }]}>Manager</Text>
+                                            </View>
+                                        </View>
+                                        {index < managers.length - 1 && (
+                                            <View style={[styles.rowDivider, { backgroundColor: colors.border }]} />
+                                        )}
+                                    </React.Fragment>
+                                );
+                            })
+                        )}
+                    </View>
+                )}
 
                 {/* View Mode Toggle — T2/T3 only */}
                 {canToggle && (
@@ -896,6 +962,23 @@ const styles = StyleSheet.create({
         fontSize: 16,
         fontWeight: '500',
     },
+
+    // ── Assigned Managers ──
+    mgrAvatar: {
+        width: 36,
+        height: 36,
+        borderRadius: 18,
+        alignItems: 'center',
+        justifyContent: 'center',
+    },
+    mgrAvatarText: { fontSize: 13, fontWeight: '700' },
+    mgrEmptyRow: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 8,
+        paddingVertical: 4,
+    },
+    mgrEmptyText: { fontSize: 14 },
 
     // ── Modal ──
     modalOverlay: {

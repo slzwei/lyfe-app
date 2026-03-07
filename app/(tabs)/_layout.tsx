@@ -37,7 +37,7 @@ const TAB_LABELS: Record<string, string> = {
   candidates: 'Candidates',
   team: 'Team',
   events: 'Events',
-  pa: 'PA',
+  pa: 'Candidates',
   admin: 'Admin',
   profile: 'Profile',
 };

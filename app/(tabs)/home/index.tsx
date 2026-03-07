@@ -13,6 +13,9 @@ import {
     type BiometryType,
 } from '@/lib/biometrics';
 import { fetchLeadStats, fetchManagerDashboardStats, fetchRecentActivities, type LeadPipelineStats, type ManagerDashboardStats } from '@/lib/leads';
+import { fetchUpcomingEvents } from '@/lib/events';
+import { EVENT_TYPE_COLORS, type AgencyEvent } from '@/types/event';
+import { supabase } from '@/lib/supabase';
 import { STATUS_CONFIG, type LeadActivity, type LeadActivityType, type LeadStatus } from '@/types/lead';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
@@ -68,6 +71,42 @@ const LEAD_PIPELINE: { status: LeadStatus; count: number }[] = [
     { status: 'won', count: 1 },
     { status: 'lost', count: 0 },
 ];
+
+// ── PA Colour Palette ──
+const PA_MANAGER_COLORS = ['#6366F1', '#0D9488', '#E11D48', '#F59E0B', '#8B5CF6'];
+
+// ── PA date helpers (same as pa/index.tsx) ──
+const _now = Date.now();
+const d = (days: number) => new Date(_now - days * 86400000).toISOString();
+const fd = (daysFromNow: number) => new Date(_now + daysFromNow * 86400000).toISOString().split('T')[0];
+
+// ── Mock Data — PA View ──
+const PA_MOCK_EVENTS: AgencyEvent[] = [
+    { id: 'pe1', title: 'Client Roadshow', event_type: 'roadshow', event_date: fd(1),
+      start_time: '09:00', end_time: '17:00', location: 'Hillion Mall',
+      created_by: 'm1', creator_name: 'David Lim',
+      description: null, created_at: d(1), updated_at: d(1), attendees: [], external_attendees: [] },
+    { id: 'pe2', title: 'Team Training', event_type: 'training', event_date: fd(3),
+      start_time: '14:00', end_time: '16:00', location: 'Lyfe Office',
+      created_by: 'm2', creator_name: 'Emily Koh',
+      description: null, created_at: d(0), updated_at: d(0), attendees: [], external_attendees: [] },
+    { id: 'pe3', title: 'Agency Meeting', event_type: 'agency_event', event_date: fd(6),
+      start_time: '10:00', end_time: null, location: 'Marina Bay Sands',
+      created_by: 'm1', creator_name: 'David Lim',
+      description: null, created_at: d(0), updated_at: d(0), attendees: [], external_attendees: [] },
+];
+const PA_MOCK_CANDIDATE_COUNT = 3;
+const PA_MOCK_INTERVIEW_COUNT = 1;
+
+// ── PA date format helpers ──
+const formatDate = (dateStr: string) => {
+    const dt = new Date(dateStr + 'T00:00:00');
+    return dt.toLocaleDateString('en-SG', { weekday: 'short', month: 'short', day: 'numeric' });
+};
+const formatTime = (time: string) => {
+    const [h, m] = time.split(':').map(Number);
+    return `${h % 12 || 12}:${m.toString().padStart(2, '0')} ${h >= 12 ? 'PM' : 'AM'}`;
+};
 
 function getGreeting(): string {
     const hour = new Date().getHours();
@@ -173,11 +212,49 @@ export default function HomeScreen() {
     const [recentActivities, setRecentActivities] = useState<(LeadActivity & { lead_name?: string })[]>([]);
     const [managerStats, setManagerStats] = useState<ManagerDashboardStats | null>(null);
 
+    // PA state
+    const [paCandidateCount, setPaCandidateCount] = useState(0);
+    const [paInterviewCount, setPaInterviewCount] = useState(0);
+    const [paEvents, setPaEvents] = useState<AgencyEvent[]>([]);
+
     const greeting = useMemo(() => getGreeting(), []);
     const firstName = user?.full_name?.split(' ')[0] || 'there';
 
+    const role = user?.role;
+    const isCandidate = role === 'candidate';
+    const isPa = role === 'pa';
+
     const loadDashboardData = useCallback(async () => {
-        if (MOCK_OTP || !user?.id) return;
+        if (!user?.id) return;
+
+        // ── PA branch ──
+        if (isPa) {
+            if (MOCK_OTP) {
+                setPaCandidateCount(PA_MOCK_CANDIDATE_COUNT);
+                setPaInterviewCount(PA_MOCK_INTERVIEW_COUNT);
+                setPaEvents(PA_MOCK_EVENTS);
+                return;
+            }
+            const { data: assignments } = await supabase
+                .from('pa_manager_assignments')
+                .select('manager_id')
+                .eq('pa_id', user.id);
+
+            const managerIds = (assignments || []).map((a: any) => a.manager_id);
+
+            const [{ count: total }, { count: interviews }, eventsResult] = await Promise.all([
+                supabase.from('candidates').select('id', { count: 'exact', head: true }).in('assigned_manager_id', managerIds),
+                supabase.from('candidates').select('id', { count: 'exact', head: true }).in('assigned_manager_id', managerIds).eq('status', 'interview_scheduled'),
+                fetchUpcomingEvents(user.id, 5),
+            ]);
+            setPaCandidateCount(total ?? 0);
+            setPaInterviewCount(interviews ?? 0);
+            setPaEvents(eventsResult.data);
+            return;
+        }
+
+        // ── Agent / Manager branch ──
+        if (MOCK_OTP) return;
         const promises: Promise<any>[] = [
             fetchLeadStats(user.id, isManagerView),
             fetchRecentActivities(user.id, isManagerView, 5),
@@ -189,7 +266,7 @@ export default function HomeScreen() {
         if (results[0].data) setStats(results[0].data);
         if (results[1].data) setRecentActivities(results[1].data);
         if (results[2]?.data) setManagerStats(results[2].data);
-    }, [user?.id, isManagerView, user?.role]);
+    }, [user?.id, isPa, isManagerView, user?.role]);
 
     useEffect(() => {
         loadDashboardData();
@@ -211,9 +288,6 @@ export default function HomeScreen() {
         : (isManagerView ? MANAGER_ACTIVITIES : MOCK_ACTIVITIES);
 
     const totalPipeline = pipeline.reduce((n, s) => n + s.count, 0);
-
-    const role = user?.role;
-    const isCandidate = role === 'candidate';
 
     return (
         <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]}>
@@ -265,6 +339,18 @@ export default function HomeScreen() {
                                 </View>
                             </View>
                         </>
+                    ) : isPa ? (
+                        <View style={styles.statsRow}>
+                            <View style={[styles.heroCardPrimary, { backgroundColor: colors.accent }]}>
+                                <Ionicons name="document-text" size={80} color="rgba(255,255,255,0.15)" style={styles.heroIconBg} />
+                                <Text style={[styles.heroStatValue, { color: '#FFFFFF' }]}>{paCandidateCount}</Text>
+                                <Text style={[styles.heroStatLabel, { color: 'rgba(255,255,255,0.9)' }]}>Candidates</Text>
+                            </View>
+                            <View style={styles.statsColumn}>
+                                <StatCardSmall label="Interviews" value={paInterviewCount.toString()} colors={colors} />
+                                <StatCardSmall label="Events" value={paEvents.length.toString()} colors={colors} />
+                            </View>
+                        </View>
                     ) : isManagerView ? (
                         <>
                             <View style={styles.statsRow}>
@@ -307,6 +393,13 @@ export default function HomeScreen() {
                                 <QuickActionBtn icon="help-circle" label="Support" colors={colors} onPress={() => { }} />
                                 <QuickActionBtn icon="person" label="Profile" colors={colors} onPress={() => router.push('/(tabs)/profile' as any)} />
                             </>
+                        ) : isPa ? (
+                            <>
+                                <QuickActionBtn icon="document-text" label="Candidates" colors={colors} onPress={() => router.push('/(tabs)/pa' as any)} />
+                                <QuickActionBtn icon="calendar" label="Events" colors={colors} onPress={() => router.push('/(tabs)/events' as any)} />
+                                <QuickActionBtn icon="person-add" label="Add Candidate" colors={colors} onPress={() => router.push('/(tabs)/pa/add-candidate' as any)} />
+                                <QuickActionBtn icon="person" label="Profile" colors={colors} onPress={() => router.push('/(tabs)/profile' as any)} />
+                            </>
                         ) : isManagerView ? (
                             <>
                                 <QuickActionBtn icon="briefcase" label="Team" colors={colors} onPress={() => router.push('/(tabs)/team' as any)} />
@@ -325,8 +418,51 @@ export default function HomeScreen() {
                     </View>
                 </View>
 
-                {/* Lead Pipeline — hidden for candidates */}
-                {!isCandidate && (
+                {/* My Events — PA only */}
+                {isPa && (
+                    <View style={[styles.card, { backgroundColor: colors.cardBackground }]}>
+                        <View style={styles.sectionHeaderRow}>
+                            <Text style={[styles.sectionTitle, { color: colors.textPrimary }]}>My Events</Text>
+                            <TouchableOpacity onPress={() => router.push('/(tabs)/events' as any)}>
+                                <Text style={[styles.seeAllText, { color: colors.accent }]}>See All</Text>
+                            </TouchableOpacity>
+                        </View>
+
+                        {paEvents.length === 0 ? (
+                            <Text style={[styles.emptyActivityText, { color: colors.textTertiary }]}>No upcoming events</Text>
+                        ) : (
+                            paEvents.map(event => {
+                                const typeColor = EVENT_TYPE_COLORS[event.event_type] ?? colors.accent;
+                                return (
+                                    <TouchableOpacity
+                                        key={event.id}
+                                        style={styles.managerEventRow}
+                                        onPress={() => router.push(`/(tabs)/pa/event/${event.id}` as any)}
+                                        activeOpacity={0.7}
+                                    >
+                                        <View style={[styles.managerEventStripe, { backgroundColor: typeColor }]} />
+                                        <View style={styles.managerEventContent}>
+                                            <Text style={[styles.managerEventTitle, { color: colors.textPrimary }]} numberOfLines={1}>
+                                                {event.title}
+                                            </Text>
+                                            <Text style={[styles.managerEventMeta, { color: colors.textTertiary }]}>
+                                                {formatDate(event.event_date)} · {formatTime(event.start_time)}
+                                            </Text>
+                                            {event.location ? (
+                                                <Text style={[styles.managerEventOwner, { color: typeColor }]} numberOfLines={1}>
+                                                    {event.location}
+                                                </Text>
+                                            ) : null}
+                                        </View>
+                                    </TouchableOpacity>
+                                );
+                            })
+                        )}
+                    </View>
+                )}
+
+                {/* Lead Pipeline — hidden for candidates and PA */}
+                {!isCandidate && !isPa && (
                     <View style={[styles.card, { backgroundColor: colors.cardBackground, shadowColor: colors.textPrimary }]}>
                         <Text style={[styles.sectionTitle, { color: colors.textPrimary }]}>Lead Pipeline</Text>
                         <View style={[styles.pipelineWrapper, { backgroundColor: colors.borderLight }]}>
@@ -362,8 +498,8 @@ export default function HomeScreen() {
                     </View>
                 )}
 
-                {/* Recent Activity — hidden for candidates */}
-                {!isCandidate && (
+                {/* Recent Activity — hidden for candidates and PA */}
+                {!isCandidate && !isPa && (
                     <View style={[styles.card, { backgroundColor: colors.cardBackground, shadowColor: colors.textPrimary }]}>
                         <View style={styles.sectionHeaderRow}>
                             <Text style={[styles.sectionTitle, { color: colors.textPrimary }]}>Recent Activity</Text>
@@ -649,6 +785,14 @@ const styles = StyleSheet.create({
     activityLeadName: { fontSize: 15, fontWeight: '700', marginBottom: 2 },
     activityDetail: { fontSize: 13, fontWeight: '400' },
     activityTime: { fontSize: 12, alignSelf: 'flex-start', marginTop: 2 },
+
+    // Manager Schedule (PA view)
+    managerEventRow: { flexDirection: 'row', alignItems: 'stretch', gap: 12, marginBottom: 14 },
+    managerEventStripe: { width: 4, borderRadius: 2 },
+    managerEventContent: { flex: 1 },
+    managerEventTitle: { fontSize: 15, fontWeight: '600', marginBottom: 2 },
+    managerEventMeta: { fontSize: 12, marginBottom: 2 },
+    managerEventOwner: { fontSize: 12, fontWeight: '600' },
 
     // Biometrics prompt sheet
     biometricOverlay: {
