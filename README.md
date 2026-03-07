@@ -69,6 +69,9 @@ lyfe-app/
 │       ├── admin/              # Admin panel
 │       └── profile/            # User profile, settings, biometrics
 ├── components/                 # Shared UI components
+│   ├── WheelPicker.tsx         # iOS-style scroll wheel picker (snap, opacity gradient, unified indicator)
+│   ├── Confetti.tsx            # Physics-based particle confetti burst animation
+│   └── ...                     # Avatar, ScreenHeader, StatusBadge, etc.
 ├── constants/
 │   ├── Colors.ts               # Full light/dark theme token system
 │   └── Roles.ts                # Role definitions, permission helpers, tab config
@@ -172,7 +175,7 @@ Five event types, each colour-coded:
 | Roadshow | Pink | Field marketing at physical locations (see below) |
 | Other | Grey | General events |
 
-Events support host/external attendees, location, start/end times, and notes.
+Events support host/external attendees, location, start/end times, and notes. The create/edit form uses a compact Start | End time row — tapping either cell opens an iOS wheel picker bottom sheet.
 
 #### Roadshow Events
 
@@ -191,7 +194,11 @@ Roadshows are the most feature-rich event type — field marketing events where 
 - Check-in flow: on-time (teal CTA) or late (amber warning + optional reason)
 - Pledge sheet: agent sets personal targets for the day (sitdowns, pitches, cases, AFYC)
 - After check-in: animated progress rings showing actual vs pledged per metric
-- Log Activity buttons: Sitdown +1, Pitch +1, Case Closed (with AFYC amount input)
+- Log Activity buttons: Sitdown and Pitch open a confirmation sheet (count context + time picker for backdating); Case Closed opens an AFYC amount input sheet with time picker
+- Confetti celebration animation when a sitdown or pitch target is hit, and on every case close
+- Leave Roadshow button logs a departure; agent can Return to Booth if the event is still live; activity buttons are disabled while departed
+- Auto-departure: 1 hour after the event end time, a departure is automatically logged if the agent hasn't already left
+- Check-in and departure events appear in the activity feed alongside sitdowns, pitches, and cases
 - Optimistic UI updates with rollback on failure; 400ms debounce per button
 - Booth leaderboard and live activity feed (updates via Supabase Realtime)
 
@@ -243,7 +250,7 @@ Core tables:
 | `event_attendees` | Many-to-many: users ↔ events, with role (host/attendee/etc.) |
 | `roadshow_configs` | Per-event roadshow settings (cost, slots, grace, suggested targets) |
 | `roadshow_attendance` | T1 agent check-in records with pledge data |
-| `roadshow_activities` | Individual activity logs (sitdown / pitch / case_closed + AFYC) |
+| `roadshow_activities` | Individual activity logs (sitdown / pitch / case_closed / check_in / departure + optional AFYC) |
 
 Row-Level Security (RLS) is enabled on all tables. Roadshow data is scoped to event attendees and event creators.
 
