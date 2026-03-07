@@ -867,9 +867,9 @@ export default function EventDetailScreen() {
                 )}
 
                 {isCurrentlyLate && (
-                    <View style={[rsStyles.lateBanner, { backgroundColor: '#FEF3C7', borderColor: '#F59E0B' }]}>
-                        <Ionicons name="warning" size={14} color="#D97706" />
-                        <Text style={[rsStyles.lateText, { color: '#92400E' }]}>
+                    <View style={[rsStyles.lateBanner, { backgroundColor: colors.warningLight, borderColor: colors.warning }]}>
+                        <Ionicons name="warning" size={14} color={colors.warning} />
+                        <Text style={[rsStyles.lateText, { color: colors.warning }]}>
                             {formatCheckinTime(new Date().toISOString())} — {minutesCurrentlyLate} min late
                         </Text>
                     </View>
@@ -889,7 +889,7 @@ export default function EventDetailScreen() {
                 )}
 
                 <TouchableOpacity
-                    style={[rsStyles.checkinBtn, { backgroundColor: isCurrentlyLate ? '#D97706' : colors.accent }]}
+                    style={[rsStyles.checkinBtn, { backgroundColor: isCurrentlyLate ? colors.warning : colors.accent }]}
                     onPress={handleOpenCheckin}
                     accessibilityLabel={isCurrentlyLate ? 'Mark Attendance Late' : 'Check In Now'}
                 >
@@ -955,7 +955,7 @@ export default function EventDetailScreen() {
                     </Text>
                 </View>
                 {(myAttendance?.pledged_afyc ?? 0) > 0 && (
-                    <View style={[rsStyles.afycTrack, { backgroundColor: '#3A3A3C' }]}>
+                    <View style={[rsStyles.afycTrack, { backgroundColor: colors.surfaceSecondary }]}>
                         <View style={[rsStyles.afycFill, {
                             width: `${Math.min(100, (myCounts.afyc / (myAttendance?.pledged_afyc ?? 1)) * 100)}%` as any,
                             backgroundColor: '#F59E0B',
@@ -1049,7 +1049,7 @@ export default function EventDetailScreen() {
                     const counts = activityCounts(agent.user_id);
                     const ac = avatarColor(agent.full_name ?? '?');
                     return (
-                        <View key={agent.id} style={[rsStyles.agentCard, { borderColor: colors.border }]}>
+                        <View key={agent.id} style={[rsStyles.agentCard, { backgroundColor: colors.surfaceSecondary }]}>
                             <View style={rsStyles.agentHeader}>
                                 <Avatar name={agent.full_name ?? '?'} avatarUrl={null} size={32} backgroundColor={ac + '18'} textColor={ac} />
                                 <Text style={[rsStyles.agentName, { color: colors.textPrimary }]}>{agent.full_name}</Text>
@@ -1066,8 +1066,8 @@ export default function EventDetailScreen() {
                             {att ? (
                                 <>
                                     <View style={rsStyles.agentCheckinRow}>
-                                        <Ionicons name={att.is_late ? 'warning' : 'checkmark-circle'} size={14} color={att.is_late ? '#D97706' : '#0D9488'} />
-                                        <Text style={{ color: att.is_late ? '#D97706' : '#0D9488', fontSize: 13 }}>
+                                        <Ionicons name={att.is_late ? 'warning' : 'checkmark-circle'} size={14} color={att.is_late ? colors.warning : colors.accent} />
+                                        <Text style={{ color: att.is_late ? colors.warning : colors.accent, fontSize: 13 }}>
                                             {formatCheckinTime(att.checked_in_at)} · {att.is_late ? `Late ${att.minutes_late} min` : 'On time'}
                                         </Text>
                                         {att.checked_in_by && <Text style={{ color: colors.textTertiary, fontSize: 11 }}>(override)</Text>}
@@ -1231,28 +1231,48 @@ export default function EventDetailScreen() {
                     Cost today: ${roadshowConfig.daily_cost.toFixed(2)} ({roadshowConfig.slots_per_day} × ${roadshowConfig.slot_cost.toFixed(2)})
                 </Text>
             )}
-            <View style={rsStyles.boothTotalRow}>
-                <Text style={[rsStyles.boothTotalLabel, { color: colors.textSecondary }]}>Sitdowns</Text>
-                <Text style={[rsStyles.boothTotalValue, { color: colors.textPrimary }]}>{boothTotals.sitdowns} / {boothTotals.pledgedSitdowns} pledged</Text>
+            <View style={rsStyles.ringsRow}>
+                <ProgressRing
+                    actual={boothTotals.sitdowns}
+                    pledged={boothTotals.pledgedSitdowns}
+                    color="#6366F1"
+                    label="Sitdowns"
+                    accessLabel={`Booth sitdowns: ${boothTotals.sitdowns} of ${boothTotals.pledgedSitdowns}`}
+                />
+                <ProgressRing
+                    actual={boothTotals.pitches}
+                    pledged={boothTotals.pledgedPitches}
+                    color="#0D9488"
+                    label="Pitches"
+                    accessLabel={`Booth pitches: ${boothTotals.pitches} of ${boothTotals.pledgedPitches}`}
+                />
+                <ProgressRing
+                    actual={boothTotals.closed}
+                    pledged={boothTotals.pledgedClosed}
+                    color="#F59E0B"
+                    label="Closed"
+                    accessLabel={`Booth cases: ${boothTotals.closed} of ${boothTotals.pledgedClosed}`}
+                />
             </View>
-            <View style={rsStyles.boothTotalRow}>
-                <Text style={[rsStyles.boothTotalLabel, { color: colors.textSecondary }]}>Pitches</Text>
-                <Text style={[rsStyles.boothTotalValue, { color: colors.textPrimary }]}>{boothTotals.pitches} / {boothTotals.pledgedPitches} pledged</Text>
+            <View style={rsStyles.afycSection}>
+                <View style={rsStyles.afycRow}>
+                    <Text style={[rsStyles.afycLabel, { color: colors.textSecondary }]}>AFYC</Text>
+                    <Text style={[rsStyles.afycValue, { color: colors.textPrimary }]}>
+                        ${boothTotals.afyc.toLocaleString()}
+                        {boothTotals.pledgedAfyc > 0 && (
+                            <Text style={{ color: colors.textTertiary }}> of ${boothTotals.pledgedAfyc.toLocaleString()} pledged</Text>
+                        )}
+                    </Text>
+                </View>
+                {boothTotals.pledgedAfyc > 0 && (
+                    <View style={[rsStyles.afycTrack, { backgroundColor: colors.surfaceSecondary }]}>
+                        <View style={[rsStyles.afycFill, {
+                            width: `${Math.min(100, (boothTotals.afyc / boothTotals.pledgedAfyc) * 100)}%` as any,
+                            backgroundColor: '#F59E0B',
+                        }]} />
+                    </View>
+                )}
             </View>
-            <View style={rsStyles.boothTotalRow}>
-                <Text style={[rsStyles.boothTotalLabel, { color: colors.textSecondary }]}>Cases Closed</Text>
-                <Text style={[rsStyles.boothTotalValue, { color: colors.textPrimary }]}>{boothTotals.closed} / {boothTotals.pledgedClosed} pledged</Text>
-            </View>
-            <View style={rsStyles.boothTotalRow}>
-                <Text style={[rsStyles.boothTotalLabel, { color: colors.textSecondary }]}>AFYC Achieved</Text>
-                <Text style={[rsStyles.boothTotalValue, { color: boothTotals.afyc > 0 ? '#F59E0B' : colors.textPrimary, fontWeight: '700' }]}>
-                    ${boothTotals.afyc.toLocaleString()}{boothTotals.pledgedAfyc > 0 ? ` / $${boothTotals.pledgedAfyc.toLocaleString()}` : ''}
-                </Text>
-            </View>
-            <View style={[rsStyles.progressTrack, { backgroundColor: colors.surfaceSecondary }]}>
-                <View style={[rsStyles.progressFill, { width: `${Math.round(boothPct * 100)}%` as any, backgroundColor: ROADSHOW_PINK }]} />
-            </View>
-            <Text style={{ color: colors.textTertiary, fontSize: 12 }}>{Math.round(boothPct * 100)}% vs pledged</Text>
         </View>
     );
 
@@ -1307,9 +1327,9 @@ export default function EventDetailScreen() {
                         <Avatar name={att.full_name ?? '?'} avatarUrl={null} size={28} backgroundColor={avatarColor(att.full_name ?? '?') + '18'} textColor={avatarColor(att.full_name ?? '?')} />
                         <Text style={[rsStyles.agentName, { color: colors.textPrimary }]}>{att.full_name}</Text>
                         <Text style={{ color: colors.textTertiary, fontSize: 12 }}>{formatCheckinTime(att.checked_in_at)}</Text>
-                        <View style={[rsStyles.latePill, { backgroundColor: att.is_late ? '#FEF3C7' : '#D1FAE5' }]}>
-                            <Ionicons name={att.is_late ? 'warning' : 'checkmark'} size={11} color={att.is_late ? '#D97706' : '#065F46'} />
-                            <Text style={{ color: att.is_late ? '#92400E' : '#065F46', fontSize: 11, fontWeight: '600' }}>
+                        <View style={[rsStyles.latePill, { backgroundColor: att.is_late ? colors.warningLight : colors.successLight }]}>
+                            <Ionicons name={att.is_late ? 'warning' : 'checkmark'} size={11} color={att.is_late ? colors.warning : colors.success} />
+                            <Text style={{ color: att.is_late ? colors.warning : colors.success, fontSize: 11, fontWeight: '600' }}>
                                 {att.is_late ? `Late ${att.minutes_late}m` : 'On time'}
                             </Text>
                         </View>
@@ -1861,13 +1881,11 @@ const rsStyles = StyleSheet.create({
     boothTotalRow: { flexDirection: 'row', justifyContent: 'space-between' },
     boothTotalLabel: { fontSize: 14 },
     boothTotalValue: { fontSize: 14, fontWeight: '600' },
-    progressTrack: { height: 8, borderRadius: 4, overflow: 'hidden' },
-    progressFill: { height: 8, borderRadius: 4 },
 
     sectionHeaderRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
     countBadge: { fontSize: 13, fontWeight: '600' },
 
-    agentCard: { borderRadius: 12, borderWidth: 1, padding: 12, gap: 6 },
+    agentCard: { borderRadius: 12, padding: 12, gap: 6 },
     agentHeader: { flexDirection: 'row', alignItems: 'center', gap: 8 },
     agentName: { flex: 1, fontSize: 15, fontWeight: '600' },
     agentCheckinRow: { flexDirection: 'row', alignItems: 'center', gap: 6 },
