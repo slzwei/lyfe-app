@@ -15,15 +15,65 @@ interface PledgePayload {
   pledgedAfyc: number;
 }
 
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') {
     return new Response('ok', { headers: corsHeaders });
   }
 
   try {
+    // ── Auth check ─────────────────────────────────────────────
+    const authHeader = req.headers.get('Authorization');
+    if (!authHeader?.startsWith('Bearer ')) {
+      return new Response(JSON.stringify({ error: 'Missing or invalid Authorization header' }), {
+        status: 401,
+        headers: corsHeaders,
+      });
+    }
+
+    const token = authHeader.replace('Bearer ', '');
+    const userClient = createClient(
+      Deno.env.get('SUPABASE_URL')!,
+      Deno.env.get('SUPABASE_ANON_KEY')!,
+      { global: { headers: { Authorization: `Bearer ${token}` } } },
+    );
+
+    const { data: { user: caller }, error: authError } = await userClient.auth.getUser();
+    if (authError || !caller) {
+      return new Response(JSON.stringify({ error: 'Unauthorized' }), {
+        status: 401,
+        headers: corsHeaders,
+      });
+    }
+
+    // ── Input validation ───────────────────────────────────────
     const payload: PledgePayload = await req.json();
     const { eventId, agentId, agentName, pledgedSitdowns, pledgedPitches, pledgedClosed, pledgedAfyc } = payload;
 
+    if (!eventId || !UUID_RE.test(eventId)) {
+      return new Response(JSON.stringify({ error: 'Invalid eventId' }), { status: 400, headers: corsHeaders });
+    }
+    if (!agentId || !UUID_RE.test(agentId)) {
+      return new Response(JSON.stringify({ error: 'Invalid agentId' }), { status: 400, headers: corsHeaders });
+    }
+    if (!agentName || typeof agentName !== 'string') {
+      return new Response(JSON.stringify({ error: 'Invalid agentName' }), { status: 400, headers: corsHeaders });
+    }
+    if (typeof pledgedSitdowns !== 'number' || pledgedSitdowns < 0) {
+      return new Response(JSON.stringify({ error: 'pledgedSitdowns must be a non-negative number' }), { status: 400, headers: corsHeaders });
+    }
+    if (typeof pledgedPitches !== 'number' || pledgedPitches < 0) {
+      return new Response(JSON.stringify({ error: 'pledgedPitches must be a non-negative number' }), { status: 400, headers: corsHeaders });
+    }
+    if (typeof pledgedClosed !== 'number' || pledgedClosed < 0) {
+      return new Response(JSON.stringify({ error: 'pledgedClosed must be a non-negative number' }), { status: 400, headers: corsHeaders });
+    }
+    if (typeof pledgedAfyc !== 'number' || pledgedAfyc < 0) {
+      return new Response(JSON.stringify({ error: 'pledgedAfyc must be a non-negative number' }), { status: 400, headers: corsHeaders });
+    }
+
+    // ── Service-role client for cross-user data lookups ────────
     const supabase = createClient(
       Deno.env.get('SUPABASE_URL')!,
       Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!,

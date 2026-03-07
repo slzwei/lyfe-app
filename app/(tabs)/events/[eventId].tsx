@@ -486,15 +486,21 @@ export default function EventDetailScreen() {
 
         // Fire-and-forget push notification
         const supabaseUrl = process.env.EXPO_PUBLIC_SUPABASE_URL ?? '';
-        fetch(`${supabaseUrl}/functions/v1/notify-roadshow-pledge`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-                eventId, agentId: user!.id, agentName: user!.full_name,
-                pledgedSitdowns: pledges.sitdowns, pledgedPitches: pledges.pitches,
-                pledgedClosed: pledges.closed, pledgedAfyc: pledges.afyc,
-            }),
-        }).catch(() => { });
+        supabase.auth.getSession().then(({ data: { session } }) => {
+            if (!session) return;
+            fetch(`${supabaseUrl}/functions/v1/notify-roadshow-pledge`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${session.access_token}`,
+                },
+                body: JSON.stringify({
+                    eventId, agentId: user!.id, agentName: user!.full_name,
+                    pledgedSitdowns: pledges.sitdowns, pledgedPitches: pledges.pitches,
+                    pledgedClosed: pledges.closed, pledgedAfyc: pledges.afyc,
+                }),
+            }).catch(() => { });
+        });
 
         setShowPledgeSheet(false);
         setCheckingIn(false);
