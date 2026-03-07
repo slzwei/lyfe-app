@@ -2,7 +2,6 @@ import LyfeLogo from '@/components/LyfeLogo';
 import { useAuth } from '@/contexts/AuthContext';
 import { useTheme } from '@/contexts/ThemeContext';
 import { getBiometryType, type BiometryType } from '@/lib/biometrics';
-import { isMockMode, setMockMode } from '@/lib/mockMode';
 import { Ionicons } from '@expo/vector-icons';
 import { createVideoPlayer, VideoView } from 'expo-video';
 import React, { useEffect, useRef, useState } from 'react';
@@ -52,7 +51,6 @@ export default function LoginScreen() {
 
     const [biometryType, setBiometryType] = useState<BiometryType>('none');
     const [isBiometricLoading, setIsBiometricLoading] = useState(false);
-    const [mockMode, setMockModeState] = useState(isMockMode());
 
     const otpRefs = useRef<(TextInput | null)[]>([]);
     const fadeAnim = useRef(new Animated.Value(1)).current;
@@ -90,17 +88,6 @@ export default function LoginScreen() {
         } finally {
             setIsBiometricLoading(false);
         }
-    };
-
-    const handleToggleMock = async () => {
-        const next = !mockMode;
-        await setMockMode(next);
-        setMockModeState(next);
-        // Reset to welcome step so the login flow restarts cleanly
-        setStep('welcome');
-        setPhone('');
-        setOtp(['', '', '', '', '', '']);
-        setError(null);
     };
 
     const handleSendOtp = async () => {
@@ -337,19 +324,6 @@ export default function LoginScreen() {
                                 )}
                             </Animated.View>
 
-                            {__DEV__ && (
-                                <TouchableOpacity
-                                    onPress={handleToggleMock}
-                                    style={styles.devToggle}
-                                    activeOpacity={0.7}
-                                >
-                                    <View style={[styles.devDot, { backgroundColor: mockMode ? '#F59E0B' : '#10B981' }]} />
-                                    <Text style={styles.devToggleText}>
-                                        {mockMode ? 'Mock login  —  tap to use real OTP' : 'Real OTP  —  tap to use mock login'}
-                                    </Text>
-                                </TouchableOpacity>
-                            )}
-
                             <Text style={[styles.footer, { color: OVERLAY_TEXT_SUBTLE }]}>
                                 By continuing, you agree to Lyfe's Terms of Service
                             </Text>
@@ -401,22 +375,4 @@ const styles = StyleSheet.create({
     linkButton: { alignItems: 'center', marginTop: 16, padding: 8 },
     linkText: { fontSize: 14, fontWeight: '500' },
     footer: { fontSize: 12, textAlign: 'center', marginTop: 12, lineHeight: 18 },
-    devToggle: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        justifyContent: 'center',
-        gap: 6,
-        marginTop: 48,
-        paddingVertical: 6,
-    },
-    devDot: {
-        width: 8,
-        height: 8,
-        borderRadius: 4,
-    },
-    devToggleText: {
-        fontSize: 12,
-        color: 'rgba(255,255,255,0.55)',
-        fontWeight: '500',
-    },
 });

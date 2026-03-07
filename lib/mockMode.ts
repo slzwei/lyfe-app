@@ -1,29 +1,21 @@
 /**
- * Dev-only mock mode singleton.
- * Initialized async from AsyncStorage at app startup (before screens render).
- * Persists across sessions so the toggle survives app restarts.
+ * Mock mode — DEPRECATED.
+ *
+ * Auth now always goes through real Supabase OTP.
+ * Dev/test phone numbers are whitelisted in the custom-sms-hook edge function
+ * (OTP_WHITELIST_PHONES env secret) so they skip SMS but still get a real session.
+ *
+ * isMockMode() is kept as a stub returning false so existing screen-level imports
+ * don't break. Those mock-data branches are dead code and will be removed incrementally.
  */
-import AsyncStorage from '@react-native-async-storage/async-storage';
 
-const KEY = 'lyfe_dev_mock_mode';
-
-// Start from the env var default
-let _isMock = process.env.EXPO_PUBLIC_MOCK_OTP === 'true';
-
-/** Call once at app startup (inside AuthContext.initAuth) before isLoading → false */
-export async function initMockMode(): Promise<void> {
-    if (!__DEV__) return;
-    const stored = await AsyncStorage.getItem(KEY);
-    if (stored !== null) _isMock = stored === 'true';
-}
-
-/** Returns current mock mode. Safe to call at render time after initMockMode has resolved. */
+/** @deprecated Always returns false. Will be removed once all screens are cleaned up. */
 export function isMockMode(): boolean {
-    return __DEV__ && _isMock;
+    return false;
 }
 
-/** Persist a new mock mode value. Call this then signOut() to take effect on next login. */
-export async function setMockMode(value: boolean): Promise<void> {
-    _isMock = value;
-    await AsyncStorage.setItem(KEY, String(value));
-}
+/** @deprecated No-op. */
+export async function initMockMode(): Promise<void> {}
+
+/** @deprecated No-op. */
+export async function setMockMode(_value: boolean): Promise<void> {}

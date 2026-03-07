@@ -4,7 +4,6 @@ import {
     isBiometricsEnabled,
     setBiometricsEnabled,
 } from '@/lib/biometrics';
-import { initMockMode, isMockMode } from '@/lib/mockMode';
 import { supabase } from '@/lib/supabase';
 import type { User } from '@/types/database';
 import AsyncStorage from '@react-native-async-storage/async-storage';
@@ -34,8 +33,6 @@ interface AuthContextType extends AuthState {
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
-
-const MOCK_OTP_CODE = '123456';
 
 export function AuthProvider({ children }: { children: React.ReactNode }) {
     const [state, setState] = useState<AuthState>({
@@ -99,12 +96,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     useEffect(() => {
         const initAuth = async () => {
             try {
-                await initMockMode(); // read stored toggle before any auth logic
-                if (isMockMode()) {
-                    setState(prev => ({ ...prev, isLoading: false }));
-                    return;
-                }
-
                 const { data: { session } } = await supabase.auth.getSession();
 
                 if (session?.user) {
@@ -200,60 +191,12 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
     /** Send OTP to phone number */
     const signInWithOtp = useCallback(async (phone: string) => {
-        if (isMockMode()) {
-            console.log(`[MOCK OTP] Would send OTP to ${phone}. Use code: ${MOCK_OTP_CODE}`);
-            return { error: null };
-        }
         const { error } = await supabase.auth.signInWithOtp({ phone });
         return { error: error ? new Error(error.message) : null };
     }, []);
 
-    const MOCK_ROLES: Record<string, { role: User['role']; name: string; stage?: string }> = {
-        '+6580000001': { role: 'admin', name: 'Admin User' },
-        '+6580000002': { role: 'director', name: 'Dir. Rachel Tan' },
-        '+6580000003': { role: 'manager', name: 'Mgr. David Lim' },
-        '+6580000004': { role: 'agent', name: 'Agent Sarah Lee' },
-        '+6580000005': { role: 'pa', name: 'PA Jessica Ng' },
-        '+6580000006': { role: 'candidate', name: 'Candidate Jason', stage: 'exam_prep' },
-    };
-
     /** Verify OTP code */
     const verifyOtp = useCallback(async (phone: string, token: string) => {
-        if (isMockMode()) {
-            if (token === MOCK_OTP_CODE) {
-                const match = MOCK_ROLES[phone];
-                const mockRole = match?.role || 'manager';
-                const mockName = match?.name || 'Test User';
-                const mockStage = match?.stage || null;
-                const mockUser: User = {
-                    id: 'mock-user-id',
-                    email: null,
-                    phone,
-                    full_name: mockName,
-                    avatar_url: null,
-                    role: mockRole,
-                    reports_to: null,
-                    lifecycle_stage: mockStage as User['lifecycle_stage'],
-                    date_of_birth: null,
-                    push_token: null,
-                    last_login_at: new Date().toISOString(),
-                    is_active: true,
-                    created_at: new Date().toISOString(),
-                    updated_at: new Date().toISOString(),
-                };
-                setState(prev => ({
-                    ...prev,
-                    session: null,
-                    user: mockUser,
-                    isLoading: false,
-                    isAuthenticated: true,
-                    pendingBiometricSession: false,
-                }));
-                return { error: null };
-            }
-            return { error: new Error('Invalid OTP code') };
-        }
-
         const { error } = await supabase.auth.verifyOtp({ phone, token, type: 'sms' });
         return { error: error ? new Error(error.message) : null };
     }, []);
@@ -324,18 +267,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     const signOut = useCallback(async () => {
         await AsyncStorage.removeItem('lyfe_view_mode');
 
-        if (isMockMode()) {
-            setState(prev => ({
-                ...prev,
-                session: null,
-                user: null,
-                isLoading: false,
-                isAuthenticated: false,
-                pendingBiometricSession: false,
-            }));
-            return;
-        }
-
         const bioEnabled = await isBiometricsEnabled();
         const hasLiveSession = !!sessionRef.current;
 
@@ -372,10 +303,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     const updateProfile = useCallback(async (name: string, email: string | null): Promise<{ error: string | null }> => {
         const trimmedName = name.trim();
         const trimmedEmail = email?.trim() || null;
-        if (isMockMode()) {
-            setState(prev => prev.user ? { ...prev, user: { ...prev.user, full_name: trimmedName, email: trimmedEmail } } : prev);
-            return { error: null };
-        }
         if (!sessionRef.current?.user?.id) return { error: 'Not authenticated' };
         const { error } = await supabase
             .from('users')
@@ -411,12 +338,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
     /** Refresh user profile */
     const refreshUser = useCallback(async () => {
-        if (isMockMode() && state.user) return;
         if (sessionRef.current?.user) {
             const profile = await fetchUserProfile(sessionRef.current.user.id);
             setState(prev => ({ ...prev, user: profile }));
         }
-    }, [state.user, fetchUserProfile]);
+    }, [fetchUserProfile]);
 
     return (
         <AuthContext.Provider
