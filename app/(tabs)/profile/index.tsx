@@ -8,10 +8,12 @@ import { getBiometryType, type BiometryType } from '@/lib/biometrics';
 import { pickAndUploadAvatar, removeAvatar, takeAndUploadAvatar } from '@/lib/storage';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import {
+    Animated,
     ActivityIndicator,
     Alert,
+    KeyboardAvoidingView,
     Modal,
     Platform,
     SafeAreaView,
@@ -19,6 +21,7 @@ import {
     StyleSheet,
     Switch,
     Text,
+    TextInput,
     TouchableOpacity,
     View,
 } from 'react-native';
@@ -53,13 +56,12 @@ const GENERAL_SETTINGS: SettingsRow[] = [
 ];
 
 const SUPPORT_SETTINGS: SettingsRow[] = [
-    { key: 'help', icon: 'help-circle-outline', label: 'Help & Support' },
     { key: 'terms', icon: 'document-text-outline', label: 'Terms of Service' },
 ];
 
 export default function ProfileScreen() {
     const { colors, isDark, mode, setMode } = useTheme();
-    const { user, signOut, biometricsEnabled, enableBiometrics, disableBiometrics, updateAvatarUrl } = useAuth();
+    const { user, signOut, biometricsEnabled, enableBiometrics, disableBiometrics, updateAvatarUrl, updateProfile } = useAuth();
     const { viewMode, canToggle, setViewMode } = useViewMode();
     const router = useRouter();
     const [showSignOutModal, setShowSignOutModal] = useState(false);
@@ -67,9 +69,34 @@ export default function ProfileScreen() {
     const [avatarUploading, setAvatarUploading] = useState(false);
     const [biometryType, setBiometryType] = useState<BiometryType>('none');
 
+    // Edit profile modal
+    const [showEditModal, setShowEditModal] = useState(false);
+    const [editName, setEditName] = useState('');
+    const [editEmail, setEditEmail] = useState('');
+    const [editSaving, setEditSaving] = useState(false);
+    const [editError, setEditError] = useState<string | null>(null);
+
     useEffect(() => {
         getBiometryType().then(setBiometryType);
     }, []);
+
+    // Sheet slide-up animations (overlay appears instantly; only the sheet slides)
+    const avatarSheetY = useRef(new Animated.Value(400)).current;
+    const editSheetY = useRef(new Animated.Value(400)).current;
+
+    useEffect(() => {
+        if (showAvatarSheet) {
+            avatarSheetY.setValue(400);
+            Animated.spring(avatarSheetY, { toValue: 0, useNativeDriver: true, damping: 22, stiffness: 220 }).start();
+        }
+    }, [showAvatarSheet]);
+
+    useEffect(() => {
+        if (showEditModal) {
+            editSheetY.setValue(400);
+            Animated.spring(editSheetY, { toValue: 0, useNativeDriver: true, damping: 22, stiffness: 220 }).start();
+        }
+    }, [showEditModal]);
 
     const handleToggleBiometrics = async (value: boolean) => {
         if (value) {
@@ -102,14 +129,26 @@ export default function ProfileScreen() {
 
     const handleSettingsPress = (key: string) => {
         if (key === 'edit') {
-            setShowAvatarSheet(true);
+            setEditName(user?.full_name || '');
+            setEditEmail(user?.email || '');
+            setEditError(null);
+            setShowEditModal(true);
             return;
         }
-        if (Platform.OS === 'web') {
-            window.alert(`${key.charAt(0).toUpperCase() + key.slice(1)} — Coming soon`);
-        } else {
-            Alert.alert('Coming Soon', `This feature is under development.`);
-        }
+        if (key === 'notifications') { router.push('/(tabs)/profile/notifications' as any); return; }
+        if (key === 'privacy') { router.push('/(tabs)/profile/privacy' as any); return; }
+        if (key === 'help') { router.push('/(tabs)/profile/help' as any); return; }
+        if (key === 'terms') { router.push('/(tabs)/profile/terms' as any); return; }
+    };
+
+    const handleSaveProfile = async () => {
+        if (!editName.trim()) { setEditError('Name is required'); return; }
+        setEditSaving(true);
+        setEditError(null);
+        const { error } = await updateProfile(editName, editEmail || null);
+        setEditSaving(false);
+        if (error) { setEditError(error); return; }
+        setShowEditModal(false);
     };
 
     const handleAvatarAction = async (action: 'camera' | 'library' | 'remove') => {
@@ -414,11 +453,77 @@ export default function ProfileScreen() {
                 </TouchableOpacity>
             </ScrollView>
 
+            {/* Edit Profile Modal */}
+            <Modal
+                visible={showEditModal}
+                transparent
+                animationType="none"
+                onRequestClose={() => setShowEditModal(false)}
+                accessibilityViewIsModal
+            >
+                <KeyboardAvoidingView
+                    behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+                    style={{ flex: 1 }}
+                >
+                    <TouchableOpacity
+                        style={styles.sheetOverlay}
+                        activeOpacity={1}
+                        onPress={() => setShowEditModal(false)}
+                    >
+                        <Animated.View style={[styles.sheet, { backgroundColor: colors.cardBackground, transform: [{ translateY: editSheetY }] }]}>
+                            <View style={[styles.sheetHandle, { backgroundColor: colors.divider }]} />
+                            <Text style={[styles.sheetTitle, { color: colors.textPrimary }]}>Edit Profile</Text>
+
+                            <Text style={[styles.editLabel, { color: colors.textTertiary }]}>FULL NAME</Text>
+                            <View style={[styles.editInputWrap, { backgroundColor: colors.inputBackground, borderColor: colors.border }]}>
+                                <TextInput
+                                    style={[styles.editInput, { color: colors.textPrimary }]}
+                                    value={editName}
+                                    onChangeText={setEditName}
+                                    placeholder="Your full name"
+                                    placeholderTextColor={colors.textTertiary}
+                                    returnKeyType="next"
+                                    autoCapitalize="words"
+                                />
+                            </View>
+
+                            <Text style={[styles.editLabel, { color: colors.textTertiary, marginTop: 16 }]}>EMAIL (OPTIONAL)</Text>
+                            <View style={[styles.editInputWrap, { backgroundColor: colors.inputBackground, borderColor: colors.border }]}>
+                                <TextInput
+                                    style={[styles.editInput, { color: colors.textPrimary }]}
+                                    value={editEmail}
+                                    onChangeText={setEditEmail}
+                                    placeholder="your@email.com"
+                                    placeholderTextColor={colors.textTertiary}
+                                    keyboardType="email-address"
+                                    autoCapitalize="none"
+                                    returnKeyType="done"
+                                    onSubmitEditing={handleSaveProfile}
+                                />
+                            </View>
+
+                            {editError && (
+                                <Text style={[styles.editErrorText, { color: colors.danger }]}>{editError}</Text>
+                            )}
+
+                            <TouchableOpacity
+                                style={[styles.editSaveBtn, { backgroundColor: colors.accent, opacity: editSaving ? 0.7 : 1 }]}
+                                onPress={handleSaveProfile}
+                                disabled={editSaving}
+                                activeOpacity={0.8}
+                            >
+                                <Text style={styles.editSaveBtnText}>{editSaving ? 'Saving…' : 'Save Changes'}</Text>
+                            </TouchableOpacity>
+                        </Animated.View>
+                    </TouchableOpacity>
+                </KeyboardAvoidingView>
+            </Modal>
+
             {/* Avatar Picker Sheet */}
             <Modal
                 visible={showAvatarSheet}
                 transparent
-                animationType="slide"
+                animationType="none"
                 onRequestClose={() => setShowAvatarSheet(false)}
                 accessibilityViewIsModal
             >
@@ -427,7 +532,7 @@ export default function ProfileScreen() {
                     activeOpacity={1}
                     onPress={() => setShowAvatarSheet(false)}
                 >
-                    <View style={[styles.sheet, { backgroundColor: colors.cardBackground }]}>
+                    <Animated.View style={[styles.sheet, { backgroundColor: colors.cardBackground, transform: [{ translateY: avatarSheetY }] }]}>
                         <View style={[styles.sheetHandle, { backgroundColor: colors.divider }]} />
                         <Text style={[styles.sheetTitle, { color: colors.textPrimary }]}>Profile Photo</Text>
 
@@ -465,7 +570,7 @@ export default function ProfileScreen() {
                                 <Text style={[styles.sheetRowText, { color: colors.danger }]}>Remove Photo</Text>
                             </TouchableOpacity>
                         )}
-                    </View>
+                    </Animated.View>
                 </TouchableOpacity>
             </Modal>
 
@@ -707,6 +812,41 @@ const styles = StyleSheet.create({
     },
     signOutText: {
         fontSize: 15,
+        fontWeight: '600',
+    },
+
+    // ── Edit Profile ──
+    editLabel: {
+        fontSize: 11,
+        fontWeight: '700',
+        letterSpacing: 0.6,
+        marginBottom: 6,
+        paddingHorizontal: 4,
+    },
+    editInputWrap: {
+        borderRadius: 12,
+        borderWidth: 1,
+        paddingHorizontal: 14,
+        paddingVertical: 12,
+    },
+    editInput: {
+        fontSize: 16,
+        padding: 0,
+    },
+    editErrorText: {
+        fontSize: 13,
+        marginTop: 8,
+        paddingHorizontal: 4,
+    },
+    editSaveBtn: {
+        marginTop: 24,
+        paddingVertical: 15,
+        borderRadius: 14,
+        alignItems: 'center',
+    },
+    editSaveBtnText: {
+        color: '#FFFFFF',
+        fontSize: 16,
         fontWeight: '600',
     },
 

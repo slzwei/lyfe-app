@@ -318,7 +318,7 @@ export default function HomeScreen() {
                             <>
                                 <QuickActionBtn icon="person-add" label="Add Lead" colors={colors} onPress={() => router.push('/(tabs)/leads/add' as any)} />
                                 <QuickActionBtn icon="list" label="All Leads" colors={colors} onPress={() => router.push('/(tabs)/leads' as any)} />
-                                <QuickActionBtn icon="calendar" label="Follow-ups" colors={colors} onPress={() => { }} />
+                                <QuickActionBtn icon="calendar" label="Follow-ups" colors={colors} onPress={() => router.push('/(tabs)/leads' as any)} />
                                 <QuickActionBtn icon="person" label="Profile" colors={colors} onPress={() => router.push('/(tabs)/profile' as any)} />
                             </>
                         )}
@@ -368,6 +368,7 @@ export default function HomeScreen() {
                         <View style={styles.sectionHeaderRow}>
                             <Text style={[styles.sectionTitle, { color: colors.textPrimary }]}>Recent Activity</Text>
                             <TouchableOpacity
+                                onPress={() => router.push('/(tabs)/leads' as any)}
                                 accessibilityRole="button"
                                 accessibilityLabel="See all recent activity"
                             >

@@ -1,19 +1,23 @@
 import LoadingState from '@/components/LoadingState';
 import PipelineStepper from '@/components/PipelineStepper';
+import { useAuth } from '@/contexts/AuthContext';
 import { useTheme } from '@/contexts/ThemeContext';
-import { fetchCandidate, syncAgentToMKTR, updateCandidateStatus } from '@/lib/recruitment';
+import { addCandidateActivity, fetchCandidate, syncAgentToMKTR, updateCandidateStatus } from '@/lib/recruitment';
 import { CANDIDATE_STATUS_CONFIG, type CandidateStatus, type RecruitmentCandidate } from '@/types/recruitment';
 import { Ionicons } from '@expo/vector-icons';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import React, { useCallback, useEffect, useState } from 'react';
 import {
     Alert,
+    KeyboardAvoidingView,
     Linking,
     Modal,
+    Platform,
     SafeAreaView,
     ScrollView,
     StyleSheet,
     Text,
+    TextInput,
     TouchableOpacity,
     View,
 } from 'react-native';
@@ -22,9 +26,13 @@ import { isMockMode } from '@/lib/mockMode';
 export default function CandidateDetailScreen() {
     const MOCK_OTP = isMockMode();
     const { colors } = useTheme();
+    const { user } = useAuth();
     const router = useRouter();
     const { candidateId } = useLocalSearchParams<{ candidateId: string }>();
     const [showStatusModal, setShowStatusModal] = useState(false);
+    const [showNoteModal, setShowNoteModal] = useState(false);
+    const [noteText, setNoteText] = useState('');
+    const [isSavingNote, setIsSavingNote] = useState(false);
     const [candidate, setCandidate] = useState<RecruitmentCandidate | null>(null);
     const [isLoading, setIsLoading] = useState(true);
 
@@ -64,10 +72,21 @@ export default function CandidateDetailScreen() {
 
     const statusConfig = CANDIDATE_STATUS_CONFIG[candidate.status];
 
+    const handleSaveNote = async () => {
+        if (!noteText.trim()) return;
+        setIsSavingNote(true);
+        if (!MOCK_OTP && user?.id && candidate.id) {
+            await addCandidateActivity(candidate.id, user.id, 'note', null, noteText.trim());
+        }
+        setIsSavingNote(false);
+        setNoteText('');
+        setShowNoteModal(false);
+    };
+
     const actions = [
         { icon: 'swap-horizontal-outline', label: 'Status', onPress: () => setShowStatusModal(true) },
-        { icon: 'calendar-outline', label: 'Schedule', onPress: () => Alert.alert('Coming Soon', 'Calendar integration in Phase 4B') },
-        { icon: 'create-outline', label: 'Note', onPress: () => Alert.alert('Coming Soon', 'Notes will be saved to database') },
+        { icon: 'calendar-outline', label: 'Schedule', onPress: () => router.push(`/(tabs)/candidates/${candidateId}` as any) },
+        { icon: 'create-outline', label: 'Note', onPress: () => { setNoteText(''); setShowNoteModal(true); } },
         { icon: 'call-outline', label: 'Call', onPress: () => Linking.openURL(`tel:${candidate.phone}`) },
     ];
 
@@ -207,6 +226,35 @@ export default function CandidateDetailScreen() {
                     </View>
                 )}
             </ScrollView>
+
+            {/* Note Modal */}
+            <Modal visible={showNoteModal} transparent animationType="slide" onRequestClose={() => setShowNoteModal(false)}>
+                <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} style={{ flex: 1 }}>
+                    <TouchableOpacity style={styles.modalOverlay} activeOpacity={1} onPress={() => setShowNoteModal(false)}>
+                        <View style={[styles.noteSheet, { backgroundColor: colors.cardBackground }]}>
+                            <View style={[styles.noteHandle, { backgroundColor: colors.border }]} />
+                            <Text style={[styles.noteTitle, { color: colors.textPrimary }]}>Add Note</Text>
+                            <TextInput
+                                style={[styles.noteInput, { backgroundColor: colors.inputBackground, color: colors.textPrimary, borderColor: colors.border }]}
+                                value={noteText}
+                                onChangeText={setNoteText}
+                                placeholder="Write a note about this candidate..."
+                                placeholderTextColor={colors.textTertiary}
+                                multiline
+                                autoFocus
+                            />
+                            <TouchableOpacity
+                                style={[styles.noteSaveBtn, { backgroundColor: colors.accent, opacity: isSavingNote || !noteText.trim() ? 0.5 : 1 }]}
+                                onPress={handleSaveNote}
+                                disabled={isSavingNote || !noteText.trim()}
+                                activeOpacity={0.8}
+                            >
+                                <Text style={styles.noteSaveBtnText}>{isSavingNote ? 'Saving…' : 'Save Note'}</Text>
+                            </TouchableOpacity>
+                        </View>
+                    </TouchableOpacity>
+                </KeyboardAvoidingView>
+            </Modal>
 
             {/* Status Change Modal */}
             <Modal visible={showStatusModal} transparent animationType="fade">
@@ -388,6 +436,37 @@ const styles = StyleSheet.create({
 
     // Notes
     notesText: { fontSize: 14, lineHeight: 20 },
+
+    // Note sheet
+    noteSheet: {
+        borderTopLeftRadius: 20,
+        borderTopRightRadius: 20,
+        padding: 20,
+        paddingBottom: 40,
+        gap: 12,
+    },
+    noteHandle: {
+        width: 36,
+        height: 4,
+        borderRadius: 2,
+        alignSelf: 'center',
+        marginBottom: 4,
+    },
+    noteTitle: { fontSize: 18, fontWeight: '700' },
+    noteInput: {
+        borderRadius: 12,
+        borderWidth: 1,
+        padding: 12,
+        fontSize: 15,
+        minHeight: 100,
+        textAlignVertical: 'top',
+    },
+    noteSaveBtn: {
+        paddingVertical: 14,
+        borderRadius: 12,
+        alignItems: 'center',
+    },
+    noteSaveBtnText: { color: '#FFF', fontSize: 15, fontWeight: '600' },
 
     // Modal
     modalOverlay: {

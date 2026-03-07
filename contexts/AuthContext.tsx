@@ -27,6 +27,7 @@ interface AuthContextType extends AuthState {
     signOut: () => Promise<void>;
     refreshUser: () => Promise<void>;
     updateAvatarUrl: (url: string | null) => void;
+    updateProfile: (name: string, email: string | null) => Promise<{ error: string | null }>;
     authenticateWithBiometrics: () => Promise<{ success: boolean }>;
     enableBiometrics: () => Promise<boolean>;
     disableBiometrics: () => Promise<void>;
@@ -367,6 +368,24 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         setState(prev => prev.user ? { ...prev, user: { ...prev.user, avatar_url: url } } : prev);
     }, []);
 
+    /** Update full_name and email in Supabase and local state */
+    const updateProfile = useCallback(async (name: string, email: string | null): Promise<{ error: string | null }> => {
+        const trimmedName = name.trim();
+        const trimmedEmail = email?.trim() || null;
+        if (isMockMode()) {
+            setState(prev => prev.user ? { ...prev, user: { ...prev.user, full_name: trimmedName, email: trimmedEmail } } : prev);
+            return { error: null };
+        }
+        if (!sessionRef.current?.user?.id) return { error: 'Not authenticated' };
+        const { error } = await supabase
+            .from('users')
+            .update({ full_name: trimmedName, email: trimmedEmail })
+            .eq('id', sessionRef.current.user.id);
+        if (error) return { error: error.message };
+        setState(prev => prev.user ? { ...prev, user: { ...prev.user, full_name: trimmedName, email: trimmedEmail } } : prev);
+        return { error: null };
+    }, []);
+
     /** Register Expo push token and store to users table */
     const registerPushToken = useCallback(async (userId: string) => {
         try {
@@ -408,6 +427,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
                 signOut,
                 refreshUser,
                 updateAvatarUrl,
+                updateProfile,
                 authenticateWithBiometrics,
                 enableBiometrics,
                 disableBiometrics,
