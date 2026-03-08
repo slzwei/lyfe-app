@@ -17,8 +17,8 @@ import { formatDateShort, formatTime } from '@/lib/dateTime';
 import { PA_MANAGER_COLORS } from '@/constants/ui';
 import { MOCK_AGENT_STATS, MOCK_LEAD_PIPELINE, MOCK_MANAGER_ACTIVITIES, MOCK_MANAGER_STATS } from '@/lib/mockData';
 import { fetchUpcomingEvents } from '@/lib/events';
+import { fetchPAManagerIds, fetchPACandidateCount, fetchPAInterviewCount } from '@/lib/recruitment';
 import { EVENT_TYPE_COLORS, type AgencyEvent } from '@/types/event';
-import { supabase } from '@/lib/supabase';
 import { STATUS_CONFIG, type LeadActivity, type LeadActivityType } from '@/types/lead';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
@@ -154,20 +154,14 @@ export default function HomeScreen() {
 
         // ── PA branch ──
         if (isPa) {
-            const { data: assignments } = await supabase
-                .from('pa_manager_assignments')
-                .select('manager_id')
-                .eq('pa_id', user.id);
-
-            const managerIds = (assignments || []).map((a: any) => a.manager_id);
-
-            const [{ count: total }, { count: interviews }, eventsResult] = await Promise.all([
-                supabase.from('candidates').select('id', { count: 'exact', head: true }).in('assigned_manager_id', managerIds),
-                supabase.from('candidates').select('id', { count: 'exact', head: true }).in('assigned_manager_id', managerIds).eq('status', 'interview_scheduled'),
+            const managerIds = await fetchPAManagerIds(user.id);
+            const [total, interviews, eventsResult] = await Promise.all([
+                fetchPACandidateCount(managerIds),
+                fetchPAInterviewCount(managerIds),
                 fetchUpcomingEvents(user.id, 5),
             ]);
-            setPaCandidateCount(total ?? 0);
-            setPaInterviewCount(interviews ?? 0);
+            setPaCandidateCount(total);
+            setPaInterviewCount(interviews);
             setPaEvents(eventsResult.data);
             return;
         }

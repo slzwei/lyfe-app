@@ -1,12 +1,14 @@
 import Avatar from '@/components/Avatar';
 import Confetti, { CONFETTI_DURATION } from '@/components/Confetti';
+import ProgressRing from '@/components/events/ProgressRing';
 import ScreenHeader from '@/components/ScreenHeader';
 import WheelPicker from '@/components/WheelPicker';
+import { useRoadshowRealtime } from '@/hooks/useRoadshowRealtime';
 import { useAuth } from '@/contexts/AuthContext';
 import { useTheme } from '@/contexts/ThemeContext';
 import {
     deleteEvent, fetchEventById, fetchRoadshowActivities, fetchRoadshowAttendance,
-    fetchRoadshowConfig, logRoadshowActivity, logRoadshowAttendanceWithPledge,
+    fetchRoadshowConfig, hasUserCheckedIn, logRoadshowActivity, logRoadshowAttendanceWithPledge,
     managerCheckIn, type PledgeInput,
 } from '@/lib/events';
 import { formatActivityTime, formatCheckinTime, formatCreatedAt, formatDateLong, formatTime, todayLocalStr } from '@/lib/dateTime';
@@ -35,41 +37,6 @@ import {
     View,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-
-// ── Progress Ring ─────────────────────────────────────────────
-function ProgressRing({ actual, pledged, color, label, accessLabel }: {
-    actual: number; pledged: number; color: string; label: string; accessLabel: string;
-}) {
-    const pct = pledged > 0 ? Math.min(1, actual / pledged) : 0;
-    const noPledge = pledged === 0;
-    const ringW = 80;
-    const ringH = 6;
-
-    const fillAnim = useRef(new Animated.Value(0)).current;
-    useEffect(() => {
-        Animated.timing(fillAnim, { toValue: pct, duration: 600, useNativeDriver: false }).start();
-    }, [pct]);
-
-    const fillWidth = fillAnim.interpolate({ inputRange: [0, 1], outputRange: [0, ringW] });
-
-    return (
-        <View style={rsStyles.ringContainer} accessibilityLabel={accessLabel}>
-            <Text style={[rsStyles.ringActual, { color }]}>{actual}</Text>
-            {noPledge ? (
-                <View style={[rsStyles.ringTrack, { width: ringW, borderStyle: 'dashed', borderColor: '#CBD5E1' }]} />
-            ) : (
-                <View style={[rsStyles.ringTrack, { width: ringW, backgroundColor: color + '22' }]}>
-                    <Animated.View style={[rsStyles.ringFill, { width: fillWidth, backgroundColor: color }]} />
-                </View>
-            )}
-            <Text style={rsStyles.ringLabel}>{label}</Text>
-            {noPledge
-                ? <Text style={rsStyles.ringTarget}>No target</Text>
-                : <Text style={rsStyles.ringTarget}>of {pledged}</Text>
-            }
-        </View>
-    );
-}
 
 // ── Main Screen ───────────────────────────────────────────────
 export default function EventDetailScreen() {
@@ -200,29 +167,17 @@ export default function EventDetailScreen() {
     }, [loadEvent]));
 
     // Realtime subscription for live roadshow
-    useEffect(() => {
-        if (!event || event.event_type !== 'roadshow' || event.event_date !== todayStr) return;
-
-        const channel = supabase
-            .channel(`roadshow-${eventId}`)
-            .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'roadshow_activities', filter: `event_id=eq.${eventId}` },
-                (payload: any) => {
-                    if (payload.new.user_id !== user?.id) {
-                        setActivities(prev => [payload.new, ...prev]);
-                    }
-                }
-            )
-            .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'roadshow_attendance', filter: `event_id=eq.${eventId}` },
-                (payload: any) => {
-                    if (payload.new.user_id !== user?.id) {
-                        setAttendance(prev => [...prev, payload.new]);
-                    }
-                }
-            )
-            .subscribe();
-
-        return () => { supabase.removeChannel(channel); };
-    }, [event?.id, event?.event_date, todayStr, user?.id]);
+    useRoadshowRealtime(
+        eventId,
+        !!(event && event.event_type === 'roadshow' && event.event_date === todayStr),
+        user?.id,
+        useCallback((activity: RoadshowActivity) => {
+            setActivities(prev => [activity, ...prev]);
+        }, []),
+        useCallback((att: RoadshowAttendance) => {
+            setAttendance(prev => [...prev, att]);
+        }, []),
+    );
 
     // ── Derived state ─────────────────────────────────────────
     const isRoadshow = event?.event_type === 'roadshow';
@@ -281,13 +236,8 @@ export default function EventDetailScreen() {
         setCheckinError(null);
 
         // Check for existing attendance (manager may have checked in already)
-        const { data: existing } = await supabase
-            .from('roadshow_attendance')
-            .select('id')
-            .eq('event_id', eventId)
-            .eq('user_id', user!.id)
-            .single();
-        if (existing) {
+        const alreadyCheckedIn = await hasUserCheckedIn(eventId!, user!.id);
+        if (alreadyCheckedIn) {
             setCheckingIn(false);
             setShowPledgeSheet(false);
             Alert.alert('Already Checked In', 'You were already checked in by your manager.');
@@ -1625,12 +1575,6 @@ const rsStyles = StyleSheet.create({
     checkinBtnText: { color: '#FFFFFF', fontSize: 16, fontWeight: '700' },
 
     ringsRow: { flexDirection: 'row', justifyContent: 'space-around' },
-    ringContainer: { alignItems: 'center', gap: 4, flexShrink: 1, minWidth: 80 },
-    ringActual: { fontSize: 28, fontWeight: '800' },
-    ringTrack: { height: 6, borderRadius: 3, overflow: 'hidden', borderWidth: 0 },
-    ringFill: { height: 6, borderRadius: 3 },
-    ringLabel: { fontSize: 11, color: '#8E8E93', fontWeight: '600' },
-    ringTarget: { fontSize: 11, color: '#8E8E93' },
 
     progressHeaderRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
     checkinLabel: { fontSize: 13 },

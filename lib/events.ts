@@ -199,6 +199,17 @@ function mapEvents(rows: EventRow[]): AgencyEvent[] {
     }));
 }
 
+/** Check if a user has already checked in to an event */
+export async function hasUserCheckedIn(eventId: string, userId: string): Promise<boolean> {
+    const { data } = await supabase
+        .from('roadshow_attendance')
+        .select('id')
+        .eq('event_id', eventId)
+        .eq('user_id', userId)
+        .single();
+    return !!data;
+}
+
 // ── Roadshow service functions ────────────────────────────────
 
 /** Helpers to compute daily/slot cost client-side */

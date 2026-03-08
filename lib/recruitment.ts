@@ -7,6 +7,7 @@ import type {
     Interview,
     RecruitmentCandidate,
 } from '@/types/recruitment';
+import type { User } from '@/types/database';
 import { supabase } from './supabase';
 
 // ── Types ────────────────────────────────────────────────────
@@ -465,4 +466,45 @@ export async function deleteCandidateDocument(
 
     if (error) return { error: error.message };
     return { error: null };
+}
+
+// ── PA Helper Queries ──────────────────────────────────────────
+
+/** Fetch manager IDs assigned to a PA */
+export async function fetchPAManagerIds(paId: string): Promise<string[]> {
+    const { data } = await supabase
+        .from('pa_manager_assignments')
+        .select('manager_id')
+        .eq('pa_id', paId);
+    return (data || []).map((a: any) => a.manager_id);
+}
+
+/** Fetch managers (with profile info) assigned to a PA */
+export async function fetchPAManagers(paId: string): Promise<User[]> {
+    const { data } = await supabase
+        .from('pa_manager_assignments')
+        .select('manager:users!pa_manager_assignments_manager_id_fkey(id, full_name, role)')
+        .eq('pa_id', paId);
+    return (data as any[] || []).map(r => r.manager).filter(Boolean);
+}
+
+/** Count candidates across a set of manager IDs */
+export async function fetchPACandidateCount(managerIds: string[]): Promise<number> {
+    if (managerIds.length === 0) return 0;
+    const { count } = await supabase
+        .from('candidates')
+        .select('id', { count: 'exact', head: true })
+        .in('assigned_manager_id', managerIds);
+    return count ?? 0;
+}
+
+/** Count candidates with interview_scheduled status across manager IDs */
+export async function fetchPAInterviewCount(managerIds: string[]): Promise<number> {
+    if (managerIds.length === 0) return 0;
+    const { count } = await supabase
+        .from('candidates')
+        .select('id', { count: 'exact', head: true })
+        .in('assigned_manager_id', managerIds)
+        .eq('status', 'interview_scheduled');
+    return count ?? 0;
 }
