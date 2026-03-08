@@ -93,7 +93,7 @@ export default function ExamsListScreen() {
 
     const handlePaperPress = (paper: ExamPaper) => {
         if (paper.question_count === 0) return;
-        router.push(`/exams/take/${paper.id}`);
+        router.push(`/(tabs)/exams/take/${paper.id}`);
     };
 
     if (isLoading) {

@@ -7,6 +7,7 @@ import { useTheme } from '@/contexts/ThemeContext';
 import { fetchCandidates } from '@/lib/recruitment';
 import { CANDIDATE_STATUSES, CANDIDATE_STATUS_CONFIG, type CandidateStatus, type RecruitmentCandidate } from '@/types/recruitment';
 import { Ionicons } from '@expo/vector-icons';
+import { useFilteredList } from '@/hooks/useFilteredList';
 import { useFocusEffect, useRouter } from 'expo-router';
 import React, { useCallback, useState } from 'react';
 import {
@@ -28,6 +29,8 @@ export interface CandidateListScreenProps {
     /** When true, fetches candidates in manager-view scope. Defaults to false. */
     isManagerView?: boolean;
 }
+
+const CANDIDATE_SEARCH_FIELDS: (keyof RecruitmentCandidate)[] = ['name', 'phone'];
 
 const FILTER_TABS: { key: CandidateStatus | 'all'; label: string }[] = [
     { key: 'all', label: 'All' },
@@ -71,21 +74,9 @@ export default function CandidateListScreen({
         }, [loadCandidates])
     );
 
-    const filteredCandidates = candidates
-        .filter((candidate) => {
-            if (search.trim()) {
-                const q = search.toLowerCase();
-                const matchesName = candidate.name.toLowerCase().includes(q);
-                const matchesPhone = candidate.phone?.includes(q);
-                if (!matchesName && !matchesPhone) return false;
-            }
-            if (activeFilter !== 'all' && candidate.status !== activeFilter) return false;
-            return true;
-        })
-        .sort((a, b) => new Date(b.updated_at).getTime() - new Date(a.updated_at).getTime());
-
-    const counts: Record<string, number> = { all: candidates.length };
-    candidates.forEach((c) => { counts[c.status] = (counts[c.status] || 0) + 1; });
+    const { filtered: filteredCandidates, counts } = useFilteredList(
+        candidates, search, activeFilter, 'status', CANDIDATE_SEARCH_FIELDS,
+    );
 
     const onRefresh = useCallback(async () => {
         setRefreshing(true);

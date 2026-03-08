@@ -7,9 +7,10 @@ import { useTheme } from '@/contexts/ThemeContext';
 import { useViewMode } from '@/contexts/ViewModeContext';
 import { fetchLeads } from '@/lib/leads';
 import type { Lead, LeadStatus } from '@/types/lead';
+import { useFilteredList } from '@/hooks/useFilteredList';
 import { Ionicons } from '@expo/vector-icons';
 import { useFocusEffect, useRouter } from 'expo-router';
-import React, { useCallback, useMemo, useState } from 'react';
+import React, { useCallback, useState } from 'react';
 import {
     FlatList,
     RefreshControl,
@@ -20,6 +21,8 @@ import {
     TouchableOpacity,
     View,
 } from 'react-native';
+const LEAD_SEARCH_FIELDS: (keyof Lead)[] = ['full_name', 'phone'];
+
 const FILTER_TABS: { key: LeadStatus | 'all'; label: string }[] = [
     { key: 'all', label: 'All' },
     { key: 'new', label: 'New' },
@@ -64,22 +67,9 @@ export default function LeadsListScreen() {
         }, [loadLeads])
     );
 
-    const filteredLeads = useMemo(() => leads.filter((lead) => {
-        if (search.trim()) {
-            const q = search.toLowerCase();
-            const matchesName = lead.full_name.toLowerCase().includes(q);
-            const matchesPhone = lead.phone?.includes(q);
-            if (!matchesName && !matchesPhone) return false;
-        }
-        if (activeFilter !== 'all' && lead.status !== activeFilter) return false;
-        return true;
-    }).sort((a, b) => new Date(b.updated_at).getTime() - new Date(a.updated_at).getTime()), [leads, search, activeFilter]);
-
-    const counts = useMemo(() => {
-        const c: Record<string, number> = { all: leads.length };
-        leads.forEach((l) => { c[l.status] = (c[l.status] || 0) + 1; });
-        return c;
-    }, [leads]);
+    const { filtered: filteredLeads, counts } = useFilteredList(
+        leads, search, activeFilter, 'status', LEAD_SEARCH_FIELDS,
+    );
 
     const onRefresh = useCallback(async () => {
         setRefreshing(true);
@@ -104,7 +94,7 @@ export default function LeadsListScreen() {
                 rightAction={!isManagerView ? (
                     <TouchableOpacity
                         style={[styles.addButton, { backgroundColor: colors.accent }]}
-                        onPress={() => router.push('/leads/add')}
+                        onPress={() => router.push('/(tabs)/leads/add')}
                         accessibilityLabel="Add new lead"
                     >
                         <Ionicons name="add" size={20} color="#FFFFFF" />
@@ -219,7 +209,7 @@ export default function LeadsListScreen() {
                 renderItem={({ item }) => (
                     <LeadCard
                         lead={item}
-                        onPress={() => router.push(`/leads/${item.id}`)}
+                        onPress={() => router.push(`/(tabs)/leads/${item.id}`)}
                     />
                 )}
             />

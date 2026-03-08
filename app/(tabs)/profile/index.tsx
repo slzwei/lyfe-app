@@ -106,7 +106,7 @@ export default function ProfileScreen() {
         }
     }, [showEditModal]);
 
-    const handleToggleBiometrics = async (value: boolean) => {
+    const handleToggleBiometrics = useCallback(async (value: boolean) => {
         if (value) {
             const success = await enableBiometrics();
             if (!success && Platform.OS !== 'web') {
@@ -115,7 +115,7 @@ export default function ProfileScreen() {
         } else {
             await disableBiometrics();
         }
-    };
+    }, [enableBiometrics, disableBiometrics]);
 
     const handleSignOut = () => {
         setShowSignOutModal(true);
@@ -126,14 +126,14 @@ export default function ProfileScreen() {
         signOut();
     };
 
-    const handleViewModeChange = (newMode: ViewMode) => {
+    const handleViewModeChange = useCallback((newMode: ViewMode) => {
         if (newMode === viewMode) return;
         setViewMode(newMode);
         // FM-01 mitigation: redirect to Home after mode switch to avoid tab stranding
         setTimeout(() => {
             router.replace('/(tabs)/home');
         }, 100);
-    };
+    }, [viewMode, setViewMode, router]);
 
     const handleSettingsPress = (key: string) => {
         if (key === 'edit') {
@@ -145,7 +145,6 @@ export default function ProfileScreen() {
         }
         if (key === 'notifications') { router.push('/(tabs)/profile/notifications' as any); return; }
         if (key === 'privacy') { router.push('/(tabs)/profile/privacy' as any); return; }
-        if (key === 'help') { router.push('/(tabs)/profile/help' as any); return; }
         if (key === 'terms') { router.push('/(tabs)/profile/terms' as any); return; }
     };
 
@@ -159,7 +158,7 @@ export default function ProfileScreen() {
         setShowEditModal(false);
     };
 
-    const handleAvatarAction = async (action: 'camera' | 'library' | 'remove') => {
+    const handleAvatarAction = useCallback(async (action: 'camera' | 'library' | 'remove') => {
         setShowAvatarSheet(false);
         if (!user?.id) return;
 
@@ -182,7 +181,7 @@ export default function ProfileScreen() {
         if (result.error) {
             Alert.alert('Upload Failed', result.error);
         }
-    };
+    }, [user?.id, updateAvatarUrl]);
 
     const themeOptions: Array<{ value: 'system' | 'light' | 'dark'; label: string; icon: keyof typeof Ionicons.glyphMap }> = [
         { value: 'system', label: 'System', icon: 'phone-portrait-outline' },

@@ -4,6 +4,7 @@ import ScreenHeader from '@/components/ScreenHeader';
 import { useAuth } from '@/contexts/AuthContext';
 import { useTheme } from '@/contexts/ThemeContext';
 import { fetchTeamMembers, type TeamMember } from '@/lib/team';
+import { useFilteredList } from '@/hooks/useFilteredList';
 import { Ionicons } from '@expo/vector-icons';
 import { useFocusEffect, useRouter } from 'expo-router';
 import React, { useCallback, useMemo, useState } from 'react';
@@ -18,6 +19,8 @@ import {
     View,
 } from 'react-native';
 import { AVATAR_COLORS, getAvatarColor } from '@/constants/ui';
+
+const TEAM_SEARCH_FIELDS: (keyof TeamMember)[] = ['name', 'phone', 'email'];
 
 type FilterKey = 'all' | 'manager' | 'agent';
 
@@ -52,30 +55,19 @@ export default function TeamScreen() {
         }, [loadMembers])
     );
 
-    const filteredMembers = useMemo(() => members.filter((m) => {
-        if (filter !== 'all' && m.role !== filter) return false;
-        if (search.trim()) {
-            const q = search.toLowerCase();
-            if (
-                !m.name.toLowerCase().includes(q) &&
-                !m.phone?.includes(q) &&
-                !m.email?.toLowerCase().includes(q)
-            ) return false;
-        }
-        return true;
-    }), [members, filter, search]);
+    const { filtered: filteredMembers, counts: baseCounts } = useFilteredList(
+        members, search, filter, 'role', TEAM_SEARCH_FIELDS,
+    );
 
     const { counts, totalLeads, totalWon, avgConversion } = useMemo(() => {
         const c = {
-            all: members.length,
-            manager: members.filter((m) => m.role === 'manager').length,
-            agent: members.filter((m) => m.role === 'agent').length,
+            ...baseCounts,
             active: members.filter((m) => m.isActive).length,
         };
         const tl = members.reduce((sum, m) => sum + m.leadsCount, 0);
         const tw = members.reduce((sum, m) => sum + m.wonCount, 0);
         return { counts: c, totalLeads: tl, totalWon: tw, avgConversion: tl > 0 ? Math.round(tw / tl * 100) : 0 };
-    }, [members]);
+    }, [members, baseCounts]);
 
     const onRefresh = useCallback(async () => {
         setRefreshing(true);

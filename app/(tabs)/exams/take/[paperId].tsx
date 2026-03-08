@@ -239,7 +239,7 @@ export default function TakeExamScreen() {
                 // Also save to AsyncStorage for immediate results page use
                 await AsyncStorage.setItem(`exam_result_${result.id}`, JSON.stringify(result));
                 await AsyncStorage.removeItem(STORAGE_KEY);
-                router.replace(`/exams/results/${result.id}`);
+                router.replace(`/(tabs)/exams/results/${result.id}`);
                 return;
             }
         }
@@ -272,7 +272,7 @@ export default function TakeExamScreen() {
         await AsyncStorage.setItem(`exam_result_${resultId}`, JSON.stringify(result));
         await AsyncStorage.removeItem(STORAGE_KEY);
 
-        router.replace(`/exams/results/${resultId}`);
+        router.replace(`/(tabs)/exams/results/${resultId}`);
     };
 
     const handleBack = () => {

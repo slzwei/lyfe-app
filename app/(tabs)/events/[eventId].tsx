@@ -17,7 +17,7 @@ import { useViewMode } from '@/contexts/ViewModeContext';
 import { EVENT_TYPE_COLORS, EVENT_TYPE_LABELS } from '@/types/event';
 import { Ionicons } from '@expo/vector-icons';
 import { useFocusEffect, useLocalSearchParams, useRouter } from 'expo-router';
-import React, { useCallback, useEffect, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
     ActivityIndicator,
     Alert,
@@ -137,7 +137,7 @@ export default function EventDetailScreen() {
         );
         pulse.start();
         return () => pulse.stop();
-    }, [liveAnim]);
+    }, []);
 
     // Auto-log departure 1 hour after event ends if agent hasn't left yet
     const autoDepFired = useRef(false);
@@ -253,7 +253,7 @@ export default function EventDetailScreen() {
     })();
 
     // Activity counts per user
-    const activityCounts = (userId: string) => {
+    const activityCounts = useCallback((userId: string) => {
         const mine = activities.filter(a => a.user_id === userId);
         return {
             sitdowns: mine.filter(a => a.type === 'sitdown').length,
@@ -261,21 +261,21 @@ export default function EventDetailScreen() {
             closed: mine.filter(a => a.type === 'case_closed').length,
             afyc: mine.filter(a => a.type === 'case_closed').reduce((s, a) => s + (a.afyc_amount ?? 0), 0),
         };
-    };
+    }, [activities]);
 
-    const myCounts = myAttendance ? activityCounts(myAttendance.user_id) : { sitdowns: 0, pitches: 0, closed: 0, afyc: 0 };
+    const myCounts = useMemo(() => myAttendance ? activityCounts(myAttendance.user_id) : { sitdowns: 0, pitches: 0, closed: 0, afyc: 0 }, [myAttendance?.user_id, activityCounts]);
 
     // ── Check-in handlers ─────────────────────────────────────
-    const handleOpenCheckin = () => {
+    const handleOpenCheckin = useCallback(() => {
         if (roadshowConfig) {
             setPledgeSitdowns(roadshowConfig.suggested_sitdowns);
             setPledgePitches(roadshowConfig.suggested_pitches);
             setPledgeClosed(roadshowConfig.suggested_closed);
         }
         setShowPledgeSheet(true);
-    };
+    }, [roadshowConfig]);
 
-    const handleConfirmPledge = async () => {
+    const handleConfirmPledge = useCallback(async () => {
         if (checkingIn) return;
         setCheckingIn(true);
         setCheckinError(null);
@@ -333,7 +333,7 @@ export default function EventDetailScreen() {
         setShowPledgeSheet(false);
         setCheckingIn(false);
         loadEvent(true);
-    };
+    }, [checkingIn, eventId, user, lateReason, pledgeSitdowns, pledgePitches, pledgeClosed, pledgeAfyc, loadEvent]);
 
     // ── Log time helpers ──────────────────────────────────────
     const initLogTime = () => {
@@ -361,7 +361,7 @@ export default function EventDetailScreen() {
     };
 
     // ── Activity logging ──────────────────────────────────────
-    const handleLogActivity = async (type: 'sitdown' | 'pitch', afycAmount?: number) => {
+    const handleLogActivity = useCallback(async (type: 'sitdown' | 'pitch', afycAmount?: number) => {
         if (logDebounce[type]) return;
         setLogDebounce(prev => ({ ...prev, [type]: true }));
 
@@ -390,9 +390,9 @@ export default function EventDetailScreen() {
         }
 
         setTimeout(() => setLogDebounce(prev => ({ ...prev, [type]: false })), 400);
-    };
+    }, [logDebounce, myCounts, myAttendance, eventId, user]);
 
-    const handleLogCaseClosed = async () => {
+    const handleLogCaseClosed = useCallback(async () => {
         if (loggingActivity) return;
         setLoggingActivity(true);
         const amount = Number(afycInput) || 0;
@@ -424,7 +424,7 @@ export default function EventDetailScreen() {
             Alert.alert('Failed', 'Could not log case closed.');
         }
         setLoggingActivity(false);
-    };
+    }, [loggingActivity, afycInput, eventId, user]);
 
     // ── Manager override ──────────────────────────────────────
     const openOverride = (agent: EventAttendee) => {
@@ -1181,7 +1181,7 @@ export default function EventDetailScreen() {
                     <View style={styles.headerActions}>
                         {canEdit && (
                             <TouchableOpacity
-                                onPress={() => router.push({ pathname: '/events/create' as any, params: { eventId: event.id } })}
+                                onPress={() => router.push({ pathname: '/(tabs)/events/create' as any, params: { eventId: event.id } })}
                                 hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
                                 accessibilityLabel="Edit event"
                             >

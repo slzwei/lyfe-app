@@ -22,7 +22,7 @@ import { supabase } from '@/lib/supabase';
 import { STATUS_CONFIG, type LeadActivity, type LeadActivityType } from '@/types/lead';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
-import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import React, { memo, useCallback, useEffect, useMemo, useState } from 'react';
 import {
     Modal,
     RefreshControl,
@@ -117,20 +117,19 @@ export default function HomeScreen() {
         checkBiometricsPrompt();
     }, []);
 
-    const handleEnableBiometrics = async () => {
+    const handleEnableBiometrics = useCallback(async () => {
         setIsEnablingBiometrics(true);
         const success = await enableBiometrics();
         setIsEnablingBiometrics(false);
         if (success) {
             setShowBiometricsPrompt(false);
-            // setBiometricsEnabled already calls markBiometricsPromptShown internally
         }
-    };
+    }, [enableBiometrics]);
 
-    const handleDismissBiometricsPrompt = async () => {
+    const handleDismissBiometricsPrompt = useCallback(async () => {
         await markBiometricsPromptShown();
         setShowBiometricsPrompt(false);
-    };
+    }, []);
 
     // Real data state
     const [stats, setStats] = useState<LeadPipelineStats | null>(null);
@@ -201,9 +200,9 @@ export default function HomeScreen() {
     const pipeline = stats?.pipeline || MOCK_LEAD_PIPELINE;
 
     // Normalize recent activities for display
-    const displayActivities = recentActivities.length > 0
+    const displayActivities = useMemo(() => recentActivities.length > 0
         ? formatActivities(recentActivities)
-        : (isManagerView ? MOCK_MANAGER_ACTIVITIES : []);
+        : (isManagerView ? MOCK_MANAGER_ACTIVITIES : []), [recentActivities, isManagerView]);
 
     const totalPipeline = useMemo(() => pipeline.reduce((n, s) => n + s.count, 0), [pipeline]);
 
@@ -512,16 +511,16 @@ export default function HomeScreen() {
 
 // ── Sub-Components ──
 
-function StatCardSmall({ label, value, colors }: { label: string; value: string; colors: any }) {
+const StatCardSmall = memo(function StatCardSmall({ label, value, colors }: { label: string; value: string; colors: any }) {
     return (
         <View style={[styles.statCardSmall, { backgroundColor: colors.cardBackground, shadowColor: colors.textPrimary }]}>
             <Text style={[styles.statValueSmall, { color: colors.textPrimary }]}>{value}</Text>
             <Text style={[styles.statLabelSmall, { color: colors.textTertiary }]}>{label}</Text>
         </View>
     );
-}
+});
 
-function QuickActionBtn({ icon, label, colors, onPress }: { icon: string; label: string; colors: any; onPress: () => void }) {
+const QuickActionBtn = memo(function QuickActionBtn({ icon, label, colors, onPress }: { icon: string; label: string; colors: any; onPress: () => void }) {
     return (
         <TouchableOpacity style={[styles.quickActionSurface, { backgroundColor: colors.cardBackground, shadowColor: colors.textPrimary }]} onPress={onPress} activeOpacity={0.7} accessibilityRole="button" accessibilityLabel={label}>
             <View style={[styles.quickActionIconWrapper, { backgroundColor: colors.accentLight }]}>
@@ -530,7 +529,7 @@ function QuickActionBtn({ icon, label, colors, onPress }: { icon: string; label:
             <Text style={[styles.quickActionLabel, { color: colors.textPrimary }]}>{label}</Text>
         </TouchableOpacity>
     );
-}
+});
 
 // ── Styles ──
 const styles = StyleSheet.create({

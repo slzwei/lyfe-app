@@ -67,11 +67,11 @@ export default function ExamResultsScreen() {
     const handleRetake = () => {
         if (!result) return;
         // Navigate back to the exam list
-        router.replace('/exams');
+        router.replace('/(tabs)/exams');
     };
 
     const handleDone = () => {
-        router.replace('/exams');
+        router.replace('/(tabs)/exams');
     };
 
     if (isLoading) {

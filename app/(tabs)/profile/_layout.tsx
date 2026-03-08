@@ -15,7 +15,6 @@ export default function ProfileLayout() {
             <Stack.Screen name="index" />
             <Stack.Screen name="notifications" />
             <Stack.Screen name="privacy" />
-            <Stack.Screen name="help" />
             <Stack.Screen name="terms" />
         </Stack>
     );

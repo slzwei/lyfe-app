@@ -621,7 +621,7 @@ export default function EventsScreen() {
                 renderItem={({ item }) => (
                     <EventCard
                         event={item}
-                        onPress={() => router.push(`/events/${item.id}` as any)}
+                        onPress={() => router.push(`/(tabs)/events/${item.id}` as any)}
                         colors={colors}
                     />
                 )}
@@ -629,7 +629,7 @@ export default function EventsScreen() {
 
             <TouchableOpacity
                 style={[styles.fab, { backgroundColor: colors.accent }]}
-                onPress={() => router.push('/events/create' as any)}
+                onPress={() => router.push('/(tabs)/events/create' as any)}
                 activeOpacity={0.85}
                 accessibilityLabel="Create event"
             >
