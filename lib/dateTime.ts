@@ -95,3 +95,12 @@ export function dateRange(start: string, end: string): string[] {
 export function toDateStr(d: Date): string {
     return d.toISOString().split('T')[0];
 }
+
+/** Format ISO timestamp as relative time (e.g. "now", "5m ago", "2h ago", "3d ago") */
+export function timeAgo(dateStr: string): string {
+    const diffMin = Math.floor((Date.now() - new Date(dateStr).getTime()) / 60000);
+    if (diffMin < 1) return 'now';
+    if (diffMin < 60) return `${diffMin}m ago`;
+    if (diffMin < 1440) return `${Math.floor(diffMin / 60)}h ago`;
+    return `${Math.floor(diffMin / 1440)}d ago`;
+}

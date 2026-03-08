@@ -13,7 +13,7 @@ import {
     type BiometryType,
 } from '@/lib/biometrics';
 import { fetchLeadStats, fetchManagerDashboardStats, fetchRecentActivities, type LeadPipelineStats, type ManagerDashboardStats } from '@/lib/leads';
-import { formatDateShort, formatTime } from '@/lib/dateTime';
+import { formatDateShort, formatTime, timeAgo } from '@/lib/dateTime';
 import { PA_MANAGER_COLORS } from '@/constants/ui';
 import { MOCK_AGENT_STATS, MOCK_LEAD_PIPELINE, MOCK_MANAGER_ACTIVITIES, MOCK_MANAGER_STATS } from '@/lib/mockData';
 import { fetchUpcomingEvents } from '@/lib/events';
@@ -68,14 +68,7 @@ function formatActivities(activities: (LeadActivity & { lead_name?: string })[])
             detail = a.description ? `Note: ${a.description.substring(0, 40)}${a.description.length > 40 ? '...' : ''}` : 'Added a note';
         }
 
-        // Time ago
-        const diffMs = Date.now() - new Date(a.created_at).getTime();
-        const diffMin = Math.floor(diffMs / 60000);
-        let time: string;
-        if (diffMin < 1) time = 'now';
-        else if (diffMin < 60) time = `${diffMin}m ago`;
-        else if (diffMin < 1440) time = `${Math.floor(diffMin / 60)}h ago`;
-        else time = `${Math.floor(diffMin / 1440)}d ago`;
+        const time = timeAgo(a.created_at);
 
         return {
             id: a.id,
@@ -137,9 +130,9 @@ export default function HomeScreen() {
     const [managerStats, setManagerStats] = useState<ManagerDashboardStats | null>(null);
 
     // PA state
-    const [paCandidateCount, setPaCandidateCount] = useState(0);
-    const [paInterviewCount, setPaInterviewCount] = useState(0);
-    const [paEvents, setPaEvents] = useState<AgencyEvent[]>([]);
+    const [paStats, setPaStats] = useState<{ candidateCount: number; interviewCount: number; events: AgencyEvent[] }>({
+        candidateCount: 0, interviewCount: 0, events: [],
+    });
 
     const greeting = useMemo(() => getGreeting(), []);
     const firstName = user?.full_name?.split(' ')[0] || 'there';
@@ -165,9 +158,7 @@ export default function HomeScreen() {
                 supabase.from('candidates').select('id', { count: 'exact', head: true }).in('assigned_manager_id', managerIds).eq('status', 'interview_scheduled'),
                 fetchUpcomingEvents(user.id, 5),
             ]);
-            setPaCandidateCount(total ?? 0);
-            setPaInterviewCount(interviews ?? 0);
-            setPaEvents(eventsResult.data);
+            setPaStats({ candidateCount: total ?? 0, interviewCount: interviews ?? 0, events: eventsResult.data });
             return;
         }
 
@@ -260,12 +251,12 @@ export default function HomeScreen() {
                         <View style={styles.statsRow}>
                             <View style={[styles.heroCardPrimary, { backgroundColor: colors.accent }]}>
                                 <Ionicons name="document-text" size={80} color="rgba(255,255,255,0.15)" style={styles.heroIconBg} />
-                                <Text style={[styles.heroStatValue, { color: '#FFFFFF' }]}>{paCandidateCount}</Text>
+                                <Text style={[styles.heroStatValue, { color: '#FFFFFF' }]}>{paStats.candidateCount}</Text>
                                 <Text style={[styles.heroStatLabel, { color: 'rgba(255,255,255,0.9)' }]}>Candidates</Text>
                             </View>
                             <View style={styles.statsColumn}>
-                                <StatCardSmall label="Interviews" value={paInterviewCount.toString()} colors={colors} />
-                                <StatCardSmall label="Events" value={paEvents.length.toString()} colors={colors} />
+                                <StatCardSmall label="Interviews" value={paStats.interviewCount.toString()} colors={colors} />
+                                <StatCardSmall label="Events" value={paStats.events.length.toString()} colors={colors} />
                             </View>
                         </View>
                     ) : isManagerView ? (
@@ -345,10 +336,10 @@ export default function HomeScreen() {
                             </TouchableOpacity>
                         </View>
 
-                        {paEvents.length === 0 ? (
+                        {paStats.events.length === 0 ? (
                             <Text style={[styles.emptyActivityText, { color: colors.textTertiary }]}>No upcoming events</Text>
                         ) : (
-                            paEvents.map(event => {
+                            paStats.events.map(event => {
                                 const typeColor = EVENT_TYPE_COLORS[event.event_type] ?? colors.accent;
                                 return (
                                     <TouchableOpacity
