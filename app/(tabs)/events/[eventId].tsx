@@ -179,6 +179,7 @@ export default function EventDetailScreen() {
         setEvent(data);
 
         if (data?.event_type === 'roadshow') {
+            // Config + activities in parallel; attendance needs config for computeLate()
             const [configRes, activitiesRes] = await Promise.all([
                 fetchRoadshowConfig(eventId),
                 fetchRoadshowActivities(eventId),

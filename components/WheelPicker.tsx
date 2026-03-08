@@ -1,4 +1,4 @@
-import React, { useRef, useState } from 'react';
+import React, { useMemo, useRef, useState } from 'react';
 import { ScrollView, StyleSheet, Text, View } from 'react-native';
 
 export const WHEEL_ITEM_H = 44;
@@ -40,6 +40,19 @@ export default function WheelPicker({
 
     const centerIdx = scrollY / WHEEL_ITEM_H;
 
+    const itemStyles = useMemo(() =>
+        items.map((_, i) => {
+            const dist = Math.abs(centerIdx - i);
+            const isSelected = dist < 0.5;
+            return {
+                opacity: Math.max(0.15, 1 - dist * 0.45),
+                fontSize: isSelected ? 22 : 16,
+                fontWeight: (isSelected ? '700' : '400') as '700' | '400',
+                color: isSelected ? colors.accent : colors.textPrimary,
+            };
+        }), [centerIdx, items.length, colors.accent, colors.textPrimary]
+    );
+
     return (
         <View style={{ height: WHEEL_ITEM_H * visibleItems, width, overflow: 'hidden' }}>
             {showIndicator && (
@@ -68,24 +81,19 @@ export default function WheelPicker({
                 onScrollEndDrag={handleEnd}
                 contentContainerStyle={{ paddingVertical: padding }}
             >
-                {items.map((item, i) => {
-                    const dist = Math.abs(centerIdx - i);
-                    const opacity = Math.max(0.15, 1 - dist * 0.45);
-                    const isSelected = dist < 0.5;
-                    return (
-                        <View key={i} style={{ height: WHEEL_ITEM_H, alignItems: 'center', justifyContent: 'center' }}>
-                            <Text style={{
-                                fontSize: isSelected ? 22 : 16,
-                                fontWeight: isSelected ? '700' : '400',
-                                opacity,
-                                color: isSelected ? colors.accent : colors.textPrimary,
-                                letterSpacing: -0.3,
-                            }}>
-                                {item}
-                            </Text>
-                        </View>
-                    );
-                })}
+                {items.map((item, i) => (
+                    <View key={i} style={{ height: WHEEL_ITEM_H, alignItems: 'center', justifyContent: 'center' }}>
+                        <Text style={{
+                            fontSize: itemStyles[i].fontSize,
+                            fontWeight: itemStyles[i].fontWeight,
+                            opacity: itemStyles[i].opacity,
+                            color: itemStyles[i].color,
+                            letterSpacing: -0.3,
+                        }}>
+                            {item}
+                        </Text>
+                    </View>
+                ))}
             </ScrollView>
         </View>
     );
