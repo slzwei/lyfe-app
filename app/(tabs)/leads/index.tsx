@@ -104,6 +104,79 @@ export default function LeadsListScreen() {
                 ) : undefined}
             />
 
+            {/* Search */}
+            <View style={styles.stickyHeader}>
+                <View style={[styles.searchBar, { backgroundColor: colors.cardBackground, borderColor: colors.border }]}>
+                    <Ionicons name="search" size={18} color={colors.textTertiary} />
+                    <TextInput
+                        style={[styles.searchInput, { color: colors.textPrimary }]}
+                        placeholder="Search by name or phone..."
+                        placeholderTextColor={colors.textTertiary}
+                        value={search}
+                        onChangeText={setSearch}
+                        returnKeyType="search"
+                    />
+                    {search.length > 0 && (
+                        <TouchableOpacity
+                            onPress={() => setSearch('')}
+                            hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                            accessibilityLabel="Clear search"
+                        >
+                            <Ionicons name="close-circle" size={18} color={colors.textTertiary} />
+                        </TouchableOpacity>
+                    )}
+                </View>
+
+                {/* Filter Chips */}
+                <FlatList
+                    data={FILTER_TABS}
+                    horizontal
+                    showsHorizontalScrollIndicator={false}
+                    keyExtractor={(item) => item.key}
+                    style={styles.filterList}
+                    contentContainerStyle={styles.filterRow}
+                    renderItem={({ item }) => {
+                        const isActive = activeFilter === item.key;
+                        const count = counts[item.key] || 0;
+                        return (
+                            <TouchableOpacity
+                                style={[
+                                    styles.filterChip,
+                                    {
+                                        backgroundColor: isActive ? colors.accent : colors.cardBackground,
+                                        borderColor: isActive ? colors.accent : colors.border,
+                                    },
+                                ]}
+                                onPress={() => setActiveFilter(item.key)}
+                                accessibilityRole="button"
+                                accessibilityLabel={`Filter by ${item.label}`}
+                                accessibilityState={{ selected: isActive }}
+                            >
+                                <Text
+                                    style={[
+                                        styles.filterChipText,
+                                        { color: isActive ? '#FFFFFF' : colors.textSecondary },
+                                    ]}
+                                >
+                                    {item.label}
+                                </Text>
+                                <Text
+                                    style={[
+                                        styles.filterChipCount,
+                                        { color: isActive ? 'rgba(255,255,255,0.8)' : colors.textTertiary },
+                                    ]}
+                                >
+                                    {count}
+                                </Text>
+                            </TouchableOpacity>
+                        );
+                    }}
+                />
+            </View>
+
+            {/* Error Banner */}
+            {error && <View style={{ paddingHorizontal: 16 }}><ErrorBanner message={error} onRetry={loadLeads} /></View>}
+
             {/* Lead List */}
             <FlatList
                 data={filteredLeads}
@@ -116,80 +189,6 @@ export default function LeadsListScreen() {
                         onRefresh={onRefresh}
                         tintColor={colors.accent}
                     />
-                }
-                ListHeaderComponent={
-                    <View style={styles.headerContainer}>
-                        {/* Search */}
-                        <View style={[styles.searchBar, { backgroundColor: colors.cardBackground, borderColor: colors.border }]}>
-                            <Ionicons name="search" size={18} color={colors.textTertiary} />
-                            <TextInput
-                                style={[styles.searchInput, { color: colors.textPrimary }]}
-                                placeholder="Search by name or phone..."
-                                placeholderTextColor={colors.textTertiary}
-                                value={search}
-                                onChangeText={setSearch}
-                                returnKeyType="search"
-                            />
-                            {search.length > 0 && (
-                                <TouchableOpacity
-                                    onPress={() => setSearch('')}
-                                    hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-                                    accessibilityLabel="Clear search"
-                                >
-                                    <Ionicons name="close-circle" size={18} color={colors.textTertiary} />
-                                </TouchableOpacity>
-                            )}
-                        </View>
-
-                        {/* Error Banner */}
-                        {error && <ErrorBanner message={error} onRetry={loadLeads} />}
-
-                        {/* Filter Chips */}
-                        <FlatList
-                            data={FILTER_TABS}
-                            horizontal
-                            showsHorizontalScrollIndicator={false}
-                            keyExtractor={(item) => item.key}
-                            style={styles.filterList}
-                            contentContainerStyle={styles.filterRow}
-                            renderItem={({ item }) => {
-                                const isActive = activeFilter === item.key;
-                                const count = counts[item.key] || 0;
-                                return (
-                                    <TouchableOpacity
-                                        style={[
-                                            styles.filterChip,
-                                            {
-                                                backgroundColor: isActive ? colors.accent : colors.cardBackground,
-                                                borderColor: isActive ? colors.accent : colors.border,
-                                            },
-                                        ]}
-                                        onPress={() => setActiveFilter(item.key)}
-                                        accessibilityRole="button"
-                                        accessibilityLabel={`Filter by ${item.label}`}
-                                        accessibilityState={{ selected: isActive }}
-                                    >
-                                        <Text
-                                            style={[
-                                                styles.filterChipText,
-                                                { color: isActive ? '#FFFFFF' : colors.textSecondary },
-                                            ]}
-                                        >
-                                            {item.label}
-                                        </Text>
-                                        <Text
-                                            style={[
-                                                styles.filterChipCount,
-                                                { color: isActive ? 'rgba(255,255,255,0.8)' : colors.textTertiary },
-                                            ]}
-                                        >
-                                            {count}
-                                        </Text>
-                                    </TouchableOpacity>
-                                );
-                            }}
-                        />
-                    </View>
                 }
                 ListEmptyComponent={
                     <EmptyState
@@ -220,7 +219,9 @@ const styles = StyleSheet.create({
         borderRadius: 20,
     },
     addButtonText: { color: '#FFFFFF', fontSize: 14, fontWeight: '700' },
-    headerContainer: {
+    stickyHeader: {
+        paddingHorizontal: 16,
+        paddingTop: 16,
         paddingBottom: 4,
     },
     searchBar: {
@@ -241,12 +242,11 @@ const styles = StyleSheet.create({
     filterList: {
         flexGrow: 0,
         marginHorizontal: -16,
-        marginBottom: 8,
     },
     filterRow: {
         gap: 8,
         paddingHorizontal: 16,
-        paddingBottom: 8,
+        paddingBottom: 4,
     },
     filterChip: {
         flexDirection: 'row',
@@ -260,7 +260,9 @@ const styles = StyleSheet.create({
     filterChipText: { fontSize: 13, fontWeight: '600' },
     filterChipCount: { fontSize: 12, fontWeight: '500' },
     listContent: {
-        padding: 16,
-        paddingTop: 16,
+        paddingHorizontal: 16,
+        paddingTop: 8,
+        paddingBottom: 16,
+        flexGrow: 1,
     },
 });

@@ -55,13 +55,13 @@ export async function submitExamAttempt(
     const passed = percentage >= 70;
     const durationSeconds = Math.floor((Date.now() - startedAt) / 1000);
 
-    // Insert exam attempt
+    // Insert attempt as 'in_progress' first so RLS allows answer inserts
     const { data: attempt, error: attemptError } = await supabase
         .from('exam_attempts')
         .insert({
             user_id: userId,
             paper_id: paperId,
-            status,
+            status: 'in_progress',
             score: correct,
             total_questions: questions.length,
             percentage,
@@ -77,7 +77,7 @@ export async function submitExamAttempt(
         return { data: null, error: attemptError.message };
     }
 
-    // Insert individual answers
+    // Insert individual answers (RLS requires attempt status = 'in_progress')
     const answerRows = questions.map((q) => ({
         attempt_id: attempt.id,
         question_id: q.id,
@@ -91,7 +91,16 @@ export async function submitExamAttempt(
 
     if (answersError) {
         if (__DEV__) console.error('Failed to insert exam answers:', answersError.message);
-        // Don't fail — the attempt was already saved
+    }
+
+    // Now update attempt to final status
+    const { error: updateError } = await supabase
+        .from('exam_attempts')
+        .update({ status })
+        .eq('id', attempt.id);
+
+    if (updateError) {
+        if (__DEV__) console.error('Failed to update attempt status:', updateError.message);
     }
 
     return {

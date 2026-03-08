@@ -47,7 +47,7 @@ export function hasCapability(role: UserRole, capability: Capability): boolean {
 
 /** Tabs each role can see (base configuration — use getVisibleTabs() for view-mode-aware tabs) */
 export const ROLE_TABS: Record<UserRole, string[]> = {
-    admin: ['home', 'admin', 'profile'],
+    admin: ['home', 'profile'],
     director: ['home', 'leads', 'team', 'events', 'profile'],
     manager: ['home', 'leads', 'team', 'events', 'profile'],
     agent: ['home', 'leads', 'events', 'profile'],

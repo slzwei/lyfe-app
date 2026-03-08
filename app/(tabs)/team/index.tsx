@@ -176,6 +176,63 @@ export default function TeamScreen() {
         <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]}>
             <ScreenHeader title="Team" />
 
+            {/* Pinned Search + Filters */}
+            <View style={styles.stickyHeader}>
+                {/* Search Bar */}
+                <View style={[styles.searchBar, { backgroundColor: colors.cardBackground, borderColor: colors.border }]}>
+                    <Ionicons name="search" size={18} color={colors.textTertiary} />
+                    <TextInput
+                        style={[styles.searchInput, { color: colors.textPrimary }]}
+                        placeholder="Search team members..."
+                        placeholderTextColor={colors.textTertiary}
+                        value={search}
+                        onChangeText={setSearch}
+                        returnKeyType="search"
+                    />
+                    {search.length > 0 && (
+                        <TouchableOpacity onPress={() => setSearch('')} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
+                            <Ionicons name="close-circle" size={18} color={colors.textTertiary} />
+                        </TouchableOpacity>
+                    )}
+                </View>
+
+                {/* Filter Chips */}
+                {filters.length > 1 && (
+                    <View style={styles.filterRow}>
+                        {filters.map((f) => {
+                            const isActive = filter === f.key;
+                            const count = counts[f.key] || 0;
+                            return (
+                                <TouchableOpacity
+                                    key={f.key}
+                                    style={[
+                                        styles.filterChip,
+                                        {
+                                            backgroundColor: isActive ? colors.accent : colors.cardBackground,
+                                            borderColor: isActive ? colors.accent : colors.border,
+                                        },
+                                    ]}
+                                    onPress={() => setFilter(f.key)}
+                                    accessibilityRole="button"
+                                    accessibilityLabel={`Filter by ${f.label}`}
+                                    accessibilityState={{ selected: isActive }}
+                                >
+                                    <Text style={[styles.filterText, { color: isActive ? '#FFF' : colors.textSecondary }]}>
+                                        {f.label}
+                                    </Text>
+                                    <Text style={[styles.filterCount, { color: isActive ? 'rgba(255,255,255,0.8)' : colors.textTertiary }]}>
+                                        {count}
+                                    </Text>
+                                </TouchableOpacity>
+                            );
+                        })}
+                    </View>
+                )}
+            </View>
+
+            {/* Error Banner */}
+            {error && <View style={{ paddingHorizontal: 16 }}><ErrorBanner message={error} onRetry={loadMembers} /></View>}
+
             <FlatList
                 data={filteredMembers}
                 renderItem={renderMember}
@@ -203,60 +260,6 @@ export default function TeamScreen() {
                             </View>
                         </View>
 
-                        {/* Search Bar */}
-                        <View style={[styles.searchBar, { backgroundColor: colors.cardBackground, borderColor: colors.border }]}>
-                            <Ionicons name="search" size={18} color={colors.textTertiary} />
-                            <TextInput
-                                style={[styles.searchInput, { color: colors.textPrimary }]}
-                                placeholder="Search team members..."
-                                placeholderTextColor={colors.textTertiary}
-                                value={search}
-                                onChangeText={setSearch}
-                                returnKeyType="search"
-                            />
-                            {search.length > 0 && (
-                                <TouchableOpacity onPress={() => setSearch('')} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
-                                    <Ionicons name="close-circle" size={18} color={colors.textTertiary} />
-                                </TouchableOpacity>
-                            )}
-                        </View>
-
-                        {/* Error Banner */}
-                        {error && <ErrorBanner message={error} onRetry={loadMembers} />}
-
-                        {/* Filter Chips */}
-                        {filters.length > 1 && (
-                            <View style={styles.filterRow}>
-                                {filters.map((f) => {
-                                    const isActive = filter === f.key;
-                                    const count = counts[f.key] || 0;
-                                    return (
-                                        <TouchableOpacity
-                                            key={f.key}
-                                            style={[
-                                                styles.filterChip,
-                                                {
-                                                    backgroundColor: isActive ? colors.accent : colors.cardBackground,
-                                                    borderColor: isActive ? colors.accent : colors.border,
-                                                },
-                                            ]}
-                                            onPress={() => setFilter(f.key)}
-                                            accessibilityRole="button"
-                                            accessibilityLabel={`Filter by ${f.label}`}
-                                            accessibilityState={{ selected: isActive }}
-                                        >
-                                            <Text style={[styles.filterText, { color: isActive ? '#FFF' : colors.textSecondary }]}>
-                                                {f.label}
-                                            </Text>
-                                            <Text style={[styles.filterCount, { color: isActive ? 'rgba(255,255,255,0.8)' : colors.textTertiary }]}>
-                                                {count}
-                                            </Text>
-                                        </TouchableOpacity>
-                                    );
-                                })}
-                            </View>
-                        )}
-
                         {/* Section Label */}
                         <View style={styles.sectionRow}>
                             <Text style={[styles.sectionLabel, { color: colors.textSecondary }]}>
@@ -279,7 +282,12 @@ export default function TeamScreen() {
 
 const styles = StyleSheet.create({
     container: { flex: 1 },
-    listContent: { paddingHorizontal: 16, paddingBottom: 32 },
+    listContent: { paddingHorizontal: 16, paddingBottom: 32, flexGrow: 1 },
+    stickyHeader: {
+        paddingHorizontal: 16,
+        paddingTop: 8,
+        paddingBottom: 4,
+    },
 
     // ── Hero Stats ──
     heroRow: {

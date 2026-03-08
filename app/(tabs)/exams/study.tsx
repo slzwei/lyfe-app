@@ -8,7 +8,6 @@ import {
     ScrollView,
     StyleSheet,
     Text,
-    TouchableOpacity,
     View,
 } from 'react-native';
 
@@ -117,13 +116,9 @@ export default function StudyScreen() {
                 {/* Topics */}
                 <Text style={[styles.sectionTitle, { color: colors.textPrimary }]}>Modules</Text>
                 {STUDY_TOPICS.map((topic) => (
-                    <TouchableOpacity
+                    <View
                         key={topic.id}
                         style={[styles.topicCard, { backgroundColor: colors.cardBackground, borderColor: colors.cardBorder }]}
-                        activeOpacity={0.7}
-                        onPress={() => {
-                            // Future: navigate to topic detail
-                        }}
                     >
                         <View style={styles.topicRow}>
                             <View style={[styles.topicIconWrap, { backgroundColor: topic.color + '14' }]}>
@@ -133,6 +128,10 @@ export default function StudyScreen() {
                                 <View style={styles.topicHeaderRow}>
                                     <View style={[styles.paperBadge, { backgroundColor: topic.color + '18' }]}>
                                         <Text style={[styles.paperBadgeText, { color: topic.color }]}>{topic.paperCode}</Text>
+                                    </View>
+                                    <View style={styles.comingSoonBadge}>
+                                        <Ionicons name="lock-closed-outline" size={11} color={colors.textTertiary} />
+                                        <Text style={[styles.comingSoonText, { color: colors.textTertiary }]}>Coming Soon</Text>
                                     </View>
                                 </View>
                                 <Text style={[styles.topicTitle, { color: colors.textPrimary }]} numberOfLines={2}>
@@ -156,9 +155,8 @@ export default function StudyScreen() {
                                     </View>
                                 </View>
                             </View>
-                            <Ionicons name="chevron-forward" size={18} color={colors.textTertiary} />
                         </View>
-                    </TouchableOpacity>
+                    </View>
                 ))}
             </ScrollView>
         </SafeAreaView>
@@ -235,6 +233,8 @@ const styles = StyleSheet.create({
         borderRadius: 6,
     },
     paperBadgeText: { fontSize: 11, fontWeight: '700' },
+    comingSoonBadge: { flexDirection: 'row', alignItems: 'center', gap: 4, marginLeft: 8 },
+    comingSoonText: { fontSize: 11, fontWeight: '600' },
     topicTitle: { fontSize: 15, fontWeight: '600', marginBottom: 2 },
     topicDesc: { fontSize: 12, lineHeight: 16, marginBottom: 6 },
     topicMeta: { flexDirection: 'row', gap: 12 },

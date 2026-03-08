@@ -44,6 +44,7 @@ export default function CreateEventScreen() {
     const router = useRouter();
     const { eventId } = useLocalSearchParams<{ eventId?: string }>();
     const isEditing = !!eventId;
+    const [isEditingRoadshow, setIsEditingRoadshow] = useState(false);
 
     const [title, setTitle] = useState('');
     const [eventType, setEventType] = useState<EventType>('team_meeting');
@@ -133,6 +134,7 @@ export default function CreateEventScreen() {
                 })));
 
                 if (data.event_type === 'roadshow') {
+                    setIsEditingRoadshow(true);
                     const { data: cfg } = await fetchRoadshowConfig(eventId);
                     if (cfg) {
                         setRsWeeklyCost(String(cfg.weekly_cost));
@@ -343,11 +345,12 @@ export default function CreateEventScreen() {
                     <View style={styles.field}>
                         <Text style={labelStyle}>Title *</Text>
                         <TextInput
-                            style={[inputStyle, errors.title && { borderColor: colors.danger }]}
+                            style={[inputStyle, isEditingRoadshow && { opacity: 0.5 }, errors.title && { borderColor: colors.danger }]}
                             placeholder="Event title"
                             placeholderTextColor={colors.textTertiary}
                             value={title}
                             onChangeText={t => { setTitle(t); setErrors(e => ({ ...e, title: '' })); }}
+                            editable={!isEditingRoadshow}
                         />
                         {errors.title ? <Text style={[styles.errorText, { color: colors.danger }]}>{errors.title}</Text> : null}
                     </View>
@@ -368,8 +371,10 @@ export default function CreateEventScreen() {
                                                 borderColor: isActive ? color : colors.border,
                                                 backgroundColor: isActive ? color + '18' : colors.cardBackground,
                                             },
+                                            isEditingRoadshow && !isActive && { opacity: 0.3 },
                                         ]}
-                                        onPress={() => setEventType(t)}
+                                        onPress={() => !isEditingRoadshow && setEventType(t)}
+                                        activeOpacity={isEditingRoadshow ? 1 : 0.7}
                                     >
                                         <Text style={[styles.typeChipText, { color: isActive ? color : colors.textSecondary }]}>
                                             {EVENT_TYPE_LABELS[t]}
@@ -380,19 +385,25 @@ export default function CreateEventScreen() {
                         </View>
                     </View>
 
-                    {/* Date — single for non-roadshow, date range for roadshow */}
-                    {eventType !== 'roadshow' ? (
+                    {/* Date — single for non-roadshow or editing, date range for new roadshow */}
+                    {(eventType !== 'roadshow' || isEditing) ? (
                         <View style={styles.field}>
-                            <Text style={labelStyle}>Date * (YYYY-MM-DD)</Text>
+                            <Text style={labelStyle}>Date {isEditingRoadshow ? '' : '* (YYYY-MM-DD)'}</Text>
                             <TextInput
-                                style={[inputStyle, errors.eventDate && { borderColor: colors.danger }]}
+                                style={[inputStyle, isEditingRoadshow && { opacity: 0.5 }, errors.eventDate && { borderColor: colors.danger }]}
                                 placeholder="e.g. 2026-03-15"
                                 placeholderTextColor={colors.textTertiary}
-                                value={eventDate}
+                                value={isEditingRoadshow ? formatDateLabel(eventDate) : eventDate}
                                 onChangeText={v => { setEventDate(v); setErrors(e => ({ ...e, eventDate: '' })); }}
                                 keyboardType="numbers-and-punctuation"
                                 maxLength={10}
+                                editable={!isEditingRoadshow}
                             />
+                            {isEditingRoadshow && (
+                                <Text style={[{ color: colors.textTertiary, fontSize: 12, marginTop: 4 }]}>
+                                    Date is locked for roadshow events. To add more days, create a new roadshow.
+                                </Text>
+                            )}
                             {errors.eventDate ? <Text style={[styles.errorText, { color: colors.danger }]}>{errors.eventDate}</Text> : null}
                         </View>
                     ) : (
@@ -430,12 +441,6 @@ export default function CreateEventScreen() {
                                 <Text style={[styles.rsPreviewHint, { color: colors.textTertiary }]}>
                                     Creates {dateDiffDays(rsStartDate, rsEndDate) + 1} daily event{dateDiffDays(rsStartDate, rsEndDate) + 1 > 1 ? 's' : ''} · {formatDateLabel(rsStartDate)} – {formatDateLabel(rsEndDate)}
                                 </Text>
-                            )}
-                            {isEditing && (
-                                <View style={[styles.editNotice, { backgroundColor: colors.surfaceSecondary }]}>
-                                    <Ionicons name="information-circle-outline" size={14} color={colors.textTertiary} />
-                                    <Text style={[{ color: colors.textTertiary, fontSize: 12, flex: 1 }]}>Editing this day only. Other days in this campaign are unaffected.</Text>
-                                </View>
                             )}
                         </View>
                     )}
