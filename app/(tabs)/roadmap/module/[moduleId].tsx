@@ -268,9 +268,22 @@ export default function ModuleDetailScreen() {
                             source={{ uri: pdfUrl }}
                             style={{ flex: 1 }}
                             originWhitelist={['*']}
-                            startInLoadingState
+                            startInLoadingState={true}
                             renderLoading={() => (
                                 <ActivityIndicator size="large" color={colors.accent} style={StyleSheet.absoluteFill} />
+                            )}
+                            onError={() => {}}
+                            onHttpError={() => {}}
+                            renderError={() => (
+                                <View style={styles.pdfErrorContainer}>
+                                    <Ionicons name="cloud-offline-outline" size={48} color={colors.textTertiary} />
+                                    <Text style={[styles.pdfErrorTitle, { color: colors.textPrimary }]}>
+                                        Unable to load file
+                                    </Text>
+                                    <Text style={[styles.pdfErrorSubtitle, { color: colors.textTertiary }]}>
+                                        Please check your connection and try again.
+                                    </Text>
+                                </View>
                             )}
                         />
                     )}
@@ -373,6 +386,22 @@ const styles = StyleSheet.create({
         flex: 1,
         fontSize: 15,
         fontWeight: '600',
+        textAlign: 'center',
+    },
+    pdfErrorContainer: {
+        ...StyleSheet.absoluteFillObject,
+        alignItems: 'center',
+        justifyContent: 'center',
+        padding: 32,
+        gap: 8,
+    },
+    pdfErrorTitle: {
+        fontSize: 17,
+        fontWeight: '600',
+        textAlign: 'center',
+    },
+    pdfErrorSubtitle: {
+        fontSize: 14,
         textAlign: 'center',
     },
 });

@@ -79,14 +79,7 @@ afterEach(() => {
 
 describe('submitExamAttempt', () => {
     it('calculates score and creates attempt with answers', async () => {
-        const attemptsChain = mockSupa.__getChain('exam_attempts');
-        mockResolve(attemptsChain, {
-            data: { id: 'attempt-1', user_id: 'u1', paper_id: 'p1' },
-            error: null,
-        });
-
-        const answersChain = mockSupa.__getChain('exam_answers');
-        mockResolve(answersChain, { error: null });
+        mockSupa.rpc.mockResolvedValueOnce({ data: { attempt_id: 'attempt-1' }, error: null });
 
         // All correct → 100%, pass
         const result = await submitExamAttempt(
@@ -112,11 +105,7 @@ describe('submitExamAttempt', () => {
     });
 
     it('calculates passing score at 70% threshold', async () => {
-        const attemptsChain = mockSupa.__getChain('exam_attempts');
-        mockResolve(attemptsChain, { data: { id: 'attempt-2' }, error: null });
-
-        const answersChain = mockSupa.__getChain('exam_answers');
-        mockResolve(answersChain, { error: null });
+        mockSupa.rpc.mockResolvedValueOnce({ data: { attempt_id: 'attempt-2' }, error: null });
 
         // 4/5 correct → 80%, pass
         const result = await submitExamAttempt(
@@ -137,11 +126,7 @@ describe('submitExamAttempt', () => {
     });
 
     it('calculates failing score below 70%', async () => {
-        const attemptsChain = mockSupa.__getChain('exam_attempts');
-        mockResolve(attemptsChain, { data: { id: 'attempt-3' }, error: null });
-
-        const answersChain = mockSupa.__getChain('exam_answers');
-        mockResolve(answersChain, { error: null });
+        mockSupa.rpc.mockResolvedValueOnce({ data: { attempt_id: 'attempt-3' }, error: null });
 
         // 3/5 correct → 60%, fail
         const result = await submitExamAttempt(
@@ -162,11 +147,7 @@ describe('submitExamAttempt', () => {
     });
 
     it('handles unanswered questions as incorrect', async () => {
-        const attemptsChain = mockSupa.__getChain('exam_attempts');
-        mockResolve(attemptsChain, { data: { id: 'attempt-4' }, error: null });
-
-        const answersChain = mockSupa.__getChain('exam_answers');
-        mockResolve(answersChain, { error: null });
+        mockSupa.rpc.mockResolvedValueOnce({ data: { attempt_id: 'attempt-4' }, error: null });
 
         // Only answer q1, leave rest blank
         const result = await submitExamAttempt(
@@ -189,8 +170,7 @@ describe('submitExamAttempt', () => {
     });
 
     it('returns error when attempt insert fails', async () => {
-        const attemptsChain = mockSupa.__getChain('exam_attempts');
-        mockResolve(attemptsChain, { data: null, error: { message: 'Insert failed' } });
+        mockSupa.rpc.mockResolvedValueOnce({ data: null, error: { message: 'Insert failed' } });
 
         const result = await submitExamAttempt(
             {
@@ -209,11 +189,10 @@ describe('submitExamAttempt', () => {
     });
 
     it('returns error and cleans up attempt when answer insert fails', async () => {
-        const attemptsChain = mockSupa.__getChain('exam_attempts');
-        mockResolve(attemptsChain, { data: { id: 'attempt-5' }, error: null });
-
-        const answersChain = mockSupa.__getChain('exam_answers');
-        mockResolve(answersChain, { error: { message: 'Answer insert failed' } });
+        mockSupa.rpc.mockResolvedValueOnce({
+            data: null,
+            error: { message: 'Failed to save your answers. Please try again.' },
+        });
 
         const result = await submitExamAttempt(
             {
@@ -233,11 +212,7 @@ describe('submitExamAttempt', () => {
     });
 
     it('tracks answer correctness per question', async () => {
-        const attemptsChain = mockSupa.__getChain('exam_attempts');
-        mockResolve(attemptsChain, { data: { id: 'attempt-6' }, error: null });
-
-        const answersChain = mockSupa.__getChain('exam_answers');
-        mockResolve(answersChain, { error: null });
+        mockSupa.rpc.mockResolvedValueOnce({ data: { attempt_id: 'attempt-6' }, error: null });
 
         const result = await submitExamAttempt(
             {
@@ -450,14 +425,7 @@ const VARK_QUESTIONS: ExamQuestion[] = [
 
 describe('submitVarkAttempt', () => {
     it('submits personality quiz with VARK scores and no pass/fail', async () => {
-        const attemptsChain = mockSupa.__getChain('exam_attempts');
-        mockResolve(attemptsChain, {
-            data: { id: 'vark-attempt-1', user_id: 'u1', paper_id: 'p-vark' },
-            error: null,
-        });
-
-        const answersChain = mockSupa.__getChain('exam_answers');
-        mockResolve(answersChain, { error: null });
+        mockSupa.rpc.mockResolvedValueOnce({ data: { attempt_id: 'vark-attempt-1' }, error: null });
 
         const result = await submitVarkAttempt(
             {
@@ -483,8 +451,7 @@ describe('submitVarkAttempt', () => {
     });
 
     it('returns error when attempt insert fails', async () => {
-        const attemptsChain = mockSupa.__getChain('exam_attempts');
-        mockResolve(attemptsChain, { data: null, error: { message: 'DB error' } });
+        mockSupa.rpc.mockResolvedValueOnce({ data: null, error: { message: 'DB error' } });
 
         const result = await submitVarkAttempt(
             {
@@ -502,15 +469,11 @@ describe('submitVarkAttempt', () => {
         expect(result.error).toBe('DB error');
     });
 
-    it('returns error and cleans up when answer insert fails', async () => {
-        const attemptsChain = mockSupa.__getChain('exam_attempts');
-        mockResolve(attemptsChain, {
-            data: { id: 'vark-attempt-2', user_id: 'u1', paper_id: 'p-vark' },
-            error: null,
+    it('returns error when RPC fails', async () => {
+        mockSupa.rpc.mockResolvedValueOnce({
+            data: null,
+            error: { message: 'Failed to save your answers. Please try again.' },
         });
-
-        const answersChain = mockSupa.__getChain('exam_answers');
-        mockResolve(answersChain, { error: { message: 'Answer insert failed' } });
 
         const result = await submitVarkAttempt(
             {

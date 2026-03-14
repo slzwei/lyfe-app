@@ -42,8 +42,10 @@ export interface ExamResultData {
 }
 
 /**
- * Submit an exam attempt to Supabase and return the result.
- * Creates both `exam_attempts` and `exam_answers` rows.
+ * Submit an exam attempt to Supabase atomically via RPC.
+ * The `submit_exam_attempt` RPC wraps attempt insert, answers insert,
+ * and status update in a single database transaction — on any failure
+ * the entire transaction rolls back, preventing orphaned rows.
  */
 export async function submitExamAttempt(
     input: SubmitExamInput,
@@ -64,54 +66,37 @@ export async function submitExamAttempt(
     const passed = percentage >= DEFAULT_PASS_PERCENTAGE;
     const durationSeconds = Math.floor((Date.now() - startedAt) / 1000);
 
-    // Insert attempt as 'in_progress' first so RLS allows answer inserts
-    const { data: attempt, error: attemptError } = await supabase
-        .from('exam_attempts')
-        .insert({
-            user_id: userId,
-            paper_id: paperId,
-            status: 'in_progress',
-            score: correct,
-            total_questions: questions.length,
-            percentage,
-            passed,
-            started_at: new Date(startedAt).toISOString(),
-            submitted_at: new Date().toISOString(),
-            duration_seconds: durationSeconds,
-        })
-        .select()
-        .single();
-
-    if (attemptError) {
-        return { data: null, error: attemptError.message };
-    }
-
-    // Insert individual answers (RLS requires attempt status = 'in_progress')
+    // Build answers array for RPC
     const answerRows = questions.map((q) => ({
-        attempt_id: attempt.id,
         question_id: q.id,
         selected_answer: answers[q.id] || null,
         is_correct: (answers[q.id] || null) === q.correct_answer,
     }));
 
-    const { error: answersError } = await supabase.from('exam_answers').insert(answerRows);
+    const { data: rpcResult, error: rpcError } = await supabase.rpc('submit_exam_attempt', {
+        p_user_id: userId,
+        p_paper_id: paperId,
+        p_status: status,
+        p_score: correct,
+        p_total_questions: questions.length,
+        p_percentage: percentage,
+        p_passed: passed,
+        p_started_at: new Date(startedAt).toISOString(),
+        p_submitted_at: new Date().toISOString(),
+        p_duration_seconds: durationSeconds,
+        p_personality_results: null,
+        p_answers: answerRows,
+    });
 
-    if (answersError) {
-        // Answers failed — clean up the orphaned attempt and surface the error
-        await supabase.from('exam_attempts').delete().eq('id', attempt.id);
-        return { data: null, error: 'Failed to save your answers. Please try again.' };
+    if (rpcError) {
+        return { data: null, error: rpcError.message };
     }
 
-    // Now update attempt to final status
-    const { error: updateError } = await supabase.from('exam_attempts').update({ status }).eq('id', attempt.id);
-
-    if (updateError) {
-        return { data: null, error: 'Exam submitted but status update failed. Please contact support.' };
-    }
+    const attemptId = (rpcResult as { attempt_id: string }).attempt_id;
 
     return {
         data: {
-            id: attempt.id,
+            id: attemptId,
             score: correct,
             totalQuestions: questions.length,
             percentage,
@@ -128,7 +113,7 @@ export async function submitExamAttempt(
 // ── Submit VARK / Personality Quiz ───────────────────────────
 
 /**
- * Submit a VARK (multi-select personality) quiz attempt.
+ * Submit a VARK (multi-select personality) quiz attempt atomically via RPC.
  * No right/wrong scoring — tallies V/A/R/K and stores a personality profile.
  */
 export async function submitVarkAttempt(
@@ -148,54 +133,37 @@ export async function submitVarkAttempt(
         correctAnswer: q.correct_answer,
     }));
 
-    // Insert attempt
-    const { data: attempt, error: attemptError } = await supabase
-        .from('exam_attempts')
-        .insert({
-            user_id: userId,
-            paper_id: paperId,
-            status: 'in_progress',
-            score: null,
-            total_questions: questions.length,
-            percentage: null,
-            passed: null,
-            started_at: new Date(startedAt).toISOString(),
-            submitted_at: new Date().toISOString(),
-            duration_seconds: durationSeconds,
-            personality_results: varkResults,
-        })
-        .select()
-        .single();
-
-    if (attemptError) {
-        return { data: null, error: attemptError.message };
-    }
-
-    // Insert answers (comma-separated for multi-select, is_correct = null)
+    // Build answers array for RPC (is_correct = null for personality quizzes)
     const answerRows = questions.map((q) => ({
-        attempt_id: attempt.id,
         question_id: q.id,
         selected_answer: answers[q.id] || null,
         is_correct: null,
     }));
 
-    const { error: answersError } = await supabase.from('exam_answers').insert(answerRows);
+    const { data: rpcResult, error: rpcError } = await supabase.rpc('submit_exam_attempt', {
+        p_user_id: userId,
+        p_paper_id: paperId,
+        p_status: status,
+        p_score: null,
+        p_total_questions: questions.length,
+        p_percentage: null,
+        p_passed: null,
+        p_started_at: new Date(startedAt).toISOString(),
+        p_submitted_at: new Date().toISOString(),
+        p_duration_seconds: durationSeconds,
+        p_personality_results: varkResults,
+        p_answers: answerRows,
+    });
 
-    if (answersError) {
-        await supabase.from('exam_attempts').delete().eq('id', attempt.id);
-        return { data: null, error: 'Failed to save your answers. Please try again.' };
+    if (rpcError) {
+        return { data: null, error: rpcError.message };
     }
 
-    // Update attempt to final status
-    const { error: updateError } = await supabase.from('exam_attempts').update({ status }).eq('id', attempt.id);
-
-    if (updateError) {
-        return { data: null, error: 'Assessment submitted but status update failed.' };
-    }
+    const attemptId = (rpcResult as { attempt_id: string }).attempt_id;
 
     return {
         data: {
-            id: attempt.id,
+            id: attemptId,
             score: 0,
             totalQuestions: questions.length,
             percentage: 0,
@@ -213,7 +181,7 @@ export async function submitVarkAttempt(
 // ── Submit Enneagram / Personality Quiz ──────────────────────
 
 /**
- * Submit an Enneagram (forced-choice personality) quiz attempt.
+ * Submit an Enneagram (forced-choice personality) quiz attempt atomically via RPC.
  * No right/wrong scoring — tallies 9 Enneagram types and stores a personality profile.
  */
 export async function submitEnneagramAttempt(
@@ -233,54 +201,37 @@ export async function submitEnneagramAttempt(
         correctAnswer: q.correct_answer,
     }));
 
-    // Insert attempt
-    const { data: attempt, error: attemptError } = await supabase
-        .from('exam_attempts')
-        .insert({
-            user_id: userId,
-            paper_id: paperId,
-            status: 'in_progress',
-            score: null,
-            total_questions: questions.length,
-            percentage: null,
-            passed: null,
-            started_at: new Date(startedAt).toISOString(),
-            submitted_at: new Date().toISOString(),
-            duration_seconds: durationSeconds,
-            personality_results: enneagramResults,
-        })
-        .select()
-        .single();
-
-    if (attemptError) {
-        return { data: null, error: attemptError.message };
-    }
-
-    // Insert answers (single-select, is_correct = null)
+    // Build answers array for RPC (single-select, is_correct = null)
     const answerRows = questions.map((q) => ({
-        attempt_id: attempt.id,
         question_id: q.id,
         selected_answer: answers[q.id] || null,
         is_correct: null,
     }));
 
-    const { error: answersError } = await supabase.from('exam_answers').insert(answerRows);
+    const { data: rpcResult, error: rpcError } = await supabase.rpc('submit_exam_attempt', {
+        p_user_id: userId,
+        p_paper_id: paperId,
+        p_status: status,
+        p_score: null,
+        p_total_questions: questions.length,
+        p_percentage: null,
+        p_passed: null,
+        p_started_at: new Date(startedAt).toISOString(),
+        p_submitted_at: new Date().toISOString(),
+        p_duration_seconds: durationSeconds,
+        p_personality_results: enneagramResults,
+        p_answers: answerRows,
+    });
 
-    if (answersError) {
-        await supabase.from('exam_attempts').delete().eq('id', attempt.id);
-        return { data: null, error: 'Failed to save your answers. Please try again.' };
+    if (rpcError) {
+        return { data: null, error: rpcError.message };
     }
 
-    // Update attempt to final status
-    const { error: updateError } = await supabase.from('exam_attempts').update({ status }).eq('id', attempt.id);
-
-    if (updateError) {
-        return { data: null, error: 'Assessment submitted but status update failed.' };
-    }
+    const attemptId = (rpcResult as { attempt_id: string }).attempt_id;
 
     return {
         data: {
-            id: attempt.id,
+            id: attemptId,
             score: 0,
             totalQuestions: questions.length,
             percentage: 0,
@@ -307,7 +258,9 @@ export async function fetchExamResult(
     // Fetch the attempt
     const { data: attempt, error: attemptError } = await supabase
         .from('exam_attempts')
-        .select('*')
+        .select(
+            'id, user_id, paper_id, status, score, total_questions, percentage, passed, started_at, submitted_at, duration_seconds, personality_results, created_at',
+        )
         .eq('id', attemptId)
         .single();
 
@@ -325,7 +278,9 @@ export async function fetchExamResult(
         // Still fetch questions for display
         const { data: questionsData } = await supabase
             .from('exam_questions')
-            .select('*')
+            .select(
+                'id, paper_id, question_number, question_text, has_latex, options, correct_answer, explanation, explanation_has_latex',
+            )
             .eq('paper_id', attempt.paper_id)
             .order('question_number');
 
@@ -353,7 +308,9 @@ export async function fetchExamResult(
     // Fetch answers with questions joined
     const { data: examAnswers, error: answersError } = await supabase
         .from('exam_answers')
-        .select('*, exam_questions!exam_answers_question_id_fkey(*)')
+        .select(
+            'id, attempt_id, question_id, selected_answer, is_correct, answered_at, exam_questions!exam_answers_question_id_fkey(id, paper_id, question_number, question_text, has_latex, options, correct_answer, explanation, explanation_has_latex)',
+        )
         .eq('attempt_id', attemptId)
         .order('exam_questions(question_number)');
 

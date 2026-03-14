@@ -1,20 +1,24 @@
 import React from 'react';
 import { StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { Sentry } from '@/lib/sentry';
-import { Colors } from '@/constants/Colors';
+import { useTheme } from '@/contexts/ThemeContext';
+import type { Colors } from '@/constants/Colors';
 
-interface Props {
+type ThemeColors = (typeof Colors)['light'];
+
+interface InnerProps {
     children: React.ReactNode;
+    colors: ThemeColors;
 }
 
-interface State {
+interface InnerState {
     hasError: boolean;
 }
 
-export default class AppErrorBoundary extends React.Component<Props, State> {
-    state: State = { hasError: false };
+class AppErrorBoundaryInner extends React.Component<InnerProps, InnerState> {
+    state: InnerState = { hasError: false };
 
-    static getDerivedStateFromError(): State {
+    static getDerivedStateFromError(): InnerState {
         return { hasError: true };
     }
 
@@ -30,13 +34,20 @@ export default class AppErrorBoundary extends React.Component<Props, State> {
     };
 
     render() {
+        const { colors } = this.props;
+
         if (this.state.hasError) {
             return (
-                <View style={styles.container}>
-                    <Text style={styles.title}>Something went wrong</Text>
-                    <Text style={styles.subtitle}>An unexpected error occurred. Please try again.</Text>
-                    <TouchableOpacity style={styles.button} onPress={this.handleReset}>
-                        <Text style={styles.buttonText}>Try Again</Text>
+                <View style={[styles.container, { backgroundColor: colors.background }]}>
+                    <Text style={[styles.title, { color: colors.textPrimary }]}>Something went wrong</Text>
+                    <Text style={[styles.subtitle, { color: colors.textTertiary }]}>
+                        An unexpected error occurred. Please try again.
+                    </Text>
+                    <TouchableOpacity
+                        style={[styles.button, { backgroundColor: colors.accent }]}
+                        onPress={this.handleReset}
+                    >
+                        <Text style={[styles.buttonText, { color: colors.textInverse }]}>Try Again</Text>
                     </TouchableOpacity>
                 </View>
             );
@@ -46,10 +57,17 @@ export default class AppErrorBoundary extends React.Component<Props, State> {
     }
 }
 
+export default function AppErrorBoundary({ children }: { children: React.ReactNode }) {
+    const { colors } = useTheme();
+    return <AppErrorBoundaryInner colors={colors}>{children}</AppErrorBoundaryInner>;
+}
+
+// Export inner class for testing (can pass colors directly)
+export { AppErrorBoundaryInner };
+
 const styles = StyleSheet.create({
     container: {
         flex: 1,
-        backgroundColor: Colors.light.background,
         justifyContent: 'center',
         alignItems: 'center',
         padding: 24,
@@ -57,23 +75,19 @@ const styles = StyleSheet.create({
     title: {
         fontSize: 20,
         fontWeight: '600',
-        color: Colors.light.textPrimary,
         marginBottom: 8,
     },
     subtitle: {
         fontSize: 15,
-        color: Colors.light.textTertiary,
         textAlign: 'center',
         marginBottom: 24,
     },
     button: {
-        backgroundColor: Colors.light.accent,
         paddingHorizontal: 24,
         paddingVertical: 12,
         borderRadius: 8,
     },
     buttonText: {
-        color: Colors.light.textInverse,
         fontSize: 16,
         fontWeight: '600',
     },

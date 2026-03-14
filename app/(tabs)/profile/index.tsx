@@ -17,6 +17,7 @@ import { useViewMode, type ViewMode } from '@/contexts/ViewModeContext';
 import { getBiometryType, type BiometryType } from '@/lib/biometrics';
 import { pickAndUploadAvatar, removeAvatar, takeAndUploadAvatar } from '@/lib/storage';
 import type { AssignedManager } from '@/types/recruitment';
+import { useSubmitGuard } from '@/hooks/useSubmitGuard';
 import { useTypedRouter } from '@/hooks/useTypedRouter';
 import { fetchPAManagers } from '@/lib/recruitment';
 import { useFocusEffect } from 'expo-router';
@@ -53,7 +54,7 @@ export default function ProfileScreen() {
     const [showEditModal, setShowEditModal] = useState(false);
     const [editName, setEditName] = useState('');
     const [editEmail, setEditEmail] = useState('');
-    const [editSaving, setEditSaving] = useState(false);
+    const { isSubmitting: editSaving, guard: editGuard } = useSubmitGuard();
     const [editError, setEditError] = useState<string | null>(null);
 
     useEffect(() => {
@@ -134,21 +135,20 @@ export default function ProfileScreen() {
         }
     };
 
-    const handleSaveProfile = async () => {
-        if (!editName.trim()) {
-            setEditError('Name is required');
-            return;
-        }
-        setEditSaving(true);
-        setEditError(null);
-        const { error } = await updateProfile(editName, editEmail || null);
-        setEditSaving(false);
-        if (error) {
-            setEditError(error);
-            return;
-        }
-        setShowEditModal(false);
-    };
+    const handleSaveProfile = () =>
+        editGuard(async () => {
+            if (!editName.trim()) {
+                setEditError('Name is required');
+                return;
+            }
+            setEditError(null);
+            const { error } = await updateProfile(editName, editEmail || null);
+            if (error) {
+                setEditError(error);
+                return;
+            }
+            setShowEditModal(false);
+        });
 
     const handleAvatarAction = useCallback(
         async (action: AvatarAction) => {

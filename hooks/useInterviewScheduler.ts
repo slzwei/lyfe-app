@@ -5,6 +5,7 @@
 import { useCallback, useState } from 'react';
 import { Alert } from 'react-native';
 import { deleteInterview, scheduleInterview, updateInterview } from '@/lib/recruitment';
+import { useSubmitGuard } from '@/hooks/useSubmitGuard';
 import type { Interview } from '@/types/recruitment';
 
 interface UseInterviewSchedulerParams {
@@ -68,7 +69,7 @@ export function useInterviewScheduler({
     const [scheduleLink, setScheduleLink] = useState('');
     const [scheduleLocation, setScheduleLocation] = useState('');
     const [scheduleNotes, setScheduleNotes] = useState('');
-    const [isScheduling, setIsScheduling] = useState(false);
+    const { isSubmitting: isScheduling, guard: scheduleGuard } = useSubmitGuard();
     const [scheduleError, setScheduleError] = useState<string | null>(null);
 
     const resetScheduleForm = useCallback(() => {
@@ -151,56 +152,54 @@ export function useInterviewScheduler({
     );
 
     const submitSchedule = useCallback(
-        async (dt: Date) => {
-            const isoDatetime = dt.toISOString();
-            const loc = scheduleType === 'in_person' ? scheduleLocation.trim() || null : null;
-            const link = scheduleType === 'zoom' ? scheduleLink.trim() || null : null;
-            const notes = scheduleNotes.trim() || null;
+        (dt: Date) =>
+            scheduleGuard(async () => {
+                const isoDatetime = dt.toISOString();
+                const loc = scheduleType === 'in_person' ? scheduleLocation.trim() || null : null;
+                const link = scheduleType === 'zoom' ? scheduleLink.trim() || null : null;
+                const notes = scheduleNotes.trim() || null;
 
-            if (!userId) {
-                setScheduleError('Not authenticated');
-                return;
-            }
-            setIsScheduling(true);
-
-            if (editingInterview) {
-                const { data: updated, error: updErr } = await updateInterview(editingInterview.id, {
-                    type: scheduleType,
-                    datetime: isoDatetime,
-                    location: loc,
-                    zoomLink: link,
-                    notes,
-                    status: scheduleStatus,
-                });
-                setIsScheduling(false);
-                if (updErr || !updated) {
-                    setScheduleError(updErr ?? 'Failed to update interview');
+                if (!userId) {
+                    setScheduleError('Not authenticated');
                     return;
                 }
-                onInterviewChanged('updated', updated);
-                closeScheduleSheet();
-                Alert.alert('Saved', 'Interview updated.');
-            } else {
-                const { data: newInterview, error: schedErr } = await scheduleInterview({
-                    candidateId,
-                    managerId: candidateManagerId,
-                    scheduledById: userId,
-                    roundNumber: candidateInterviewCount + 1,
-                    type: scheduleType,
-                    datetime: isoDatetime,
-                    location: loc,
-                    zoomLink: link,
-                    notes,
-                });
-                setIsScheduling(false);
-                if (schedErr || !newInterview) {
-                    setScheduleError(schedErr ?? 'Failed to schedule interview');
-                    return;
+
+                if (editingInterview) {
+                    const { data: updated, error: updErr } = await updateInterview(editingInterview.id, {
+                        type: scheduleType,
+                        datetime: isoDatetime,
+                        location: loc,
+                        zoomLink: link,
+                        notes,
+                        status: scheduleStatus,
+                    });
+                    if (updErr || !updated) {
+                        setScheduleError(updErr ?? 'Failed to update interview');
+                        return;
+                    }
+                    onInterviewChanged('updated', updated);
+                    closeScheduleSheet();
+                    Alert.alert('Saved', 'Interview updated.');
+                } else {
+                    const { data: newInterview, error: schedErr } = await scheduleInterview({
+                        candidateId,
+                        managerId: candidateManagerId,
+                        scheduledById: userId,
+                        roundNumber: candidateInterviewCount + 1,
+                        type: scheduleType,
+                        datetime: isoDatetime,
+                        location: loc,
+                        zoomLink: link,
+                        notes,
+                    });
+                    if (schedErr || !newInterview) {
+                        setScheduleError(schedErr ?? 'Failed to schedule interview');
+                        return;
+                    }
+                    onInterviewChanged('created', newInterview);
+                    closeScheduleSheet();
                 }
-                onInterviewChanged('created', newInterview);
-                closeScheduleSheet();
-            }
-        },
+            }),
         [
             scheduleType,
             scheduleLocation,
@@ -214,6 +213,7 @@ export function useInterviewScheduler({
             candidateInterviewCount,
             onInterviewChanged,
             closeScheduleSheet,
+            scheduleGuard,
         ],
     );
 

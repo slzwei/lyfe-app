@@ -41,7 +41,7 @@ function NoteInput({ noteText, onChangeText, isSaving, colors, onSave, onCancel 
                         styles.noteSave,
                         {
                             backgroundColor: colors.accent,
-                            opacity: noteText.trim() && !isSaving ? 1 : 0.4,
+                            opacity: noteText.trim() && !isSaving ? 1 : 0.5,
                         },
                     ]}
                     onPress={onSave}

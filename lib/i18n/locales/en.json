@@ -1,0 +1,27 @@
+{
+    "common": {
+        "loading": "Loading...",
+        "error": "Something went wrong",
+        "retry": "Try Again",
+        "save": "Save",
+        "cancel": "Cancel",
+        "delete": "Delete",
+        "confirm": "Confirm",
+        "search": "Search",
+        "noResults": "No results found",
+        "offline": "You're offline"
+    },
+    "auth": {
+        "signIn": "Sign In",
+        "signOut": "Sign Out",
+        "enterPhone": "Enter your phone number",
+        "enterOtp": "Enter verification code",
+        "verify": "Verify"
+    },
+    "home": {
+        "welcome": "Welcome back",
+        "upcomingEvents": "Upcoming Events",
+        "recentLeads": "Recent Leads",
+        "viewAll": "View All"
+    }
+}

@@ -1,7 +1,8 @@
 import React from 'react';
 import { render, fireEvent } from '@testing-library/react-native';
-import AppErrorBoundary from '@/components/AppErrorBoundary';
+import AppErrorBoundary, { AppErrorBoundaryInner } from '@/components/AppErrorBoundary';
 import { Sentry } from '@/lib/sentry';
+import { Colors } from '@/constants/Colors';
 import { Text } from 'react-native';
 
 jest.mock('@/lib/sentry', () => ({
@@ -10,6 +11,19 @@ jest.mock('@/lib/sentry', () => ({
         withScope: jest.fn((cb: any) => cb({ setExtra: jest.fn() })),
     },
 }));
+
+jest.mock('@/contexts/ThemeContext', () => {
+    const mockColors = require('@/constants/Colors').Colors;
+    return {
+        useTheme: () => ({
+            colors: mockColors.light,
+            isDark: false,
+            mode: 'light',
+            resolved: 'light',
+            setMode: jest.fn(),
+        }),
+    };
+});
 
 // Component that throws on demand
 function Bomb({ shouldThrow }: { shouldThrow: boolean }) {
@@ -72,5 +86,39 @@ describe('AppErrorBoundary', () => {
         fireEvent.press(getByText('Try Again'));
         expect(getByText('Recovered')).toBeTruthy();
         consoleSpy.mockRestore();
+    });
+});
+
+describe('AppErrorBoundaryInner with theme colors', () => {
+    it('uses light theme colors for fallback UI', () => {
+        const consoleSpy = jest.spyOn(console, 'error').mockImplementation();
+        const { getByText } = render(
+            <AppErrorBoundaryInner colors={Colors.light}>
+                <Bomb shouldThrow={true} />
+            </AppErrorBoundaryInner>,
+        );
+        expect(getByText('Something went wrong')).toBeTruthy();
+        consoleSpy.mockRestore();
+    });
+
+    it('uses dark theme colors for fallback UI', () => {
+        const consoleSpy = jest.spyOn(console, 'error').mockImplementation();
+        const { getByText } = render(
+            <AppErrorBoundaryInner colors={Colors.dark}>
+                <Bomb shouldThrow={true} />
+            </AppErrorBoundaryInner>,
+        );
+        expect(getByText('Something went wrong')).toBeTruthy();
+        expect(getByText('Try Again')).toBeTruthy();
+        consoleSpy.mockRestore();
+    });
+
+    it('renders children when no error with dark colors', () => {
+        const { getByText } = render(
+            <AppErrorBoundaryInner colors={Colors.dark}>
+                <Bomb shouldThrow={false} />
+            </AppErrorBoundaryInner>,
+        );
+        expect(getByText('Child rendered')).toBeTruthy();
     });
 });

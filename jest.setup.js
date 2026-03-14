@@ -71,6 +71,9 @@ jest.mock('react-native-safe-area-context', () => {
     };
 });
 
+// Mock expo-image (virtual — package may not be installed in test env)
+jest.mock('expo-image', () => ({ Image: 'ExpoImage' }), { virtual: true });
+
 // Mock AsyncStorage
 jest.mock('@react-native-async-storage/async-storage', () => ({
     getItem: jest.fn(),

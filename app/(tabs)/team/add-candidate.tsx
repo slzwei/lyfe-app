@@ -3,15 +3,18 @@ import FormField from '@/components/FormField';
 import { useAuth } from '@/contexts/AuthContext';
 import { useTheme } from '@/contexts/ThemeContext';
 import { createCandidate, uploadCandidateDocument, type CreateCandidateInput } from '@/lib/recruitment';
+import { useSubmitGuard } from '@/hooks/useSubmitGuard';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import React, { useState } from 'react';
 import {
     ActivityIndicator,
     Alert,
+    Keyboard,
     KeyboardAvoidingView,
     Modal,
     Platform,
+    Pressable,
     ScrollView,
     Share,
     StyleSheet,
@@ -46,7 +49,7 @@ export default function AddCandidateScreen() {
     const [errors, setErrors] = useState<Record<string, string>>({});
     const [showSuccess, setShowSuccess] = useState(false);
     const [inviteLink, setInviteLink] = useState('');
-    const [isSaving, setIsSaving] = useState(false);
+    const { isSubmitting: isSaving, guard } = useSubmitGuard();
     const [saveError, setSaveError] = useState<string | null>(null);
 
     const candidateFieldStyle = { paddingHorizontal: 16, paddingVertical: 12, marginBottom: 0 } as const;
@@ -59,38 +62,36 @@ export default function AddCandidateScreen() {
         return Object.keys(newErrors).length === 0;
     };
 
-    const handleSubmit = async () => {
-        if (!validate()) return;
-        setSaveError(null);
+    const handleSubmit = () =>
+        guard(async () => {
+            if (!validate()) return;
+            setSaveError(null);
 
-        if (!user?.id) {
-            setSaveError('Not authenticated');
-            return;
-        }
+            if (!user?.id) {
+                setSaveError('Not authenticated');
+                return;
+            }
 
-        setIsSaving(true);
-        const input: CreateCandidateInput = {
-            name: name.trim(),
-            phone: phone.trim(),
-            email: email.trim() || null,
-            notes: notes.trim() || null,
-        };
+            const input: CreateCandidateInput = {
+                name: name.trim(),
+                phone: phone.trim(),
+                email: email.trim() || null,
+                notes: notes.trim() || null,
+            };
 
-        const { data: newCandidate, inviteToken, error } = await createCandidate(input, user.id);
-        if (error || !newCandidate) {
-            setIsSaving(false);
-            setSaveError(error ?? 'Failed to create candidate');
-            return;
-        }
+            const { data: newCandidate, inviteToken, error } = await createCandidate(input, user.id);
+            if (error || !newCandidate) {
+                setSaveError(error ?? 'Failed to create candidate');
+                return;
+            }
 
-        if (resumeFile) {
-            uploadCandidateDocument(newCandidate.id, 'Resume', resumeFile.uri, resumeFile.name);
-        }
+            if (resumeFile) {
+                uploadCandidateDocument(newCandidate.id, 'Resume', resumeFile.uri, resumeFile.name);
+            }
 
-        setIsSaving(false);
-        setInviteLink(`https://lyfe-admin.vercel.app/invite/${inviteToken}`);
-        setShowSuccess(true);
-    };
+            setInviteLink(`https://lyfe-admin.vercel.app/invite/${inviteToken}`);
+            setShowSuccess(true);
+        });
 
     const handleDone = () => {
         setShowSuccess(false);
@@ -109,115 +110,120 @@ export default function AddCandidateScreen() {
             </View>
 
             <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : 'height'}>
-                <ScrollView contentContainerStyle={styles.scrollContent}>
-                    {/* Save Error */}
-                    {saveError && <ErrorBanner message={saveError} style={styles.errorBannerSpacing} />}
+                <Pressable style={{ flex: 1 }} onPress={Keyboard.dismiss}>
+                    <ScrollView contentContainerStyle={styles.scrollContent}>
+                        {/* Save Error */}
+                        {saveError && <ErrorBanner message={saveError} style={styles.errorBannerSpacing} />}
 
-                    {/* Form Card */}
-                    <View style={[styles.formCard, { backgroundColor: colors.cardBackground }]}>
-                        <FormField
-                            label="Full Name"
-                            value={name}
-                            onChangeText={setName}
-                            placeholder="Enter full name"
-                            error={errors.name}
-                            colors={colors}
-                            required
-                            containerStyle={candidateFieldStyle}
-                        />
-                        <View style={[styles.fieldDivider, { backgroundColor: colors.border }]} />
-                        <FormField
-                            label="Phone Number"
-                            value={phone}
-                            onChangeText={setPhone}
-                            placeholder="+65 9XXX XXXX"
-                            keyboardType="phone-pad"
-                            error={errors.phone}
-                            colors={colors}
-                            required
-                            containerStyle={candidateFieldStyle}
-                        />
-                        <View style={[styles.fieldDivider, { backgroundColor: colors.border }]} />
-                        <FormField
-                            label="Email"
-                            value={email}
-                            onChangeText={setEmail}
-                            placeholder="email@example.com"
-                            keyboardType="email-address"
-                            colors={colors}
-                            containerStyle={candidateFieldStyle}
-                        />
-                        <View style={[styles.fieldDivider, { backgroundColor: colors.border }]} />
-                        <View style={styles.fieldContainer}>
-                            <Text style={[styles.fieldLabel, { color: colors.textSecondary }]}>Notes</Text>
-                            <TextInput
-                                style={[styles.textArea, { color: colors.textPrimary }]}
-                                value={notes}
-                                onChangeText={setNotes}
-                                placeholder="How did you meet this candidate?"
-                                placeholderTextColor={colors.textTertiary}
-                                multiline
-                                numberOfLines={3}
+                        {/* Form Card */}
+                        <View style={[styles.formCard, { backgroundColor: colors.cardBackground }]}>
+                            <FormField
+                                label="Full Name"
+                                value={name}
+                                onChangeText={setName}
+                                placeholder="Enter full name"
+                                error={errors.name}
+                                colors={colors}
+                                required
+                                containerStyle={candidateFieldStyle}
                             />
-                        </View>
-                        <View style={[styles.fieldDivider, { backgroundColor: colors.border }]} />
-                        <View style={styles.fieldContainer}>
-                            <Text style={[styles.fieldLabel, { color: colors.textSecondary }]}>
-                                Resume <Text style={{ color: colors.textTertiary, fontWeight: '400' }}>(optional)</Text>
-                            </Text>
-                            {resumeFile ? (
-                                <View style={[styles.resumeAttached, { backgroundColor: colors.background }]}>
-                                    <Ionicons name="document-text" size={20} color={colors.accent} />
-                                    <Text
-                                        style={[styles.resumeName, { color: colors.textPrimary, flex: 1 }]}
-                                        numberOfLines={1}
-                                    >
-                                        {resumeFile.name}
-                                    </Text>
+                            <View style={[styles.fieldDivider, { backgroundColor: colors.border }]} />
+                            <FormField
+                                label="Phone Number"
+                                value={phone}
+                                onChangeText={setPhone}
+                                placeholder="+65 9XXX XXXX"
+                                keyboardType="phone-pad"
+                                error={errors.phone}
+                                colors={colors}
+                                required
+                                containerStyle={candidateFieldStyle}
+                            />
+                            <View style={[styles.fieldDivider, { backgroundColor: colors.border }]} />
+                            <FormField
+                                label="Email"
+                                value={email}
+                                onChangeText={setEmail}
+                                placeholder="email@example.com"
+                                keyboardType="email-address"
+                                colors={colors}
+                                containerStyle={candidateFieldStyle}
+                            />
+                            <View style={[styles.fieldDivider, { backgroundColor: colors.border }]} />
+                            <View style={styles.fieldContainer}>
+                                <Text style={[styles.fieldLabel, { color: colors.textSecondary }]}>Notes</Text>
+                                <TextInput
+                                    style={[styles.textArea, { color: colors.textPrimary }]}
+                                    value={notes}
+                                    onChangeText={setNotes}
+                                    placeholder="How did you meet this candidate?"
+                                    placeholderTextColor={colors.textTertiary}
+                                    multiline
+                                    numberOfLines={3}
+                                />
+                            </View>
+                            <View style={[styles.fieldDivider, { backgroundColor: colors.border }]} />
+                            <View style={styles.fieldContainer}>
+                                <Text style={[styles.fieldLabel, { color: colors.textSecondary }]}>
+                                    Resume{' '}
+                                    <Text style={{ color: colors.textTertiary, fontWeight: '400' }}>(optional)</Text>
+                                </Text>
+                                {resumeFile ? (
+                                    <View style={[styles.resumeAttached, { backgroundColor: colors.background }]}>
+                                        <Ionicons name="document-text" size={20} color={colors.accent} />
+                                        <Text
+                                            style={[styles.resumeName, { color: colors.textPrimary, flex: 1 }]}
+                                            numberOfLines={1}
+                                        >
+                                            {resumeFile.name}
+                                        </Text>
+                                        <TouchableOpacity
+                                            onPress={() => setResumeFile(null)}
+                                            hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                                        >
+                                            <Ionicons name="close-circle" size={20} color={colors.textTertiary} />
+                                        </TouchableOpacity>
+                                    </View>
+                                ) : (
                                     <TouchableOpacity
-                                        onPress={() => setResumeFile(null)}
-                                        hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                                        style={[
+                                            styles.resumePickerBtn,
+                                            { borderColor: colors.border, opacity: DocumentPicker ? 1 : 0.4 },
+                                        ]}
+                                        onPress={async () => {
+                                            if (!DocumentPicker) return;
+                                            const r = await DocumentPicker.getDocumentAsync({
+                                                type: 'application/pdf',
+                                                copyToCacheDirectory: true,
+                                            });
+                                            if (!r.canceled && r.assets[0])
+                                                setResumeFile({ uri: r.assets[0].uri, name: r.assets[0].name });
+                                        }}
+                                        activeOpacity={0.7}
+                                        disabled={!DocumentPicker}
                                     >
-                                        <Ionicons name="close-circle" size={20} color={colors.textTertiary} />
+                                        <Ionicons name="cloud-upload-outline" size={18} color={colors.accent} />
+                                        <Text style={[styles.resumePickerText, { color: colors.accent }]}>
+                                            Attach PDF
+                                        </Text>
+                                        <Text style={[styles.resumePickerHint, { color: colors.textTertiary }]}>
+                                            Up to 10 MB
+                                        </Text>
                                     </TouchableOpacity>
-                                </View>
-                            ) : (
-                                <TouchableOpacity
-                                    style={[
-                                        styles.resumePickerBtn,
-                                        { borderColor: colors.border, opacity: DocumentPicker ? 1 : 0.4 },
-                                    ]}
-                                    onPress={async () => {
-                                        if (!DocumentPicker) return;
-                                        const r = await DocumentPicker.getDocumentAsync({
-                                            type: 'application/pdf',
-                                            copyToCacheDirectory: true,
-                                        });
-                                        if (!r.canceled && r.assets[0])
-                                            setResumeFile({ uri: r.assets[0].uri, name: r.assets[0].name });
-                                    }}
-                                    activeOpacity={0.7}
-                                    disabled={!DocumentPicker}
-                                >
-                                    <Ionicons name="cloud-upload-outline" size={18} color={colors.accent} />
-                                    <Text style={[styles.resumePickerText, { color: colors.accent }]}>Attach PDF</Text>
-                                    <Text style={[styles.resumePickerHint, { color: colors.textTertiary }]}>
-                                        Up to 10 MB
-                                    </Text>
-                                </TouchableOpacity>
-                            )}
+                                )}
+                            </View>
                         </View>
-                    </View>
 
-                    <Text style={[styles.infoText, { color: colors.textTertiary }]}>
-                        An invite link will be generated for the candidate to complete their registration.
-                    </Text>
-                </ScrollView>
+                        <Text style={[styles.infoText, { color: colors.textTertiary }]}>
+                            An invite link will be generated for the candidate to complete their registration.
+                        </Text>
+                    </ScrollView>
+                </Pressable>
 
                 {/* Submit Button */}
                 <View style={styles.submitContainer}>
                     <TouchableOpacity
-                        style={[styles.submitButton, { backgroundColor: colors.accent, opacity: isSaving ? 0.6 : 1 }]}
+                        style={[styles.submitButton, { backgroundColor: colors.accent, opacity: isSaving ? 0.5 : 1 }]}
                         onPress={handleSubmit}
                         activeOpacity={0.8}
                         disabled={isSaving}

@@ -13,6 +13,7 @@ import { KAV_BEHAVIOR, letterSpacing } from '@/constants/platform';
 import { useAuth } from '@/contexts/AuthContext';
 import { useTheme } from '@/contexts/ThemeContext';
 import { useViewMode } from '@/contexts/ViewModeContext';
+import { useSubmitGuard } from '@/hooks/useSubmitGuard';
 import {
     addLeadActivity,
     addLeadNote,
@@ -56,7 +57,7 @@ export default function LeadDetailScreen() {
     const [showNoteInput, setShowNoteInput] = useState(false);
     const [noteText, setNoteText] = useState('');
     const [showStatusPicker, setShowStatusPicker] = useState(false);
-    const [isSavingNote, setIsSavingNote] = useState(false);
+    const { isSubmitting: isSavingNote, guard: noteGuard } = useSubmitGuard();
     const [isUpdatingStatus, setIsUpdatingStatus] = useState(false);
     const [showReassignModal, setShowReassignModal] = useState(false);
     const [reassignAgents, setReassignAgents] = useState<{ id: string; full_name: string }[]>([]);
@@ -227,23 +228,22 @@ export default function LeadDetailScreen() {
         }
     };
 
-    const handleAddNote = async () => {
-        if (!noteText.trim()) return;
+    const handleAddNote = () =>
+        noteGuard(async () => {
+            if (!noteText.trim()) return;
 
-        if (!user?.id) return;
-        setIsSavingNote(true);
-        const { data, error } = await addLeadNote(lead.id, noteText.trim(), user.id);
-        setIsSavingNote(false);
+            if (!user?.id) return;
+            const { data, error } = await addLeadNote(lead.id, noteText.trim(), user.id);
 
-        if (data) {
-            setActivities((prev) => [data, ...prev]);
-            setNoteText('');
-            setShowNoteInput(false);
-        } else if (error) {
-            setError('Failed to add note');
-            if (__DEV__) console.error('Failed to add note:', error);
-        }
-    };
+            if (data) {
+                setActivities((prev) => [data, ...prev]);
+                setNoteText('');
+                setShowNoteInput(false);
+            } else if (error) {
+                setError('Failed to add note');
+                if (__DEV__) console.error('Failed to add note:', error);
+            }
+        });
 
     const handleChangeStatus = async (newStatus: LeadStatus) => {
         if (newStatus === currentStatus) return;

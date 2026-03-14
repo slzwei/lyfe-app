@@ -125,7 +125,9 @@ export async function fetchTeamMember(
         // Fetch their leads
         const { data: memberLeads, error: leadsError } = await supabase
             .from('leads')
-            .select('*')
+            .select(
+                'id, assigned_to, created_by, full_name, phone, email, source, source_name, external_id, status, product_interest, notes, updated_at, created_at',
+            )
             .eq('assigned_to', memberId)
             .order('updated_at', { ascending: false });
 

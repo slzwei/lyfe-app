@@ -1,10 +1,5 @@
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 
-const corsHeaders = {
-    'Access-Control-Allow-Origin': '*',
-    'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
-};
-
 interface PledgePayload {
     eventId: string;
     agentId: string;
@@ -19,7 +14,7 @@ const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/
 
 Deno.serve(async (req) => {
     if (req.method === 'OPTIONS') {
-        return new Response('ok', { headers: corsHeaders });
+        return new Response(null, { status: 204 });
     }
 
     try {
@@ -28,7 +23,7 @@ Deno.serve(async (req) => {
         if (!authHeader?.startsWith('Bearer ')) {
             return new Response(JSON.stringify({ error: 'Missing or invalid Authorization header' }), {
                 status: 401,
-                headers: corsHeaders,
+                headers: { 'Content-Type': 'application/json' },
             });
         }
 
@@ -44,7 +39,7 @@ Deno.serve(async (req) => {
         if (authError || !caller) {
             return new Response(JSON.stringify({ error: 'Unauthorized' }), {
                 status: 401,
-                headers: corsHeaders,
+                headers: { 'Content-Type': 'application/json' },
             });
         }
 
@@ -53,36 +48,45 @@ Deno.serve(async (req) => {
         const { eventId, agentId, agentName, pledgedSitdowns, pledgedPitches, pledgedClosed, pledgedAfyc } = payload;
 
         if (!eventId || !UUID_RE.test(eventId)) {
-            return new Response(JSON.stringify({ error: 'Invalid eventId' }), { status: 400, headers: corsHeaders });
+            return new Response(JSON.stringify({ error: 'Invalid eventId' }), {
+                status: 400,
+                headers: { 'Content-Type': 'application/json' },
+            });
         }
         if (!agentId || !UUID_RE.test(agentId)) {
-            return new Response(JSON.stringify({ error: 'Invalid agentId' }), { status: 400, headers: corsHeaders });
+            return new Response(JSON.stringify({ error: 'Invalid agentId' }), {
+                status: 400,
+                headers: { 'Content-Type': 'application/json' },
+            });
         }
         if (!agentName || typeof agentName !== 'string') {
-            return new Response(JSON.stringify({ error: 'Invalid agentName' }), { status: 400, headers: corsHeaders });
+            return new Response(JSON.stringify({ error: 'Invalid agentName' }), {
+                status: 400,
+                headers: { 'Content-Type': 'application/json' },
+            });
         }
         if (typeof pledgedSitdowns !== 'number' || pledgedSitdowns < 0) {
             return new Response(JSON.stringify({ error: 'pledgedSitdowns must be a non-negative number' }), {
                 status: 400,
-                headers: corsHeaders,
+                headers: { 'Content-Type': 'application/json' },
             });
         }
         if (typeof pledgedPitches !== 'number' || pledgedPitches < 0) {
             return new Response(JSON.stringify({ error: 'pledgedPitches must be a non-negative number' }), {
                 status: 400,
-                headers: corsHeaders,
+                headers: { 'Content-Type': 'application/json' },
             });
         }
         if (typeof pledgedClosed !== 'number' || pledgedClosed < 0) {
             return new Response(JSON.stringify({ error: 'pledgedClosed must be a non-negative number' }), {
                 status: 400,
-                headers: corsHeaders,
+                headers: { 'Content-Type': 'application/json' },
             });
         }
         if (typeof pledgedAfyc !== 'number' || pledgedAfyc < 0) {
             return new Response(JSON.stringify({ error: 'pledgedAfyc must be a non-negative number' }), {
                 status: 400,
-                headers: corsHeaders,
+                headers: { 'Content-Type': 'application/json' },
             });
         }
 
@@ -93,7 +97,10 @@ Deno.serve(async (req) => {
         const { data: event } = await supabase.from('events').select('created_by, title').eq('id', eventId).single();
 
         if (!event) {
-            return new Response(JSON.stringify({ error: 'Event not found' }), { status: 404, headers: corsHeaders });
+            return new Response(JSON.stringify({ error: 'Event not found' }), {
+                status: 404,
+                headers: { 'Content-Type': 'application/json' },
+            });
         }
 
         // ── Authorization: caller must be an attendee or the event creator ──
@@ -108,7 +115,7 @@ Deno.serve(async (req) => {
             if (!attendance) {
                 return new Response(JSON.stringify({ error: 'Not authorized for this event' }), {
                     status: 403,
-                    headers: corsHeaders,
+                    headers: { 'Content-Type': 'application/json' },
                 });
             }
         }
@@ -131,7 +138,9 @@ Deno.serve(async (req) => {
         }
 
         if (recipientIds.length === 0) {
-            return new Response(JSON.stringify({ sent: 0 }), { headers: corsHeaders });
+            return new Response(JSON.stringify({ sent: 0 }), {
+                headers: { 'Content-Type': 'application/json' },
+            });
         }
 
         // Persist in-app notification rows (push handled by send-push-notification dispatcher)
@@ -144,9 +153,14 @@ Deno.serve(async (req) => {
         }));
         await supabase.from('notifications').insert(notificationRows);
 
-        return new Response(JSON.stringify({ sent: recipientIds.length }), { headers: corsHeaders });
+        return new Response(JSON.stringify({ sent: recipientIds.length }), {
+            headers: { 'Content-Type': 'application/json' },
+        });
     } catch (err) {
-        console.error('notify-roadshow-pledge error:', err);
-        return new Response(JSON.stringify({ error: String(err) }), { status: 500, headers: corsHeaders });
+        console.error('[notify-roadshow-pledge]', err);
+        return new Response(JSON.stringify({ error: 'Internal server error' }), {
+            status: 500,
+            headers: { 'Content-Type': 'application/json' },
+        });
     }
 });

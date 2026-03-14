@@ -1,10 +1,22 @@
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 
+const allowedOrigin = Deno.env.get('ADMIN_ORIGIN') || 'https://admin.lyfe.app';
+
 const corsHeaders = {
-    'Access-Control-Allow-Origin': '*',
+    'Access-Control-Allow-Origin': allowedOrigin,
     'Access-Control-Allow-Headers':
         'authorization, x-client-info, apikey, content-type, x-webhook-event, x-webhook-delivery-id, x-webhook-signature, x-webhook-timestamp',
 };
+
+function maskPhone(phone: string): string {
+    if (phone.length < 7) return '***';
+    return phone.slice(0, 3) + '****' + phone.slice(-4);
+}
+
+function maskEmail(email: string): string {
+    const [local, domain] = email.split('@');
+    return local[0] + '***@' + domain;
+}
 
 function jsonResponse(body: Record<string, unknown>, status = 200) {
     return new Response(JSON.stringify(body), {
@@ -60,7 +72,7 @@ Deno.serve(async (req) => {
         // ── Signature verification ────────────────────────────────
         const webhookSecret = Deno.env.get('MKTR_WEBHOOK_SECRET');
         if (!webhookSecret) {
-            console.error('MKTR_WEBHOOK_SECRET not configured');
+            console.error('[receive-mktr-lead] MKTR_WEBHOOK_SECRET not configured');
             return jsonResponse({ error: 'Server misconfiguration' }, 500);
         }
 
@@ -133,8 +145,8 @@ Deno.serve(async (req) => {
             .maybeSingle();
 
         if (!agent) {
-            console.warn(`Agent not found for phone: ${routing.agentPhone}. Rejecting lead.`);
-            return jsonResponse({ error: `Agent not found for phone: ${routing.agentPhone}` }, 422);
+            console.warn(`[receive-mktr-lead] Agent not found for phone: ${maskPhone(routing.agentPhone)}`);
+            return jsonResponse({ error: 'Agent not found for the provided phone number' }, 422);
         }
 
         const agentId = agent.id;
@@ -174,7 +186,7 @@ Deno.serve(async (req) => {
             if (insertError.code === '23505') {
                 return jsonResponse({ success: true, duplicate: true }, 200);
             }
-            console.error('Lead insert error:', insertError);
+            console.error('[receive-mktr-lead] Lead insert error:', insertError);
             return jsonResponse({ error: 'Failed to insert lead' }, 500);
         }
 
@@ -207,7 +219,7 @@ Deno.serve(async (req) => {
 
         return jsonResponse({ success: true, leadId });
     } catch (err) {
-        console.error('receive-mktr-lead error:', err);
-        return jsonResponse({ error: String(err) }, 500);
+        console.error('[receive-mktr-lead]', err);
+        return jsonResponse({ error: 'Internal server error' }, 500);
     }
 });

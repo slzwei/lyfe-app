@@ -10,6 +10,7 @@ module.exports = {
         '^@/(.*)$': '<rootDir>/$1',
         '^@expo/vector-icons$': '<rootDir>/__tests__/mocks/vectorIcons.js',
         '^expo-crypto$': '<rootDir>/__tests__/mocks/expo-crypto.js',
+        '^@react-native-community/netinfo$': '<rootDir>/__tests__/mocks/netinfo.js',
     },
     collectCoverageFrom: [
         'lib/**/*.ts',

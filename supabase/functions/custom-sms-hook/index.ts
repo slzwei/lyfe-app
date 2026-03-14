@@ -1,6 +1,11 @@
 import { serve } from 'https://deno.land/std@0.177.0/http/server.ts';
 import { AwsClient } from 'https://esm.sh/aws4fetch@1.0.19';
 
+function maskPhone(phone: string): string {
+    if (phone.length < 7) return '***';
+    return phone.slice(0, 3) + '****' + phone.slice(-4);
+}
+
 const aws = new AwsClient({
     accessKeyId: Deno.env.get('AWS_ACCESS_KEY_ID')!,
     secretAccessKey: Deno.env.get('AWS_SECRET_ACCESS_KEY')!,
@@ -22,7 +27,7 @@ serve(async (req) => {
 
     // ── Input validation ───────────────────────────────────────
     if (!PHONE_RE.test(phone)) {
-        console.error(`[custom-sms-hook] Invalid phone format: ${phone}`);
+        console.error(`[custom-sms-hook] Invalid phone format: ${maskPhone(phone)}`);
         return new Response(JSON.stringify({ error: 'Invalid phone number format' }), {
             status: 400,
             headers: { 'Content-Type': 'application/json' },
@@ -31,7 +36,7 @@ serve(async (req) => {
 
     // ── Whitelist check — skip SMS, OTP still works ────────────
     if (WHITELIST.includes(phone)) {
-        console.log(`[WHITELIST] Skipping SMS for ${phone}`);
+        console.log(`[custom-sms-hook] Skipping SMS for whitelisted number`);
         return new Response(JSON.stringify({}), {
             status: 200,
             headers: { 'Content-Type': 'application/json' },
@@ -59,8 +64,8 @@ serve(async (req) => {
 
         if (!response.ok) {
             const error = await response.text();
-            console.error('SNS error:', error);
-            return new Response(JSON.stringify({ error }), {
+            console.error('[custom-sms-hook] SNS error:', error);
+            return new Response(JSON.stringify({ error: 'SMS delivery failed' }), {
                 status: 400,
                 headers: { 'Content-Type': 'application/json' },
             });
@@ -71,8 +76,8 @@ serve(async (req) => {
             headers: { 'Content-Type': 'application/json' },
         });
     } catch (error) {
-        console.error('Fetch error:', error);
-        return new Response(JSON.stringify({ error: error.message }), {
+        console.error('[custom-sms-hook]', error);
+        return new Response(JSON.stringify({ error: 'Internal server error' }), {
             status: 500,
             headers: { 'Content-Type': 'application/json' },
         });

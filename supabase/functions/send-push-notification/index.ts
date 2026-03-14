@@ -6,11 +6,6 @@
  */
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 
-const corsHeaders = {
-    'Access-Control-Allow-Origin': '*',
-    'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
-};
-
 interface WebhookPayload {
     type: 'INSERT';
     table: 'notifications';
@@ -28,7 +23,17 @@ interface WebhookPayload {
 
 Deno.serve(async (req) => {
     if (req.method === 'OPTIONS') {
-        return new Response('ok', { headers: corsHeaders });
+        return new Response(null, { status: 204 });
+    }
+
+    // ── Webhook secret authentication ─────────────────────────────
+    const webhookSecret = Deno.env.get('WEBHOOK_SECRET');
+    const providedSecret = req.headers.get('X-Webhook-Secret');
+    if (!webhookSecret || providedSecret !== webhookSecret) {
+        return new Response(JSON.stringify({ error: 'Unauthorized' }), {
+            status: 401,
+            headers: { 'Content-Type': 'application/json' },
+        });
     }
 
     try {
@@ -37,7 +42,7 @@ Deno.serve(async (req) => {
         // Validate webhook payload
         if (payload.type !== 'INSERT' || !payload.record?.user_id) {
             return new Response(JSON.stringify({ skipped: true, reason: 'not an INSERT or missing user_id' }), {
-                headers: corsHeaders,
+                headers: { 'Content-Type': 'application/json' },
             });
         }
 
@@ -55,7 +60,7 @@ Deno.serve(async (req) => {
 
         if (!user?.push_token) {
             return new Response(JSON.stringify({ skipped: true, reason: 'no push token' }), {
-                headers: corsHeaders,
+                headers: { 'Content-Type': 'application/json' },
             });
         }
 
@@ -63,7 +68,7 @@ Deno.serve(async (req) => {
         const prefs = (user.notification_preferences as Record<string, boolean>) || {};
         if (prefs[record.type] === false) {
             return new Response(JSON.stringify({ skipped: true, reason: 'user opted out' }), {
-                headers: corsHeaders,
+                headers: { 'Content-Type': 'application/json' },
             });
         }
 
@@ -84,9 +89,14 @@ Deno.serve(async (req) => {
 
         const pushResult = await pushResponse.json();
 
-        return new Response(JSON.stringify({ sent: true, pushResult }), { headers: corsHeaders });
+        return new Response(JSON.stringify({ sent: true }), {
+            headers: { 'Content-Type': 'application/json' },
+        });
     } catch (err) {
-        console.error('send-push-notification error:', err);
-        return new Response(JSON.stringify({ error: String(err) }), { status: 500, headers: corsHeaders });
+        console.error('[send-push-notification]', err);
+        return new Response(JSON.stringify({ error: 'Internal server error' }), {
+            status: 500,
+            headers: { 'Content-Type': 'application/json' },
+        });
     }
 });

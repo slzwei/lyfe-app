@@ -706,37 +706,17 @@ describe('fetchUpcomingEvents', () => {
             error: null,
         });
 
+        // fetchUpcomingEvents now filters server-side with .gte() and .limit()
+        // Mock returns only what the server would return (future events, limited to 1)
         const eventsChain = mockSupa.__getChain('events');
         mockResolve(eventsChain, {
             data: [
-                {
-                    id: 'e1',
-                    title: 'Past',
-                    event_date: '2026-03-01',
-                    start_time: '09:00',
-                    event_type: 'team_meeting',
-                    created_by: 'u1',
-                    created_at: '',
-                    updated_at: '',
-                    external_attendees: [],
-                },
                 {
                     id: 'e2',
                     title: 'Future 1',
                     event_date: '2026-03-15',
                     start_time: '09:00',
                     event_type: 'training',
-                    created_by: 'u1',
-                    created_at: '',
-                    updated_at: '',
-                    external_attendees: [],
-                },
-                {
-                    id: 'e3',
-                    title: 'Future 2',
-                    event_date: '2026-03-20',
-                    start_time: '10:00',
-                    event_type: 'other',
                     created_by: 'u1',
                     created_at: '',
                     updated_at: '',

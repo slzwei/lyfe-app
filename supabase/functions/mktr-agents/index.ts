@@ -1,9 +1,21 @@
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 
+const allowedOrigin = Deno.env.get('ADMIN_ORIGIN') || 'https://admin.lyfe.app';
+
 const corsHeaders = {
-    'Access-Control-Allow-Origin': '*',
+    'Access-Control-Allow-Origin': allowedOrigin,
     'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 };
+
+function maskPhone(phone: string): string {
+    if (phone.length < 7) return '***';
+    return phone.slice(0, 3) + '****' + phone.slice(-4);
+}
+
+function maskEmail(email: string): string {
+    const [local, domain] = email.split('@');
+    return local[0] + '***@' + domain;
+}
 
 function jsonResponse(body: Record<string, unknown>, status = 200) {
     return new Response(JSON.stringify(body), {
@@ -21,7 +33,7 @@ Deno.serve(async (req) => {
         // ── API key authentication ────────────────────────────────
         const apiKey = Deno.env.get('MKTR_API_KEY');
         if (!apiKey) {
-            console.error('MKTR_API_KEY not configured');
+            console.error('[mktr-agents] MKTR_API_KEY not configured');
             return jsonResponse({ error: 'Server misconfiguration' }, 500);
         }
 
@@ -70,7 +82,7 @@ Deno.serve(async (req) => {
             .order('full_name');
 
         if (error) {
-            console.error('Error fetching agents:', error);
+            console.error('[mktr-agents] Error fetching agents:', error);
             return jsonResponse({ error: 'Failed to fetch agents' }, 500);
         }
 
@@ -84,7 +96,7 @@ Deno.serve(async (req) => {
             })),
         });
     } catch (err) {
-        console.error('mktr-agents error:', err);
-        return jsonResponse({ error: String(err) }, 500);
+        console.error('[mktr-agents]', err);
+        return jsonResponse({ error: 'Internal server error' }, 500);
     }
 });

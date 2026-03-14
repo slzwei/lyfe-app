@@ -350,7 +350,7 @@ export default function InterviewSchedulerSheet({
                             <TouchableOpacity
                                 style={[
                                     sheetStyles.primaryBtn,
-                                    { backgroundColor: colors.warning, opacity: isScheduling ? 0.6 : 1 },
+                                    { backgroundColor: colors.warning, opacity: isScheduling ? 0.5 : 1 },
                                 ]}
                                 onPress={onSubmit}
                                 activeOpacity={0.85}

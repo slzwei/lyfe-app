@@ -22,5 +22,11 @@ jobs:
       - name: Lint
         run: npm run lint
 
+      - name: Type Check
+        run: npx tsc --noEmit
+
       - name: Test with coverage
         run: npx jest --coverage
+
+      - name: Dependency audit
+        run: npm audit --audit-level=high || true

@@ -6,14 +6,19 @@
  */
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 
-const corsHeaders = {
-    'Access-Control-Allow-Origin': '*',
-    'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
-};
-
 Deno.serve(async (req) => {
     if (req.method === 'OPTIONS') {
-        return new Response('ok', { headers: corsHeaders });
+        return new Response(null, { status: 204 });
+    }
+
+    // ── Cron secret authentication ────────────────────────────────
+    const cronSecret = Deno.env.get('CRON_SECRET');
+    const authHeader = req.headers.get('Authorization');
+    if (!cronSecret || authHeader !== `Bearer ${cronSecret}`) {
+        return new Response(JSON.stringify({ error: 'Unauthorized' }), {
+            status: 401,
+            headers: { 'Content-Type': 'application/json' },
+        });
     }
 
     try {
@@ -85,9 +90,14 @@ Deno.serve(async (req) => {
             }
         }
 
-        return new Response(JSON.stringify({ sent: totalSent }), { headers: corsHeaders });
+        return new Response(JSON.stringify({ sent: totalSent }), {
+            headers: { 'Content-Type': 'application/json' },
+        });
     } catch (err) {
-        console.error('send-event-reminders error:', err);
-        return new Response(JSON.stringify({ error: String(err) }), { status: 500, headers: corsHeaders });
+        console.error('[send-event-reminders]', err);
+        return new Response(JSON.stringify({ error: 'Internal server error' }), {
+            status: 500,
+            headers: { 'Content-Type': 'application/json' },
+        });
     }
 });

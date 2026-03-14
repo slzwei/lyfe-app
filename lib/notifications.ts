@@ -15,7 +15,7 @@ export async function fetchNotifications(
 ): Promise<{ data: AppNotification[]; error: string | null; hasMore: boolean }> {
     let query = supabase
         .from('notifications')
-        .select('*')
+        .select('id, user_id, type, title, body, data, is_read, created_at')
         .eq('user_id', userId)
         .order('created_at', { ascending: false });
 

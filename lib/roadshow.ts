@@ -72,7 +72,13 @@ export interface RoadshowConfigInput {
 export async function fetchRoadshowConfig(
     eventId: string,
 ): Promise<{ data: RoadshowConfig | null; error: string | null }> {
-    const { data, error } = await supabase.from('roadshow_configs').select('*').eq('event_id', eventId).single();
+    const { data, error } = await supabase
+        .from('roadshow_configs')
+        .select(
+            'id, event_id, weekly_cost, slots_per_day, expected_start_time, late_grace_minutes, suggested_sitdowns, suggested_pitches, suggested_closed, created_at, updated_at',
+        )
+        .eq('event_id', eventId)
+        .single();
 
     if (error && error.code !== PGRST_NO_ROWS) return { data: null, error: error.message };
     if (!data) return { data: null, error: null };

@@ -72,18 +72,44 @@ export async function fetchAllEvents(
 
 /**
  * Fetch the next N upcoming events for a user.
+ * Filters server-side by event_date >= today and limits to `limit` rows.
  */
 export async function fetchUpcomingEvents(
     userId: string,
     limit = 5,
 ): Promise<{ data: AgencyEvent[]; error: string | null }> {
-    const { data: events, error } = await fetchEvents(userId);
-    if (error) return { data: [], error };
-
     const today = new Date().toISOString().split('T')[0];
-    const upcoming = events.filter((e) => e.event_date >= today).slice(0, limit);
 
-    return { data: upcoming, error: null };
+    // Get event IDs where the user is an attendee or creator
+    const [{ data: attendeeRows, error: attendeeError }, { data: createdRows, error: createdError }] =
+        await Promise.all([
+            supabase.from('event_attendees').select('event_id').eq('user_id', userId),
+            supabase.from('events').select('id').eq('created_by', userId),
+        ]);
+
+    if (attendeeError) return { data: [], error: attendeeError.message };
+    if (createdError) return { data: [], error: createdError.message };
+
+    const attendeeIds = (attendeeRows || []).map((r: { event_id: string }) => r.event_id);
+    const createdIds = (createdRows || []).map((r: { id: string }) => r.id);
+    const eventIds = [...new Set([...attendeeIds, ...createdIds])];
+
+    if (eventIds.length === 0) return { data: [], error: null };
+
+    const { data, error } = await supabase
+        .from('events')
+        .select(
+            '*, creator_user:users!created_by(full_name), event_attendees(id, event_id, user_id, attendee_role, users(full_name, avatar_url))',
+        )
+        .in('id', eventIds)
+        .gte('event_date', today)
+        .order('event_date', { ascending: true })
+        .order('start_time', { ascending: true })
+        .limit(limit);
+
+    if (error) return { data: [], error: error.message };
+
+    return { data: mapEvents(data || []), error: null };
 }
 
 /**
@@ -280,16 +306,18 @@ export async function updateEvent(
     }
 
     // Step 3: remove attendees that are no longer in the list
-    const deleteQuery = supabase.from('event_attendees').delete().eq('event_id', eventId);
-
+    // Use .filter() with PostgREST syntax — keepIds are UUIDs validated by the
+    // attendee picker upstream, so the parenthesised list is safe for PostgREST.
+    // Using .filter() is equivalent to .not().in() but avoids the SDK's string
+    // interpolation pitfalls with the .not('col','in','(...)') overload.
     const { error: deleteError } =
         keepIds.length > 0
             ? await supabase
                   .from('event_attendees')
                   .delete()
                   .eq('event_id', eventId)
-                  .not('user_id', 'in', `(${keepIds.join(',')})`)
-            : await deleteQuery;
+                  .filter('user_id', 'not.in', `(${keepIds.join(',')})`)
+            : await supabase.from('event_attendees').delete().eq('event_id', eventId);
 
     if (deleteError) return { data: null, error: deleteError.message };
 

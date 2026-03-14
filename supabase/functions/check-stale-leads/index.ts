@@ -7,17 +7,22 @@
  */
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 
-const corsHeaders = {
-    'Access-Control-Allow-Origin': '*',
-    'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
-};
-
 const STALE_DAYS = 14;
 const DEDUP_DAYS = 7;
 
 Deno.serve(async (req) => {
     if (req.method === 'OPTIONS') {
-        return new Response('ok', { headers: corsHeaders });
+        return new Response(null, { status: 204 });
+    }
+
+    // ── Cron secret authentication ────────────────────────────────
+    const cronSecret = Deno.env.get('CRON_SECRET');
+    const authHeader = req.headers.get('Authorization');
+    if (!cronSecret || authHeader !== `Bearer ${cronSecret}`) {
+        return new Response(JSON.stringify({ error: 'Unauthorized' }), {
+            status: 401,
+            headers: { 'Content-Type': 'application/json' },
+        });
     }
 
     try {
@@ -34,7 +39,9 @@ Deno.serve(async (req) => {
             .not('status', 'in', '("won","lost")');
 
         if (!staleLeads || staleLeads.length === 0) {
-            return new Response(JSON.stringify({ sent: 0 }), { headers: corsHeaders });
+            return new Response(JSON.stringify({ sent: 0 }), {
+                headers: { 'Content-Type': 'application/json' },
+            });
         }
 
         // Get recently sent stale notifications to dedup
@@ -54,7 +61,9 @@ Deno.serve(async (req) => {
         // Filter out already-notified leads
         const newStaleLeads = staleLeads.filter((l: { id: string }) => !recentlyNotified.has(l.id));
         if (newStaleLeads.length === 0) {
-            return new Response(JSON.stringify({ sent: 0 }), { headers: corsHeaders });
+            return new Response(JSON.stringify({ sent: 0 }), {
+                headers: { 'Content-Type': 'application/json' },
+            });
         }
 
         // Look up managers for each agent
@@ -98,9 +107,14 @@ Deno.serve(async (req) => {
             totalSent = rows.length;
         }
 
-        return new Response(JSON.stringify({ sent: totalSent }), { headers: corsHeaders });
+        return new Response(JSON.stringify({ sent: totalSent }), {
+            headers: { 'Content-Type': 'application/json' },
+        });
     } catch (err) {
-        console.error('check-stale-leads error:', err);
-        return new Response(JSON.stringify({ error: String(err) }), { status: 500, headers: corsHeaders });
+        console.error('[check-stale-leads]', err);
+        return new Response(JSON.stringify({ error: 'Internal server error' }), {
+            status: 500,
+            headers: { 'Content-Type': 'application/json' },
+        });
     }
 });

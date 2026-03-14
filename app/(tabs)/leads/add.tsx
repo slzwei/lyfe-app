@@ -7,11 +7,14 @@ import { createLead, type CreateLeadInput } from '@/lib/leads';
 import { PRODUCT_LABELS, SOURCE_LABELS, type LeadSource, type ProductInterest } from '@/types/lead';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
+import { useSubmitGuard } from '@/hooks/useSubmitGuard';
 import React, { useState } from 'react';
 import {
     ActivityIndicator,
+    Keyboard,
     KeyboardAvoidingView,
     Modal,
+    Pressable,
     ScrollView,
     StyleSheet,
     Text,
@@ -36,7 +39,7 @@ export default function AddLeadScreen() {
     const [notes, setNotes] = useState('');
     const [errors, setErrors] = useState<Record<string, string>>({});
     const [showSuccessModal, setShowSuccessModal] = useState(false);
-    const [isSaving, setIsSaving] = useState(false);
+    const { isSubmitting: isSaving, guard } = useSubmitGuard();
     const [saveError, setSaveError] = useState<string | null>(null);
 
     const validate = (): boolean => {
@@ -51,35 +54,34 @@ export default function AddLeadScreen() {
         return Object.keys(newErrors).length === 0;
     };
 
-    const handleSave = async () => {
-        if (!validate()) return;
-        setSaveError(null);
+    const handleSave = () =>
+        guard(async () => {
+            if (!validate()) return;
+            setSaveError(null);
 
-        if (!user?.id) {
-            setSaveError('Not authenticated');
-            return;
-        }
+            if (!user?.id) {
+                setSaveError('Not authenticated');
+                return;
+            }
 
-        setIsSaving(true);
-        const input: CreateLeadInput = {
-            full_name: name.trim(),
-            phone: phone.trim() || null,
-            email: email.trim() || null,
-            source,
-            product_interest: product,
-            notes: notes.trim() || null,
-        };
+            const input: CreateLeadInput = {
+                full_name: name.trim(),
+                phone: phone.trim() || null,
+                email: email.trim() || null,
+                source,
+                product_interest: product,
+                notes: notes.trim() || null,
+            };
 
-        const { error } = await createLead(input, user.id);
-        setIsSaving(false);
+            const { error } = await createLead(input, user.id);
 
-        if (error) {
-            setSaveError(error);
-            return;
-        }
+            if (error) {
+                setSaveError(error);
+                return;
+            }
 
-        setShowSuccessModal(true);
-    };
+            setShowSuccessModal(true);
+        });
 
     const handleSuccessDismiss = () => {
         setShowSuccessModal(false);
@@ -121,7 +123,7 @@ export default function AddLeadScreen() {
                 <Text style={[styles.headerTitle, { color: colors.textPrimary }]}>New Lead</Text>
                 <TouchableOpacity
                     onPress={handleSave}
-                    style={[styles.saveBtn, { backgroundColor: colors.accent, opacity: isSaving ? 0.6 : 1 }]}
+                    style={[styles.saveBtn, { backgroundColor: colors.accent, opacity: isSaving ? 0.5 : 1 }]}
                     disabled={isSaving}
                 >
                     {isSaving ? (
@@ -133,152 +135,158 @@ export default function AddLeadScreen() {
             </View>
 
             <KeyboardAvoidingView style={{ flex: 1 }} behavior={KAV_BEHAVIOR} keyboardVerticalOffset={100}>
-                <ScrollView
-                    style={styles.scrollView}
-                    contentContainerStyle={styles.scrollContent}
-                    showsVerticalScrollIndicator={false}
-                >
-                    {/* Save Error */}
-                    {saveError && <ErrorBanner message={saveError} />}
-
-                    {/* Contact Info */}
-                    <View
-                        style={[
-                            styles.card,
-                            { backgroundColor: colors.cardBackground, borderColor: colors.cardBorder },
-                        ]}
+                <Pressable style={{ flex: 1 }} onPress={Keyboard.dismiss}>
+                    <ScrollView
+                        style={styles.scrollView}
+                        contentContainerStyle={styles.scrollContent}
+                        showsVerticalScrollIndicator={false}
                     >
-                        <Text style={[styles.sectionTitle, { color: colors.textPrimary }]}>Contact Information</Text>
+                        {/* Save Error */}
+                        {saveError && <ErrorBanner message={saveError} />}
 
-                        <FormField
-                            label="Full Name *"
-                            value={name}
-                            onChangeText={setName}
-                            placeholder="e.g. Sarah Tan"
-                            error={errors.name}
-                            colors={colors}
-                            icon="person-outline"
-                        />
-                        <FormField
-                            label="Phone *"
-                            value={phone}
-                            onChangeText={setPhone}
-                            placeholder="+65 9123 4567"
-                            error={errors.phone}
-                            colors={colors}
-                            icon="call-outline"
-                            keyboardType="phone-pad"
-                        />
-                        <FormField
-                            label="Email"
-                            value={email}
-                            onChangeText={setEmail}
-                            placeholder="sarah@email.com"
-                            error={errors.email}
-                            colors={colors}
-                            icon="mail-outline"
-                            keyboardType="email-address"
-                            autoCapitalize="none"
-                        />
-                    </View>
-
-                    {/* Source */}
-                    <View
-                        style={[
-                            styles.card,
-                            { backgroundColor: colors.cardBackground, borderColor: colors.cardBorder },
-                        ]}
-                    >
-                        <Text style={[styles.sectionTitle, { color: colors.textPrimary }]}>Source</Text>
-                        <View style={styles.chipGroup}>
-                            {SOURCES.map((s) => (
-                                <TouchableOpacity
-                                    key={s}
-                                    style={[
-                                        styles.chip,
-                                        {
-                                            backgroundColor: source === s ? colors.accentLight : colors.surfacePrimary,
-                                            borderColor: source === s ? colors.accent : colors.borderLight,
-                                            borderWidth: source === s ? 1.5 : 0.5,
-                                        },
-                                    ]}
-                                    onPress={() => setSource(s)}
-                                >
-                                    <Text
-                                        style={[
-                                            styles.chipText,
-                                            { color: source === s ? colors.accent : colors.textSecondary },
-                                        ]}
-                                    >
-                                        {SOURCE_LABELS[s]}
-                                    </Text>
-                                </TouchableOpacity>
-                            ))}
-                        </View>
-                    </View>
-
-                    {/* Product Interest */}
-                    <View
-                        style={[
-                            styles.card,
-                            { backgroundColor: colors.cardBackground, borderColor: colors.cardBorder },
-                        ]}
-                    >
-                        <Text style={[styles.sectionTitle, { color: colors.textPrimary }]}>Product Interest</Text>
-                        <View style={styles.chipGroup}>
-                            {PRODUCTS.map((p) => (
-                                <TouchableOpacity
-                                    key={p}
-                                    style={[
-                                        styles.chip,
-                                        {
-                                            backgroundColor: product === p ? colors.accentLight : colors.surfacePrimary,
-                                            borderColor: product === p ? colors.accent : colors.borderLight,
-                                            borderWidth: product === p ? 1.5 : 0.5,
-                                        },
-                                    ]}
-                                    onPress={() => setProduct(p)}
-                                >
-                                    <Text
-                                        style={[
-                                            styles.chipText,
-                                            { color: product === p ? colors.accent : colors.textSecondary },
-                                        ]}
-                                    >
-                                        {PRODUCT_LABELS[p]}
-                                    </Text>
-                                </TouchableOpacity>
-                            ))}
-                        </View>
-                    </View>
-
-                    {/* Notes */}
-                    <View
-                        style={[
-                            styles.card,
-                            { backgroundColor: colors.cardBackground, borderColor: colors.cardBorder },
-                        ]}
-                    >
-                        <Text style={[styles.sectionTitle, { color: colors.textPrimary }]}>Notes</Text>
-                        <TextInput
+                        {/* Contact Info */}
+                        <View
                             style={[
-                                styles.notesInput,
-                                {
-                                    color: colors.textPrimary,
-                                    borderColor: colors.borderLight,
-                                    backgroundColor: colors.surfacePrimary,
-                                },
+                                styles.card,
+                                { backgroundColor: colors.cardBackground, borderColor: colors.cardBorder },
                             ]}
-                            placeholder="Any initial notes about this lead..."
-                            placeholderTextColor={colors.textTertiary}
-                            value={notes}
-                            onChangeText={setNotes}
-                            multiline
-                            numberOfLines={4}
-                            textAlignVertical="top"
-                        />
-                    </View>
-                </ScrollView>
+                        >
+                            <Text style={[styles.sectionTitle, { color: colors.textPrimary }]}>
+                                Contact Information
+                            </Text>
+
+                            <FormField
+                                label="Full Name *"
+                                value={name}
+                                onChangeText={setName}
+                                placeholder="e.g. Sarah Tan"
+                                error={errors.name}
+                                colors={colors}
+                                icon="person-outline"
+                            />
+                            <FormField
+                                label="Phone *"
+                                value={phone}
+                                onChangeText={setPhone}
+                                placeholder="+65 9123 4567"
+                                error={errors.phone}
+                                colors={colors}
+                                icon="call-outline"
+                                keyboardType="phone-pad"
+                            />
+                            <FormField
+                                label="Email"
+                                value={email}
+                                onChangeText={setEmail}
+                                placeholder="sarah@email.com"
+                                error={errors.email}
+                                colors={colors}
+                                icon="mail-outline"
+                                keyboardType="email-address"
+                                autoCapitalize="none"
+                            />
+                        </View>
+
+                        {/* Source */}
+                        <View
+                            style={[
+                                styles.card,
+                                { backgroundColor: colors.cardBackground, borderColor: colors.cardBorder },
+                            ]}
+                        >
+                            <Text style={[styles.sectionTitle, { color: colors.textPrimary }]}>Source</Text>
+                            <View style={styles.chipGroup}>
+                                {SOURCES.map((s) => (
+                                    <TouchableOpacity
+                                        key={s}
+                                        style={[
+                                            styles.chip,
+                                            {
+                                                backgroundColor:
+                                                    source === s ? colors.accentLight : colors.surfacePrimary,
+                                                borderColor: source === s ? colors.accent : colors.borderLight,
+                                                borderWidth: source === s ? 1.5 : 0.5,
+                                            },
+                                        ]}
+                                        onPress={() => setSource(s)}
+                                    >
+                                        <Text
+                                            style={[
+                                                styles.chipText,
+                                                { color: source === s ? colors.accent : colors.textSecondary },
+                                            ]}
+                                        >
+                                            {SOURCE_LABELS[s]}
+                                        </Text>
+                                    </TouchableOpacity>
+                                ))}
+                            </View>
+                        </View>
+
+                        {/* Product Interest */}
+                        <View
+                            style={[
+                                styles.card,
+                                { backgroundColor: colors.cardBackground, borderColor: colors.cardBorder },
+                            ]}
+                        >
+                            <Text style={[styles.sectionTitle, { color: colors.textPrimary }]}>Product Interest</Text>
+                            <View style={styles.chipGroup}>
+                                {PRODUCTS.map((p) => (
+                                    <TouchableOpacity
+                                        key={p}
+                                        style={[
+                                            styles.chip,
+                                            {
+                                                backgroundColor:
+                                                    product === p ? colors.accentLight : colors.surfacePrimary,
+                                                borderColor: product === p ? colors.accent : colors.borderLight,
+                                                borderWidth: product === p ? 1.5 : 0.5,
+                                            },
+                                        ]}
+                                        onPress={() => setProduct(p)}
+                                    >
+                                        <Text
+                                            style={[
+                                                styles.chipText,
+                                                { color: product === p ? colors.accent : colors.textSecondary },
+                                            ]}
+                                        >
+                                            {PRODUCT_LABELS[p]}
+                                        </Text>
+                                    </TouchableOpacity>
+                                ))}
+                            </View>
+                        </View>
+
+                        {/* Notes */}
+                        <View
+                            style={[
+                                styles.card,
+                                { backgroundColor: colors.cardBackground, borderColor: colors.cardBorder },
+                            ]}
+                        >
+                            <Text style={[styles.sectionTitle, { color: colors.textPrimary }]}>Notes</Text>
+                            <TextInput
+                                style={[
+                                    styles.notesInput,
+                                    {
+                                        color: colors.textPrimary,
+                                        borderColor: colors.borderLight,
+                                        backgroundColor: colors.surfacePrimary,
+                                    },
+                                ]}
+                                placeholder="Any initial notes about this lead..."
+                                placeholderTextColor={colors.textTertiary}
+                                value={notes}
+                                onChangeText={setNotes}
+                                multiline
+                                numberOfLines={4}
+                                textAlignVertical="top"
+                            />
+                        </View>
+                    </ScrollView>
+                </Pressable>
             </KeyboardAvoidingView>
 
             {/* Success Modal */}

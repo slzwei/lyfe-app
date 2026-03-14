@@ -25,7 +25,9 @@ export async function fetchModule(moduleId: string): Promise<{
 }> {
     const { data, error } = await supabase
         .from('roadmap_modules')
-        .select('*')
+        .select(
+            'id, programme_id, title, description, module_type, display_order, is_active, is_required, estimated_minutes, icon_name, icon_color, exam_paper_id, learning_objectives, archived_at, archived_by, created_at, updated_at',
+        )
         .eq('id', moduleId)
         .eq('is_active', true)
         .is('archived_at', null)
@@ -45,7 +47,7 @@ export async function fetchModuleProgressForCandidate(
 }> {
     const { data, error } = await supabase
         .from('candidate_module_progress')
-        .select('*')
+        .select('id, candidate_id, module_id, status, score, notes, completed_at, completed_by, created_at, updated_at')
         .eq('candidate_id', candidateId)
         .eq('module_id', moduleId)
         .maybeSingle();
@@ -61,7 +63,9 @@ export async function fetchProgrammes(): Promise<{
 }> {
     const { data, error } = await supabase
         .from('roadmap_programmes')
-        .select('*')
+        .select(
+            'id, title, slug, description, icon_type, display_order, is_active, archived_at, archived_by, created_at, updated_at',
+        )
         .eq('is_active', true)
         .is('archived_at', null)
         .order('display_order');
@@ -77,7 +81,9 @@ export async function fetchProgrammeModules(programmeId: string): Promise<{
 }> {
     const { data, error } = await supabase
         .from('roadmap_modules')
-        .select('*')
+        .select(
+            'id, programme_id, title, description, module_type, display_order, is_active, is_required, estimated_minutes, icon_name, icon_color, exam_paper_id, learning_objectives, archived_at, archived_by, created_at, updated_at',
+        )
         .eq('programme_id', programmeId)
         .eq('is_active', true)
         .is('archived_at', null)
@@ -94,7 +100,9 @@ export async function fetchModuleResources(moduleId: string): Promise<{
 }> {
     const { data, error } = await supabase
         .from('roadmap_resources')
-        .select('*')
+        .select(
+            'id, module_id, title, description, resource_type, content_url, content_text, display_order, is_active, created_at',
+        )
         .eq('module_id', moduleId)
         .eq('is_active', true)
         .order('display_order');
@@ -110,7 +118,9 @@ export async function fetchModuleItems(moduleId: string): Promise<{
 }> {
     const { data, error } = await supabase
         .from('roadmap_module_items')
-        .select('*')
+        .select(
+            'id, module_id, title, description, item_type, display_order, is_active, is_required, resource_type, resource_url, exam_paper_id, pass_percentage, time_limit_minutes, icon_name, archived_at, created_at, updated_at',
+        )
         .eq('module_id', moduleId)
         .eq('is_active', true)
         .is('archived_at', null)
@@ -130,7 +140,9 @@ export async function fetchModuleItemProgress(
 }> {
     const { data, error } = await supabase
         .from('candidate_module_item_progress')
-        .select('*, roadmap_module_items!inner(module_id)')
+        .select(
+            'id, candidate_id, module_item_id, status, score, notes, attempt_count, completed_at, completed_by, created_at, updated_at, roadmap_module_items!inner(module_id)',
+        )
         .eq('candidate_id', candidateId)
         .eq('roadmap_module_items.module_id', moduleId);
 
@@ -247,7 +259,7 @@ export async function fetchCandidateProgress(candidateId: string): Promise<{
 }> {
     const { data, error } = await supabase
         .from('candidate_module_progress')
-        .select('*')
+        .select('id, candidate_id, module_id, status, score, notes, completed_at, completed_by, created_at, updated_at')
         .eq('candidate_id', candidateId);
 
     return { data: data as CandidateModuleProgress[] | null, error: error?.message ?? null };
@@ -269,7 +281,9 @@ export async function fetchCandidateRoadmap(
         // Build module query based on view context
         let moduleQuery = supabase
             .from('roadmap_modules')
-            .select('*, exam_papers:exam_paper_id(code, title, pass_percentage)')
+            .select(
+                'id, programme_id, title, description, module_type, display_order, is_active, is_required, estimated_minutes, icon_name, icon_color, exam_paper_id, learning_objectives, archived_at, archived_by, created_at, updated_at, exam_papers:exam_paper_id(code, title, pass_percentage)',
+            )
             .order('display_order');
         if (!options?.includeDisabled) moduleQuery = moduleQuery.eq('is_active', true);
         if (!options?.includeArchived) moduleQuery = moduleQuery.is('archived_at', null);
@@ -277,14 +291,26 @@ export async function fetchCandidateRoadmap(
         const [programmesRes, modulesRes, progressRes, enrollmentRes, prerequisitesRes] = await Promise.all([
             supabase
                 .from('roadmap_programmes')
-                .select('*')
+                .select(
+                    'id, title, slug, description, icon_type, display_order, is_active, archived_at, archived_by, created_at, updated_at',
+                )
                 .eq('is_active', true)
                 .is('archived_at', null)
                 .order('display_order'),
             moduleQuery,
-            supabase.from('candidate_module_progress').select('*').eq('candidate_id', candidateId),
-            supabase.from('candidate_programme_enrollment').select('*').eq('candidate_id', candidateId),
-            supabase.from('roadmap_prerequisites').select('*'),
+            supabase
+                .from('candidate_module_progress')
+                .select(
+                    'id, candidate_id, module_id, status, score, notes, completed_at, completed_by, created_at, updated_at',
+                )
+                .eq('candidate_id', candidateId),
+            supabase
+                .from('candidate_programme_enrollment')
+                .select(
+                    'id, candidate_id, programme_id, status, started_at, completed_at, manually_unlocked, unlocked_by, unlocked_at, created_at',
+                )
+                .eq('candidate_id', candidateId),
+            supabase.from('roadmap_prerequisites').select('id, module_id, required_module_id, created_at'),
         ]);
 
         if (programmesRes.error) throw programmesRes.error;

@@ -102,7 +102,7 @@ export default function EditProfileSheet({
                         {error && <Text style={[styles.errorText, { color: colors.danger }]}>{error}</Text>}
 
                         <TouchableOpacity
-                            style={[styles.saveBtn, { backgroundColor: colors.accent, opacity: saving ? 0.7 : 1 }]}
+                            style={[styles.saveBtn, { backgroundColor: colors.accent, opacity: saving ? 0.5 : 1 }]}
                             onPress={onSave}
                             disabled={saving}
                             activeOpacity={0.8}

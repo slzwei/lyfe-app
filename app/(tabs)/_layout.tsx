@@ -1,4 +1,5 @@
 import LiveEventBar from '@/components/LiveEventBar';
+import OfflineBanner from '@/components/OfflineBanner';
 import { TAB_BAR_HEIGHT, TAB_BAR_PADDING_BOTTOM, TAB_BAR_PADDING_TOP } from '@/constants/platform';
 import { getVisibleTabs, type UserRole } from '@/constants/Roles';
 import { useAuth } from '@/contexts/AuthContext';
@@ -61,6 +62,7 @@ export default function TabLayout() {
 
     return (
         <View style={{ flex: 1 }}>
+            <OfflineBanner />
             <Tabs
                 screenOptions={{
                     headerShown: false,

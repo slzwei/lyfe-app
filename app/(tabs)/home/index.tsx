@@ -1,15 +1,19 @@
-import { displayWeight, letterSpacing } from '@/constants/platform';
+import { letterSpacing } from '@/constants/platform';
 import Avatar from '@/components/Avatar';
+import BiometricsPrompt from '@/components/home/BiometricsPrompt';
 import ErrorBanner from '@/components/ErrorBanner';
-import StatCardSmall from '@/components/home/StatCardSmall';
+import HeroStatsSection from '@/components/home/HeroStatsSection';
+import LeadPipelineCard from '@/components/home/LeadPipelineCard';
 import LyfeLogo from '@/components/LyfeLogo';
+import RecentActivityCard from '@/components/home/RecentActivityCard';
+import RoadmapProgressCard from '@/components/home/RoadmapProgressCard';
 import ScreenHeader from '@/components/ScreenHeader';
+import UpcomingEventsCard from '@/components/home/UpcomingEventsCard';
 import { useAuth } from '@/contexts/AuthContext';
 import { useTheme } from '@/contexts/ThemeContext';
 import { useNotifications } from '@/contexts/NotificationContext';
 import { useViewMode } from '@/contexts/ViewModeContext';
 import {
-    biometricMeta,
     getBiometryType,
     hasShownBiometricsPrompt,
     isBiometricsAvailable,
@@ -24,19 +28,19 @@ import {
     type LeadPipelineStats,
     type ManagerDashboardStats,
 } from '@/lib/leads';
-import { formatDateShort, formatTime, timeAgo } from '@/lib/dateTime';
+import { timeAgo } from '@/lib/dateTime';
 import { fetchUpcomingEvents } from '@/lib/events';
 import { fetchCandidateRoadmap } from '@/lib/roadmap';
 import { fetchPAManagerIds, fetchPACandidateCount, fetchPAInterviewCount } from '@/lib/recruitment';
-import { EVENT_TYPE_CONFIG } from '@/constants/displayConfigs';
 import type { AgencyEvent } from '@/types/event';
 import type { ProgrammeWithModules } from '@/types/roadmap';
-import { STATUS_CONFIG, type LeadActivity, type LeadActivityType } from '@/types/lead';
+import { type LeadActivity, type LeadActivityType } from '@/types/lead';
 import { useTypedRouter } from '@/hooks/useTypedRouter';
 import { Ionicons } from '@expo/vector-icons';
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
-import { Modal, RefreshControl, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { RefreshControl, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+
 function getGreeting(): string {
     const hour = new Date().getHours();
     if (hour < 12) return 'Good morning';
@@ -62,12 +66,11 @@ function formatActivities(
     activities: (LeadActivity & { lead_name?: string })[],
 ): { id: string; type: string; leadName: string; detail: string; time: string; icon: string }[] {
     return activities.map((a) => {
-        // Build detail string
         let detail = a.description || '';
         if (a.type === 'status_change' && a.metadata) {
             const from = a.metadata.from_status || '?';
             const to = a.metadata.to_status || '?';
-            detail = `${from.charAt(0).toUpperCase() + from.slice(1)} → ${to.charAt(0).toUpperCase() + to.slice(1)}`;
+            detail = `${from.charAt(0).toUpperCase() + from.slice(1)} \u2192 ${to.charAt(0).toUpperCase() + to.slice(1)}`;
         } else if (a.type === 'created') {
             detail = detail || 'Lead created';
         } else if (a.type === 'note') {
@@ -75,17 +78,7 @@ function formatActivities(
                 ? `Note: ${a.description.substring(0, 40)}${a.description.length > 40 ? '...' : ''}`
                 : 'Added a note';
         }
-
-        const time = timeAgo(a.created_at);
-
-        return {
-            id: a.id,
-            type: a.type,
-            leadName: a.lead_name || 'Unknown',
-            detail,
-            time,
-            icon: ACTIVITY_ICONS[a.type] || 'ellipse',
-        };
+        return { id: a.id, type: a.type, leadName: a.lead_name || 'Unknown', detail, time: timeAgo(a.created_at), icon: ACTIVITY_ICONS[a.type] || 'ellipse' };
     });
 }
 
@@ -99,7 +92,7 @@ export default function HomeScreen() {
     const [error, setError] = useState<string | null>(null);
     const isManagerView = canToggle && viewMode === 'manager';
 
-    // Biometrics setup prompt (one-time, shown after first OTP login)
+    // Biometrics setup prompt
     const [showBiometricsPrompt, setShowBiometricsPrompt] = useState(false);
     const [biometryType, setBiometryType] = useState<BiometryType>('none');
     const [isEnablingBiometrics, setIsEnablingBiometrics] = useState(false);
@@ -123,9 +116,7 @@ export default function HomeScreen() {
         setIsEnablingBiometrics(true);
         const success = await enableBiometrics();
         setIsEnablingBiometrics(false);
-        if (success) {
-            setShowBiometricsPrompt(false);
-        }
+        if (success) setShowBiometricsPrompt(false);
     }, [enableBiometrics]);
 
     const handleDismissBiometricsPrompt = useCallback(async () => {
@@ -133,28 +124,19 @@ export default function HomeScreen() {
         setShowBiometricsPrompt(false);
     }, []);
 
-    // Real data state
+    // Data state
     const [stats, setStats] = useState<LeadPipelineStats | null>(null);
     const [recentActivities, setRecentActivities] = useState<(LeadActivity & { lead_name?: string })[]>([]);
     const [managerStats, setManagerStats] = useState<ManagerDashboardStats | null>(null);
-
-    // PA state
     const [paStats, setPaStats] = useState<{ candidateCount: number; interviewCount: number; events: AgencyEvent[] }>({
-        candidateCount: 0,
-        interviewCount: 0,
-        events: [],
+        candidateCount: 0, interviewCount: 0, events: [],
     });
-
-    // Agent events state
     const [agentEvents, setAgentEvents] = useState<AgencyEvent[]>([]);
-
-    // Candidate state
     const [candidateRoadmap, setCandidateRoadmap] = useState<ProgrammeWithModules[]>([]);
     const [candidateEvents, setCandidateEvents] = useState<AgencyEvent[]>([]);
 
     const greeting = useMemo(() => getGreeting(), []);
     const firstName = user?.full_name?.split(' ')[0] || 'there';
-
     const role = user?.role;
     const isCandidate = role === 'candidate';
     const isPa = role === 'pa';
@@ -164,46 +146,32 @@ export default function HomeScreen() {
         if (!user?.id) return;
         try {
             setError(null);
-
-            // ── Candidate branch ──
             if (isCandidate) {
                 const [roadmapResult, eventsResult] = await Promise.all([
-                    fetchCandidateRoadmap(user.id),
-                    fetchUpcomingEvents(user.id, 3),
+                    fetchCandidateRoadmap(user.id), fetchUpcomingEvents(user.id, 3),
                 ]);
                 if (roadmapResult.data) setCandidateRoadmap(roadmapResult.data);
                 setCandidateEvents(eventsResult.data);
                 return;
             }
-
-            // ── PA branch ──
             if (isPa) {
                 const managerIds = await fetchPAManagerIds(user.id);
                 const [total, interviews, eventsResult] = await Promise.all([
-                    fetchPACandidateCount(managerIds),
-                    fetchPAInterviewCount(managerIds),
-                    fetchUpcomingEvents(user.id, 5),
+                    fetchPACandidateCount(managerIds), fetchPAInterviewCount(managerIds), fetchUpcomingEvents(user.id, 5),
                 ]);
                 setPaStats({ candidateCount: total ?? 0, interviewCount: interviews ?? 0, events: eventsResult.data });
                 return;
             }
-
-            // ── Agent / Manager / Admin branch ──
             const isManagerLike = isManagerView || isAdminRole;
             const promises: Promise<any>[] = [
-                fetchLeadStats(user.id, isManagerLike),
-                fetchRecentActivities(user.id, isManagerLike, 5),
+                fetchLeadStats(user.id, isManagerLike), fetchRecentActivities(user.id, isManagerLike, 5),
             ];
-            if (isManagerLike && user.role) {
-                promises.push(fetchManagerDashboardStats(user.id, user.role));
-            }
+            if (isManagerLike && user.role) promises.push(fetchManagerDashboardStats(user.id, user.role));
             const results = await Promise.all(promises);
             if (results[0].data) setStats(results[0].data);
             if (results[1].data) setRecentActivities(results[1].data);
             if (results[2]?.data) setManagerStats(results[2].data);
             if (results[0].error) setError('Failed to load dashboard data');
-
-            // Fetch upcoming events for agents
             if (!isManagerLike) {
                 const eventsResult = await fetchUpcomingEvents(user.id, 5);
                 setAgentEvents(eventsResult.data);
@@ -213,9 +181,7 @@ export default function HomeScreen() {
         }
     }, [user?.id, isCandidate, isPa, isManagerView, isAdminRole, user?.role]);
 
-    useEffect(() => {
-        loadDashboardData();
-    }, [loadDashboardData]);
+    useEffect(() => { loadDashboardData(); }, [loadDashboardData]);
 
     const onRefresh = useCallback(async () => {
         setRefreshing(true);
@@ -223,24 +189,15 @@ export default function HomeScreen() {
         setRefreshing(false);
     }, [loadDashboardData]);
 
-    // Use real stats (show zeros when no data yet)
-    const agentStats = stats || { totalLeads: 0, newThisWeek: 0, conversionRate: 0, activeFollowUps: 0 };
     const pipeline = stats?.pipeline || [];
-
-    // Normalize recent activities for display
     const displayActivities = useMemo(
         () => (recentActivities.length > 0 ? formatActivities(recentActivities) : []),
         [recentActivities, isManagerView],
     );
-
-    const totalPipeline = useMemo(() => pipeline.reduce((n, s) => n + s.count, 0), [pipeline]);
-
-    // Candidate derived data
     const currentProgramme = candidateRoadmap.find((p) => !p.isLocked && p.percentage < 100) ?? candidateRoadmap[0];
 
     return (
         <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]} edges={['top']}>
-            {/* Sticky Header */}
             <ScreenHeader
                 title="Lyfe"
                 titleElement={<LyfeLogo size="sm" />}
@@ -292,7 +249,6 @@ export default function HomeScreen() {
                     <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={colors.accent} />
                 }
             >
-                {/* Greeting + View Mode */}
                 <View style={styles.greetingRow}>
                     <Text style={[styles.greetingText, { letterSpacing: letterSpacing(-0.3) }]} numberOfLines={1}>
                         <Text style={{ color: colors.textSecondary }}>{greeting}, </Text>
@@ -302,479 +258,82 @@ export default function HomeScreen() {
 
                 {error && <ErrorBanner message={error} onRetry={loadDashboardData} onDismiss={() => setError(null)} />}
 
-                {/* Hero Stats */}
-                <View style={styles.heroStatsContainer}>
-                    {isCandidate ? (
-                        <>
-                            <View style={styles.statsRow}>
-                                <View style={[styles.heroCardPrimary, { backgroundColor: colors.accent }]}>
-                                    <Ionicons
-                                        name="map"
-                                        size={80}
-                                        color="rgba(255,255,255,0.15)"
-                                        style={styles.heroIconBg}
-                                    />
-                                    <Text style={[styles.heroStatValue, { color: colors.textInverse }]}>
-                                        {currentProgramme ? `${currentProgramme.percentage}%` : '—'}
-                                    </Text>
-                                    <Text style={[styles.heroStatLabel, { color: colors.textInverse, opacity: 0.9 }]}>
-                                        {currentProgramme?.title || 'Roadmap'}
-                                    </Text>
-                                </View>
-                                <View style={styles.statsColumn}>
-                                    <StatCardSmall
-                                        label="Modules Done"
-                                        value={
-                                            currentProgramme
-                                                ? `${currentProgramme.completedCount}/${currentProgramme.totalCount}`
-                                                : '—'
-                                        }
-                                        colors={colors}
-                                    />
-                                    <StatCardSmall
-                                        label="Programmes"
-                                        value={candidateRoadmap.length.toString()}
-                                        colors={colors}
-                                    />
-                                </View>
-                            </View>
-                        </>
-                    ) : isPa ? (
-                        <View style={styles.statsRow}>
-                            <View style={[styles.heroCardPrimary, { backgroundColor: colors.accent }]}>
-                                <Ionicons
-                                    name="document-text"
-                                    size={80}
-                                    color="rgba(255,255,255,0.15)"
-                                    style={styles.heroIconBg}
-                                />
-                                <Text style={[styles.heroStatValue, { color: colors.textInverse }]}>
-                                    {paStats.candidateCount}
-                                </Text>
-                                <Text style={[styles.heroStatLabel, { color: colors.textInverse, opacity: 0.9 }]}>
-                                    Candidates
-                                </Text>
-                            </View>
-                            <View style={styles.statsColumn}>
-                                <StatCardSmall
-                                    label="Interviews"
-                                    value={paStats.interviewCount.toString()}
-                                    colors={colors}
-                                />
-                                <StatCardSmall
-                                    label="Events"
-                                    value={paStats.events.length.toString()}
-                                    colors={colors}
-                                />
-                            </View>
-                        </View>
-                    ) : isAdminRole || isManagerView ? (
-                        <>
-                            <View style={styles.statsRow}>
-                                <View style={[styles.heroCardPrimary, { backgroundColor: colors.accent }]}>
-                                    <Ionicons
-                                        name="people"
-                                        size={80}
-                                        color="rgba(255,255,255,0.15)"
-                                        style={styles.heroIconBg}
-                                    />
-                                    <Text style={[styles.heroStatValue, { color: colors.textInverse }]}>
-                                        {stats?.totalLeads ?? 0}
-                                    </Text>
-                                    <Text style={[styles.heroStatLabel, { color: colors.textInverse, opacity: 0.9 }]}>
-                                        Team Leads
-                                    </Text>
-                                </View>
-                                <View style={styles.statsColumn}>
-                                    <StatCardSmall
-                                        label="Candidates"
-                                        value={(managerStats?.activeCandidates ?? 0).toString()}
-                                        colors={colors}
-                                    />
-                                    <StatCardSmall
-                                        label="Agents"
-                                        value={(managerStats?.agentsManaged ?? 0).toString()}
-                                        colors={colors}
-                                    />
-                                </View>
-                            </View>
-                        </>
-                    ) : (
-                        <>
-                            <View style={styles.statsRow}>
-                                <View style={[styles.heroCardPrimary, { backgroundColor: colors.accent }]}>
-                                    <Ionicons
-                                        name="briefcase"
-                                        size={80}
-                                        color="rgba(255,255,255,0.15)"
-                                        style={styles.heroIconBg}
-                                    />
-                                    <Text style={[styles.heroStatValue, { color: colors.textInverse }]}>
-                                        {agentStats.totalLeads}
-                                    </Text>
-                                    <Text style={[styles.heroStatLabel, { color: colors.textInverse, opacity: 0.9 }]}>
-                                        Total Leads
-                                    </Text>
-                                </View>
-                                <View style={styles.statsColumn}>
-                                    <StatCardSmall
-                                        label="New Leads"
-                                        value={agentStats.newThisWeek.toString()}
-                                        colors={colors}
-                                    />
-                                    <StatCardSmall
-                                        label="Conversion"
-                                        value={`${agentStats.conversionRate}%`}
-                                        colors={colors}
-                                    />
-                                </View>
-                            </View>
-                        </>
-                    )}
-                </View>
+                <HeroStatsSection
+                    colors={colors}
+                    isCandidate={isCandidate}
+                    isPa={isPa}
+                    isManagerView={isManagerView}
+                    isAdminRole={isAdminRole}
+                    stats={stats}
+                    managerStats={managerStats}
+                    paStats={{ candidateCount: paStats.candidateCount, interviewCount: paStats.interviewCount, eventCount: paStats.events.length }}
+                    currentProgramme={currentProgramme}
+                    candidateRoadmapCount={candidateRoadmap.length}
+                />
 
-                {/* Roadmap Progress — candidate only */}
                 {isCandidate && currentProgramme && (
-                    <TouchableOpacity
-                        style={[styles.card, { backgroundColor: colors.cardBackground }]}
+                    <RoadmapProgressCard
+                        programme={currentProgramme}
+                        colors={colors}
                         onPress={() => router.push('/(tabs)/roadmap')}
-                        activeOpacity={0.7}
-                    >
-                        <View style={styles.sectionHeaderRow}>
-                            <Text style={[styles.sectionTitle, { color: colors.textPrimary }]}>Roadmap Progress</Text>
-                            <Ionicons name="chevron-forward" size={18} color={colors.textTertiary} />
-                        </View>
-                        <Text style={[styles.candidateProgName, { color: colors.textSecondary }]}>
-                            {currentProgramme.title}
-                        </Text>
-                        <View style={styles.candidateProgressBarTrack}>
-                            <View
-                                style={[
-                                    styles.candidateProgressBarFill,
-                                    {
-                                        backgroundColor: colors.accent,
-                                        width: `${Math.max(currentProgramme.percentage, 2)}%`,
-                                    },
-                                ]}
-                            />
-                        </View>
-                        <Text style={[styles.candidateProgressLabel, { color: colors.textTertiary }]}>
-                            {currentProgramme.completedCount} of {currentProgramme.totalCount} modules completed
-                        </Text>
-                    </TouchableOpacity>
+                    />
                 )}
 
-                {/* Upcoming Events — candidate only */}
                 {isCandidate && (
-                    <View style={[styles.card, { backgroundColor: colors.cardBackground }]}>
-                        <View style={styles.sectionHeaderRow}>
-                            <Text style={[styles.sectionTitle, { color: colors.textPrimary }]}>Upcoming Events</Text>
-                            <TouchableOpacity onPress={() => router.push('/(tabs)/events')}>
-                                <Text style={[styles.seeAllText, { color: colors.accent }]}>See All</Text>
-                            </TouchableOpacity>
-                        </View>
-
-                        {candidateEvents.length === 0 ? (
-                            <Text style={[styles.emptyActivityText, { color: colors.textTertiary }]}>
-                                No upcoming events
-                            </Text>
-                        ) : (
-                            candidateEvents.map((event) => {
-                                const typeColor = EVENT_TYPE_CONFIG[event.event_type].color ?? colors.accent;
-                                return (
-                                    <TouchableOpacity
-                                        key={event.id}
-                                        style={styles.managerEventRow}
-                                        onPress={() => router.push(`/(tabs)/home/event/${event.id}` as any)}
-                                        activeOpacity={0.7}
-                                    >
-                                        <View style={[styles.managerEventStripe, { backgroundColor: typeColor }]} />
-                                        <View style={styles.managerEventContent}>
-                                            <Text
-                                                style={[styles.managerEventTitle, { color: colors.textPrimary }]}
-                                                numberOfLines={1}
-                                            >
-                                                {event.title}
-                                            </Text>
-                                            <Text style={[styles.managerEventMeta, { color: colors.textTertiary }]}>
-                                                {formatDateShort(event.event_date)} · {formatTime(event.start_time)}
-                                            </Text>
-                                            {event.location ? (
-                                                <Text
-                                                    style={[styles.managerEventOwner, { color: typeColor }]}
-                                                    numberOfLines={1}
-                                                >
-                                                    {event.location}
-                                                </Text>
-                                            ) : null}
-                                        </View>
-                                    </TouchableOpacity>
-                                );
-                            })
-                        )}
-                    </View>
+                    <UpcomingEventsCard
+                        title="Upcoming Events"
+                        events={candidateEvents}
+                        colors={colors}
+                        onSeeAll={() => router.push('/(tabs)/events')}
+                        onEventPress={(id) => router.push(`/(tabs)/home/event/${id}` as any)}
+                    />
                 )}
 
-                {/* My Events — PA only */}
                 {isPa && (
-                    <View style={[styles.card, { backgroundColor: colors.cardBackground }]}>
-                        <View style={styles.sectionHeaderRow}>
-                            <Text style={[styles.sectionTitle, { color: colors.textPrimary }]}>My Events</Text>
-                            <TouchableOpacity onPress={() => router.push('/(tabs)/events')}>
-                                <Text style={[styles.seeAllText, { color: colors.accent }]}>See All</Text>
-                            </TouchableOpacity>
-                        </View>
-
-                        {paStats.events.length === 0 ? (
-                            <Text style={[styles.emptyActivityText, { color: colors.textTertiary }]}>
-                                No upcoming events
-                            </Text>
-                        ) : (
-                            paStats.events.map((event) => {
-                                const typeColor = EVENT_TYPE_CONFIG[event.event_type].color ?? colors.accent;
-                                return (
-                                    <TouchableOpacity
-                                        key={event.id}
-                                        style={styles.managerEventRow}
-                                        onPress={() => router.push(`/(tabs)/home/event/${event.id}` as any)}
-                                        activeOpacity={0.7}
-                                    >
-                                        <View style={[styles.managerEventStripe, { backgroundColor: typeColor }]} />
-                                        <View style={styles.managerEventContent}>
-                                            <Text
-                                                style={[styles.managerEventTitle, { color: colors.textPrimary }]}
-                                                numberOfLines={1}
-                                            >
-                                                {event.title}
-                                            </Text>
-                                            <Text style={[styles.managerEventMeta, { color: colors.textTertiary }]}>
-                                                {formatDateShort(event.event_date)} · {formatTime(event.start_time)}
-                                            </Text>
-                                            {event.location ? (
-                                                <Text
-                                                    style={[styles.managerEventOwner, { color: typeColor }]}
-                                                    numberOfLines={1}
-                                                >
-                                                    {event.location}
-                                                </Text>
-                                            ) : null}
-                                        </View>
-                                    </TouchableOpacity>
-                                );
-                            })
-                        )}
-                    </View>
+                    <UpcomingEventsCard
+                        title="My Events"
+                        events={paStats.events}
+                        colors={colors}
+                        onSeeAll={() => router.push('/(tabs)/events')}
+                        onEventPress={(id) => router.push(`/(tabs)/home/event/${id}` as any)}
+                    />
                 )}
 
-                {/* My Events — agent only */}
                 {!isCandidate && !isPa && !isAdminRole && !isManagerView && (
-                    <View style={[styles.card, { backgroundColor: colors.cardBackground }]}>
-                        <View style={styles.sectionHeaderRow}>
-                            <Text style={[styles.sectionTitle, { color: colors.textPrimary }]}>My Events</Text>
-                            <TouchableOpacity onPress={() => router.push('/(tabs)/events')}>
-                                <Text style={[styles.seeAllText, { color: colors.accent }]}>See All</Text>
-                            </TouchableOpacity>
-                        </View>
-
-                        {agentEvents.length === 0 ? (
-                            <Text style={[styles.emptyActivityText, { color: colors.textTertiary }]}>
-                                No upcoming events
-                            </Text>
-                        ) : (
-                            agentEvents.map((event) => {
-                                const typeColor = EVENT_TYPE_CONFIG[event.event_type].color ?? colors.accent;
-                                return (
-                                    <TouchableOpacity
-                                        key={event.id}
-                                        style={styles.managerEventRow}
-                                        onPress={() => router.push(`/(tabs)/home/event/${event.id}` as any)}
-                                        activeOpacity={0.7}
-                                    >
-                                        <View style={[styles.managerEventStripe, { backgroundColor: typeColor }]} />
-                                        <View style={styles.managerEventContent}>
-                                            <Text
-                                                style={[styles.managerEventTitle, { color: colors.textPrimary }]}
-                                                numberOfLines={1}
-                                            >
-                                                {event.title}
-                                            </Text>
-                                            <Text style={[styles.managerEventMeta, { color: colors.textTertiary }]}>
-                                                {formatDateShort(event.event_date)} · {formatTime(event.start_time)}
-                                            </Text>
-                                            {event.location ? (
-                                                <Text
-                                                    style={[styles.managerEventOwner, { color: typeColor }]}
-                                                    numberOfLines={1}
-                                                >
-                                                    {event.location}
-                                                </Text>
-                                            ) : null}
-                                        </View>
-                                    </TouchableOpacity>
-                                );
-                            })
-                        )}
-                    </View>
+                    <UpcomingEventsCard
+                        title="My Events"
+                        events={agentEvents}
+                        colors={colors}
+                        onSeeAll={() => router.push('/(tabs)/events')}
+                        onEventPress={(id) => router.push(`/(tabs)/home/event/${id}` as any)}
+                    />
                 )}
 
-                {/* Lead Pipeline — hidden for candidates and PA */}
                 {!isCandidate && !isPa && (
-                    <View
-                        style={[
-                            styles.card,
-                            { backgroundColor: colors.cardBackground, shadowColor: colors.textPrimary },
-                        ]}
-                    >
-                        <Text style={[styles.sectionTitle, { color: colors.textPrimary }]}>Lead Pipeline</Text>
-                        <View style={[styles.pipelineWrapper, { backgroundColor: colors.borderLight }]}>
-                            <View style={styles.pipelineBar}>
-                                {pipeline
-                                    .filter((s) => s.count > 0)
-                                    .map((seg) => (
-                                        <View
-                                            key={seg.status}
-                                            style={[
-                                                styles.pipelineSegment,
-                                                {
-                                                    flex: seg.count / totalPipeline,
-                                                    backgroundColor: STATUS_CONFIG[seg.status].color,
-                                                },
-                                            ]}
-                                        />
-                                    ))}
-                            </View>
-                        </View>
-                        <View style={styles.pipelineLegend}>
-                            {pipeline.map((seg) => {
-                                if (seg.count === 0) return null;
-                                return (
-                                    <View
-                                        key={seg.status}
-                                        style={[styles.legendChip, { backgroundColor: colors.background }]}
-                                    >
-                                        <View
-                                            style={[
-                                                styles.legendDot,
-                                                { backgroundColor: STATUS_CONFIG[seg.status].color },
-                                            ]}
-                                        />
-                                        <Text style={[styles.legendLabel, { color: colors.textSecondary }]}>
-                                            {STATUS_CONFIG[seg.status].label}
-                                        </Text>
-                                        <Text style={[styles.legendCount, { color: colors.textPrimary }]}>
-                                            {seg.count}
-                                        </Text>
-                                    </View>
-                                );
-                            })}
-                        </View>
-                    </View>
+                    <LeadPipelineCard pipeline={pipeline} colors={colors} />
                 )}
 
-                {/* Recent Activity — hidden for candidates and PA */}
                 {!isCandidate && !isPa && (
-                    <View
-                        style={[
-                            styles.card,
-                            { backgroundColor: colors.cardBackground, shadowColor: colors.textPrimary },
-                        ]}
-                    >
-                        <View style={styles.sectionHeaderRow}>
-                            <Text style={[styles.sectionTitle, { color: colors.textPrimary }]}>Recent Activity</Text>
-                            <TouchableOpacity
-                                onPress={() => router.push('/(tabs)/leads')}
-                                accessibilityRole="button"
-                                accessibilityLabel="See all recent activity"
-                            >
-                                <Text style={[styles.seeAllText, { color: colors.accent }]}>See All</Text>
-                            </TouchableOpacity>
-                        </View>
-
-                        <View style={styles.activityFeed}>
-                            {displayActivities.length === 0 ? (
-                                <Text style={[styles.emptyActivityText, { color: colors.textTertiary }]}>
-                                    No recent activity
-                                </Text>
-                            ) : (
-                                displayActivities.map((activity) => (
-                                    <View key={activity.id} style={styles.activityRow}>
-                                        <View
-                                            style={[styles.activityIconCircle, { backgroundColor: colors.accentLight }]}
-                                        >
-                                            <Ionicons name={activity.icon as any} size={18} color={colors.accent} />
-                                        </View>
-                                        <View style={styles.activityContent}>
-                                            <Text style={[styles.activityLeadName, { color: colors.textPrimary }]}>
-                                                {activity.leadName}
-                                            </Text>
-                                            <Text style={[styles.activityDetail, { color: colors.textSecondary }]}>
-                                                {activity.detail}
-                                            </Text>
-                                        </View>
-                                        <Text style={[styles.activityTime, { color: colors.textTertiary }]}>
-                                            {activity.time}
-                                        </Text>
-                                    </View>
-                                ))
-                            )}
-                        </View>
-                    </View>
+                    <RecentActivityCard
+                        activities={displayActivities}
+                        colors={colors}
+                        onSeeAll={() => router.push('/(tabs)/leads')}
+                    />
                 )}
             </ScrollView>
 
-            {/* ── Biometrics Setup Prompt (one-time) ── */}
-            <Modal
+            <BiometricsPrompt
                 visible={showBiometricsPrompt}
-                transparent
-                animationType="slide"
-                onRequestClose={handleDismissBiometricsPrompt}
-                accessibilityViewIsModal
-            >
-                <View style={styles.biometricOverlay}>
-                    <View style={[styles.biometricSheet, { backgroundColor: colors.cardBackground }]}>
-                        <View style={[styles.biometricIconCircle, { backgroundColor: colors.accentLight }]}>
-                            <Ionicons name={biometricMeta(biometryType).icon as any} size={40} color={colors.accent} />
-                        </View>
-                        <Text style={[styles.biometricTitle, { color: colors.textPrimary }]}>
-                            Sign in with {biometricMeta(biometryType).label}
-                        </Text>
-                        <Text style={[styles.biometricSubtitle, { color: colors.textSecondary }]}>
-                            Skip the OTP next time — use {biometricMeta(biometryType).label} to sign in instantly.
-                        </Text>
-                        <TouchableOpacity
-                            style={[styles.biometricEnableBtn, { backgroundColor: colors.accent }]}
-                            onPress={handleEnableBiometrics}
-                            disabled={isEnablingBiometrics}
-                            activeOpacity={0.8}
-                            accessibilityRole="button"
-                            accessibilityLabel={`Enable ${biometricMeta(biometryType).label}`}
-                        >
-                            <Ionicons
-                                name={biometricMeta(biometryType).icon as any}
-                                size={20}
-                                color={colors.textInverse}
-                            />
-                            <Text style={[styles.biometricEnableBtnText, { color: colors.textInverse }]}>
-                                Enable {biometricMeta(biometryType).label}
-                            </Text>
-                        </TouchableOpacity>
-                        <TouchableOpacity
-                            style={styles.biometricDismissBtn}
-                            onPress={handleDismissBiometricsPrompt}
-                            activeOpacity={0.7}
-                            accessibilityRole="button"
-                            accessibilityLabel="Not now"
-                        >
-                            <Text style={[styles.biometricDismissText, { color: colors.textTertiary }]}>Not Now</Text>
-                        </TouchableOpacity>
-                    </View>
-                </View>
-            </Modal>
+                biometryType={biometryType}
+                isEnabling={isEnablingBiometrics}
+                colors={colors}
+                onEnable={handleEnableBiometrics}
+                onDismiss={handleDismissBiometricsPrompt}
+            />
         </SafeAreaView>
     );
 }
 
-// ── Styles ──
 const styles = StyleSheet.create({
     container: { flex: 1 },
     scrollContent: { paddingBottom: 40, paddingTop: 4 },
@@ -787,8 +346,6 @@ const styles = StyleSheet.create({
         marginBottom: 16,
     },
     greetingText: { fontSize: 22 },
-
-    // Header
     headerRight: {
         flexDirection: 'row',
         alignItems: 'center',
@@ -819,209 +376,5 @@ const styles = StyleSheet.create({
         fontSize: 10,
         fontWeight: '700',
         lineHeight: 12,
-    },
-
-    // Shared Section Styles
-    section: {
-        marginHorizontal: 16,
-        marginBottom: 20,
-    },
-    sectionTitle: { fontSize: 18, fontWeight: '700', marginBottom: 12 },
-    sectionHeaderRow: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        justifyContent: 'space-between',
-        marginBottom: 16,
-    },
-    seeAllText: { fontSize: 14, fontWeight: '600' },
-
-    // Card Standard
-    card: {
-        marginHorizontal: 16,
-        marginBottom: 20,
-        borderRadius: 20,
-        padding: 20,
-        shadowOffset: { width: 0, height: 4 },
-        shadowOpacity: 0.04,
-        shadowRadius: 12,
-        elevation: 2,
-    },
-
-    // Hero Stats (Staggered Layout)
-    heroStatsContainer: {
-        paddingHorizontal: 16,
-        marginBottom: 20,
-    },
-    statsRow: {
-        flexDirection: 'row',
-        gap: 12,
-    },
-    heroCardPrimary: {
-        flex: 1.2,
-        borderRadius: 24,
-        padding: 20,
-        justifyContent: 'flex-end',
-        position: 'relative',
-        overflow: 'hidden',
-        minHeight: 160,
-    },
-    heroIconBg: {
-        position: 'absolute',
-        top: -10,
-        right: -10,
-        transform: [{ rotate: '15deg' }],
-    },
-    heroStatValue: {
-        fontSize: 40,
-        fontWeight: displayWeight('800'),
-        marginBottom: 4,
-        letterSpacing: letterSpacing(-1),
-    },
-    heroStatLabel: { fontSize: 15, fontWeight: '500' },
-
-    statsColumn: {
-        flex: 1,
-        gap: 12,
-    },
-
-    // Candidate sections
-    candidateProgName: {
-        fontSize: 14,
-        fontWeight: '600',
-        marginBottom: 10,
-    },
-    candidateProgressBarTrack: {
-        height: 8,
-        borderRadius: 4,
-        backgroundColor: 'rgba(0,0,0,0.06)',
-        overflow: 'hidden',
-        marginBottom: 8,
-    },
-    candidateProgressBarFill: {
-        height: '100%',
-        borderRadius: 4,
-    },
-    candidateProgressLabel: {
-        fontSize: 13,
-    },
-    // Pipeline
-    pipelineWrapper: {
-        borderRadius: 10,
-        padding: 4,
-        marginBottom: 16,
-    },
-    pipelineBar: {
-        flexDirection: 'row',
-        height: 12,
-        borderRadius: 8,
-        overflow: 'hidden',
-        gap: 2,
-    },
-    pipelineSegment: { borderRadius: 8 },
-    pipelineLegend: {
-        flexDirection: 'row',
-        flexWrap: 'wrap',
-        gap: 8,
-    },
-    legendChip: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        paddingHorizontal: 10,
-        paddingVertical: 6,
-        borderRadius: 12,
-        gap: 6,
-    },
-    legendDot: {
-        width: 6,
-        height: 6,
-        borderRadius: 3,
-    },
-    legendLabel: { fontSize: 12, fontWeight: '500' },
-    legendCount: { fontSize: 13, fontWeight: '700' },
-
-    // Activity Feed
-    activityFeed: {
-        gap: 16,
-    },
-    emptyActivityText: { fontSize: 14, textAlign: 'center', paddingVertical: 8 },
-    activityRow: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        gap: 12,
-    },
-    activityIconCircle: {
-        width: 40,
-        height: 40,
-        borderRadius: 20,
-        alignItems: 'center',
-        justifyContent: 'center',
-    },
-    activityContent: { flex: 1 },
-    activityLeadName: { fontSize: 15, fontWeight: '700', marginBottom: 2 },
-    activityDetail: { fontSize: 13, fontWeight: '400' },
-    activityTime: { fontSize: 12, alignSelf: 'flex-start', marginTop: 2 },
-
-    // Manager Schedule (PA view)
-    managerEventRow: { flexDirection: 'row', alignItems: 'stretch', gap: 12, marginBottom: 14 },
-    managerEventStripe: { width: 4, borderRadius: 2 },
-    managerEventContent: { flex: 1 },
-    managerEventTitle: { fontSize: 15, fontWeight: '600', marginBottom: 2 },
-    managerEventMeta: { fontSize: 12, marginBottom: 2 },
-    managerEventOwner: { fontSize: 12, fontWeight: '600' },
-
-    // Biometrics prompt sheet
-    biometricOverlay: {
-        flex: 1,
-        justifyContent: 'flex-end',
-        backgroundColor: 'rgba(0,0,0,0.4)',
-    },
-    biometricSheet: {
-        borderTopLeftRadius: 28,
-        borderTopRightRadius: 28,
-        padding: 32,
-        paddingBottom: 48,
-        alignItems: 'center',
-    },
-    biometricIconCircle: {
-        width: 80,
-        height: 80,
-        borderRadius: 40,
-        alignItems: 'center',
-        justifyContent: 'center',
-        marginBottom: 20,
-    },
-    biometricTitle: {
-        fontSize: 22,
-        fontWeight: '700',
-        marginBottom: 10,
-        textAlign: 'center',
-        letterSpacing: letterSpacing(-0.3),
-    },
-    biometricSubtitle: {
-        fontSize: 15,
-        textAlign: 'center',
-        lineHeight: 22,
-        marginBottom: 28,
-    },
-    biometricEnableBtn: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        justifyContent: 'center',
-        gap: 10,
-        width: '100%',
-        height: 52,
-        borderRadius: 14,
-        marginBottom: 12,
-    },
-    biometricEnableBtnText: {
-        fontSize: 16,
-        fontWeight: '600',
-    },
-    biometricDismissBtn: {
-        padding: 12,
-    },
-    biometricDismissText: {
-        fontSize: 15,
-        fontWeight: '500',
     },
 });

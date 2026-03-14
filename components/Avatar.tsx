@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from 'react';
-import { Image, StyleSheet, Text, View } from 'react-native';
+import { Image } from 'expo-image';
+import { StyleSheet, Text, View } from 'react-native';
 
 interface AvatarProps {
     name: string;
@@ -16,14 +17,18 @@ export default function Avatar({ name, avatarUrl, size, backgroundColor, textCol
     const [imgError, setImgError] = useState(false);
 
     // Reset error state when URL changes (e.g. after re-upload)
-    useEffect(() => { setImgError(false); }, [avatarUrl]);
+    useEffect(() => {
+        setImgError(false);
+    }, [avatarUrl]);
 
     if (avatarUrl && !imgError) {
         return (
             <Image
                 source={{ uri: avatarUrl }}
                 style={{ width: size, height: size, borderRadius }}
-                resizeMode="cover"
+                contentFit="cover"
+                cachePolicy="memory-disk"
+                transition={200}
                 onError={() => setImgError(true)}
             />
         );
@@ -31,9 +36,7 @@ export default function Avatar({ name, avatarUrl, size, backgroundColor, textCol
 
     return (
         <View style={[styles.circle, { width: size, height: size, borderRadius, backgroundColor }]}>
-            <Text style={[styles.initial, { color: textColor, fontSize }]}>
-                {initial}
-            </Text>
+            <Text style={[styles.initial, { color: textColor, fontSize }]}>{initial}</Text>
         </View>
     );
 }
