@@ -1,25 +1,16 @@
 import ProgressRing from '@/components/events/ProgressRing';
 import { type ActivityCounts, PITCH_COLOR, CASE_CLOSED_COLOR } from '@/components/events/roadshowShared';
-import WheelPicker from '@/components/WheelPicker';
 import { formatCheckinTime, formatTime } from '@/lib/dateTime';
-import { ERROR_BG, ERROR_TEXT, PICKER_HOURS, PICKER_MINUTES, PICKER_AMPM, ROADSHOW_PINK } from '@/constants/ui';
-import { KAV_BEHAVIOR, letterSpacing } from '@/constants/platform';
+import { ERROR_BG, ERROR_TEXT, ROADSHOW_PINK } from '@/constants/ui';
 import type { RoadshowActivity, RoadshowAttendance, RoadshowConfig } from '@/types/event';
 import type { Colors } from '@/constants/Colors';
 import { Ionicons } from '@expo/vector-icons';
 import React from 'react';
-import {
-    ActivityIndicator,
-    KeyboardAvoidingView,
-    Modal,
-    ScrollView,
-    StyleSheet,
-    Text,
-    TextInput,
-    TouchableOpacity,
-    View,
-} from 'react-native';
-import { SafeAreaView, type EdgeInsets } from 'react-native-safe-area-context';
+import { StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
+import type { EdgeInsets } from 'react-native-safe-area-context';
+import { ActivityConfirmSheet } from './ActivityConfirmSheet';
+import { AfycSheet } from './AfycSheet';
+import { PledgeSheet } from './PledgeSheet';
 
 export interface RoadshowLiveT1Props {
     colors: typeof Colors.light;
@@ -388,301 +379,55 @@ function RoadshowLiveT1Inner(props: RoadshowLiveT1Props) {
             {hasCheckedIn && renderProgress()}
 
             {/* ── Pledge Sheet ── */}
-            <Modal
-                visible={showPledgeSheet}
-                animationType="slide"
-                presentationStyle="pageSheet"
-                onRequestClose={() => setShowPledgeSheet(false)}
-            >
-                <SafeAreaView style={[styles.sheetContainer, { backgroundColor: colors.background }]}>
-                    <KeyboardAvoidingView style={{ flex: 1 }} behavior={KAV_BEHAVIOR}>
-                        <View style={[styles.sheetHeader, { borderBottomColor: colors.border }]}>
-                            <Text style={[styles.sheetTitle, { color: colors.textPrimary }]}>
-                                Your Pledge for Today
-                            </Text>
-                            <TouchableOpacity
-                                onPress={() => setShowPledgeSheet(false)}
-                                hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-                            >
-                                <Ionicons name="close" size={24} color={colors.textSecondary} />
-                            </TouchableOpacity>
-                        </View>
-                        <ScrollView contentContainerStyle={styles.sheetContent}>
-                            <Text style={{ color: colors.textTertiary, fontSize: 13, marginBottom: 16 }}>
-                                Pre-filled with suggested targets. Adjust as needed.
-                            </Text>
-                            {(
-                                [
-                                    ['pledgeSitdowns', 'Sitdowns today', setPledgeSitdowns, pledgeSitdowns],
-                                    ['pledgePitches', 'Pitches today', setPledgePitches, pledgePitches],
-                                    ['pledgeClosed', 'Cases to close', setPledgeClosed, pledgeClosed],
-                                ] as any[]
-                            ).map(([key, label, setter, val]) => (
-                                <View key={key} style={styles.pledgeRow}>
-                                    <Text style={[styles.pledgeLabel, { color: colors.textSecondary }]}>{label}</Text>
-                                    <View style={styles.pledgeStepperRow}>
-                                        <TouchableOpacity
-                                            style={[styles.stepBtn, { backgroundColor: colors.surfaceSecondary }]}
-                                            onPress={() => setter((v: number) => Math.max(0, v - 1))}
-                                            accessibilityLabel={`Decrease ${label}`}
-                                        >
-                                            <Ionicons name="remove" size={18} color={colors.textPrimary} />
-                                        </TouchableOpacity>
-                                        <Text style={[styles.stepVal, { color: colors.textPrimary }]}>{val}</Text>
-                                        <TouchableOpacity
-                                            style={[styles.stepBtn, { backgroundColor: colors.surfaceSecondary }]}
-                                            onPress={() => setter((v: number) => v + 1)}
-                                            accessibilityLabel={`Increase ${label}`}
-                                        >
-                                            <Ionicons name="add" size={18} color={colors.textPrimary} />
-                                        </TouchableOpacity>
-                                    </View>
-                                </View>
-                            ))}
-                            <View style={styles.field}>
-                                <Text style={[styles.pledgeLabel, { color: colors.textSecondary }]}>
-                                    AFYC target ($)
-                                </Text>
-                                <TextInput
-                                    style={[
-                                        styles.inputSm,
-                                        {
-                                            backgroundColor: colors.inputBackground,
-                                            borderColor: colors.inputBorder,
-                                            color: colors.textPrimary,
-                                        },
-                                    ]}
-                                    placeholder="e.g. 2000"
-                                    placeholderTextColor={colors.textTertiary}
-                                    value={pledgeAfyc}
-                                    onChangeText={(v) => setPledgeAfyc(v.replace(/[^0-9]/g, ''))}
-                                    keyboardType="number-pad"
-                                />
-                            </View>
-                            {checkinError && (
-                                <View style={[styles.errorBanner, { backgroundColor: ERROR_BG }]}>
-                                    <Text style={{ color: ERROR_TEXT, fontSize: 13 }}>{checkinError}</Text>
-                                </View>
-                            )}
-                            <TouchableOpacity
-                                style={[
-                                    styles.checkinBtn,
-                                    { backgroundColor: colors.accent, opacity: checkingIn ? 0.6 : 1 },
-                                ]}
-                                onPress={handleConfirmPledge}
-                                disabled={checkingIn}
-                            >
-                                {checkingIn ? (
-                                    <ActivityIndicator size="small" color={colors.textInverse} />
-                                ) : (
-                                    <>
-                                        <Ionicons name="checkmark" size={20} color={colors.textInverse} />
-                                        <Text style={styles.checkinBtnText}>Confirm &amp; Pledge</Text>
-                                    </>
-                                )}
-                            </TouchableOpacity>
-                        </ScrollView>
-                    </KeyboardAvoidingView>
-                </SafeAreaView>
-            </Modal>
+            <PledgeSheet
+                colors={colors}
+                showPledgeSheet={showPledgeSheet}
+                setShowPledgeSheet={setShowPledgeSheet}
+                pledgeSitdowns={pledgeSitdowns}
+                setPledgeSitdowns={setPledgeSitdowns}
+                pledgePitches={pledgePitches}
+                setPledgePitches={setPledgePitches}
+                pledgeClosed={pledgeClosed}
+                setPledgeClosed={setPledgeClosed}
+                pledgeAfyc={pledgeAfyc}
+                setPledgeAfyc={setPledgeAfyc}
+                checkingIn={checkingIn}
+                checkinError={checkinError}
+                handleConfirmPledge={handleConfirmPledge}
+            />
 
             {/* ── Activity Confirm Sheet ── */}
-            <Modal
-                visible={confirmActivity !== null}
-                transparent
-                animationType="fade"
-                onRequestClose={() => setConfirmActivity(null)}
-            >
-                {(() => {
-                    const cfg =
-                        confirmActivity === 'sitdown'
-                            ? {
-                                  label: 'Sitdown',
-                                  icon: 'people-outline' as const,
-                                  color: colors.managerColor,
-                                  count: myCounts.sitdowns,
-                              }
-                            : {
-                                  label: 'Pitch',
-                                  icon: 'megaphone-outline' as const,
-                                  color: PITCH_COLOR,
-                                  count: myCounts.pitches,
-                              };
-                    return (
-                        <View style={styles.confirmOverlay}>
-                            <TouchableOpacity
-                                style={StyleSheet.absoluteFillObject}
-                                activeOpacity={1}
-                                onPress={() => setConfirmActivity(null)}
-                            />
-                            <View
-                                style={[
-                                    styles.confirmSheet,
-                                    { backgroundColor: colors.cardBackground, paddingBottom: insets.bottom + 24 },
-                                ]}
-                            >
-                                <View style={[styles.confirmHandle, { backgroundColor: colors.border }]} />
-                                <View style={[styles.confirmIconBg, { backgroundColor: cfg.color + '18' }]}>
-                                    <Ionicons name={cfg.icon} size={34} color={cfg.color} />
-                                </View>
-                                <Text style={[styles.confirmTitle, { color: colors.textPrimary }]}>
-                                    Log {cfg.label}?
-                                </Text>
-                                <Text style={[styles.confirmSubtitle, { color: colors.textTertiary }]}>
-                                    {cfg.count === 0 ? 'First one today' : `${cfg.count} logged so far today`}
-                                </Text>
-                                <Text style={[styles.confirmTimeLabel, { color: colors.textTertiary }]}>Time</Text>
-                                <View style={styles.wheelRow}>
-                                    <WheelPicker
-                                        items={PICKER_HOURS}
-                                        selectedIndex={logHour}
-                                        onChange={setLogHour}
-                                        colors={colors}
-                                        width={52}
-                                    />
-                                    <WheelPicker
-                                        items={PICKER_MINUTES}
-                                        selectedIndex={logMinuteIdx}
-                                        onChange={setLogMinuteIdx}
-                                        colors={colors}
-                                        width={52}
-                                    />
-                                    <WheelPicker
-                                        items={PICKER_AMPM}
-                                        selectedIndex={logAmPm}
-                                        onChange={setLogAmPm}
-                                        colors={colors}
-                                        width={60}
-                                    />
-                                </View>
-                                <TouchableOpacity
-                                    style={[styles.confirmBtn, { backgroundColor: cfg.color }]}
-                                    activeOpacity={0.8}
-                                    onPress={() => {
-                                        handleLogActivity(confirmActivity!);
-                                        setConfirmActivity(null);
-                                    }}
-                                >
-                                    <Text style={styles.confirmBtnText}>Log {cfg.label}</Text>
-                                </TouchableOpacity>
-                                <TouchableOpacity style={styles.confirmCancel} onPress={() => setConfirmActivity(null)}>
-                                    <Text style={[styles.confirmCancelText, { color: colors.textSecondary }]}>
-                                        Cancel
-                                    </Text>
-                                </TouchableOpacity>
-                            </View>
-                        </View>
-                    );
-                })()}
-            </Modal>
+            <ActivityConfirmSheet
+                colors={colors}
+                confirmActivity={confirmActivity}
+                setConfirmActivity={setConfirmActivity}
+                myCounts={myCounts}
+                insets={insets}
+                logHour={logHour}
+                setLogHour={setLogHour}
+                logMinuteIdx={logMinuteIdx}
+                setLogMinuteIdx={setLogMinuteIdx}
+                logAmPm={logAmPm}
+                setLogAmPm={setLogAmPm}
+                handleLogActivity={handleLogActivity}
+            />
 
             {/* ── AFYC Input Sheet ── */}
-            <Modal
-                visible={showAfycSheet}
-                animationType="slide"
-                presentationStyle="pageSheet"
-                onRequestClose={() => setShowAfycSheet(false)}
-            >
-                <SafeAreaView style={[styles.sheetContainer, { backgroundColor: colors.background }]}>
-                    <KeyboardAvoidingView style={{ flex: 1 }} behavior={KAV_BEHAVIOR}>
-                        <View style={[styles.sheetHeader, { borderBottomColor: colors.border }]}>
-                            <Text style={[styles.sheetTitle, { color: colors.textPrimary }]}>Log Case Closed</Text>
-                            <TouchableOpacity
-                                onPress={() => setShowAfycSheet(false)}
-                                hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-                            >
-                                <Ionicons name="close" size={24} color={colors.textSecondary} />
-                            </TouchableOpacity>
-                        </View>
-                        <View style={styles.sheetContent}>
-                            <Text style={[styles.pledgeLabel, { color: colors.textSecondary, marginBottom: 6 }]}>
-                                AFYC Amount ($)
-                            </Text>
-                            <TextInput
-                                style={[
-                                    styles.inputSm,
-                                    {
-                                        backgroundColor: colors.inputBackground,
-                                        borderColor: colors.inputBorder,
-                                        color: colors.textPrimary,
-                                        fontSize: 22,
-                                        fontWeight: '700',
-                                    },
-                                ]}
-                                placeholder="0"
-                                placeholderTextColor={colors.textTertiary}
-                                value={afycInput}
-                                onChangeText={(v) => setAfycInput(v.replace(/[^0-9]/g, ''))}
-                                keyboardType="number-pad"
-                                autoFocus
-                            />
-                            <Text
-                                style={[
-                                    styles.pledgeLabel,
-                                    { color: colors.textSecondary, marginTop: 20, marginBottom: 4 },
-                                ]}
-                            >
-                                Time
-                            </Text>
-                            <View style={[styles.wheelRow, { marginBottom: 8 }]}>
-                                <WheelPicker
-                                    items={PICKER_HOURS}
-                                    selectedIndex={logHour}
-                                    onChange={setLogHour}
-                                    colors={colors}
-                                    width={52}
-                                />
-                                <WheelPicker
-                                    items={PICKER_MINUTES}
-                                    selectedIndex={logMinuteIdx}
-                                    onChange={setLogMinuteIdx}
-                                    colors={colors}
-                                    width={52}
-                                />
-                                <WheelPicker
-                                    items={PICKER_AMPM}
-                                    selectedIndex={logAmPm}
-                                    onChange={setLogAmPm}
-                                    colors={colors}
-                                    width={60}
-                                />
-                            </View>
-                            <TouchableOpacity
-                                style={[
-                                    styles.checkinBtn,
-                                    {
-                                        backgroundColor: CASE_CLOSED_COLOR,
-                                        marginTop: 12,
-                                        opacity: loggingActivity ? 0.6 : 1,
-                                    },
-                                ]}
-                                onPress={handleLogCaseClosed}
-                                disabled={loggingActivity}
-                            >
-                                {loggingActivity ? (
-                                    <ActivityIndicator size="small" color={colors.textInverse} />
-                                ) : (
-                                    <>
-                                        <Ionicons name="checkmark" size={20} color={colors.textInverse} />
-                                        <Text style={styles.checkinBtnText}>Log Case Closed</Text>
-                                    </>
-                                )}
-                            </TouchableOpacity>
-                            <TouchableOpacity
-                                style={{ marginTop: 16, alignItems: 'center' }}
-                                onPress={() => {
-                                    setAfycInput('0');
-                                    handleLogCaseClosed();
-                                }}
-                            >
-                                <Text style={{ color: colors.textTertiary, fontSize: 14 }}>
-                                    Skip AFYC — log without amount
-                                </Text>
-                            </TouchableOpacity>
-                        </View>
-                    </KeyboardAvoidingView>
-                </SafeAreaView>
-            </Modal>
+            <AfycSheet
+                colors={colors}
+                showAfycSheet={showAfycSheet}
+                setShowAfycSheet={setShowAfycSheet}
+                afycInput={afycInput}
+                setAfycInput={setAfycInput}
+                logHour={logHour}
+                setLogHour={setLogHour}
+                logMinuteIdx={logMinuteIdx}
+                setLogMinuteIdx={setLogMinuteIdx}
+                logAmPm={logAmPm}
+                setLogAmPm={setLogAmPm}
+                loggingActivity={loggingActivity}
+                handleLogCaseClosed={handleLogCaseClosed}
+            />
         </>
     );
 }
@@ -694,18 +439,6 @@ const styles = StyleSheet.create({
     cardTitle: { fontSize: 15, fontWeight: '700' },
     field: { gap: 4 },
     inputSm: { borderWidth: 1, borderRadius: 12, paddingHorizontal: 14, paddingVertical: 12, fontSize: 15 },
-    sheetContainer: { flex: 1 },
-    sheetHeader: {
-        flexDirection: 'row',
-        justifyContent: 'space-between',
-        alignItems: 'center',
-        paddingHorizontal: 16,
-        paddingVertical: 14,
-        borderBottomWidth: StyleSheet.hairlineWidth,
-    },
-    sheetTitle: { fontSize: 17, fontWeight: '700' },
-    sheetContent: { padding: 16, gap: 12 },
-
     infoBanner: { flexDirection: 'row', alignItems: 'center', gap: 8, borderRadius: 12, padding: 12, borderWidth: 1 },
     lateBanner: { flexDirection: 'row', alignItems: 'center', gap: 6, borderRadius: 8, padding: 10, borderWidth: 1 },
     lateText: { fontSize: 13, fontWeight: '600' },
@@ -804,50 +537,4 @@ const styles = StyleSheet.create({
         minHeight: 44,
     },
     returnBtnText: { fontSize: 14, fontWeight: '600' },
-
-    pledgeRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
-    pledgeLabel: { fontSize: 15, fontWeight: '500' },
-    pledgeStepperRow: { flexDirection: 'row', alignItems: 'center', gap: 12 },
-    stepBtn: { width: 36, height: 36, borderRadius: 8, alignItems: 'center', justifyContent: 'center' },
-    stepVal: { fontSize: 18, fontWeight: '700', minWidth: 32, textAlign: 'center' },
-
-    confirmOverlay: {
-        flex: 1,
-        backgroundColor: 'rgba(0,0,0,0.45)',
-        justifyContent: 'flex-end',
-        position: 'relative',
-    },
-    confirmSheet: {
-        borderTopLeftRadius: 24,
-        borderTopRightRadius: 24,
-        paddingHorizontal: 24,
-        paddingTop: 12,
-        alignItems: 'center',
-        gap: 10,
-    },
-    confirmHandle: { width: 36, height: 4, borderRadius: 2, marginBottom: 4 },
-    confirmIconBg: {
-        width: 76,
-        height: 76,
-        borderRadius: 38,
-        alignItems: 'center',
-        justifyContent: 'center',
-        marginBottom: 2,
-    },
-    confirmTitle: { fontSize: 22, fontWeight: '700', letterSpacing: letterSpacing(-0.3) },
-    confirmSubtitle: { fontSize: 14 },
-    confirmBtn: {
-        width: '100%',
-        alignItems: 'center',
-        justifyContent: 'center',
-        borderRadius: 14,
-        paddingVertical: 16,
-        minHeight: 52,
-        marginTop: 6,
-    },
-    confirmBtnText: { color: '#FFFFFF', fontSize: 17, fontWeight: '700' },
-    confirmCancel: { paddingVertical: 12, minHeight: 44, alignItems: 'center', justifyContent: 'center' },
-    confirmCancelText: { fontSize: 16 },
-    confirmTimeLabel: { fontSize: 13, fontWeight: '500', marginTop: 4, marginBottom: -4 },
-    wheelRow: { flexDirection: 'row', gap: 0, alignItems: 'center', justifyContent: 'center' },
 });

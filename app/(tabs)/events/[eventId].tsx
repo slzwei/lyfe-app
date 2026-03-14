@@ -30,12 +30,12 @@ import {
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 
 // ── Extracted sub-components ──
-import { RoadshowUpcoming } from './_components/RoadshowUpcoming';
-import { RoadshowLiveT1 } from './_components/RoadshowLiveT1';
-import { RoadshowLiveT2 } from './_components/RoadshowLiveT2';
-import { RoadshowLeaderboard, RoadshowActivityFeed } from './_components/RoadshowShared';
-import { RoadshowPast } from './_components/RoadshowPast';
-import { EventAttendees } from './_components/EventAttendees';
+import { RoadshowUpcoming } from '@/components/events/RoadshowUpcoming';
+import { RoadshowLiveT1 } from '@/components/events/RoadshowLiveT1';
+import { RoadshowLiveT2 } from '@/components/events/RoadshowLiveT2';
+import { RoadshowLeaderboard, RoadshowActivityFeed } from '@/components/events/RoadshowShared';
+import { RoadshowPast } from '@/components/events/RoadshowPast';
+import { EventAttendees } from '@/components/events/EventAttendees';
 
 // ── Main Screen ───────────────────────────────────────────────
 export default function EventDetailScreen() {

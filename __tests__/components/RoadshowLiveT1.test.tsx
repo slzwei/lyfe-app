@@ -1,7 +1,7 @@
 import React from 'react';
 import { render, fireEvent } from '@testing-library/react-native';
-import { RoadshowLiveT1 } from '@/app/(tabs)/events/_components/RoadshowLiveT1';
-import type { RoadshowLiveT1Props } from '@/app/(tabs)/events/_components/RoadshowLiveT1';
+import { RoadshowLiveT1 } from '@/components/events/RoadshowLiveT1';
+import type { RoadshowLiveT1Props } from '@/components/events/RoadshowLiveT1';
 import type { RoadshowAttendance, RoadshowConfig } from '@/types/event';
 
 jest.mock('@/components/events/ProgressRing', () => {

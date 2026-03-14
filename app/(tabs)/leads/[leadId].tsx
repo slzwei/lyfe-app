@@ -13,21 +13,11 @@ import { KAV_BEHAVIOR, letterSpacing } from '@/constants/platform';
 import { useAuth } from '@/contexts/AuthContext';
 import { useTheme } from '@/contexts/ThemeContext';
 import { useViewMode } from '@/contexts/ViewModeContext';
-import { useSubmitGuard } from '@/hooks/useSubmitGuard';
-import {
-    addLeadActivity,
-    addLeadNote,
-    fetchLead,
-    fetchLeadActivities,
-    fetchTeamAgents,
-    reassignLead,
-    updateLeadStatus,
-} from '@/lib/leads';
-import type { Lead } from '@/types/lead';
-import { PRODUCT_LABELS, SOURCE_LABELS, type LeadActivity, type LeadStatus } from '@/types/lead';
+import { useLeadDetail } from '@/hooks/useLeadDetail';
+import { PRODUCT_LABELS, SOURCE_LABELS } from '@/types/lead';
 import { Ionicons } from '@expo/vector-icons';
 import { useLocalSearchParams, useRouter, useSegments } from 'expo-router';
-import React, { useCallback, useEffect, useRef, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import {
     AppState,
     KeyboardAvoidingView,
@@ -50,19 +40,32 @@ export default function LeadDetailScreen() {
     const backLabel = segments[1] === 'team' ? 'Agent' : 'Leads';
     const isManagerView = canToggle && viewMode === 'manager';
 
-    const [lead, setLead] = useState<Lead | null>(null);
-    const [activities, setActivities] = useState<LeadActivity[]>([]);
-    const [currentStatus, setCurrentStatus] = useState<LeadStatus>('new');
-    const [isLoading, setIsLoading] = useState(true);
-    const [showNoteInput, setShowNoteInput] = useState(false);
-    const [noteText, setNoteText] = useState('');
-    const [showStatusPicker, setShowStatusPicker] = useState(false);
-    const { isSubmitting: isSavingNote, guard: noteGuard } = useSubmitGuard();
-    const [isUpdatingStatus, setIsUpdatingStatus] = useState(false);
-    const [showReassignModal, setShowReassignModal] = useState(false);
-    const [reassignAgents, setReassignAgents] = useState<{ id: string; full_name: string }[]>([]);
-    const [isReassigning, setIsReassigning] = useState(false);
-    const [error, setError] = useState<string | null>(null);
+    const {
+        lead,
+        activities,
+        currentStatus,
+        isLoading,
+        error,
+        setError,
+        loadData,
+        logActivity,
+        handleChangeStatus,
+        handleAddNote,
+        handleOpenReassign,
+        handleReassign,
+        showReassignModal,
+        setShowReassignModal,
+        reassignAgents,
+        isReassigning,
+        showNoteInput,
+        setShowNoteInput,
+        noteText,
+        setNoteText,
+        isSavingNote,
+        showStatusPicker,
+        setShowStatusPicker,
+        isUpdatingStatus,
+    } = useLeadDetail({ leadId, userId: user?.id, fullName: user?.full_name });
 
     // Contact confirmation (AppState-based)
     const [pendingContact, setPendingContact] = useState<{ type: 'call' | 'whatsapp'; phone: string } | null>(null);
@@ -81,33 +84,6 @@ export default function LeadDetailScreen() {
         });
         return () => subscription.remove();
     }, []);
-
-    const loadData = useCallback(async () => {
-        if (!leadId) return;
-
-        try {
-            setError(null);
-            const [leadResult, activitiesResult] = await Promise.all([fetchLead(leadId), fetchLeadActivities(leadId)]);
-
-            if (leadResult.data) {
-                setLead(leadResult.data);
-                setCurrentStatus(leadResult.data.status);
-            }
-            if (leadResult.error) {
-                setError('Failed to load lead details');
-            }
-            if (activitiesResult.data) {
-                setActivities(activitiesResult.data);
-            }
-        } catch {
-            setError('Failed to load lead details');
-        }
-        setIsLoading(false);
-    }, [leadId]);
-
-    useEffect(() => {
-        loadData();
-    }, [loadData]);
 
     if (isLoading) {
         return (
@@ -131,23 +107,6 @@ export default function LeadDetailScreen() {
             </SafeAreaView>
         );
     }
-
-    const logActivity = (type: 'call' | 'whatsapp', description: string, metadata: Record<string, any>) => {
-        const optimistic: LeadActivity = {
-            id: `a_${Date.now()}`,
-            lead_id: lead.id,
-            user_id: user?.id || 'me',
-            type,
-            description,
-            metadata,
-            created_at: new Date().toISOString(),
-            actor_name: user?.full_name || undefined,
-        };
-        setActivities((prev) => [optimistic, ...prev]);
-        if (user?.id) {
-            addLeadActivity(lead.id, user.id, type, description, metadata);
-        }
-    };
 
     const handleCall = () => {
         if (!lead.phone) return;
@@ -183,92 +142,6 @@ export default function LeadDetailScreen() {
         // Auto-advance: New → Contacted on any logged contact attempt
         if (currentStatus === 'new') {
             handleChangeStatus('contacted');
-        }
-    };
-
-    const handleOpenReassign = async () => {
-        if (user?.id) {
-            const { data } = await fetchTeamAgents(user.id);
-            setReassignAgents(data.filter((a) => a.id !== lead.assigned_to));
-        }
-        setShowReassignModal(true);
-    };
-
-    const handleReassign = async (toAgent: { id: string; full_name: string }) => {
-        if (!lead) return;
-        const fromId = lead.assigned_to;
-        const fromName = fromId;
-
-        const newActivity: LeadActivity = {
-            id: `a_${Date.now()}`,
-            lead_id: lead.id,
-            user_id: user?.id || 'me',
-            type: 'reassignment',
-            description: null,
-            metadata: {
-                from_agent_id: fromId,
-                to_agent_id: toAgent.id,
-                from_agent_name: fromName,
-                to_agent_name: toAgent.full_name,
-            },
-            created_at: new Date().toISOString(),
-            actor_name: user?.full_name || undefined,
-        };
-
-        setShowReassignModal(false);
-
-        if (!user?.id) return;
-        setIsReassigning(true);
-        const { error } = await reassignLead(lead.id, toAgent.id, fromId, fromName, toAgent.full_name, user.id);
-        setIsReassigning(false);
-        if (!error) {
-            setActivities((prev) => [newActivity, ...prev]);
-        } else {
-            if (__DEV__) console.error('Failed to reassign:', error);
-        }
-    };
-
-    const handleAddNote = () =>
-        noteGuard(async () => {
-            if (!noteText.trim()) return;
-
-            if (!user?.id) return;
-            const { data, error } = await addLeadNote(lead.id, noteText.trim(), user.id);
-
-            if (data) {
-                setActivities((prev) => [data, ...prev]);
-                setNoteText('');
-                setShowNoteInput(false);
-            } else if (error) {
-                setError('Failed to add note');
-                if (__DEV__) console.error('Failed to add note:', error);
-            }
-        });
-
-    const handleChangeStatus = async (newStatus: LeadStatus) => {
-        if (newStatus === currentStatus) return;
-
-        const previousStatus = currentStatus;
-
-        if (!user?.id) return;
-
-        // Optimistic update — close picker and show new status immediately
-        setCurrentStatus(newStatus);
-        setShowStatusPicker(false);
-        setIsUpdatingStatus(true);
-
-        const { error } = await updateLeadStatus(lead.id, newStatus, previousStatus, user.id);
-        setIsUpdatingStatus(false);
-
-        if (!error) {
-            // Re-fetch activities to get the persisted status_change entry
-            const { data: updatedActivities } = await fetchLeadActivities(lead.id);
-            if (updatedActivities) setActivities(updatedActivities);
-        } else {
-            // Rollback on failure
-            setCurrentStatus(previousStatus);
-            setError('Failed to update status');
-            if (__DEV__) console.error('Failed to update status:', error);
         }
     };
 

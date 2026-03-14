@@ -12,37 +12,48 @@ export interface SimpleUser {
     avatar_url?: string | null;
 }
 
+// ── Shared query helpers ─────────────────────────────────────
+
+const EVENT_SELECT =
+    '*, creator_user:users!created_by(full_name), event_attendees(id, event_id, user_id, attendee_role, users(full_name, avatar_url))';
+
 /**
- * Fetch events where the user is an attendee or creator, ordered by date ascending.
+ * Fetch event IDs where the user is an attendee or creator.
  */
-export async function fetchEvents(userId: string): Promise<{ data: AgencyEvent[]; error: string | null }> {
+async function getUserEventIds(userId: string): Promise<{ ids: string[]; error: string | null }> {
     const [{ data: attendeeRows, error: attendeeError }, { data: createdRows, error: createdError }] =
         await Promise.all([
             supabase.from('event_attendees').select('event_id').eq('user_id', userId),
             supabase.from('events').select('id').eq('created_by', userId),
         ]);
 
-    if (attendeeError) return { data: [], error: attendeeError.message };
-    if (createdError) return { data: [], error: createdError.message };
+    if (attendeeError) return { ids: [], error: attendeeError.message };
+    if (createdError) return { ids: [], error: createdError.message };
 
     const attendeeIds = (attendeeRows || []).map((r: { event_id: string }) => r.event_id);
     const createdIds = (createdRows || []).map((r: { id: string }) => r.id);
-    const eventIds = [...new Set([...attendeeIds, ...createdIds])];
+    return { ids: [...new Set([...attendeeIds, ...createdIds])], error: null };
+}
 
-    if (eventIds.length === 0) return { data: [], error: null };
+// ── Public event queries ─────────────────────────────────────
+
+/**
+ * Fetch events where the user is an attendee or creator, ordered by date ascending.
+ */
+export async function fetchEvents(userId: string): Promise<{ data: AgencyEvent[]; error: string | null }> {
+    const { ids, error: idsError } = await getUserEventIds(userId);
+    if (idsError) return { data: [], error: idsError };
+    if (ids.length === 0) return { data: [], error: null };
 
     const { data, error } = await supabase
         .from('events')
-        .select(
-            '*, creator_user:users!created_by(full_name), event_attendees(id, event_id, user_id, attendee_role, users(full_name, avatar_url))',
-        )
-        .in('id', eventIds)
+        .select(EVENT_SELECT)
+        .in('id', ids)
         .order('event_date', { ascending: true })
         .order('start_time', { ascending: true });
 
     if (error) return { data: [], error: error.message };
-
-    return { data: mapEvents(data || []), error: null };
+    return { data: mapEvents((data || []) as EventRow[]), error: null };
 }
 
 /**
@@ -54,9 +65,7 @@ export async function fetchAllEvents(
 ): Promise<{ data: AgencyEvent[]; error: string | null; hasMore: boolean }> {
     let query = supabase
         .from('events')
-        .select(
-            '*, creator_user:users!created_by(full_name), event_attendees(id, event_id, user_id, attendee_role, users(full_name, avatar_url))',
-        )
+        .select(EVENT_SELECT)
         .order('event_date', { ascending: true })
         .order('start_time', { ascending: true });
 
@@ -65,7 +74,7 @@ export async function fetchAllEvents(
     const { data, error } = await query;
     if (error) return { data: [], error: error.message, hasMore: false };
 
-    const results = mapEvents(data || []);
+    const results = mapEvents((data || []) as EventRow[]);
     const { data: paged, hasMore } = resolvePage(results, page, pageSize);
     return { data: paged, error: null, hasMore };
 }
@@ -80,52 +89,31 @@ export async function fetchUpcomingEvents(
 ): Promise<{ data: AgencyEvent[]; error: string | null }> {
     const today = new Date().toISOString().split('T')[0];
 
-    // Get event IDs where the user is an attendee or creator
-    const [{ data: attendeeRows, error: attendeeError }, { data: createdRows, error: createdError }] =
-        await Promise.all([
-            supabase.from('event_attendees').select('event_id').eq('user_id', userId),
-            supabase.from('events').select('id').eq('created_by', userId),
-        ]);
-
-    if (attendeeError) return { data: [], error: attendeeError.message };
-    if (createdError) return { data: [], error: createdError.message };
-
-    const attendeeIds = (attendeeRows || []).map((r: { event_id: string }) => r.event_id);
-    const createdIds = (createdRows || []).map((r: { id: string }) => r.id);
-    const eventIds = [...new Set([...attendeeIds, ...createdIds])];
-
-    if (eventIds.length === 0) return { data: [], error: null };
+    const { ids, error: idsError } = await getUserEventIds(userId);
+    if (idsError) return { data: [], error: idsError };
+    if (ids.length === 0) return { data: [], error: null };
 
     const { data, error } = await supabase
         .from('events')
-        .select(
-            '*, creator_user:users!created_by(full_name), event_attendees(id, event_id, user_id, attendee_role, users(full_name, avatar_url))',
-        )
-        .in('id', eventIds)
+        .select(EVENT_SELECT)
+        .in('id', ids)
         .gte('event_date', today)
         .order('event_date', { ascending: true })
         .order('start_time', { ascending: true })
         .limit(limit);
 
     if (error) return { data: [], error: error.message };
-
-    return { data: mapEvents(data || []), error: null };
+    return { data: mapEvents((data || []) as EventRow[]), error: null };
 }
 
 /**
  * Fetch a single event with attendees joined.
  */
 export async function fetchEventById(eventId: string): Promise<{ data: AgencyEvent | null; error: string | null }> {
-    const { data, error } = await supabase
-        .from('events')
-        .select(
-            '*, creator_user:users!created_by(full_name), event_attendees(id, event_id, user_id, attendee_role, users(full_name, avatar_url))',
-        )
-        .eq('id', eventId)
-        .single();
+    const { data, error } = await supabase.from('events').select(EVENT_SELECT).eq('id', eventId).single();
 
     if (error) return { data: null, error: error.message };
-    const mapped = mapEvents([data]);
+    const mapped = mapEvents([data] as EventRow[]);
     return { data: mapped[0] || null, error: null };
 }
 
@@ -188,16 +176,16 @@ interface EventRow {
     id: string;
     title: string;
     description: string | null;
-    event_type: EventType;
+    event_type: string;
     event_date: string;
     start_time: string;
     end_time: string | null;
     location: string | null;
     created_by: string;
     creator_user?: { full_name: string } | null;
-    created_at: string;
-    updated_at: string;
-    external_attendees: ExternalAttendee[];
+    created_at: string | null;
+    updated_at: string | null;
+    external_attendees: ExternalAttendee[] | null;
     event_attendees?: AttendeeRow[];
 }
 
@@ -214,15 +202,15 @@ function mapEvents(rows: EventRow[]): AgencyEvent[] {
         id: row.id,
         title: row.title,
         description: row.description,
-        event_type: row.event_type,
+        event_type: row.event_type as EventType,
         event_date: row.event_date,
         start_time: row.start_time,
         end_time: row.end_time,
         location: row.location,
         created_by: row.created_by,
         creator_name: row.creator_user?.full_name || null,
-        created_at: row.created_at,
-        updated_at: row.updated_at,
+        created_at: row.created_at ?? '',
+        updated_at: row.updated_at ?? '',
         external_attendees: row.external_attendees || [],
         attendees: (row.event_attendees || []).map(
             (a: AttendeeRow) =>
