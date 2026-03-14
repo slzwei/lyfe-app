@@ -206,8 +206,14 @@ ALTER TABLE candidate_module_item_progress
     DROP CONSTRAINT valid_item_progress_status;
 
 ALTER TABLE candidate_module_item_progress
+    ALTER COLUMN status DROP DEFAULT;
+
+ALTER TABLE candidate_module_item_progress
     ALTER COLUMN status TYPE item_progress_status
     USING status::item_progress_status;
+
+ALTER TABLE candidate_module_item_progress
+    ALTER COLUMN status SET DEFAULT 'not_started'::item_progress_status;
 
 
 -- ============================================================================
