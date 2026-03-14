@@ -1,6 +1,6 @@
 import React from 'react';
 import { render } from '@testing-library/react-native';
-import { RoadshowPast } from '@/app/(tabs)/events/_components/RoadshowPast';
+import { RoadshowPast } from '@/components/events/RoadshowPast';
 import type { RoadshowAttendance, RoadshowConfig } from '@/types/event';
 
 jest.mock('@/components/Avatar', () => {

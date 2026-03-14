@@ -1,6 +1,6 @@
 import React from 'react';
 import { render } from '@testing-library/react-native';
-import { RoadshowUpcoming } from '@/app/(tabs)/events/_components/RoadshowUpcoming';
+import { RoadshowUpcoming } from '@/components/events/RoadshowUpcoming';
 import type { RoadshowConfig } from '@/types/event';
 
 const COLORS = {

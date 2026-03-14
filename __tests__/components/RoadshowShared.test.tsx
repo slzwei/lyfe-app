@@ -1,7 +1,7 @@
 import React from 'react';
 import { render } from '@testing-library/react-native';
-import { RoadshowLeaderboard, RoadshowActivityFeed } from '@/app/(tabs)/events/_components/RoadshowShared';
-import type { LeaderboardEntry } from '@/app/(tabs)/events/_components/RoadshowShared';
+import { RoadshowLeaderboard, RoadshowActivityFeed } from '@/components/events/RoadshowShared';
+import type { LeaderboardEntry } from '@/components/events/RoadshowShared';
 import type { RoadshowActivity } from '@/types/event';
 
 jest.mock('@/components/Avatar', () => {

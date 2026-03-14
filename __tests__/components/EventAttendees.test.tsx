@@ -1,6 +1,6 @@
 import React from 'react';
 import { render } from '@testing-library/react-native';
-import { EventAttendees } from '@/app/(tabs)/events/_components/EventAttendees';
+import { EventAttendees } from '@/components/events/EventAttendees';
 import type { AttendeeRole, EventAttendee, ExternalAttendee } from '@/types/event';
 
 jest.mock('@/components/Avatar', () => {
