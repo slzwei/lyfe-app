@@ -1,6 +1,14 @@
 import React, { useEffect, useState } from 'react';
-import { Image } from 'expo-image';
-import { StyleSheet, Text, View } from 'react-native';
+import { Image as RNImage, StyleSheet, Text, View } from 'react-native';
+
+// expo-image requires a native module that may not be present in older dev builds.
+// Fall back to React Native's built-in Image when the native module is missing.
+let ExpoImage: any;
+try {
+    ExpoImage = require('expo-image').Image;
+} catch {
+    ExpoImage = null;
+}
 
 interface AvatarProps {
     name: string;
@@ -22,13 +30,23 @@ export default function Avatar({ name, avatarUrl, size, backgroundColor, textCol
     }, [avatarUrl]);
 
     if (avatarUrl && !imgError) {
+        if (ExpoImage) {
+            return (
+                <ExpoImage
+                    source={{ uri: avatarUrl }}
+                    style={{ width: size, height: size, borderRadius }}
+                    contentFit="cover"
+                    cachePolicy="memory-disk"
+                    transition={200}
+                    onError={() => setImgError(true)}
+                />
+            );
+        }
         return (
-            <Image
+            <RNImage
                 source={{ uri: avatarUrl }}
                 style={{ width: size, height: size, borderRadius }}
-                contentFit="cover"
-                cachePolicy="memory-disk"
-                transition={200}
+                resizeMode="cover"
                 onError={() => setImgError(true)}
             />
         );

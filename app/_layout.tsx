@@ -101,8 +101,8 @@ function RootLayout() {
     if (!fontsLoaded) return null;
 
     return (
-        <AppErrorBoundary>
-            <ThemeProvider>
+        <ThemeProvider>
+            <AppErrorBoundary>
                 <NetworkProvider>
                     <AuthProvider>
                         <ViewModeProvider>
@@ -112,8 +112,8 @@ function RootLayout() {
                         </ViewModeProvider>
                     </AuthProvider>
                 </NetworkProvider>
-            </ThemeProvider>
-        </AppErrorBoundary>
+            </AppErrorBoundary>
+        </ThemeProvider>
     );
 }
 

@@ -1,7 +1,20 @@
 import React, { createContext, useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import NetInfo, { type NetInfoState } from '@react-native-community/netinfo';
 import { OfflineQueue, SyncManager, type SyncStatus } from '@/lib/offline';
 import { supabase } from '@/lib/supabase';
+
+// NetInfo requires a native module that may not be present in older dev builds.
+// Fall back to a no-op listener when the native module is missing.
+let NetInfo: any;
+try {
+    const mod = require('@react-native-community/netinfo');
+    NetInfo = mod.default ?? mod;
+    if (!NetInfo?.addEventListener) throw new Error('missing addEventListener');
+} catch {
+    NetInfo = {
+        addEventListener: () => () => {},
+    };
+}
+type NetInfoState = { isConnected: boolean | null; isInternetReachable: boolean | null };
 
 export interface NetworkContextType {
     isConnected: boolean;

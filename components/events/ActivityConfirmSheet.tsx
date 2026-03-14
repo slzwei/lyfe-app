@@ -1,4 +1,4 @@
-import { type ActivityCounts, PITCH_COLOR } from '@/components/events/roadshowShared';
+import { type ActivityCounts, PITCH_COLOR } from '@/components/events/roadshowTokens';
 import WheelPicker from '@/components/WheelPicker';
 import { PICKER_HOURS, PICKER_MINUTES, PICKER_AMPM } from '@/constants/ui';
 import { letterSpacing } from '@/constants/platform';

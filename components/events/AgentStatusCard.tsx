@@ -1,5 +1,5 @@
 import Avatar from '@/components/Avatar';
-import { type ActivityCounts, PITCH_COLOR, CASE_CLOSED_COLOR } from '@/components/events/roadshowShared';
+import { type ActivityCounts, PITCH_COLOR, CASE_CLOSED_COLOR } from '@/components/events/roadshowTokens';
 import { getAvatarColor, ROADSHOW_PINK } from '@/constants/ui';
 import { formatCheckinTime } from '@/lib/dateTime';
 import type { AgencyEvent, EventAttendee, RoadshowAttendance } from '@/types/event';

@@ -1,4 +1,4 @@
-import { CASE_CLOSED_COLOR } from '@/components/events/roadshowShared';
+import { CASE_CLOSED_COLOR } from '@/components/events/roadshowTokens';
 import WheelPicker from '@/components/WheelPicker';
 import { PICKER_HOURS, PICKER_MINUTES, PICKER_AMPM } from '@/constants/ui';
 import { KAV_BEHAVIOR } from '@/constants/platform';

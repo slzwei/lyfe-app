@@ -59,7 +59,8 @@
                     "organization": "mktr-pte-ltd",
                     "project": "apple-ios"
                 }
-            ]
+            ],
+            "./plugins/withSwiftConcurrency"
         ],
         "experiments": {
             "typedRoutes": true

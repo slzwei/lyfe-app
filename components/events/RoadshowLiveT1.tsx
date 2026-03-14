@@ -1,5 +1,5 @@
 import ProgressRing from '@/components/events/ProgressRing';
-import { type ActivityCounts, PITCH_COLOR, CASE_CLOSED_COLOR } from '@/components/events/roadshowShared';
+import { type ActivityCounts, PITCH_COLOR, CASE_CLOSED_COLOR } from '@/components/events/roadshowTokens';
 import { formatCheckinTime, formatTime } from '@/lib/dateTime';
 import { ERROR_BG, ERROR_TEXT, ROADSHOW_PINK } from '@/constants/ui';
 import type { RoadshowActivity, RoadshowAttendance, RoadshowConfig } from '@/types/event';

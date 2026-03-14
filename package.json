@@ -18,7 +18,8 @@
         "gen:types": "npx supabase gen types typescript --project-id nvtedkyjwulkzjeoqjgx > types/supabase.ts",
         "seed": "node scripts/seed.mjs",
         "seed:reset": "node scripts/seed.mjs --reset",
-        "seed:reset-only": "node scripts/seed.mjs --reset-only"
+        "seed:reset-only": "node scripts/seed.mjs --reset-only",
+        "postinstall": "bash scripts/patch-expo-swift6.sh"
     },
     "lint-staged": {
         "*.{ts,tsx}": [

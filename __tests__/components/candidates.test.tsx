@@ -55,19 +55,12 @@ jest.mock('@/components/WheelPicker', () => {
     };
 });
 
-// InterviewSection imports InterviewCard via relative path './InterviewCard'.
-// That file lives at components/InterviewCard.tsx (not in candidates/).
-// We mock the actual resolved path so Jest can load InterviewSection.
-jest.mock(
-    '../../components/candidates/InterviewCard',
-    () => {
-        const { Text } = require('react-native');
-        return function MockInterviewCard({ interview }: any) {
-            return <Text>Interview R{interview.round_number}</Text>;
-        };
-    },
-    { virtual: true },
-);
+jest.mock('@/components/candidates/InterviewCard', () => {
+    const { Text } = require('react-native');
+    return function MockInterviewCard({ interview }: any) {
+        return <Text>Interview R{interview.round_number}</Text>;
+    };
+});
 
 // ── Shared helpers ──
 

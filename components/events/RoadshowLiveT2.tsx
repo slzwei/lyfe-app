@@ -1,5 +1,5 @@
 import ProgressRing from '@/components/events/ProgressRing';
-import { type ActivityCounts, type BoothTotals, CASE_CLOSED_COLOR } from '@/components/events/roadshowShared';
+import { type ActivityCounts, type BoothTotals, CASE_CLOSED_COLOR } from '@/components/events/roadshowTokens';
 import { ACTIVITY_TYPE_CONFIG } from '@/constants/displayConfigs';
 import type { AgencyEvent, EventAttendee, RoadshowAttendance, RoadshowConfig } from '@/types/event';
 import type { Colors } from '@/constants/Colors';
