@@ -73,6 +73,7 @@ export function useDashboard({ userId, role, isManagerView, isAdminRole }: UseDa
     const [candidateRoadmap, setCandidateRoadmap] = useState<ProgrammeWithModules[]>([]);
     const [candidateEvents, setCandidateEvents] = useState<AgencyEvent[]>([]);
     const [error, setError] = useState<string | null>(null);
+    const [isLoading, setIsLoading] = useState(true);
     const [refreshing, setRefreshing] = useState(false);
 
     const isCandidate = role === 'candidate';
@@ -111,17 +112,20 @@ export function useDashboard({ userId, role, isManagerView, isAdminRole }: UseDa
                 fetchRecentActivities(userId, isManagerLike, 5),
             ];
             if (isManagerLike && role) promises.push(fetchManagerDashboardStats(userId, role));
+            // Fetch events in parallel with stats — not after
+            if (!isManagerLike) promises.push(fetchUpcomingEvents(userId, 5));
             const results = await Promise.all(promises);
             if (results[0].data) setStats(results[0].data);
             if (results[1].data) setRecentActivities(results[1].data);
-            if (results[2]?.data) setManagerStats(results[2].data);
+            const managerStatsIdx = isManagerLike && role ? 2 : -1;
+            const eventsIdx = !isManagerLike ? (managerStatsIdx >= 0 ? 3 : 2) : -1;
+            if (managerStatsIdx >= 0 && results[managerStatsIdx]?.data) setManagerStats(results[managerStatsIdx].data);
+            if (eventsIdx >= 0 && results[eventsIdx]?.data) setAgentEvents(results[eventsIdx].data);
             if (results[0].error) setError('Failed to load dashboard data');
-            if (!isManagerLike) {
-                const eventsResult = await fetchUpcomingEvents(userId, 5);
-                setAgentEvents(eventsResult.data);
-            }
         } catch {
             setError('Failed to load dashboard data');
+        } finally {
+            setIsLoading(false);
         }
     }, [userId, isCandidate, isPa, isManagerView, isAdminRole, role]);
 
@@ -150,6 +154,7 @@ export function useDashboard({ userId, role, isManagerView, isAdminRole }: UseDa
         candidateEvents,
         error,
         setError,
+        isLoading,
         refreshing,
         loadDashboardData,
         onRefresh,

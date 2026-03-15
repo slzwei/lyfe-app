@@ -89,6 +89,7 @@ export default function HomeScreen() {
         candidateEvents,
         error,
         setError,
+        isLoading,
         refreshing,
         loadDashboardData,
         onRefresh,
@@ -193,6 +194,7 @@ export default function HomeScreen() {
                         title="Upcoming Events"
                         events={candidateEvents}
                         colors={colors}
+                        isLoading={isLoading}
                         onSeeAll={() => router.push('/(tabs)/events')}
                         onEventPress={(id) => router.push(`/(tabs)/home/event/${id}` as any)}
                     />
@@ -203,6 +205,7 @@ export default function HomeScreen() {
                         title="My Events"
                         events={paStats.events}
                         colors={colors}
+                        isLoading={isLoading}
                         onSeeAll={() => router.push('/(tabs)/events')}
                         onEventPress={(id) => router.push(`/(tabs)/home/event/${id}` as any)}
                     />
@@ -213,6 +216,7 @@ export default function HomeScreen() {
                         title="My Events"
                         events={agentEvents}
                         colors={colors}
+                        isLoading={isLoading}
                         onSeeAll={() => router.push('/(tabs)/events')}
                         onEventPress={(id) => router.push(`/(tabs)/home/event/${id}` as any)}
                     />

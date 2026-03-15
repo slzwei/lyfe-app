@@ -3,17 +3,18 @@ import { EVENT_TYPE_CONFIG } from '@/constants/displayConfigs';
 import type { AgencyEvent } from '@/types/event';
 import type { ThemeColors } from '@/types/theme';
 import React from 'react';
-import { StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { ActivityIndicator, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 
 interface Props {
     title: string;
     events: AgencyEvent[];
     colors: ThemeColors;
+    isLoading?: boolean;
     onSeeAll: () => void;
     onEventPress: (eventId: string) => void;
 }
 
-function UpcomingEventsCard({ title, events, colors, onSeeAll, onEventPress }: Props) {
+function UpcomingEventsCard({ title, events, colors, isLoading, onSeeAll, onEventPress }: Props) {
     return (
         <View style={[styles.card, { backgroundColor: colors.cardBackground, shadowColor: colors.textPrimary }]}>
             <View style={styles.sectionHeaderRow}>
@@ -23,7 +24,9 @@ function UpcomingEventsCard({ title, events, colors, onSeeAll, onEventPress }: P
                 </TouchableOpacity>
             </View>
 
-            {events.length === 0 ? (
+            {isLoading ? (
+                <ActivityIndicator size="small" color={colors.accent} style={styles.loader} />
+            ) : events.length === 0 ? (
                 <Text style={[styles.emptyText, { color: colors.textTertiary }]}>No upcoming events</Text>
             ) : (
                 events.map((event) => {
@@ -76,6 +79,7 @@ const styles = StyleSheet.create({
     },
     sectionTitle: { fontSize: 18, fontWeight: '700', marginBottom: 0 },
     seeAllText: { fontSize: 14, fontWeight: '600' },
+    loader: { paddingVertical: 16 },
     emptyText: { fontSize: 14, textAlign: 'center', paddingVertical: 8 },
     eventRow: { flexDirection: 'row', alignItems: 'stretch', gap: 12, marginBottom: 14 },
     eventStripe: { width: 4, borderRadius: 2 },
