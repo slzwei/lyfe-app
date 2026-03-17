@@ -10,6 +10,7 @@ import SecurityCard from '@/components/profile/SecurityCard';
 import SettingsListCard, { type SettingsRowConfig } from '@/components/profile/SettingsListCard';
 import SignOutModal from '@/components/profile/SignOutModal';
 import UserHeroCard from '@/components/profile/UserHeroCard';
+import PersonalityQuizzesCard from '@/components/profile/PersonalityQuizzesCard';
 import ViewModeCard from '@/components/profile/ViewModeCard';
 import { useAuth } from '@/contexts/AuthContext';
 import { useTheme } from '@/contexts/ThemeContext';
@@ -201,6 +202,11 @@ export default function ProfileScreen() {
                 {/* View Mode Toggle -- T2/T3 only */}
                 {canToggle && (
                     <ViewModeCard colors={colors} viewMode={viewMode} onViewModeChange={handleViewModeChange} />
+                )}
+
+                {/* Personality Quizzes — non-candidate, non-PA roles */}
+                {user?.id && user?.role !== 'candidate' && user?.role !== 'pa' && (
+                    <PersonalityQuizzesCard colors={colors} userId={user.id} />
                 )}
 
                 {/* Security -- Biometrics */}
