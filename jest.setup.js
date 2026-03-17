@@ -74,6 +74,27 @@ jest.mock('react-native-safe-area-context', () => {
 // Mock expo-image (virtual — package may not be installed in test env)
 jest.mock('expo-image', () => ({ Image: 'ExpoImage' }), { virtual: true });
 
+// Mock expo-av (native audio module not available in test env)
+jest.mock('expo-av', () => ({
+    Audio: {
+        Sound: {
+            createAsync: jest.fn().mockResolvedValue({
+                sound: {
+                    playAsync: jest.fn(),
+                    pauseAsync: jest.fn(),
+                    stopAsync: jest.fn(),
+                    unloadAsync: jest.fn(),
+                    setPositionAsync: jest.fn(),
+                    getStatusAsync: jest.fn().mockResolvedValue({ isLoaded: false }),
+                    setOnPlaybackStatusUpdate: jest.fn(),
+                },
+                status: { isLoaded: false },
+            }),
+        },
+        setAudioModeAsync: jest.fn(),
+    },
+}));
+
 // Mock AsyncStorage
 jest.mock('@react-native-async-storage/async-storage', () => ({
     getItem: jest.fn(),

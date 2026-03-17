@@ -18,12 +18,13 @@ module.exports = {
         'contexts/**/*.tsx',
         'components/**/*.tsx',
         'constants/**/*.ts',
+        'app/**/*.tsx',
         '!**/*.d.ts',
     ],
     coverageThreshold: {
         global: {
             statements: 65,
-            branches: 50,
+            branches: 60,
             functions: 65,
             lines: 65,
         },
