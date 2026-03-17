@@ -104,17 +104,17 @@ export default function PersonalityQuizzesCard({ colors, userId }: Props) {
 
     const handleVark = () => {
         if (varkResult) {
-            router.push(`/(tabs)/exams/results/vark/${varkResult.attemptId}` as any);
+            router.push(`/(tabs)/profile/results/vark/${varkResult.attemptId}` as any);
         } else if (varkPaperId) {
-            router.push(`/(tabs)/exams/take/${varkPaperId}` as any);
+            router.push(`/(tabs)/profile/take/${varkPaperId}` as any);
         }
     };
 
     const handleEnneagram = () => {
         if (enneagramResult) {
-            router.push(`/(tabs)/exams/results/enneagram/${enneagramResult.attemptId}` as any);
+            router.push(`/(tabs)/profile/results/enneagram/${enneagramResult.attemptId}` as any);
         } else if (enneagramPaperId) {
-            router.push(`/(tabs)/exams/take/${enneagramPaperId}` as any);
+            router.push(`/(tabs)/profile/take/${enneagramPaperId}` as any);
         }
     };
 

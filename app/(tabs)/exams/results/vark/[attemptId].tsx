@@ -26,6 +26,7 @@ export default function VarkResultsScreen() {
     const router = useRouter();
     const segments = useSegments();
     const isFromRoadmap = segments[1] === 'roadmap';
+    const isFromProfile = segments[1] === 'profile';
 
     const [varkResults, setVarkResults] = useState<VarkResults | null>(null);
     const [isLoading, setIsLoading] = useState(true);
@@ -65,12 +66,18 @@ export default function VarkResultsScreen() {
         }
     };
 
+    const getBackRoute = () => {
+        if (isFromProfile) return '/(tabs)/profile';
+        if (isFromRoadmap) return '/(tabs)/roadmap';
+        return '/(tabs)/exams';
+    };
+
     const handleDone = () => {
-        router.replace(isFromRoadmap ? '/(tabs)/roadmap' : '/(tabs)/exams');
+        router.replace(getBackRoute());
     };
 
     const handleRetake = () => {
-        router.replace(isFromRoadmap ? '/(tabs)/roadmap' : '/(tabs)/exams');
+        router.replace(getBackRoute());
     };
 
     if (isLoading) {

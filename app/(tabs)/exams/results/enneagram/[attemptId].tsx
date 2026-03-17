@@ -19,6 +19,7 @@ export default function EnneagramResultsScreen() {
     const router = useRouter();
     const segments = useSegments();
     const isFromRoadmap = segments[1] === 'roadmap';
+    const isFromProfile = segments[1] === 'profile';
 
     const [results, setResults] = useState<EnneagramResults | null>(null);
     const [isLoading, setIsLoading] = useState(true);
@@ -58,12 +59,18 @@ export default function EnneagramResultsScreen() {
         }
     };
 
+    const getBackRoute = () => {
+        if (isFromProfile) return '/(tabs)/profile';
+        if (isFromRoadmap) return '/(tabs)/roadmap';
+        return '/(tabs)/exams';
+    };
+
     const handleDone = () => {
-        router.replace(isFromRoadmap ? '/(tabs)/roadmap' : '/(tabs)/exams');
+        router.replace(getBackRoute());
     };
 
     const handleRetake = () => {
-        router.replace(isFromRoadmap ? '/(tabs)/roadmap' : '/(tabs)/exams');
+        router.replace(getBackRoute());
     };
 
     if (isLoading) {

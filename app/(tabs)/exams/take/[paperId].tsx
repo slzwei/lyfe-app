@@ -35,7 +35,8 @@ export default function TakeExamScreen() {
     const { user } = useAuth();
     const router = useRouter();
     const segments = useSegments();
-    const tabBase = segments[1] === 'roadmap' ? '/(tabs)/roadmap' : '/(tabs)/exams';
+    const tabBase =
+        segments[1] === 'roadmap' ? '/(tabs)/roadmap' : segments[1] === 'profile' ? '/(tabs)/profile' : '/(tabs)/exams';
 
     const [questions, setQuestions] = useState<ExamQuestion[]>([]);
     const [currentIndex, setCurrentIndex] = useState(0);
