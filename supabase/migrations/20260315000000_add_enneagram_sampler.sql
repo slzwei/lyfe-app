@@ -1,0 +1,65 @@
+-- RHETI Sampler — 36-question Enneagram test (shorter alternative to the full 144-question version)
+-- Based on the Riso-Hudson Enneagram Type Indicator Free Sampler.
+-- Uses column-based scoring: columns A-I map to 9 Enneagram types.
+
+-- Create exam paper
+INSERT INTO public.exam_papers (code, title, description, duration_minutes, pass_percentage, question_count, is_active, is_mandatory, display_order, allow_multiple_answers)
+VALUES ('ENNEAGRAM_SAMPLER', 'Quick Enneagram Sampler (36 Questions)', 'A shorter version of the Enneagram personality test. Takes about 10 minutes.', 15, 0, 36, true, false, 11, false);
+
+-- Insert 36 forced-choice questions
+INSERT INTO public.exam_questions (paper_id, question_number, question_text, options, correct_answer, explanation)
+VALUES
+((SELECT id FROM public.exam_papers WHERE code = 'ENNEAGRAM_SAMPLER'), 1, 'Choose the statement that describes you best.', '{"A":"I''ve been romantic and imaginative.","B":"I''ve been pragmatic and down to earth."}', '', '{"quiz_type":"enneagram","types":{"A":4,"B":9}}'),
+((SELECT id FROM public.exam_papers WHERE code = 'ENNEAGRAM_SAMPLER'), 2, 'Choose the statement that describes you best.', '{"A":"I have tended to take on confrontations.","B":"I have tended to avoid confrontations."}', '', '{"quiz_type":"enneagram","types":{"A":8,"B":9}}'),
+((SELECT id FROM public.exam_papers WHERE code = 'ENNEAGRAM_SAMPLER'), 3, 'Choose the statement that describes you best.', '{"A":"I have typically been diplomatic, charming, and ambitious.","B":"I have typically been direct, formal, and idealistic."}', '', '{"quiz_type":"enneagram","types":{"A":3,"B":1}}'),
+((SELECT id FROM public.exam_papers WHERE code = 'ENNEAGRAM_SAMPLER'), 4, 'Choose the statement that describes you best.', '{"A":"I have tended to be focused and intense.","B":"I have tended to be spontaneous and fun-loving."}', '', '{"quiz_type":"enneagram","types":{"A":4,"B":7}}'),
+((SELECT id FROM public.exam_papers WHERE code = 'ENNEAGRAM_SAMPLER'), 5, 'Choose the statement that describes you best.', '{"A":"I have been a hospitable person and have enjoyed welcoming new friends into my life.","B":"I have been a private person and have not mixed much with others."}', '', '{"quiz_type":"enneagram","types":{"A":2,"B":5}}'),
+((SELECT id FROM public.exam_papers WHERE code = 'ENNEAGRAM_SAMPLER'), 6, 'Choose the statement that describes you best.', '{"A":"Generally, it''s been easy to \"get a rise\" out of me.","B":"Generally, it''s been difficult to \"get a rise\" out of me."}', '', '{"quiz_type":"enneagram","types":{"A":6,"B":9}}'),
+((SELECT id FROM public.exam_papers WHERE code = 'ENNEAGRAM_SAMPLER'), 7, 'Choose the statement that describes you best.', '{"A":"I''ve been more of a \"street-smart\" survivor.","B":"I''ve been more of a \"high-minded\" idealist."}', '', '{"quiz_type":"enneagram","types":{"A":8,"B":1}}'),
+((SELECT id FROM public.exam_papers WHERE code = 'ENNEAGRAM_SAMPLER'), 8, 'Choose the statement that describes you best.', '{"A":"I have needed to show affection to people.","B":"I have preferred to maintain a certain distance with people."}', '', '{"quiz_type":"enneagram","types":{"A":2,"B":5}}'),
+((SELECT id FROM public.exam_papers WHERE code = 'ENNEAGRAM_SAMPLER'), 9, 'Choose the statement that describes you best.', '{"A":"When presented with a new experience, I''ve usually asked myself if it would be useful to me.","B":"When presented with a new experience, I''ve usually asked myself if it would be enjoyable."}', '', '{"quiz_type":"enneagram","types":{"A":3,"B":7}}'),
+((SELECT id FROM public.exam_papers WHERE code = 'ENNEAGRAM_SAMPLER'), 10, 'Choose the statement that describes you best.', '{"A":"I have tended to focus too much on myself.","B":"I have tended to focus too much on others."}', '', '{"quiz_type":"enneagram","types":{"A":4,"B":2}}'),
+((SELECT id FROM public.exam_papers WHERE code = 'ENNEAGRAM_SAMPLER'), 11, 'Choose the statement that describes you best.', '{"A":"Others have depended on my insight and knowledge.","B":"Others have depended on my strength and decisiveness."}', '', '{"quiz_type":"enneagram","types":{"A":5,"B":8}}'),
+((SELECT id FROM public.exam_papers WHERE code = 'ENNEAGRAM_SAMPLER'), 12, 'Choose the statement that describes you best.', '{"A":"I have come across as being too unsure of myself.","B":"I have come across as being too sure of myself."}', '', '{"quiz_type":"enneagram","types":{"A":6,"B":3}}'),
+((SELECT id FROM public.exam_papers WHERE code = 'ENNEAGRAM_SAMPLER'), 13, 'Choose the statement that describes you best.', '{"A":"I have been more relationship-oriented than goal-oriented.","B":"I have been more goal-oriented than relationship-oriented."}', '', '{"quiz_type":"enneagram","types":{"A":2,"B":3}}'),
+((SELECT id FROM public.exam_papers WHERE code = 'ENNEAGRAM_SAMPLER'), 14, 'Choose the statement that describes you best.', '{"A":"I have not been able to speak up for myself very well.","B":"I have been outspoken\u2014I''ve said what others wished they had the nerve to say."}', '', '{"quiz_type":"enneagram","types":{"A":4,"B":8}}'),
+((SELECT id FROM public.exam_papers WHERE code = 'ENNEAGRAM_SAMPLER'), 15, 'Choose the statement that describes you best.', '{"A":"It''s been difficult for me to stop considering alternatives and do something definite.","B":"It''s been difficult for me to take it easy and be more flexible."}', '', '{"quiz_type":"enneagram","types":{"A":7,"B":1}}'),
+((SELECT id FROM public.exam_papers WHERE code = 'ENNEAGRAM_SAMPLER'), 16, 'Choose the statement that describes you best.', '{"A":"I have tended to be hesitant and procrastinating.","B":"I have tended to be bold and domineering."}', '', '{"quiz_type":"enneagram","types":{"A":6,"B":8}}'),
+((SELECT id FROM public.exam_papers WHERE code = 'ENNEAGRAM_SAMPLER'), 17, 'Choose the statement that describes you best.', '{"A":"My reluctance to get too involved has gotten me into trouble with people.","B":"My eagerness to have people depend on me has gotten me into trouble with them."}', '', '{"quiz_type":"enneagram","types":{"A":5,"B":2}}'),
+((SELECT id FROM public.exam_papers WHERE code = 'ENNEAGRAM_SAMPLER'), 18, 'Choose the statement that describes you best.', '{"A":"Usually, I have been able to put my feelings aside to get the job done.","B":"Usually, I have needed to work through my feelings before I could act."}', '', '{"quiz_type":"enneagram","types":{"A":3,"B":4}}'),
+((SELECT id FROM public.exam_papers WHERE code = 'ENNEAGRAM_SAMPLER'), 19, 'Choose the statement that describes you best.', '{"A":"Generally, I have been methodical and cautious.","B":"Generally, I have been adventurous and taken risks."}', '', '{"quiz_type":"enneagram","types":{"A":6,"B":7}}'),
+((SELECT id FROM public.exam_papers WHERE code = 'ENNEAGRAM_SAMPLER'), 20, 'Choose the statement that describes you best.', '{"A":"I have tended to be a supportive, giving person who enjoys the company of others.","B":"I have tended to be a serious, reserved person who likes discussing issues."}', '', '{"quiz_type":"enneagram","types":{"A":2,"B":1}}'),
+((SELECT id FROM public.exam_papers WHERE code = 'ENNEAGRAM_SAMPLER'), 21, 'Choose the statement that describes you best.', '{"A":"I''ve often felt the need to be a \"pillar of strength.\"","B":"I''ve often felt the need to perform perfectly."}', '', '{"quiz_type":"enneagram","types":{"A":8,"B":1}}'),
+((SELECT id FROM public.exam_papers WHERE code = 'ENNEAGRAM_SAMPLER'), 22, 'Choose the statement that describes you best.', '{"A":"I''ve typically been interested in asking tough questions and maintaining my independence.","B":"I''ve typically been interested in maintaining my stability and peace of mind."}', '', '{"quiz_type":"enneagram","types":{"A":5,"B":9}}'),
+((SELECT id FROM public.exam_papers WHERE code = 'ENNEAGRAM_SAMPLER'), 23, 'Choose the statement that describes you best.', '{"A":"I''ve been too hard-nosed and skeptical.","B":"I''ve been too soft-hearted and sentimental."}', '', '{"quiz_type":"enneagram","types":{"A":8,"B":2}}'),
+((SELECT id FROM public.exam_papers WHERE code = 'ENNEAGRAM_SAMPLER'), 24, 'Choose the statement that describes you best.', '{"A":"I''ve often worried that I''m missing out on something better.","B":"I''ve often worried that if I let down my guard, someone will take advantage of me."}', '', '{"quiz_type":"enneagram","types":{"A":7,"B":6}}'),
+((SELECT id FROM public.exam_papers WHERE code = 'ENNEAGRAM_SAMPLER'), 25, 'Choose the statement that describes you best.', '{"A":"My habit of being \"stand-offish\" has annoyed people.","B":"My habit of telling people what to do has annoyed people."}', '', '{"quiz_type":"enneagram","types":{"A":5,"B":1}}'),
+((SELECT id FROM public.exam_papers WHERE code = 'ENNEAGRAM_SAMPLER'), 26, 'Choose the statement that describes you best.', '{"A":"Usually, when troubles have gotten to me, I have been able to \"tune them out.\"","B":"Usually, when troubles have gotten to me, I have treated myself to something I''ve enjoyed."}', '', '{"quiz_type":"enneagram","types":{"A":9,"B":7}}'),
+((SELECT id FROM public.exam_papers WHERE code = 'ENNEAGRAM_SAMPLER'), 27, 'Choose the statement that describes you best.', '{"A":"I have depended upon my friends and they have known that they can depend on me.","B":"I have not depended on people; I have done things on my own."}', '', '{"quiz_type":"enneagram","types":{"A":6,"B":5}}'),
+((SELECT id FROM public.exam_papers WHERE code = 'ENNEAGRAM_SAMPLER'), 28, 'Choose the statement that describes you best.', '{"A":"I have tended to be detached and preoccupied.","B":"I have tended to be moody and self-absorbed."}', '', '{"quiz_type":"enneagram","types":{"A":5,"B":4}}'),
+((SELECT id FROM public.exam_papers WHERE code = 'ENNEAGRAM_SAMPLER'), 29, 'Choose the statement that describes you best.', '{"A":"I have liked to challenge people and \"shake them up.\"","B":"I have liked to comfort people and calm them down."}', '', '{"quiz_type":"enneagram","types":{"A":8,"B":9}}'),
+((SELECT id FROM public.exam_papers WHERE code = 'ENNEAGRAM_SAMPLER'), 30, 'Choose the statement that describes you best.', '{"A":"I have generally been an outgoing, sociable person.","B":"I have generally been an earnest, self-disciplined person."}', '', '{"quiz_type":"enneagram","types":{"A":7,"B":1}}'),
+((SELECT id FROM public.exam_papers WHERE code = 'ENNEAGRAM_SAMPLER'), 31, 'Choose the statement that describes you best.', '{"A":"I''ve usually been shy about showing my abilities.","B":"I''ve usually liked to let people know what I can do well."}', '', '{"quiz_type":"enneagram","types":{"A":6,"B":3}}'),
+((SELECT id FROM public.exam_papers WHERE code = 'ENNEAGRAM_SAMPLER'), 32, 'Choose the statement that describes you best.', '{"A":"Pursuing my personal interests has been more important to me than having comfort and security.","B":"Having comfort and security has been more important to me than pursuing my personal interests."}', '', '{"quiz_type":"enneagram","types":{"A":4,"B":9}}'),
+((SELECT id FROM public.exam_papers WHERE code = 'ENNEAGRAM_SAMPLER'), 33, 'Choose the statement that describes you best.', '{"A":"When I''ve had conflict with others, I''ve tended to withdraw.","B":"When I''ve had conflict with others, I''ve rarely backed down."}', '', '{"quiz_type":"enneagram","types":{"A":5,"B":8}}'),
+((SELECT id FROM public.exam_papers WHERE code = 'ENNEAGRAM_SAMPLER'), 34, 'Choose the statement that describes you best.', '{"A":"I have given in too easily and let others push me around.","B":"I have been too uncompromising and demanding with others."}', '', '{"quiz_type":"enneagram","types":{"A":9,"B":1}}'),
+((SELECT id FROM public.exam_papers WHERE code = 'ENNEAGRAM_SAMPLER'), 35, 'Choose the statement that describes you best.', '{"A":"I''ve been appreciated for my unsinkable spirit and great sense of humor.","B":"I''ve been appreciated for my quiet strength and exceptional generosity."}', '', '{"quiz_type":"enneagram","types":{"A":7,"B":2}}'),
+((SELECT id FROM public.exam_papers WHERE code = 'ENNEAGRAM_SAMPLER'), 36, 'Choose the statement that describes you best.', '{"A":"Much of my success has been due to my talent for making a favorable impression.","B":"Much of my success has been achieved despite my lack of interest in developing \"interpersonal skills.\""}', '', '{"quiz_type":"enneagram","types":{"A":3,"B":5}}');
+
+-- Rename existing full-test module item for clarity
+UPDATE public.roadmap_module_items
+SET title = 'Full Enneagram Test (144 Questions)',
+    display_order = 2
+WHERE module_id = (SELECT id FROM public.roadmap_modules WHERE title = 'Enneagram')
+  AND exam_paper_id = (SELECT id FROM public.exam_papers WHERE code = 'ENNEAGRAM');
+
+-- Add sampler as a second quiz option (optional, shown first)
+INSERT INTO public.roadmap_module_items (module_id, item_type, title, exam_paper_id, display_order, is_required)
+VALUES (
+    (SELECT id FROM public.roadmap_modules WHERE title = 'Enneagram'),
+    'quiz',
+    'Quick Enneagram Sampler (36 Questions)',
+    (SELECT id FROM public.exam_papers WHERE code = 'ENNEAGRAM_SAMPLER'),
+    1,
+    false
+);
