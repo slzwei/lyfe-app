@@ -226,21 +226,6 @@ function mapEvents(rows: EventRow[]): AgencyEvent[] {
     }));
 }
 
-// ── Roadshow re-exports (moved to lib/roadshow.ts) ──────────
-export {
-    hasUserCheckedIn,
-    type RoadshowConfigInput,
-    fetchRoadshowConfig,
-    saveRoadshowConfig,
-    fetchRoadshowAttendance,
-    type PledgeInput,
-    logRoadshowAttendanceWithPledge,
-    managerCheckIn,
-    fetchRoadshowActivities,
-    logRoadshowActivity,
-    createRoadshowBulk,
-} from './roadshow';
-
 /**
  * Delete an event (attendees cascade via FK).
  */

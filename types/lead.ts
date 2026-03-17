@@ -45,7 +45,16 @@ export interface LeadActivity {
     actor_name?: string;
 }
 
-/** Status display config */
+/**
+ * Status display config.
+ *
+ * INTENTIONAL EXCEPTION to the `useTheme()` color rule:
+ * Status badge colors are semantic (blue=new, yellow=contacted, green=success,
+ * purple=proposed, grey=lost) and must remain visually consistent regardless of
+ * light/dark theme. They are used with low-opacity backgrounds (hex + "14") so
+ * they work on both light and dark surfaces. Changing these to theme tokens
+ * would break cross-theme consistency with no UX benefit.
+ */
 export const STATUS_CONFIG: Record<LeadStatus, { label: string; color: string; bgColor: string; icon: string }> = {
     new: { label: 'New', color: '#007AFF', bgColor: '#E5F1FF', icon: 'sparkles' },
     contacted: { label: 'Contacted', color: '#EAB308', bgColor: '#FEF9C3', icon: 'chatbubble' },

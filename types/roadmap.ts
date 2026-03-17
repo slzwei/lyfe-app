@@ -100,13 +100,6 @@ export const RESOURCE_TYPE_CONFIG: Record<ResourceType, { label: string; icon: s
     text: { label: 'Article', icon: 'reader-outline' },
 };
 
-export const NODE_STATE_CONFIG: Record<NodeState, { opacity: number; scale: number }> = {
-    completed: { opacity: 1, scale: 1 },
-    current: { opacity: 1, scale: 1.05 },
-    available: { opacity: 0.9, scale: 1 },
-    locked: { opacity: 0.4, scale: 0.95 },
-};
-
 export const MODULE_ITEM_TYPE_CONFIG: Record<ModuleItemType, { label: string; icon: string; color: string }> = {
     material: { label: 'Material', icon: 'document-text-outline', color: '#007AFF' },
     pre_quiz: { label: 'Pre-Quiz', icon: 'help-circle-outline', color: '#AF52DE' },

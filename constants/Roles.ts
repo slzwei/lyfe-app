@@ -8,8 +8,6 @@
 import type { UserRole } from '@/types/database';
 export type { UserRole, LifecycleStage } from '@/types/database';
 
-export type LeadStatus = 'new' | 'contacted' | 'qualified' | 'proposed' | 'won' | 'lost';
-
 // ── Capability-Based Permission System ──
 
 export type Capability =

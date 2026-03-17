@@ -37,13 +37,18 @@ export async function uploadCandidateDocument(
 
         if (uploadError) return { data: null, error: uploadError.message };
 
-        const {
-            data: { publicUrl },
-        } = supabase.storage.from('candidate-resumes').getPublicUrl(filePath);
+        const { data: signedUrlData, error: signedUrlError } = await supabase.storage
+            .from('candidate-resumes')
+            .createSignedUrl(filePath, 3600);
 
+        if (signedUrlError || !signedUrlData?.signedUrl) {
+            return { data: null, error: signedUrlError?.message ?? 'Failed to generate signed URL' };
+        }
+
+        // Store the file path (not the signed URL) so we can re-sign on each access
         const { data: row, error: insertError } = await supabase
             .from('candidate_documents')
-            .insert({ candidate_id: candidateId, label, file_url: publicUrl, file_name: fileName })
+            .insert({ candidate_id: candidateId, label, file_url: filePath, file_name: fileName })
             .select()
             .single();
 

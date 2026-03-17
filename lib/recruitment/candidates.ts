@@ -233,13 +233,18 @@ export async function uploadCandidateResume(
 
         if (uploadError) return { url: null, error: uploadError.message };
 
-        const {
-            data: { publicUrl },
-        } = supabase.storage.from('candidate-resumes').getPublicUrl(filePath);
+        const { data: signedUrlData, error: signedUrlError } = await supabase.storage
+            .from('candidate-resumes')
+            .createSignedUrl(filePath, 3600);
 
+        if (signedUrlError || !signedUrlData?.signedUrl) {
+            return { url: null, error: signedUrlError?.message ?? 'Failed to generate signed URL' };
+        }
+
+        // Store the file path (not the signed URL) so we can re-sign on each access
         const { data: updated, error: updateError } = await supabase
             .from('candidates')
-            .update({ resume_url: publicUrl })
+            .update({ resume_url: filePath })
             .eq('id', candidateId)
             .select('id');
 
@@ -252,6 +257,18 @@ export async function uploadCandidateResume(
         captureError(err, { fn: 'uploadResume' });
         return { url: null, error: err?.message || 'Upload failed' };
     }
+}
+
+/**
+ * Fetch candidate status counts for a manager's pipeline view.
+ */
+export async function fetchCandidateStatusCounts(
+    managerId: string,
+): Promise<{ data: { status: string }[]; error: string | null }> {
+    const { data, error } = await supabase.from('candidates').select('status').eq('manager_id', managerId);
+
+    if (error) return { data: [], error: error.message };
+    return { data: (data || []) as { status: string }[], error: null };
 }
 
 /**

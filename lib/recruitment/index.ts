@@ -13,7 +13,6 @@ export {
     fetchCandidate,
     createCandidate,
     updateCandidateStatus,
-    uploadCandidateResume,
     addCandidateActivity,
     syncAgentToMKTR,
 } from './candidates';

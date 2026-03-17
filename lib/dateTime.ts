@@ -14,12 +14,6 @@ export function formatCheckinTime(iso: string): string {
     return `${d.getHours() % 12 || 12}:${d.getMinutes().toString().padStart(2, '0')} ${d.getHours() >= 12 ? 'PM' : 'AM'}`;
 }
 
-/** Format ISO timestamp to "HH:MM" (24h) */
-export function formatActivityTime(iso: string): string {
-    const d = new Date(iso);
-    return `${d.getHours().toString().padStart(2, '0')}:${d.getMinutes().toString().padStart(2, '0')}`;
-}
-
 /** Format YYYY-MM-DD as "Monday, 8 March 2026" */
 export function formatDateLong(dateStr: string): string {
     return new Date(dateStr + 'T00:00:00').toLocaleDateString('en-SG', {
