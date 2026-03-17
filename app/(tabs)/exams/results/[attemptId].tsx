@@ -68,11 +68,19 @@ export default function ExamResultsScreen() {
 
     const handleRetake = () => {
         if (!result) return;
-        router.replace(isFromRoadmap ? '/(tabs)/roadmap' : '/(tabs)/exams');
+        if (router.canGoBack()) {
+            router.back();
+        } else {
+            router.replace(isFromRoadmap ? '/(tabs)/roadmap' : '/(tabs)/exams');
+        }
     };
 
     const handleDone = () => {
-        router.replace(isFromRoadmap ? '/(tabs)/roadmap' : '/(tabs)/exams');
+        if (router.canGoBack()) {
+            router.back();
+        } else {
+            router.replace(isFromRoadmap ? '/(tabs)/roadmap' : '/(tabs)/exams');
+        }
     };
 
     if (isLoading) {

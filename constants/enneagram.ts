@@ -20,6 +20,8 @@ export interface EnneagramResults {
     percentages: Record<string, number>;
     primaryType: EnneagramType;
     wing: EnneagramType | null;
+    /** Total questions in the quiz variant (36 for sampler, 144 for full). Absent in legacy results. */
+    totalQuestions?: number;
 }
 
 export const ENNEAGRAM_TYPES: EnneagramType[] = [1, 2, 3, 4, 5, 6, 7, 8, 9];
@@ -157,5 +159,8 @@ export const ENNEAGRAM_TYPE_INFO: Record<EnneagramType, EnneagramTypeInfo> = {
     },
 };
 
-/** Minimum questions answered for a confident result */
-export const ENNEAGRAM_MIN_ANSWERED = 100;
+/** Fraction of questions that must be answered for a confident result (70%) */
+export const ENNEAGRAM_MIN_ANSWERED_PCT = 0.7;
+
+/** Default total question count for legacy results missing totalQuestions */
+export const ENNEAGRAM_DEFAULT_TOTAL = 144;

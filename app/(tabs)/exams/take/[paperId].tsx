@@ -49,7 +49,10 @@ export default function TakeExamScreen() {
     const [quizType, setQuizType] = useState<'standard' | 'vark' | 'enneagram'>('standard');
     const [paperTitle, setPaperTitle] = useState<string | null>(null);
     const [dialogConfig, setDialogConfig] = useState<{
-        visible: boolean; title: string; message: string; buttons: ConfirmDialogButton[];
+        visible: boolean;
+        title: string;
+        message: string;
+        buttons: ConfirmDialogButton[];
     }>({ visible: false, title: '', message: '', buttons: [] });
 
     const showDialog = (title: string, message: string, buttons: ConfirmDialogButton[]) => {
@@ -65,14 +68,35 @@ export default function TakeExamScreen() {
     const isMultiSelectRef = useRef(false);
     const quizTypeRef = useRef<'standard' | 'vark' | 'enneagram'>('standard');
 
+    // Refs that sync with state to avoid stale closures in timer/dialog callbacks
+    const answersRef = useRef(answers);
+    const questionsRef = useRef(questions);
+    const userRef = useRef(user);
+    const paperTitleRef = useRef(paperTitle);
+    const tabBaseRef = useRef(tabBase);
+    useEffect(() => {
+        answersRef.current = answers;
+    }, [answers]);
+    useEffect(() => {
+        questionsRef.current = questions;
+    }, [questions]);
+    useEffect(() => {
+        userRef.current = user;
+    }, [user]);
+    useEffect(() => {
+        paperTitleRef.current = paperTitle;
+    }, [paperTitle]);
+    useEffect(() => {
+        tabBaseRef.current = tabBase;
+    }, [tabBase]);
+
     // Load questions + restore saved progress
     useEffect(() => {
         const loadQuestions = async () => {
             let questionsData: ExamQuestion[] = [];
             let duration = 60;
 
-            const { data, error } = await supabase
-                .from('exam_questions').select('*').eq('paper_id', paperId).order('question_number');
+            const { data, error } = await supabase.rpc('get_exam_questions', { p_paper_id: paperId });
 
             if (error) {
                 setError('Failed to load questions. Please try again.');
@@ -82,7 +106,10 @@ export default function TakeExamScreen() {
             questionsData = data as ExamQuestion[];
 
             const { data: paper } = await supabase
-                .from('exam_papers').select('duration_minutes, allow_multiple_answers, title').eq('id', paperId).single();
+                .from('exam_papers')
+                .select('duration_minutes, allow_multiple_answers, title')
+                .eq('id', paperId)
+                .single();
 
             duration = paper?.duration_minutes || 60;
             setPaperTitle(paper?.title || null);
@@ -93,7 +120,9 @@ export default function TakeExamScreen() {
                     const parsed = JSON.parse(questionsData[0].explanation || '');
                     if (parsed?.quiz_type === 'enneagram') detected = 'enneagram';
                     else if (parsed?.quiz_type === 'vark') detected = 'vark';
-                } catch { /* Not a personality quiz */ }
+                } catch {
+                    /* Not a personality quiz */
+                }
             }
             setQuizType(detected);
             quizTypeRef.current = detected;
@@ -107,7 +136,11 @@ export default function TakeExamScreen() {
                 const saved = await AsyncStorage.getItem(STORAGE_KEY);
                 if (saved) {
                     const state = JSON.parse(saved);
-                    if (state.paperId === paperId && state.schemaVersion === ACTIVE_EXAM_SCHEMA_VERSION && state.allowMultipleAnswers === multiSelect) {
+                    if (
+                        state.paperId === paperId &&
+                        state.schemaVersion === ACTIVE_EXAM_SCHEMA_VERSION &&
+                        state.allowMultipleAnswers === multiSelect
+                    ) {
                         setAnswers(state.answers || {});
                         setCurrentIndex(state.currentIndex || 0);
                         startedAtRef.current = state.startedAt || Date.now();
@@ -118,7 +151,9 @@ export default function TakeExamScreen() {
                             setTimeLeft(Math.max(0, duration * 60 - elapsed));
                         }
                         setIsLoading(false);
-                        setTimeout(() => { hasRestoredRef.current = true; }, 0);
+                        setTimeout(() => {
+                            hasRestoredRef.current = true;
+                        }, 0);
                         return;
                     }
                     await AsyncStorage.removeItem(STORAGE_KEY);
@@ -130,7 +165,9 @@ export default function TakeExamScreen() {
             startedAtRef.current = Date.now();
             setTimeLeft(duration * 60);
             setIsLoading(false);
-            setTimeout(() => { hasRestoredRef.current = true; }, 0);
+            setTimeout(() => {
+                hasRestoredRef.current = true;
+            }, 0);
         };
         loadQuestions();
     }, [paperId]);
@@ -141,11 +178,16 @@ export default function TakeExamScreen() {
         if (quizTypeRef.current !== 'standard') return;
         timerRef.current = setInterval(() => {
             setTimeLeft((prev) => {
-                if (prev <= 1) { handleAutoSubmit(); return 0; }
+                if (prev <= 1) {
+                    handleAutoSubmit();
+                    return 0;
+                }
                 return prev - 1;
             });
         }, 1000);
-        return () => { if (timerRef.current) clearInterval(timerRef.current); };
+        return () => {
+            if (timerRef.current) clearInterval(timerRef.current);
+        };
     }, [isLoading, isSubmitting]);
 
     // App state listener
@@ -170,7 +212,8 @@ export default function TakeExamScreen() {
             attemptId: `${user?.id}_${paperId}`,
             paperId: paperId || '',
             paperCode: PAPER_CODES[paperId || ''] || paperTitle || '',
-            answers, currentIndex,
+            answers,
+            currentIndex,
             startedAt: startedAtRef.current,
             durationMinutes: PAPER_DURATIONS[paperId || ''] || 60,
             totalQuestions: questions.length,
@@ -191,7 +234,11 @@ export default function TakeExamScreen() {
             const current = prev[questionId] || '';
             const selections = current ? current.split(',') : [];
             const idx = selections.indexOf(option);
-            if (idx >= 0) { selections.splice(idx, 1); } else { selections.push(option); }
+            if (idx >= 0) {
+                selections.splice(idx, 1);
+            } else {
+                selections.push(option);
+            }
             selections.sort();
             return { ...prev, [questionId]: selections.join(',') };
         });
@@ -203,9 +250,15 @@ export default function TakeExamScreen() {
         if (timerRef.current) clearInterval(timerRef.current);
         const label = quizTypeRef.current !== 'standard' ? 'assessment' : 'exam';
         showDialog("Time's Up!", `Your ${label} has been automatically submitted.`, [
-            { text: 'View Results', onPress: () => { hideDialog(); submitExam('auto_submitted'); } },
+            {
+                text: 'View Results',
+                onPress: () => {
+                    hideDialog();
+                    submitExam('auto_submitted');
+                },
+            },
         ]);
-    }, [answers, questions]);
+    }, []);
 
     const handleSubmit = () => {
         const unansweredQuestions = questions.filter((q) => !isQuestionAnswered(answers, q.id));
@@ -213,27 +266,51 @@ export default function TakeExamScreen() {
 
         if (unanswered > 0 && isPersonalityQuiz) {
             const nums = unansweredQuestions.map((q) => q.question_number);
-            const preview = nums.length <= 10 ? nums.join(', ') : nums.slice(0, 10).join(', ') + `, ... and ${nums.length - 10} more`;
-            showDialog('All Questions Required', `Please answer all questions for accurate results.\n\nUnanswered: ${preview}`, [
-                { text: 'Go to First', onPress: () => {
-                    hideDialog();
-                    const firstIdx = questions.findIndex((q) => q.id === unansweredQuestions[0].id);
-                    if (firstIdx >= 0) setCurrentIndex(firstIdx);
-                }},
-            ]);
+            const preview =
+                nums.length <= 10
+                    ? nums.join(', ')
+                    : nums.slice(0, 10).join(', ') + `, ... and ${nums.length - 10} more`;
+            showDialog(
+                'All Questions Required',
+                `Please answer all questions for accurate results.\n\nUnanswered: ${preview}`,
+                [
+                    {
+                        text: 'Go to First',
+                        onPress: () => {
+                            hideDialog();
+                            const firstIdx = questions.findIndex((q) => q.id === unansweredQuestions[0].id);
+                            if (firstIdx >= 0) setCurrentIndex(firstIdx);
+                        },
+                    },
+                ],
+            );
         } else if (unanswered > 0) {
-            showDialog('Unanswered Questions',
+            showDialog(
+                'Unanswered Questions',
                 `You have ${unanswered} unanswered question${unanswered > 1 ? 's' : ''}. Unanswered questions will be marked incorrect. Submit anyway?`,
                 [
                     { text: 'Review', style: 'cancel', onPress: hideDialog },
-                    { text: 'Submit', style: 'destructive', onPress: () => { hideDialog(); submitExam('submitted'); } },
+                    {
+                        text: 'Submit',
+                        style: 'destructive',
+                        onPress: () => {
+                            hideDialog();
+                            submitExam('submitted');
+                        },
+                    },
                 ],
             );
         } else {
             const title = isPersonalityQuiz ? 'Submit Assessment' : 'Submit Exam';
             showDialog(title, 'Are you sure you want to submit? You cannot change your answers after submission.', [
                 { text: 'Cancel', style: 'cancel', onPress: hideDialog },
-                { text: 'Submit', onPress: () => { hideDialog(); submitExam('submitted'); } },
+                {
+                    text: 'Submit',
+                    onPress: () => {
+                        hideDialog();
+                        submitExam('submitted');
+                    },
+                },
             ]);
         }
     };
@@ -243,23 +320,45 @@ export default function TakeExamScreen() {
         setIsSubmitting(true);
         if (timerRef.current) clearInterval(timerRef.current);
 
-        const pc = PAPER_CODES[paperId || ''] || paperTitle || paperId || '';
+        // Read from refs to avoid stale closures (timer/dialog callbacks)
+        const currentAnswers = answersRef.current;
+        const currentQuestions = questionsRef.current;
+        const currentUser = userRef.current;
+        const currentPaperTitle = paperTitleRef.current;
+        const currentTabBase = tabBaseRef.current;
 
-        if (user?.id) {
-            const submitFn = quizTypeRef.current === 'enneagram' ? submitEnneagramAttempt
-                : quizTypeRef.current === 'vark' ? submitVarkAttempt : submitExamAttempt;
+        const pc = PAPER_CODES[paperId || ''] || currentPaperTitle || paperId || '';
+
+        if (currentUser?.id) {
+            const submitFn =
+                quizTypeRef.current === 'enneagram'
+                    ? submitEnneagramAttempt
+                    : quizTypeRef.current === 'vark'
+                      ? submitVarkAttempt
+                      : submitExamAttempt;
             const { data: result, error } = await submitFn(
-                { userId: user.id, paperId: paperId || '', questions, answers, status, startedAt: startedAtRef.current }, pc,
+                {
+                    userId: currentUser.id,
+                    paperId: paperId || '',
+                    questions: currentQuestions,
+                    answers: currentAnswers,
+                    status,
+                    startedAt: startedAtRef.current,
+                },
+                pc,
             );
 
             if (!error && result) {
                 await AsyncStorage.setItem(`exam_result_${result.id}`, JSON.stringify(result));
                 await AsyncStorage.removeItem(STORAGE_KEY);
                 if (result.personalityResults) {
-                    const isEnneagram = 'quizType' in result.personalityResults && result.personalityResults.quizType === 'enneagram';
-                    router.replace(`${tabBase}/results/${isEnneagram ? 'enneagram' : 'vark'}/${result.id}` as any);
+                    const isEnneagram =
+                        'quizType' in result.personalityResults && result.personalityResults.quizType === 'enneagram';
+                    router.replace(
+                        `${currentTabBase}/results/${isEnneagram ? 'enneagram' : 'vark'}/${result.id}` as any,
+                    );
                 } else {
-                    router.replace(`${tabBase}/results/${result.id}` as any);
+                    router.replace(`${currentTabBase}/results/${result.id}` as any);
                 }
                 return;
             }
@@ -267,44 +366,75 @@ export default function TakeExamScreen() {
 
         // Local-only fallback
         if (quizTypeRef.current === 'enneagram') {
-            const enneagramResults = computeEnneagramScores(questions, answers);
+            const enneagramResults = computeEnneagramScores(currentQuestions, currentAnswers);
             const resultId = `result_${Date.now()}`;
             const result = {
-                id: resultId, score: 0, totalQuestions: questions.length, percentage: 0, passed: false, status,
-                answers: questions.map((q) => ({ questionId: q.id, selected: answers[q.id] || null, isCorrect: false, correctAnswer: q.correct_answer })),
-                questions, paperCode: pc, personalityResults: enneagramResults,
+                id: resultId,
+                score: 0,
+                totalQuestions: currentQuestions.length,
+                percentage: 0,
+                passed: false,
+                status,
+                answers: currentQuestions.map((q) => ({
+                    questionId: q.id,
+                    selected: currentAnswers[q.id] || null,
+                    isCorrect: false,
+                    correctAnswer: q.correct_answer,
+                })),
+                questions: currentQuestions,
+                paperCode: pc,
+                personalityResults: enneagramResults,
             };
             await AsyncStorage.setItem(`exam_result_${resultId}`, JSON.stringify(result));
             await AsyncStorage.removeItem(STORAGE_KEY);
-            router.replace(`${tabBase}/results/enneagram/${resultId}` as any);
+            router.replace(`${currentTabBase}/results/enneagram/${resultId}` as any);
         } else if (quizTypeRef.current === 'vark') {
-            const varkResults = computeVarkScores(questions, answers);
+            const varkResults = computeVarkScores(currentQuestions, currentAnswers);
             const resultId = `result_${Date.now()}`;
             const result = {
-                id: resultId, score: 0, totalQuestions: questions.length, percentage: 0, passed: false, status,
-                answers: questions.map((q) => ({ questionId: q.id, selected: answers[q.id] || null, isCorrect: false, correctAnswer: q.correct_answer })),
-                questions, paperCode: pc, personalityResults: varkResults,
+                id: resultId,
+                score: 0,
+                totalQuestions: currentQuestions.length,
+                percentage: 0,
+                passed: false,
+                status,
+                answers: currentQuestions.map((q) => ({
+                    questionId: q.id,
+                    selected: currentAnswers[q.id] || null,
+                    isCorrect: false,
+                    correctAnswer: q.correct_answer,
+                })),
+                questions: currentQuestions,
+                paperCode: pc,
+                personalityResults: varkResults,
             };
             await AsyncStorage.setItem(`exam_result_${resultId}`, JSON.stringify(result));
             await AsyncStorage.removeItem(STORAGE_KEY);
-            router.replace(`${tabBase}/results/vark/${resultId}` as any);
+            router.replace(`${currentTabBase}/results/vark/${resultId}` as any);
         } else {
             let correct = 0;
-            const answerDetails = questions.map((q) => {
-                const selected = answers[q.id] || null;
+            const answerDetails = currentQuestions.map((q) => {
+                const selected = currentAnswers[q.id] || null;
                 const isCorrect = selected === q.correct_answer;
                 if (isCorrect) correct++;
                 return { questionId: q.id, selected, isCorrect, correctAnswer: q.correct_answer };
             });
-            const percentage = Math.round((correct / questions.length) * 100);
+            const percentage = Math.round((correct / currentQuestions.length) * 100);
             const resultId = `result_${Date.now()}`;
             const result = {
-                id: resultId, score: correct, totalQuestions: questions.length, percentage, passed: percentage >= 70,
-                status, answers: answerDetails, questions, paperCode: PAPER_CODES[paperId || ''] || paperId,
+                id: resultId,
+                score: correct,
+                totalQuestions: currentQuestions.length,
+                percentage,
+                passed: percentage >= 70,
+                status,
+                answers: answerDetails,
+                questions: currentQuestions,
+                paperCode: PAPER_CODES[paperId || ''] || paperId,
             };
             await AsyncStorage.setItem(`exam_result_${resultId}`, JSON.stringify(result));
             await AsyncStorage.removeItem(STORAGE_KEY);
-            router.replace(`${tabBase}/results/${resultId}` as any);
+            router.replace(`${currentTabBase}/results/${resultId}` as any);
         }
     };
 
@@ -314,7 +444,15 @@ export default function TakeExamScreen() {
             'Your progress is saved. You can resume later.',
             [
                 { text: 'Stay', style: 'cancel', onPress: hideDialog },
-                { text: 'Leave', style: 'destructive', onPress: () => { hideDialog(); if (timerRef.current) clearInterval(timerRef.current); router.back(); } },
+                {
+                    text: 'Leave',
+                    style: 'destructive',
+                    onPress: () => {
+                        hideDialog();
+                        if (timerRef.current) clearInterval(timerRef.current);
+                        router.back();
+                    },
+                },
             ],
         );
     };
@@ -338,26 +476,44 @@ export default function TakeExamScreen() {
     return (
         <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]} edges={['top']}>
             <ExamTopBar
-                displayCode={displayCode} currentIndex={currentIndex} totalQuestions={questions.length}
-                timeLeft={timeLeft} isPersonalityQuiz={isPersonalityQuiz} colors={colors} onBack={handleBack}
+                displayCode={displayCode}
+                currentIndex={currentIndex}
+                totalQuestions={questions.length}
+                timeLeft={timeLeft}
+                isPersonalityQuiz={isPersonalityQuiz}
+                colors={colors}
+                onBack={handleBack}
             />
             <ExamProgressBar currentIndex={currentIndex} totalQuestions={questions.length} colors={colors} />
 
             {error && (
                 <ErrorBanner
                     message={error}
-                    onRetry={() => router.replace(`${tabBase}/${segments[1] === 'roadmap' ? 'exam' : 'take'}/${paperId}` as any)}
+                    onRetry={() =>
+                        router.replace(`${tabBase}/${segments[1] === 'roadmap' ? 'exam' : 'take'}/${paperId}` as any)
+                    }
                     onDismiss={() => setError(null)}
                 />
             )}
 
-            <ScrollView style={styles.scrollView} contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
-                <QuestionCard question={currentQuestion} isMultiSelect={isMultiSelect} quizType={quizType} colors={colors} />
+            <ScrollView
+                style={styles.scrollView}
+                contentContainerStyle={styles.scrollContent}
+                showsVerticalScrollIndicator={false}
+            >
+                <QuestionCard
+                    question={currentQuestion}
+                    isMultiSelect={isMultiSelect}
+                    quizType={quizType}
+                    colors={colors}
+                />
 
                 {['A', 'B', 'C', 'D'].map((option) => {
                     const optionText = currentQuestion.options[option];
                     if (!optionText) return null;
-                    const isSelected = isMultiSelect ? currentSelections.includes(option) : answers[currentQuestion.id] === option;
+                    const isSelected = isMultiSelect
+                        ? currentSelections.includes(option)
+                        : answers[currentQuestion.id] === option;
                     return (
                         <OptionCard
                             key={option}
@@ -366,15 +522,22 @@ export default function TakeExamScreen() {
                             isSelected={isSelected}
                             isMultiSelect={isMultiSelect}
                             colors={colors}
-                            onPress={() => isMultiSelect ? handleToggleAnswer(currentQuestion.id, option) : handleSelectAnswer(currentQuestion.id, option)}
+                            onPress={() =>
+                                isMultiSelect
+                                    ? handleToggleAnswer(currentQuestion.id, option)
+                                    : handleSelectAnswer(currentQuestion.id, option)
+                            }
                         />
                     );
                 })}
             </ScrollView>
 
             <ExamBottomBar
-                currentIndex={currentIndex} totalQuestions={questions.length}
-                isSubmitting={isSubmitting} allAnswered={allAnswered} isPersonalityQuiz={isPersonalityQuiz}
+                currentIndex={currentIndex}
+                totalQuestions={questions.length}
+                isSubmitting={isSubmitting}
+                allAnswered={allAnswered}
+                isPersonalityQuiz={isPersonalityQuiz}
                 colors={colors}
                 onPrev={() => setCurrentIndex((i) => Math.max(0, i - 1))}
                 onNext={() => setCurrentIndex((i) => Math.min(questions.length - 1, i + 1))}
@@ -384,15 +547,24 @@ export default function TakeExamScreen() {
 
             {showGrid && (
                 <QuestionGrid
-                    questions={questions} answers={answers} currentIndex={currentIndex} colors={colors}
-                    onSelectQuestion={(idx) => { setCurrentIndex(idx); setShowGrid(false); }}
+                    questions={questions}
+                    answers={answers}
+                    currentIndex={currentIndex}
+                    colors={colors}
+                    onSelectQuestion={(idx) => {
+                        setCurrentIndex(idx);
+                        setShowGrid(false);
+                    }}
                     onClose={() => setShowGrid(false)}
                 />
             )}
 
             <ConfirmDialog
-                visible={dialogConfig.visible} title={dialogConfig.title}
-                message={dialogConfig.message} buttons={dialogConfig.buttons} onDismiss={hideDialog}
+                visible={dialogConfig.visible}
+                title={dialogConfig.title}
+                message={dialogConfig.message}
+                buttons={dialogConfig.buttons}
+                onDismiss={hideDialog}
             />
         </SafeAreaView>
     );

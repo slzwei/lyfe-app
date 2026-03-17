@@ -4,7 +4,7 @@ import LoadingState from '@/components/LoadingState';
 import ScreenHeader from '@/components/ScreenHeader';
 import { useAuth } from '@/contexts/AuthContext';
 import { useTheme } from '@/contexts/ThemeContext';
-import { supabase } from '@/lib/supabase';
+import { fetchExamPapersWithAttempts } from '@/lib/exams';
 import type { ExamPaper, PaperStats } from '@/types/exam';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
@@ -23,58 +23,19 @@ export default function ExamsListScreen() {
     const [error, setError] = useState<string | null>(null);
 
     const fetchData = useCallback(async () => {
+        if (!user?.id) return;
         try {
             setError(null);
 
-            const { data: papersData, error: papersError } = await supabase
-                .from('exam_papers')
-                .select('*')
-                .eq('is_active', true)
-                .not('code', 'in', '("M5","M9","M9A","HI")')
-                .order('display_order');
+            const {
+                papers: papersData,
+                stats: statsData,
+                error: fetchError,
+            } = await fetchExamPapersWithAttempts(user.id);
 
-            if (papersError) throw papersError;
-            setPapers(papersData as ExamPaper[]);
-
-            // Fetch best attempt stats for current user
-            if (user?.id) {
-                const { data: attempts } = await supabase
-                    .from('exam_attempts')
-                    .select('paper_id, score, percentage, passed, submitted_at')
-                    .eq('user_id', user.id)
-                    .in('status', ['submitted', 'auto_submitted']);
-
-                if (attempts) {
-                    const statsMap: Record<string, PaperStats> = {};
-                    for (const attempt of attempts) {
-                        const existing = statsMap[attempt.paper_id];
-                        if (!existing) {
-                            statsMap[attempt.paper_id] = {
-                                attemptCount: 1,
-                                bestScore: attempt.percentage,
-                                lastAttemptDate: attempt.submitted_at,
-                                bestPassed: attempt.passed,
-                            };
-                        } else {
-                            existing.attemptCount++;
-                            if (
-                                attempt.percentage &&
-                                (!existing.bestScore || attempt.percentage > existing.bestScore)
-                            ) {
-                                existing.bestScore = attempt.percentage;
-                                existing.bestPassed = attempt.passed;
-                            }
-                            if (
-                                attempt.submitted_at &&
-                                (!existing.lastAttemptDate || attempt.submitted_at > existing.lastAttemptDate)
-                            ) {
-                                existing.lastAttemptDate = attempt.submitted_at;
-                            }
-                        }
-                    }
-                    setStats(statsMap);
-                }
-            }
+            if (fetchError) throw new Error(fetchError);
+            setPapers(papersData);
+            setStats(statsData);
         } catch (err: any) {
             setError(err.message || 'Failed to load quizzes');
         } finally {

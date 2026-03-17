@@ -1,7 +1,7 @@
 /**
  * Exams service — Supabase CRUD for exam attempts & answers
  */
-import type { ExamQuestion } from '@/types/exam';
+import type { ExamPaper, ExamQuestion, PaperStats } from '@/types/exam';
 import type { VarkResults } from '@/constants/vark';
 import type { EnneagramResults } from '@/constants/enneagram';
 import { computeVarkScores, isVarkResults } from './vark';
@@ -10,6 +10,65 @@ import { supabase } from './supabase';
 
 /** Default pass threshold when exam_papers.pass_percentage is unavailable */
 const DEFAULT_PASS_PERCENTAGE = 70;
+
+// ── Fetch Exam Papers with Attempts ──────────────────────────
+
+/**
+ * Fetch active exam papers and the current user's attempt stats.
+ * Used by the exam list screen.
+ */
+export async function fetchExamPapersWithAttempts(userId: string): Promise<{
+    papers: ExamPaper[];
+    stats: Record<string, PaperStats>;
+    error: string | null;
+}> {
+    const { data: papersData, error: papersError } = await supabase
+        .from('exam_papers')
+        .select('*')
+        .eq('is_active', true)
+        .not('code', 'in', '("M5","M9","M9A","HI")')
+        .order('display_order');
+
+    if (papersError) return { papers: [], stats: {}, error: papersError.message };
+
+    const papers = (papersData || []) as ExamPaper[];
+
+    // Fetch best attempt stats for current user
+    const statsMap: Record<string, PaperStats> = {};
+    const { data: attempts } = await supabase
+        .from('exam_attempts')
+        .select('paper_id, score, percentage, passed, submitted_at')
+        .eq('user_id', userId)
+        .in('status', ['submitted', 'auto_submitted']);
+
+    if (attempts) {
+        for (const attempt of attempts) {
+            const existing = statsMap[attempt.paper_id];
+            if (!existing) {
+                statsMap[attempt.paper_id] = {
+                    attemptCount: 1,
+                    bestScore: attempt.percentage,
+                    lastAttemptDate: attempt.submitted_at,
+                    bestPassed: attempt.passed,
+                };
+            } else {
+                existing.attemptCount++;
+                if (attempt.percentage && (!existing.bestScore || attempt.percentage > existing.bestScore)) {
+                    existing.bestScore = attempt.percentage;
+                    existing.bestPassed = attempt.passed;
+                }
+                if (
+                    attempt.submitted_at &&
+                    (!existing.lastAttemptDate || attempt.submitted_at > existing.lastAttemptDate)
+                ) {
+                    existing.lastAttemptDate = attempt.submitted_at;
+                }
+            }
+        }
+    }
+
+    return { papers, stats: statsMap, error: null };
+}
 
 // ── Submit Exam ──────────────────────────────────────────────
 
@@ -275,14 +334,10 @@ export async function fetchExamResult(
 
     // If this is a personality quiz with stored results, return them directly
     if (attempt.personality_results) {
-        // Still fetch questions for display
-        const { data: questionsData } = await supabase
-            .from('exam_questions')
-            .select(
-                'id, paper_id, question_number, question_text, has_latex, options, correct_answer, explanation, explanation_has_latex',
-            )
-            .eq('paper_id', attempt.paper_id)
-            .order('question_number');
+        // Fetch questions via RPC (direct table access restricted to admin)
+        const { data: questionsData } = await supabase.rpc('get_exam_questions', {
+            p_paper_id: attempt.paper_id,
+        });
 
         return {
             data: {

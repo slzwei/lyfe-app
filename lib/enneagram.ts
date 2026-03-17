@@ -68,7 +68,7 @@ export function computeEnneagramScores(questions: ExamQuestion[], answers: Recor
     // Determine wing (adjacent type with higher score)
     const wing = getWing(primaryType, scores);
 
-    return { quizType: 'enneagram', scores, percentages, primaryType, wing };
+    return { quizType: 'enneagram', scores, percentages, primaryType, wing, totalQuestions: questions.length };
 }
 
 /**

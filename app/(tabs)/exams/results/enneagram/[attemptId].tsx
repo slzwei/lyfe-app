@@ -9,7 +9,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useLocalSearchParams, useRouter, useSegments } from 'expo-router';
 import React, { useEffect, useState } from 'react';
 import { ActivityIndicator, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { SafeAreaView } from 'react-native-safe-area-context';
 
 export default function EnneagramResultsScreen() {
     const { attemptId } = useLocalSearchParams<{ attemptId: string }>();
@@ -17,7 +17,6 @@ export default function EnneagramResultsScreen() {
     const router = useRouter();
     const segments = useSegments();
     const isFromRoadmap = segments[1] === 'roadmap';
-    const insets = useSafeAreaInsets();
 
     const [results, setResults] = useState<EnneagramResults | null>(null);
     const [isLoading, setIsLoading] = useState(true);
@@ -67,17 +66,17 @@ export default function EnneagramResultsScreen() {
 
     if (isLoading) {
         return (
-            <View style={[styles.container, { backgroundColor: colors.background, paddingTop: insets.top }]}>
+            <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]} edges={['top', 'bottom']}>
                 <View style={styles.loadingContainer}>
                     <ActivityIndicator size="large" color={colors.accent} />
                 </View>
-            </View>
+            </SafeAreaView>
         );
     }
 
     if (!results || error) {
         return (
-            <View style={[styles.container, { backgroundColor: colors.background, paddingTop: insets.top }]}>
+            <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]} edges={['top', 'bottom']}>
                 <View style={styles.loadingContainer}>
                     <Ionicons name="alert-circle-outline" size={48} color={colors.danger} />
                     <Text style={[styles.errorText, { color: colors.textSecondary }]}>
@@ -92,7 +91,7 @@ export default function EnneagramResultsScreen() {
                         </Text>
                     </TouchableOpacity>
                 </View>
-            </View>
+            </SafeAreaView>
         );
     }
 
@@ -109,7 +108,7 @@ export default function EnneagramResultsScreen() {
     );
 
     return (
-        <View style={[styles.container, { backgroundColor: colors.background, paddingTop: insets.top }]}>
+        <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]} edges={['top', 'bottom']}>
             <ScrollView style={styles.scroll} contentContainerStyle={styles.scrollContent}>
                 {/* Header */}
                 <View style={styles.header}>
@@ -256,7 +255,7 @@ export default function EnneagramResultsScreen() {
                     </TouchableOpacity>
                 </View>
             </ScrollView>
-        </View>
+        </SafeAreaView>
     );
 }
 
