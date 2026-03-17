@@ -11,7 +11,7 @@ echo "Patching Expo iOS sources for Swift concurrency compatibility..."
 #       non-'Sendable' type 'ContentPosition' may have shared mutable state"
 FILE="node_modules/expo-image/ios/ContentPosition.swift"
 if [ -f "$FILE" ] && grep -q "static let center" "$FILE" && ! grep -q "nonisolated" "$FILE"; then
-  sed -i '' 's/static let center/nonisolated(unsafe) static let center/' "$FILE"
+  sed -i.bak 's/static let center/nonisolated(unsafe) static let center/' "$FILE" && rm -f "$FILE.bak"
   echo "  ✓ ContentPosition.swift — added nonisolated(unsafe)"
 fi
 
