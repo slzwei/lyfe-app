@@ -1,11 +1,9 @@
 /**
  * Lead stats & dashboard aggregations
  */
-import type { LeadActivity, LeadStatus } from '@/types/lead';
+import { LEAD_STATUSES, type LeadActivity, type LeadStatus } from '@/types/lead';
 import { captureError } from '../sentry';
 import { supabase } from '../supabase';
-
-const ONE_WEEK_MS = 7 * 86400000;
 
 export interface LeadPipelineStats {
     totalLeads: number;
@@ -22,61 +20,53 @@ export interface ManagerDashboardStats {
 
 /**
  * Fetch aggregate pipeline stats for the home dashboard.
+ * Uses the get_lead_pipeline_stats RPC to compute all aggregations server-side
+ * in a single round-trip instead of fetching every lead row into JS.
  */
 export async function fetchLeadStats(
     userId: string,
     isManager: boolean,
 ): Promise<{ data: LeadPipelineStats; error: string | null }> {
-    let query = supabase.from('leads').select('id, status, created_at');
+    const emptyData: LeadPipelineStats = {
+        totalLeads: 0,
+        newThisWeek: 0,
+        conversionRate: 0,
+        activeFollowUps: 0,
+        pipeline: [],
+    };
 
-    if (!isManager) {
-        query = query.eq('assigned_to', userId);
-    } else {
-        // Scope to manager's own leads + their agents' leads
-        const { data: agents } = await supabase
-            .from('users')
-            .select('id')
-            .eq('reports_to', userId)
-            .eq('role', 'agent')
-            .eq('is_active', true);
-        const agentIds = ((agents || []) as { id: string }[]).map((a) => a.id);
-        query = query.in('assigned_to', [...agentIds, userId]);
-    }
-
-    const { data: leads, error } = await query;
-    if (error) {
-        return {
-            data: { totalLeads: 0, newThisWeek: 0, conversionRate: 0, activeFollowUps: 0, pipeline: [] },
-            error: error.message,
-        };
-    }
-
-    const allLeads = leads || [];
-    const weekAgo = new Date(Date.now() - ONE_WEEK_MS).toISOString();
-    const newThisWeek = allLeads.filter((l) => l.created_at >= weekAgo && l.status === 'new').length;
-    const wonCount = allLeads.filter((l) => l.status === 'won').length;
-    const closedCount = allLeads.filter((l) => l.status === 'won' || l.status === 'lost').length;
-    const conversionRate = closedCount > 0 ? Math.round((wonCount / closedCount) * 100) : 0;
-    const activeFollowUps = allLeads.filter(
-        (l) => l.status === 'contacted' || l.status === 'qualified' || l.status === 'proposed',
-    ).length;
-
-    // Build pipeline counts
-    const statusCounts: Record<string, number> = {};
-    allLeads.forEach((l) => {
-        statusCounts[l.status] = (statusCounts[l.status] || 0) + 1;
+    const { data, error } = await supabase.rpc('get_lead_pipeline_stats', {
+        p_user_id: userId,
+        p_is_manager: isManager,
     });
 
-    const STATUSES: LeadStatus[] = ['new', 'contacted', 'qualified', 'proposed', 'won', 'lost'];
-    const pipeline = STATUSES.map((s) => ({ status: s, count: statusCounts[s] || 0 }));
+    if (error) {
+        return { data: emptyData, error: error.message };
+    }
+
+    if (!data) {
+        return { data: emptyData, error: null };
+    }
+
+    // The RPC returns JSONB — parse into our LeadPipelineStats shape
+    const result = data as {
+        totalLeads: number;
+        newThisWeek: number;
+        conversionRate: number;
+        activeFollowUps: number;
+        pipeline: { status: string; count: number }[];
+    };
 
     return {
         data: {
-            totalLeads: allLeads.length,
-            newThisWeek,
-            conversionRate,
-            activeFollowUps,
-            pipeline,
+            totalLeads: result.totalLeads ?? 0,
+            newThisWeek: result.newThisWeek ?? 0,
+            conversionRate: result.conversionRate ?? 0,
+            activeFollowUps: result.activeFollowUps ?? 0,
+            pipeline: (result.pipeline || []).map((p) => ({
+                status: p.status as LeadStatus,
+                count: p.count ?? 0,
+            })),
         },
         error: null,
     };
@@ -192,8 +182,7 @@ export async function getTeamLeadSummary(managerId: string): Promise<{
             stageCounts[l.status] = (stageCounts[l.status] || 0) + 1;
         });
 
-        const STATUSES: LeadStatus[] = ['new', 'contacted', 'qualified', 'proposed', 'won', 'lost'];
-        const byStage = STATUSES.map((s) => ({ stage: s, count: stageCounts[s] || 0 }));
+        const byStage = LEAD_STATUSES.map((s) => ({ stage: s, count: stageCounts[s] || 0 }));
 
         const leadIds = allLeads.map((l) => l.id);
         const leadNameMap: Record<string, string> = {};

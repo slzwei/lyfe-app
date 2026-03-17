@@ -5,6 +5,7 @@ import ContactConfirmModal from '@/components/leads/ContactConfirmModal';
 import NoteInput from '@/components/leads/NoteInput';
 import QuickAction from '@/components/leads/QuickAction';
 import ReassignModal from '@/components/leads/ReassignModal';
+import RecordingCard from '@/components/leads/RecordingCard';
 import StatusPicker from '@/components/leads/StatusPicker';
 import LoadingState from '@/components/LoadingState';
 import ScreenHeader from '@/components/ScreenHeader';
@@ -37,7 +38,7 @@ export default function LeadDetailScreen() {
     const { viewMode, canToggle } = useViewMode();
     const router = useRouter();
     const segments = useSegments();
-    const backLabel = segments[1] === 'team' ? 'Agent' : 'Leads';
+    const backLabel = segments[1] === 'team' ? 'Agent' : segments[1] === 'home' ? 'Back' : 'Leads';
     const isManagerView = canToggle && viewMode === 'manager';
 
     const {
@@ -93,6 +94,17 @@ export default function LeadDetailScreen() {
             </SafeAreaView>
         );
     }
+
+    // Parse MKTR source details from notes (format: "Key: Value | Key: Value")
+    const mktrInfo =
+        lead?.source_name === 'mktr' && lead.notes
+            ? Object.fromEntries(
+                  lead.notes.split(' | ').map((part) => {
+                      const [key, ...rest] = part.split(': ');
+                      return [key.toLowerCase(), rest.join(': ')];
+                  }),
+              )
+            : null;
 
     if (!lead) {
         return (
@@ -219,10 +231,30 @@ export default function LeadDetailScreen() {
                                 <View style={[styles.infoTag, { backgroundColor: colors.surfacePrimary }]}>
                                     <Ionicons name="location-outline" size={12} color={colors.textTertiary} />
                                     <Text style={[styles.infoTagText, { color: colors.textSecondary }]}>
-                                        {SOURCE_LABELS[lead.source]}
+                                        {lead.source_name === 'mktr' ? 'MKTR' : SOURCE_LABELS[lead.source]}
                                     </Text>
                                 </View>
                             </View>
+                            {mktrInfo && (
+                                <View style={styles.tagsRow}>
+                                    {mktrInfo.campaign && (
+                                        <View style={[styles.infoTag, { backgroundColor: colors.surfacePrimary }]}>
+                                            <Ionicons name="megaphone-outline" size={12} color={colors.textTertiary} />
+                                            <Text style={[styles.infoTagText, { color: colors.textSecondary }]}>
+                                                {mktrInfo.campaign}
+                                            </Text>
+                                        </View>
+                                    )}
+                                    {mktrInfo.qr && (
+                                        <View style={[styles.infoTag, { backgroundColor: colors.surfacePrimary }]}>
+                                            <Ionicons name="qr-code-outline" size={12} color={colors.textTertiary} />
+                                            <Text style={[styles.infoTagText, { color: colors.textSecondary }]}>
+                                                {mktrInfo.qr}
+                                            </Text>
+                                        </View>
+                                    )}
+                                </View>
+                            )}
                         </View>
                     </View>
 
@@ -301,6 +333,11 @@ export default function LeadDetailScreen() {
                                 setNoteText('');
                             }}
                         />
+                    )}
+
+                    {/* Call Recording & Transcript */}
+                    {(lead.recording_url || lead.transcript) && (
+                        <RecordingCard recordingUrl={lead.recording_url} transcript={lead.transcript} />
                     )}
 
                     {/* Activity Timeline */}

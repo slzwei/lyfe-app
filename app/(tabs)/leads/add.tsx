@@ -94,7 +94,12 @@ export default function AddLeadScreen() {
         return (
             <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]}>
                 <View style={[styles.headerBar, { borderBottomColor: colors.borderLight }]}>
-                    <TouchableOpacity onPress={() => router.back()} style={styles.cancelBtn}>
+                    <TouchableOpacity
+                        onPress={() => router.back()}
+                        style={styles.cancelBtn}
+                        accessibilityRole="button"
+                        accessibilityLabel="Go back"
+                    >
                         <Text style={[styles.cancelText, { color: colors.textSecondary }]}>Back</Text>
                     </TouchableOpacity>
                     <Text style={[styles.headerTitle, { color: colors.textPrimary }]}>New Lead</Text>
@@ -117,7 +122,12 @@ export default function AddLeadScreen() {
         <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]}>
             {/* Header */}
             <View style={[styles.headerBar, { borderBottomColor: colors.borderLight }]}>
-                <TouchableOpacity onPress={() => router.back()} style={styles.cancelBtn}>
+                <TouchableOpacity
+                    onPress={() => router.back()}
+                    style={styles.cancelBtn}
+                    accessibilityRole="button"
+                    accessibilityLabel="Cancel and go back"
+                >
                     <Text style={[styles.cancelText, { color: colors.textSecondary }]}>Cancel</Text>
                 </TouchableOpacity>
                 <Text style={[styles.headerTitle, { color: colors.textPrimary }]}>New Lead</Text>
@@ -125,6 +135,8 @@ export default function AddLeadScreen() {
                     onPress={handleSave}
                     style={[styles.saveBtn, { backgroundColor: colors.accent, opacity: isSaving ? 0.5 : 1 }]}
                     disabled={isSaving}
+                    accessibilityRole="button"
+                    accessibilityLabel="Save new lead"
                 >
                     {isSaving ? (
                         <ActivityIndicator size="small" color={colors.textInverse} />
@@ -209,6 +221,9 @@ export default function AddLeadScreen() {
                                             },
                                         ]}
                                         onPress={() => setSource(s)}
+                                        accessibilityRole="button"
+                                        accessibilityLabel={`Source: ${SOURCE_LABELS[s]}`}
+                                        accessibilityState={{ selected: source === s }}
                                     >
                                         <Text
                                             style={[
@@ -245,6 +260,9 @@ export default function AddLeadScreen() {
                                             },
                                         ]}
                                         onPress={() => setProduct(p)}
+                                        accessibilityRole="button"
+                                        accessibilityLabel={`Product: ${PRODUCT_LABELS[p]}`}
+                                        accessibilityState={{ selected: product === p }}
                                     >
                                         <Text
                                             style={[
@@ -283,6 +301,7 @@ export default function AddLeadScreen() {
                                 multiline
                                 numberOfLines={4}
                                 textAlignVertical="top"
+                                accessibilityLabel="Notes"
                             />
                         </View>
                     </ScrollView>
@@ -301,6 +320,8 @@ export default function AddLeadScreen() {
                         <TouchableOpacity
                             style={[styles.modalOkBtn, { backgroundColor: colors.accent }]}
                             onPress={handleSuccessDismiss}
+                            accessibilityRole="button"
+                            accessibilityLabel="OK, dismiss"
                         >
                             <Text style={[styles.modalOkBtnText, { color: colors.textInverse }]}>OK</Text>
                         </TouchableOpacity>

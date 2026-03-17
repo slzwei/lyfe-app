@@ -103,6 +103,7 @@ export default function LeadsListScreen() {
                     <TouchableOpacity
                         style={[styles.addButton, { backgroundColor: colors.accent }]}
                         onPress={() => router.push('/(tabs)/leads/add')}
+                        accessibilityRole="button"
                         accessibilityLabel="Add new lead"
                     >
                         <Ionicons name="add" size={20} color={colors.textInverse} />
@@ -124,11 +125,14 @@ export default function LeadsListScreen() {
                         value={search}
                         onChangeText={setSearch}
                         returnKeyType="search"
+                        accessibilityLabel="Search leads"
+                        accessibilityHint="Search by name or phone number"
                     />
                     {search.length > 0 && (
                         <TouchableOpacity
                             onPress={() => setSearch('')}
                             hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                            accessibilityRole="button"
                             accessibilityLabel="Clear search"
                         >
                             <Ionicons name="close-circle" size={18} color={colors.textTertiary} />
