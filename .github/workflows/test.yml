@@ -28,5 +28,8 @@ jobs:
       - name: Test with coverage
         run: npx jest --coverage
 
+      - name: Validate Expo config
+        run: npx expo-doctor@latest || echo "::warning::expo-doctor found issues — review output above"
+
       - name: Dependency audit
-        run: npm audit --audit-level=high || true
+        run: npm audit --audit-level=high || echo "::warning::npm audit found high-severity vulnerabilities — review npm audit output above"
