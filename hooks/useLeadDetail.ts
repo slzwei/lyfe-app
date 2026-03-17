@@ -15,6 +15,7 @@ import type { LeadActivity, LeadStatus } from '@/types/lead';
 interface UseLeadDetailParams {
     leadId: string | undefined;
     userId: string | undefined;
+    userRole: string | undefined;
     fullName: string | undefined;
 }
 
@@ -115,22 +116,23 @@ function useLeadStatus({
 interface UseLeadReassignParams {
     lead: Lead | null;
     userId: string | undefined;
+    userRole: string | undefined;
     fullName: string | undefined;
     setActivities: React.Dispatch<React.SetStateAction<LeadActivity[]>>;
 }
 
-function useLeadReassign({ lead, userId, fullName, setActivities }: UseLeadReassignParams) {
+function useLeadReassign({ lead, userId, userRole, fullName, setActivities }: UseLeadReassignParams) {
     const [showReassignModal, setShowReassignModal] = useState(false);
     const [reassignAgents, setReassignAgents] = useState<{ id: string; full_name: string }[]>([]);
     const [isReassigning, setIsReassigning] = useState(false);
 
     const handleOpenReassign = useCallback(async () => {
         if (userId && lead) {
-            const { data } = await fetchTeamAgents(userId);
+            const { data } = await fetchTeamAgents(userId, userRole);
             setReassignAgents(data.filter((a) => a.id !== lead.assigned_to));
         }
         setShowReassignModal(true);
-    }, [userId, lead]);
+    }, [userId, userRole, lead]);
 
     const handleReassign = useCallback(
         async (toAgent: { id: string; full_name: string }) => {
@@ -168,14 +170,21 @@ function useLeadReassign({ lead, userId, fullName, setActivities }: UseLeadReass
         [lead, userId, fullName, setActivities],
     );
 
-    return { showReassignModal, setShowReassignModal, reassignAgents, isReassigning, handleOpenReassign, handleReassign };
+    return {
+        showReassignModal,
+        setShowReassignModal,
+        reassignAgents,
+        isReassigning,
+        handleOpenReassign,
+        handleReassign,
+    };
 }
 
 // ---------------------------------------------------------------------------
 // Main hook — composes sub-hooks, single public import point
 // ---------------------------------------------------------------------------
 
-export function useLeadDetail({ leadId, userId, fullName }: UseLeadDetailParams) {
+export function useLeadDetail({ leadId, userId, userRole, fullName }: UseLeadDetailParams) {
     const [lead, setLead] = useState<Lead | null>(null);
     const [activities, setActivities] = useState<LeadActivity[]>([]);
     const [currentStatus, setCurrentStatus] = useState<LeadStatus>('new');
@@ -232,7 +241,7 @@ export function useLeadDetail({ leadId, userId, fullName }: UseLeadDetailParams)
 
     const noteState = useLeadNote({ lead, userId, setActivities, setError });
     const statusState = useLeadStatus({ lead, userId, currentStatus, setCurrentStatus, setActivities, setError });
-    const reassignState = useLeadReassign({ lead, userId, fullName, setActivities });
+    const reassignState = useLeadReassign({ lead, userId, userRole, fullName, setActivities });
 
     return {
         lead,

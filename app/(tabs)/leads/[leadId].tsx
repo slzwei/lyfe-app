@@ -66,7 +66,7 @@ export default function LeadDetailScreen() {
         showStatusPicker,
         setShowStatusPicker,
         isUpdatingStatus,
-    } = useLeadDetail({ leadId, userId: user?.id, fullName: user?.full_name });
+    } = useLeadDetail({ leadId, userId: user?.id, userRole: user?.role, fullName: user?.full_name });
 
     // Contact confirmation (AppState-based)
     const [pendingContact, setPendingContact] = useState<{ type: 'call' | 'whatsapp'; phone: string } | null>(null);

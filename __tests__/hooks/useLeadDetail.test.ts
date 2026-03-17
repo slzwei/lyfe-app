@@ -73,6 +73,7 @@ const ACTIVITIES: LeadActivity[] = [
 const defaultParams = {
     leadId: 'lead-1',
     userId: 'user-1',
+    userRole: 'manager',
     fullName: 'Test User',
 };
 
@@ -123,7 +124,7 @@ describe('useLeadDetail', () => {
 
         it('does not fetch when leadId is undefined', async () => {
             const { result } = renderHook(() =>
-                useLeadDetail({ leadId: undefined, userId: 'user-1', fullName: 'Test' }),
+                useLeadDetail({ leadId: undefined, userId: 'user-1', userRole: 'manager', fullName: 'Test' }),
             );
 
             // loadData exits early — isLoading stays true (never set to false)
@@ -325,7 +326,7 @@ describe('useLeadDetail', () => {
             setupSuccessfulLoad();
 
             const { result } = renderHook(() =>
-                useLeadDetail({ leadId: 'lead-1', userId: undefined, fullName: 'Test' }),
+                useLeadDetail({ leadId: 'lead-1', userId: undefined, userRole: 'manager', fullName: 'Test' }),
             );
 
             await waitFor(() => {
@@ -444,7 +445,7 @@ describe('useLeadDetail', () => {
             setupSuccessfulLoad();
 
             const { result } = renderHook(() =>
-                useLeadDetail({ leadId: 'lead-1', userId: undefined, fullName: 'Test' }),
+                useLeadDetail({ leadId: 'lead-1', userId: undefined, userRole: 'manager', fullName: 'Test' }),
             );
 
             await waitFor(() => {
@@ -521,7 +522,7 @@ describe('useLeadDetail', () => {
                 await result.current.handleOpenReassign();
             });
 
-            expect(mockFetchTeamAgents).toHaveBeenCalledWith('user-1');
+            expect(mockFetchTeamAgents).toHaveBeenCalledWith('user-1', 'manager');
             expect(result.current.showReassignModal).toBe(true);
             // Filters out the currently assigned agent (agent-1)
             expect(result.current.reassignAgents).toEqual([
@@ -534,7 +535,7 @@ describe('useLeadDetail', () => {
             setupSuccessfulLoad();
 
             const { result } = renderHook(() =>
-                useLeadDetail({ leadId: 'lead-1', userId: undefined, fullName: 'Test' }),
+                useLeadDetail({ leadId: 'lead-1', userId: undefined, userRole: 'manager', fullName: 'Test' }),
             );
 
             await waitFor(() => {
@@ -639,7 +640,7 @@ describe('useLeadDetail', () => {
             setupSuccessfulLoad();
 
             const { result } = renderHook(() =>
-                useLeadDetail({ leadId: 'lead-1', userId: undefined, fullName: 'Test' }),
+                useLeadDetail({ leadId: 'lead-1', userId: undefined, userRole: 'manager', fullName: 'Test' }),
             );
 
             await waitFor(() => {
@@ -756,7 +757,7 @@ describe('useLeadDetail', () => {
             setupSuccessfulLoad();
 
             const { result } = renderHook(() =>
-                useLeadDetail({ leadId: 'lead-1', userId: undefined, fullName: 'Test' }),
+                useLeadDetail({ leadId: 'lead-1', userId: undefined, userRole: 'manager', fullName: 'Test' }),
             );
 
             await waitFor(() => {

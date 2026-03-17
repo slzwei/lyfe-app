@@ -121,13 +121,18 @@ export async function updateLeadStatus(
  */
 export async function fetchTeamAgents(
     managerId: string,
+    userRole?: string,
 ): Promise<{ data: { id: string; full_name: string }[]; error: string | null }> {
-    const { data, error } = await supabase
-        .from('users')
-        .select('id, full_name')
-        .eq('reports_to', managerId)
-        .eq('role', 'agent')
-        .eq('is_active', true);
+    let query = supabase.from('users').select('id, full_name').eq('role', 'agent').eq('is_active', true);
+
+    if (userRole === 'admin' || userRole === 'director') {
+        // Directors/admins can reassign to any active agent
+    } else {
+        // Managers only see their direct reports
+        query = query.eq('reports_to', managerId);
+    }
+
+    const { data, error } = await query;
 
     if (error) return { data: [], error: error.message };
     return { data: (data || []) as { id: string; full_name: string }[], error: null };
