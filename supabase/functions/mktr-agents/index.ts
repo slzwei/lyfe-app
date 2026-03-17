@@ -17,6 +17,25 @@ function maskEmail(email: string): string {
     return local[0] + '***@' + domain;
 }
 
+/**
+ * Timing-safe comparison of two strings.
+ */
+async function timingSafeEqual(a: string, b: string): Promise<boolean> {
+    const enc = new TextEncoder();
+    const keyData = enc.encode('comparison-key');
+    const key = await crypto.subtle.importKey('raw', keyData, { name: 'HMAC', hash: 'SHA-256' }, false, ['sign']);
+    const sigA = await crypto.subtle.sign('HMAC', key, enc.encode(a));
+    const sigB = await crypto.subtle.sign('HMAC', key, enc.encode(b));
+    const arrA = new Uint8Array(sigA);
+    const arrB = new Uint8Array(sigB);
+    if (arrA.length !== arrB.length) return false;
+    let result = 0;
+    for (let i = 0; i < arrA.length; i++) {
+        result |= arrA[i] ^ arrB[i];
+    }
+    return result === 0;
+}
+
 function jsonResponse(body: Record<string, unknown>, status = 200) {
     return new Response(JSON.stringify(body), {
         status,
@@ -30,7 +49,7 @@ Deno.serve(async (req) => {
     }
 
     try {
-        // ── API key authentication ────────────────────────────────
+        // ── API key authentication (timing-safe) ────────────────────
         const apiKey = Deno.env.get('MKTR_API_KEY');
         if (!apiKey) {
             console.error('[mktr-agents] MKTR_API_KEY not configured');
@@ -38,7 +57,7 @@ Deno.serve(async (req) => {
         }
 
         const authHeader = req.headers.get('Authorization');
-        if (!authHeader?.startsWith('Bearer ') || authHeader.slice(7) !== apiKey) {
+        if (!authHeader?.startsWith('Bearer ') || !(await timingSafeEqual(authHeader.slice(7), apiKey))) {
             return jsonResponse({ error: 'Unauthorized' }, 401);
         }
 
@@ -54,7 +73,7 @@ Deno.serve(async (req) => {
                 .from('users')
                 .select('id, full_name, phone, email, role')
                 .eq('id', agentId)
-                .in('role', ['agent', 'pa'])
+                .in('role', ['agent', 'director', 'manager'])
                 .eq('is_active', true)
                 .single();
 
@@ -66,8 +85,8 @@ Deno.serve(async (req) => {
                 agent: {
                     id: agent.id,
                     name: agent.full_name,
-                    phone: agent.phone,
-                    email: agent.email,
+                    phone: maskPhone(agent.phone || ''),
+                    email: agent.email ? maskEmail(agent.email) : null,
                     role: agent.role,
                 },
             });
@@ -77,9 +96,10 @@ Deno.serve(async (req) => {
         const { data: agents, error } = await supabase
             .from('users')
             .select('id, full_name, phone, email, role')
-            .in('role', ['agent', 'pa'])
+            .in('role', ['agent', 'director', 'manager'])
             .eq('is_active', true)
-            .order('full_name');
+            .order('full_name')
+            .limit(500);
 
         if (error) {
             console.error('[mktr-agents] Error fetching agents:', error);
@@ -90,8 +110,8 @@ Deno.serve(async (req) => {
             agents: (agents || []).map((a: any) => ({
                 id: a.id,
                 name: a.full_name,
-                phone: a.phone,
-                email: a.email,
+                phone: maskPhone(a.phone || ''),
+                email: a.email ? maskEmail(a.email) : null,
                 role: a.role,
             })),
         });

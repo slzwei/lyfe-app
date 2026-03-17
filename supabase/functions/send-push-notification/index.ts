@@ -21,15 +21,34 @@ interface WebhookPayload {
     };
 }
 
+/**
+ * Timing-safe comparison of two strings.
+ */
+async function timingSafeEqual(a: string, b: string): Promise<boolean> {
+    const enc = new TextEncoder();
+    const keyData = enc.encode('comparison-key');
+    const key = await crypto.subtle.importKey('raw', keyData, { name: 'HMAC', hash: 'SHA-256' }, false, ['sign']);
+    const sigA = await crypto.subtle.sign('HMAC', key, enc.encode(a));
+    const sigB = await crypto.subtle.sign('HMAC', key, enc.encode(b));
+    const arrA = new Uint8Array(sigA);
+    const arrB = new Uint8Array(sigB);
+    if (arrA.length !== arrB.length) return false;
+    let result = 0;
+    for (let i = 0; i < arrA.length; i++) {
+        result |= arrA[i] ^ arrB[i];
+    }
+    return result === 0;
+}
+
 Deno.serve(async (req) => {
     if (req.method === 'OPTIONS') {
         return new Response(null, { status: 204 });
     }
 
-    // ── Webhook secret authentication ─────────────────────────────
+    // ── Webhook secret authentication (timing-safe) ────────────────
     const webhookSecret = Deno.env.get('WEBHOOK_SECRET');
     const providedSecret = req.headers.get('X-Webhook-Secret');
-    if (!webhookSecret || providedSecret !== webhookSecret) {
+    if (!webhookSecret || !providedSecret || !(await timingSafeEqual(providedSecret, webhookSecret))) {
         return new Response(JSON.stringify({ error: 'Unauthorized' }), {
             status: 401,
             headers: { 'Content-Type': 'application/json' },

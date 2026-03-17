@@ -88,14 +88,15 @@ Deno.serve(async (req) => {
             return jsonResponse({ error: 'Invalid signature' }, 401);
         }
 
-        // ── Replay protection ─────────────────────────────────────
+        // ── Replay protection (timestamp mandatory) ────────────────
         const timestampHeader = req.headers.get('X-Webhook-Timestamp');
-        if (timestampHeader) {
-            const ts = new Date(timestampHeader).getTime();
-            const now = Date.now();
-            if (isNaN(ts) || Math.abs(now - ts) > 5 * 60 * 1000) {
-                return jsonResponse({ error: 'Timestamp too old or invalid' }, 401);
-            }
+        if (!timestampHeader) {
+            return jsonResponse({ error: 'Missing timestamp' }, 401);
+        }
+        const ts = new Date(timestampHeader).getTime();
+        const now = Date.now();
+        if (isNaN(ts) || Math.abs(now - ts) > 5 * 60 * 1000) {
+            return jsonResponse({ error: 'Timestamp too old or invalid' }, 401);
         }
 
         // ── Parse and validate payload ────────────────────────────
@@ -107,14 +108,12 @@ Deno.serve(async (req) => {
         }
 
         const { event, deliveryId, data } = payload;
-        if (event !== 'lead.created') {
+        const SUPPORTED_EVENTS = ['lead.created', 'lead.assigned', 'lead.unassigned'];
+        if (!SUPPORTED_EVENTS.includes(event)) {
             return jsonResponse({ error: `Unsupported event: ${event}` }, 400);
         }
         if (!data?.lead?.externalId) {
             return jsonResponse({ error: 'Missing data.lead.externalId' }, 400);
-        }
-        if (!data?.routing?.agentPhone) {
-            return jsonResponse({ error: 'Missing data.routing.agentPhone' }, 400);
         }
 
         const { lead, routing, campaign, qrTag } = data;
@@ -122,7 +121,75 @@ Deno.serve(async (req) => {
         // ── Service-role client ───────────────────────────────────
         const supabase = createClient(Deno.env.get('SUPABASE_URL')!, Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!);
 
-        // ── Idempotency check ─────────────────────────────────────
+        // ── lead.unassigned ───────────────────────────────────────
+        if (event === 'lead.unassigned') {
+            if (!data?.previousAgentId) {
+                return jsonResponse({ error: 'Missing data.previousAgentId' }, 400);
+            }
+
+            const { data: existing } = await supabase
+                .from('leads')
+                .select('id, assigned_to')
+                .eq('external_id', lead.externalId)
+                .eq('source_name', 'mktr')
+                .maybeSingle();
+
+            if (!existing) {
+                return jsonResponse({ success: true, message: 'Lead not found, nothing to unassign' });
+            }
+
+            if (existing.assigned_to !== data.previousAgentId) {
+                return jsonResponse({ error: 'Lead is not assigned to the specified agent' }, 409);
+            }
+
+            const { error: deleteError } = await supabase.from('leads').delete().eq('id', existing.id);
+
+            if (deleteError) {
+                console.error('[receive-mktr-lead] Lead delete error:', deleteError);
+                return jsonResponse({ error: 'Failed to delete lead' }, 500);
+            }
+
+            return jsonResponse({ success: true, leadId: existing.id, deleted: true });
+        }
+
+        // ── Resolve agent ─────────────────────────────────────────
+        // lead.created matches by agentPhone, lead.assigned matches by agentExternalId
+        let agentId: string;
+
+        if (event === 'lead.created') {
+            if (!routing?.agentPhone) {
+                return jsonResponse({ error: 'Missing data.routing.agentPhone' }, 400);
+            }
+            // Strip '+' prefix — DB stores phones without it (e.g. 6580000012)
+            const normalizedPhone = routing.agentPhone.replace(/^\+/, '');
+            const { data: agent } = await supabase
+                .from('users')
+                .select('id')
+                .eq('phone', normalizedPhone)
+                .maybeSingle();
+            if (!agent) {
+                console.warn(`[receive-mktr-lead] Agent not found for phone: ${maskPhone(routing.agentPhone)}`);
+                return jsonResponse({ error: 'Agent not found for the provided phone number' }, 422);
+            }
+            agentId = agent.id;
+        } else {
+            // lead.assigned — agentExternalId is the Supabase user UUID (returned by mktr-agents endpoint)
+            if (!routing?.agentExternalId) {
+                return jsonResponse({ error: 'Missing data.routing.agentExternalId' }, 400);
+            }
+            const { data: agent } = await supabase
+                .from('users')
+                .select('id')
+                .eq('id', routing.agentExternalId)
+                .maybeSingle();
+            if (!agent) {
+                console.warn(`[receive-mktr-lead] Agent not found for ID: ${routing.agentExternalId}`);
+                return jsonResponse({ error: 'Agent not found for the provided ID' }, 422);
+            }
+            agentId = agent.id;
+        }
+
+        // ── Idempotency / upsert check ────────────────────────────
         const { data: existing } = await supabase
             .from('leads')
             .select('id')
@@ -131,31 +198,59 @@ Deno.serve(async (req) => {
             .maybeSingle();
 
         if (existing) {
+            if (event === 'lead.assigned') {
+                // Reassign existing lead to new agent
+                const { error: updateError } = await supabase
+                    .from('leads')
+                    .update({
+                        assigned_to: agentId,
+                        recording_url: lead.recordingUrl || null,
+                        transcript: lead.transcript || null,
+                    })
+                    .eq('id', existing.id);
+
+                if (updateError) {
+                    console.error('[receive-mktr-lead] Lead reassign error:', updateError);
+                    return jsonResponse({ error: 'Failed to reassign lead' }, 500);
+                }
+
+                const fullName = [lead.firstName, lead.lastName].filter(Boolean).join(' ') || 'Unknown';
+
+                await supabase.from('lead_activities').insert({
+                    lead_id: existing.id,
+                    user_id: agentId,
+                    type: 'reassignment',
+                    description: `Lead reassigned via MKTR to ${routing.agentName || 'agent'}`,
+                    metadata: { source: 'mktr', delivery_id: deliveryId, campaign: campaign?.name || null },
+                });
+
+                await supabase.from('notifications').insert({
+                    user_id: agentId,
+                    type: 'new_lead',
+                    title: `Lead Assigned: ${fullName}`,
+                    body: `From ${campaign?.name || 'MKTR'} via MKTR`,
+                    data: { route: `/(tabs)/leads/${existing.id}`, leadId: existing.id },
+                });
+
+                return jsonResponse({ success: true, leadId: existing.id, reassigned: true });
+            }
+
+            // lead.created duplicate
             return jsonResponse({ success: true, leadId: existing.id, duplicate: true });
         }
 
-        // ── Resolve agent by phone ────────────────────────────────
-        // Strip '+' prefix — DB stores phones without it (e.g. 6580000012)
-        const normalizedPhone = routing.agentPhone.replace(/^\+/, '');
-
-        const { data: agent } = await supabase
-            .from('users')
-            .select('id, push_token')
-            .eq('phone', normalizedPhone)
-            .maybeSingle();
-
-        if (!agent) {
-            console.warn(`[receive-mktr-lead] Agent not found for phone: ${maskPhone(routing.agentPhone)}`);
-            return jsonResponse({ error: 'Agent not found for the provided phone number' }, 422);
-        }
-
-        const agentId = agent.id;
-
         // ── Build notes from MKTR metadata ────────────────────────
         const noteParts: string[] = [];
-        if (lead.company) noteParts.push(`Company: ${lead.company}`);
-        if (lead.jobTitle) noteParts.push(`Title: ${lead.jobTitle}`);
-        if (lead.industry) noteParts.push(`Industry: ${lead.industry}`);
+        if (event === 'lead.created') {
+            if (lead.company) noteParts.push(`Company: ${lead.company}`);
+            if (lead.jobTitle) noteParts.push(`Title: ${lead.jobTitle}`);
+            if (lead.industry) noteParts.push(`Industry: ${lead.industry}`);
+        } else {
+            // lead.assigned — different payload shape
+            if (lead.leadSource) noteParts.push(`Source: ${lead.leadSource}`);
+            if (lead.tags?.length) noteParts.push(`Tags: ${lead.tags.join(', ')}`);
+            if (lead.sourceMetadata?.sentiment) noteParts.push(`Sentiment: ${lead.sourceMetadata.sentiment}`);
+        }
         if (campaign?.name) noteParts.push(`Campaign: ${campaign.name}`);
         if (qrTag?.slug) noteParts.push(`QR: ${qrTag.slug}`);
         const notes = noteParts.length > 0 ? noteParts.join(' | ') : null;
@@ -175,6 +270,8 @@ Deno.serve(async (req) => {
                 status: 'new',
                 product_interest: 'general',
                 notes,
+                recording_url: lead.recordingUrl || null,
+                transcript: lead.transcript || null,
                 assigned_to: agentId,
                 created_by: agentId,
             })
@@ -197,25 +294,23 @@ Deno.serve(async (req) => {
             lead_id: leadId,
             user_id: agentId,
             type: 'created',
-            description: 'Lead received from MKTR',
+            description: event === 'lead.created' ? 'Lead received from MKTR' : 'Lead assigned from MKTR',
             metadata: {
                 source: 'mktr',
                 campaign: campaign?.name || null,
-                routing_mode: routing.mode,
+                routing_mode: routing.mode || null,
                 delivery_id: deliveryId,
             },
         });
 
-        // ── In-app notification (push handled by send-push-notification dispatcher) ──
-        if (agentId) {
-            await supabase.from('notifications').insert({
-                user_id: agentId,
-                type: 'new_lead',
-                title: `New Lead: ${fullName}`,
-                body: `From ${campaign?.name || 'MKTR'} via MKTR`,
-                data: { route: `/(tabs)/leads/${leadId}`, leadId },
-            });
-        }
+        // ── In-app notification ───────────────────────────────────
+        await supabase.from('notifications').insert({
+            user_id: agentId,
+            type: 'new_lead',
+            title: event === 'lead.created' ? `New Lead: ${fullName}` : `Lead Assigned: ${fullName}`,
+            body: `From ${campaign?.name || 'MKTR'} via MKTR`,
+            data: { route: `/(tabs)/leads/${leadId}`, leadId },
+        });
 
         return jsonResponse({ success: true, leadId });
     } catch (err) {
