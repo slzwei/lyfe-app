@@ -1,7 +1,7 @@
 {
     "name": "lyfe-app",
     "main": "expo-router/entry",
-    "version": "1.1.0",
+    "version": "1.2.0",
     "scripts": {
         "start": "expo start",
         "android": "expo run:android",
@@ -19,7 +19,7 @@
         "seed": "node scripts/seed.mjs",
         "seed:reset": "node scripts/seed.mjs --reset",
         "seed:reset-only": "node scripts/seed.mjs --reset-only",
-        "postinstall": "bash scripts/patch-expo-swift6.sh"
+        "postinstall": "bash scripts/patch-expo-swift6.sh && bash scripts/patch-turbomodule-crash.sh"
     },
     "lint-staged": {
         "*.{ts,tsx}": [

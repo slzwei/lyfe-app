@@ -14,7 +14,6 @@ const mockSentryModule = {
     setTag: jest.fn(),
     addBreadcrumb: jest.fn(),
     withScope: jest.fn((cb: any) => cb({ setExtra: jest.fn(), setExtras: jest.fn() })),
-    mobileReplayIntegration: jest.fn(() => ({ name: 'MobileReplay' })),
     reactNavigationIntegration: jest.fn(() => ({
         name: 'ReactNavigation',
         registerNavigationContainer: jest.fn(),
@@ -58,10 +57,14 @@ describe('sentry', () => {
             expect.objectContaining({
                 dsn: 'https://abc@sentry.io/123',
                 environment: expect.any(String),
-                replaysOnErrorSampleRate: 1.0,
                 enableAutoSessionTracking: true,
             }),
         );
+
+        // mobileReplayIntegration must NOT be in integrations (causes iOS 26 crash)
+        const initCall = SentryFresh.init.mock.calls[0][0];
+        const integrationNames = initCall.integrations.map((i: any) => i.name);
+        expect(integrationNames).not.toContain('MobileReplay');
     });
 
     it('re-exports Sentry module', () => {

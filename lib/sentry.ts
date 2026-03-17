@@ -1,5 +1,5 @@
 import * as Sentry from '@sentry/react-native';
-import { mobileReplayIntegration, reactNavigationIntegration } from '@sentry/react-native';
+import { reactNavigationIntegration } from '@sentry/react-native';
 import Constants from 'expo-constants';
 
 const DSN = process.env.EXPO_PUBLIC_SENTRY_DSN || '';
@@ -19,9 +19,7 @@ export function initSentry() {
         environment: __DEV__ ? 'development' : 'production',
         release: `com.shawnlee.lyfe@${Constants.expoConfig?.version ?? '0.0.0'}`,
         dist: Constants.expoConfig?.extra?.eas?.projectId ?? undefined,
-        integrations: [mobileReplayIntegration(), navigationIntegration],
-        replaysSessionSampleRate: 0,
-        replaysOnErrorSampleRate: 1.0,
+        integrations: [navigationIntegration],
         enableAutoSessionTracking: true,
         attachStacktrace: true,
     });
