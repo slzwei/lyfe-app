@@ -6,7 +6,7 @@ jest.mock('@/lib/dateTime', () => ({
     formatDateTime: jest.fn((d: string) => d),
 }));
 
-const COLORS = {
+const COLORS: any = {
     surfacePrimary: '#F5F5F5',
     background: '#FFF',
     border: '#E0E0E0',

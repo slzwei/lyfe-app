@@ -203,14 +203,14 @@ export async function submitVarkAttempt(
         p_user_id: userId,
         p_paper_id: paperId,
         p_status: status,
-        p_score: null,
+        p_score: null as any,
         p_total_questions: questions.length,
-        p_percentage: null,
-        p_passed: null,
+        p_percentage: null as any,
+        p_passed: null as any,
         p_started_at: new Date(startedAt).toISOString(),
         p_submitted_at: new Date().toISOString(),
         p_duration_seconds: durationSeconds,
-        p_personality_results: varkResults,
+        p_personality_results: varkResults as any,
         p_answers: answerRows,
     });
 
@@ -271,14 +271,14 @@ export async function submitEnneagramAttempt(
         p_user_id: userId,
         p_paper_id: paperId,
         p_status: status,
-        p_score: null,
+        p_score: null as any,
         p_total_questions: questions.length,
-        p_percentage: null,
-        p_passed: null,
+        p_percentage: null as any,
+        p_passed: null as any,
         p_started_at: new Date(startedAt).toISOString(),
         p_submitted_at: new Date().toISOString(),
         p_duration_seconds: durationSeconds,
-        p_personality_results: enneagramResults,
+        p_personality_results: enneagramResults as any,
         p_answers: answerRows,
     });
 
@@ -349,7 +349,7 @@ export async function fetchExamResult(
                 status: attempt.status,
                 answers: [],
                 questions: (questionsData as ExamQuestion[]) || [],
-                paperCode: paper.code || '',
+                paperCode: paper?.code || '',
                 personalityResults: isEnneagramResults(attempt.personality_results)
                     ? attempt.personality_results
                     : isVarkResults(attempt.personality_results)

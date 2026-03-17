@@ -748,7 +748,7 @@ describe('PdfViewerModal', () => {
             />,
         );
         // Find the TouchableOpacity (close button) and press it
-        const touchables = UNSAFE_root.findAll((node) => node.type === require('react-native').TouchableOpacity);
+        const touchables = UNSAFE_root.findAll((node: any) => node.type === require('react-native').TouchableOpacity);
         if (touchables.length > 0) {
             fireEvent.press(touchables[0]);
             expect(onClose).toHaveBeenCalledTimes(1);

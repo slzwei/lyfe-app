@@ -5,7 +5,7 @@ import React from 'react';
 import { render, fireEvent } from '@testing-library/react-native';
 import WheelPicker, { WHEEL_ITEM_H } from '@/components/WheelPicker';
 
-const MOCK_COLORS = {
+const MOCK_COLORS: any = {
     accent: '#FF7600',
     textPrimary: '#000000',
     border: '#E5E5EA',

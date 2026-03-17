@@ -2,6 +2,6 @@
  * Shared Supabase mock instance — imported by test files, also used
  * by the jest.mock factory in lib/__mocks__/supabase.ts
  */
-import { createMockSupabase } from '../__tests__/fixtures/mockSupabase';
+import { supabase as _supabase } from '../lib/__mocks__/supabase';
 
-export const supabase = createMockSupabase();
+export const supabase = _supabase;

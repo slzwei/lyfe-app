@@ -35,7 +35,7 @@ export async function fetchLeadStats(
         pipeline: [],
     };
 
-    const { data, error } = await supabase.rpc('get_lead_pipeline_stats', {
+    const { data, error } = await (supabase as any).rpc('get_lead_pipeline_stats', {
         p_user_id: userId,
         p_is_manager: isManager,
     });
@@ -136,7 +136,7 @@ export async function fetchRecentActivities(
         lead_name: item.leads?.full_name || 'Unknown',
     }));
 
-    return { data: activities, error: null };
+    return { data: activities as any, error: null };
 }
 
 /**

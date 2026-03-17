@@ -39,7 +39,7 @@ export function letterSpacing(iosValue: number): number {
  * Font weight adjustment — '800' (ExtraBold) looks chunky on Roboto
  * at display sizes. Step down to '700' on Android.
  */
-export function displayWeight(iosWeight: '800' | '700'): '800' | '700' {
+export function displayWeight(iosWeight: '800' | '700' | '600'): '800' | '700' | '600' {
     if (!isAndroid) return iosWeight;
     return iosWeight === '800' ? '700' : iosWeight;
 }

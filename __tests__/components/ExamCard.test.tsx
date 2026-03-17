@@ -24,6 +24,7 @@ const MOCK_PAPER: ExamPaper = {
     is_active: true,
     is_mandatory: true,
     display_order: 1,
+    allow_multiple_answers: false,
 };
 
 const MOCK_STATS_WITH_ATTEMPTS: PaperStats = {

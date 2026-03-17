@@ -87,7 +87,7 @@ export async function fetchTeamMembers(
             return {
                 id: u.id,
                 name: u.full_name,
-                role: u.role,
+                role: u.role as TeamMember['role'],
                 phone: u.phone,
                 email: u.email,
                 avatarUrl: u.avatar_url,
@@ -139,12 +139,12 @@ export async function fetchTeamMember(
         const member: TeamMember = {
             id: user.id,
             name: user.full_name,
-            role: user.role,
+            role: user.role as TeamMember['role'],
             phone: user.phone,
             email: user.email,
             avatarUrl: user.avatar_url,
             isActive: user.is_active ?? true,
-            joinedDate: user.created_at,
+            joinedDate: user.created_at ?? '',
             leadsCount: leadsList.length,
             wonCount,
             conversionRate: leadsList.length > 0 ? Math.round((wonCount / leadsList.length) * 100) : 0,

@@ -52,7 +52,7 @@ export default function VarkResultsScreen() {
             // Fall back to Supabase
             const { data, error: fetchError } = await fetchExamResult(attemptId || '');
             if (data?.personalityResults) {
-                setVarkResults(data.personalityResults);
+                setVarkResults(data.personalityResults as any);
             } else if (fetchError) {
                 setError(fetchError);
             } else {

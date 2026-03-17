@@ -108,7 +108,7 @@ export default function TeamScreen() {
     );
 
     const { counts, totalLeads, totalWon, avgConversion } = useMemo(() => {
-        const c = {
+        const c: Record<string, number> = {
             ...baseCounts,
             active: members.filter((m) => m.isActive).length,
         };

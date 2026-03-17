@@ -140,8 +140,8 @@ export async function fetchCandidate(
         notes: row.notes,
         resume_url: row.resume_url || null,
         interviews: (interviews || []) as Interview[],
-        created_at: row.created_at,
-        updated_at: row.updated_at,
+        created_at: row.created_at ?? '',
+        updated_at: row.updated_at ?? '',
     };
 
     return { data: candidate, error: null };
@@ -192,8 +192,8 @@ export async function createCandidate(
         notes: row.notes,
         resume_url: row.resume_url || null,
         interviews: [],
-        created_at: row.created_at,
-        updated_at: row.updated_at,
+        created_at: row.created_at ?? '',
+        updated_at: row.updated_at ?? '',
     };
 
     return { data: candidate, inviteToken: token, error: null };
@@ -252,7 +252,7 @@ export async function uploadCandidateResume(
         if (!updated || updated.length === 0)
             return { url: null, error: 'Permission denied: could not save resume URL' };
 
-        return { url: publicUrl, error: null };
+        return { url: signedUrlData.signedUrl, error: null };
     } catch (err: any) {
         captureError(err, { fn: 'uploadResume' });
         return { url: null, error: err?.message || 'Upload failed' };

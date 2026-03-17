@@ -71,8 +71,8 @@ const defaultSingleProps = {
     selectedDate: TODAY,
     onSelect: jest.fn(),
     onClose: jest.fn(),
-    colors: mockColors,
-} as const;
+    colors: mockColors as any,
+};
 
 // Default props for range mode
 const defaultRangeProps = {
@@ -82,8 +82,8 @@ const defaultRangeProps = {
     endDate: TODAY,
     onConfirm: jest.fn(),
     onClose: jest.fn(),
-    colors: mockColors,
-} as const;
+    colors: mockColors as any,
+};
 
 beforeEach(() => {
     jest.clearAllMocks();

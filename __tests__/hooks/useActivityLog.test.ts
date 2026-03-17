@@ -228,12 +228,14 @@ describe('useActivityLog', () => {
 
     it('handleLogCaseClosed shows confirm for $0 AFYC', async () => {
         // Mock Alert.alert to auto-press "Cancel" so the Promise resolves
-        const alertSpy = jest
-            .spyOn(require('react-native').Alert, 'alert')
-            .mockImplementation((_title: string, _message?: string, buttons?: any[]) => {
-                const cancelBtn = buttons?.find((b: any) => b.text === 'Cancel');
-                if (cancelBtn?.onPress) cancelBtn.onPress();
-            });
+        const alertSpy = jest.spyOn(require('react-native').Alert, 'alert').mockImplementation(((
+            _title: string,
+            _message?: string,
+            buttons?: any[],
+        ) => {
+            const cancelBtn = buttons?.find((b: any) => b.text === 'Cancel');
+            if (cancelBtn?.onPress) cancelBtn.onPress();
+        }) as any);
         const { result } = renderHook(() => useActivityLog(defaultParams));
 
         // Leave afycInput empty/0
@@ -247,12 +249,14 @@ describe('useActivityLog', () => {
 
     it('handleLogCaseClosed with $0 proceeds when confirmed', async () => {
         // Mock Alert.alert to auto-press "Log" so it proceeds
-        const alertSpy = jest
-            .spyOn(require('react-native').Alert, 'alert')
-            .mockImplementation((_title: string, _message?: string, buttons?: any[]) => {
-                const logBtn = buttons?.find((b: any) => b.text === 'Log');
-                if (logBtn?.onPress) logBtn.onPress();
-            });
+        const alertSpy = jest.spyOn(require('react-native').Alert, 'alert').mockImplementation(((
+            _title: string,
+            _message?: string,
+            buttons?: any[],
+        ) => {
+            const logBtn = buttons?.find((b: any) => b.text === 'Log');
+            if (logBtn?.onPress) logBtn.onPress();
+        }) as any);
         const { result } = renderHook(() => useActivityLog(defaultParams));
 
         await act(async () => {

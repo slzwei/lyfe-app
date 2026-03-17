@@ -19,7 +19,7 @@ import ModuleCard from '@/components/roadmap/ModuleCard';
 import type { RoadmapModuleWithProgress, RoadmapResource } from '@/types/roadmap';
 
 // ── Theme mock ──
-const COLORS: Record<string, string> = {
+const COLORS: any = {
     textPrimary: '#111',
     textSecondary: '#555',
     textTertiary: '#999',
@@ -55,6 +55,7 @@ function makeModule(overrides: Partial<RoadmapModuleWithProgress> = {}): Roadmap
         updated_at: '2026-01-01T00:00:00Z',
         progress: null,
         resources: [],
+        itemSummary: null,
         isLocked: false,
         examPaper: null,
         prerequisiteIds: [],

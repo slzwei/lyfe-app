@@ -98,11 +98,8 @@ describe('MODULE_TYPE_COLOR_KEY', () => {
 
     it('all color key values are strings starting with "roadmap"', () => {
         for (const [type, colorKey] of Object.entries(MODULE_TYPE_COLOR_KEY)) {
-            expect(typeof colorKey).toBe('string', `MODULE_TYPE_COLOR_KEY.${type} should be a string`);
-            expect(colorKey.startsWith('roadmap')).toBe(
-                true,
-                `MODULE_TYPE_COLOR_KEY.${type} = "${colorKey}" does not start with "roadmap"`,
-            );
+            expect(typeof colorKey).toBe('string');
+            expect(colorKey.startsWith('roadmap')).toBe(true);
         }
     });
 

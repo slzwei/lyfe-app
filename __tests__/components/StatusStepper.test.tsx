@@ -2,7 +2,7 @@ import React from 'react';
 import { render } from '@testing-library/react-native';
 import StatusStepper from '@/components/StatusStepper';
 
-const COLORS = { border: '#E0E0E0', textPrimary: '#000', textTertiary: '#999' };
+const COLORS: any = { border: '#E0E0E0', textPrimary: '#000', textTertiary: '#999' };
 
 describe('StatusStepper', () => {
     it('renders all status steps', () => {

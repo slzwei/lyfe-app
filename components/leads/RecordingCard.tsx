@@ -46,7 +46,7 @@ export default function RecordingCard({ recordingUrl, transcript }: RecordingCar
                 }
             }
 
-            const { sound } = await Audio.Sound.createAsync({ uri: recordingUrl }, { shouldPlay: true }, (status) => {
+            const { sound } = await Audio.Sound.createAsync({ uri: recordingUrl! }, { shouldPlay: true }, (status) => {
                 if (status.isLoaded) {
                     setPositionMs(status.positionMillis);
                     setDurationMs(status.durationMillis || 0);

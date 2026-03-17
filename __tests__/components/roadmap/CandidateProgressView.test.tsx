@@ -54,7 +54,7 @@ jest.mock('@/lib/roadmap', () => ({
 }));
 
 // ── Theme mock ──
-const COLORS: Record<string, string> = {
+const COLORS: any = {
     textPrimary: '#111',
     textSecondary: '#555',
     textTertiary: '#999',

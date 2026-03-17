@@ -38,7 +38,7 @@ describe('SEEDLING_PALETTE', () => {
 
     it('all values are valid hex color strings', () => {
         for (const [key, value] of Object.entries(SEEDLING_PALETTE)) {
-            expect(isHex(value)).toBe(true, `SEEDLING_PALETTE.${key} = "${value}" is not a valid hex color`);
+            expect(isHex(value)).toBe(true);
         }
     });
 
@@ -88,7 +88,7 @@ describe('SPROUT_PALETTE', () => {
 
     it('all values are valid hex color strings', () => {
         for (const [key, value] of Object.entries(SPROUT_PALETTE)) {
-            expect(isHex(value)).toBe(true, `SPROUT_PALETTE.${key} = "${value}" is not a valid hex color`);
+            expect(isHex(value)).toBe(true);
         }
     });
 

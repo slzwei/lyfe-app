@@ -22,45 +22,55 @@ const QUESTIONS: ExamQuestion[] = [
         paper_id: 'p1',
         question_number: 1,
         question_text: 'What is 1+1?',
-        options: ['1', '2', '3', '4'],
-        correct_answer: '2',
+        options: { A: '1', B: '2', C: '3', D: '4' },
+        correct_answer: 'B',
+        has_latex: false,
         explanation: 'Basic math',
+        explanation_has_latex: false,
     },
     {
         id: 'q2',
         paper_id: 'p1',
         question_number: 2,
         question_text: 'What is 2+2?',
-        options: ['3', '4', '5', '6'],
-        correct_answer: '4',
+        options: { A: '3', B: '4', C: '5', D: '6' },
+        correct_answer: 'B',
+        has_latex: false,
         explanation: null,
+        explanation_has_latex: false,
     },
     {
         id: 'q3',
         paper_id: 'p1',
         question_number: 3,
         question_text: 'What is 3+3?',
-        options: ['5', '6', '7', '8'],
-        correct_answer: '6',
+        options: { A: '5', B: '6', C: '7', D: '8' },
+        correct_answer: 'B',
+        has_latex: false,
         explanation: null,
+        explanation_has_latex: false,
     },
     {
         id: 'q4',
         paper_id: 'p1',
         question_number: 4,
         question_text: 'What is 4+4?',
-        options: ['7', '8', '9', '10'],
-        correct_answer: '8',
+        options: { A: '7', B: '8', C: '9', D: '10' },
+        correct_answer: 'B',
+        has_latex: false,
         explanation: null,
+        explanation_has_latex: false,
     },
     {
         id: 'q5',
         paper_id: 'p1',
         question_number: 5,
         question_text: 'What is 5+5?',
-        options: ['9', '10', '11', '12'],
-        correct_answer: '10',
+        options: { A: '9', B: '10', C: '11', D: '12' },
+        correct_answer: 'B',
+        has_latex: false,
         explanation: null,
+        explanation_has_latex: false,
     },
 ];
 
@@ -87,7 +97,7 @@ describe('submitExamAttempt', () => {
                 userId: 'u1',
                 paperId: 'p1',
                 questions: QUESTIONS,
-                answers: { q1: '2', q2: '4', q3: '6', q4: '8', q5: '10' },
+                answers: { q1: 'B', q2: 'B', q3: 'B', q4: 'B', q5: 'B' },
                 status: 'submitted',
                 startedAt: new Date('2026-03-08T11:50:00Z').getTime(),
             },
@@ -113,7 +123,7 @@ describe('submitExamAttempt', () => {
                 userId: 'u1',
                 paperId: 'p1',
                 questions: QUESTIONS,
-                answers: { q1: '2', q2: '4', q3: '6', q4: '8', q5: 'wrong' },
+                answers: { q1: 'B', q2: 'B', q3: 'B', q4: 'B', q5: 'wrong' },
                 status: 'submitted',
                 startedAt: Date.now() - 60000,
             },
@@ -134,7 +144,7 @@ describe('submitExamAttempt', () => {
                 userId: 'u1',
                 paperId: 'p1',
                 questions: QUESTIONS,
-                answers: { q1: '2', q2: '4', q3: '6', q4: 'wrong', q5: 'wrong' },
+                answers: { q1: 'B', q2: 'B', q3: 'B', q4: 'wrong', q5: 'wrong' },
                 status: 'submitted',
                 startedAt: Date.now() - 60000,
             },
@@ -155,7 +165,7 @@ describe('submitExamAttempt', () => {
                 userId: 'u1',
                 paperId: 'p1',
                 questions: QUESTIONS,
-                answers: { q1: '2' }, // missing q2-q5
+                answers: { q1: 'B' }, // missing q2-q5
                 status: 'auto_submitted',
                 startedAt: Date.now() - 300000,
             },
@@ -219,7 +229,7 @@ describe('submitExamAttempt', () => {
                 userId: 'u1',
                 paperId: 'p1',
                 questions: QUESTIONS,
-                answers: { q1: '2', q2: 'wrong', q3: '6', q4: 'wrong', q5: '10' },
+                answers: { q1: 'B', q2: 'wrong', q3: 'B', q4: 'wrong', q5: 'B' },
                 status: 'submitted',
                 startedAt: Date.now() - 60000,
             },
@@ -227,9 +237,9 @@ describe('submitExamAttempt', () => {
         );
 
         const answers = result.data!.answers;
-        expect(answers[0]).toEqual({ questionId: 'q1', selected: '2', isCorrect: true, correctAnswer: '2' });
-        expect(answers[1]).toEqual({ questionId: 'q2', selected: 'wrong', isCorrect: false, correctAnswer: '4' });
-        expect(answers[2]).toEqual({ questionId: 'q3', selected: '6', isCorrect: true, correctAnswer: '6' });
+        expect(answers[0]).toEqual({ questionId: 'q1', selected: 'B', isCorrect: true, correctAnswer: 'B' });
+        expect(answers[1]).toEqual({ questionId: 'q2', selected: 'wrong', isCorrect: false, correctAnswer: 'B' });
+        expect(answers[2]).toEqual({ questionId: 'q3', selected: 'B', isCorrect: true, correctAnswer: 'B' });
     });
 });
 
@@ -343,8 +353,8 @@ describe('fetchExamResult', () => {
         const result = await fetchExamResult('attempt-vark');
         expect(result.error).toBeNull();
         expect(result.data?.personalityResults).toBeDefined();
-        expect(result.data?.personalityResults?.preference).toBe('single');
-        expect(result.data?.personalityResults?.topTypes).toEqual(['V']);
+        expect((result.data?.personalityResults as any)?.preference).toBe('single');
+        expect((result.data?.personalityResults as any)?.topTypes).toEqual(['V']);
         expect(result.data?.score).toBe(0);
         expect(result.data?.passed).toBe(false);
     });
@@ -408,7 +418,9 @@ const VARK_QUESTIONS: ExamQuestion[] = [
         question_text: 'How do you prefer to learn?',
         options: { A: 'Diagrams', B: 'Listening', C: 'Reading', D: 'Practice' },
         correct_answer: 'A:V,B:A,C:R,D:K',
+        has_latex: false,
         explanation: '{"quiz_type":"vark","types":{"A":"V","B":"A","C":"R","D":"K"}}',
+        explanation_has_latex: false,
     },
     {
         id: 'vq2',
@@ -417,7 +429,9 @@ const VARK_QUESTIONS: ExamQuestion[] = [
         question_text: 'When studying, you prefer...',
         options: { A: 'Charts', B: 'Discussion', C: 'Notes', D: 'Hands-on' },
         correct_answer: 'A:V,B:A,C:R,D:K',
+        has_latex: false,
         explanation: '{"quiz_type":"vark","types":{"A":"V","B":"A","C":"R","D":"K"}}',
+        explanation_has_latex: false,
     },
 ];
 

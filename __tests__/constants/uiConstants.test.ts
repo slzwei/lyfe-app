@@ -42,7 +42,7 @@ describe('ANIM', () => {
 
     it('all values are positive integers', () => {
         for (const [key, value] of Object.entries(ANIM)) {
-            expect(typeof value).toBe('number', `ANIM.${key} should be a number`);
+            expect(typeof value).toBe('number');
             expect(value).toBeGreaterThan(0);
             expect(Number.isInteger(value)).toBe(true);
         }
@@ -102,7 +102,7 @@ describe('SPACING', () => {
 
     it('each value is a multiple of 4 (4pt grid)', () => {
         for (const [key, value] of Object.entries(SPACING)) {
-            expect(value % 4).toBe(0, `SPACING.${key} = ${value} is not a multiple of 4`);
+            expect(value % 4).toBe(0);
         }
     });
 
@@ -149,7 +149,7 @@ describe('ICON', () => {
 
     it('all values are positive integers', () => {
         for (const [key, value] of Object.entries(ICON)) {
-            expect(typeof value).toBe('number', `ICON.${key} should be a number`);
+            expect(typeof value).toBe('number');
             expect(value).toBeGreaterThan(0);
             expect(Number.isInteger(value)).toBe(true);
         }

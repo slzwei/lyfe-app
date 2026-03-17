@@ -44,6 +44,8 @@ function makeItemProgress(overrides: Partial<CandidateModuleItemProgress> = {}):
         completed_at: null,
         completed_by: null,
         score: null,
+        attempt_count: 0,
+        notes: null,
         created_at: '2026-01-01',
         updated_at: '2026-01-01',
         ...overrides,

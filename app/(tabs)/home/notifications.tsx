@@ -115,7 +115,7 @@ export default function NotificationsScreen() {
                     onPress={() => handleTap(item)}
                     activeOpacity={0.7}
                     accessibilityRole="button"
-                    accessibilityLabel={`${typeConfig.label}: ${item.title}. ${item.body || ''} ${timeAgo(item.created_at)}${!item.is_read ? '. Unread' : ''}`}
+                    accessibilityLabel={`${typeConfig.label}: ${item.title}. ${item.body || ''} ${timeAgo(item.created_at ?? '')}${!item.is_read ? '. Unread' : ''}`}
                     accessibilityHint={data?.route ? 'Double tap to open' : undefined}
                 >
                     <View
@@ -142,7 +142,9 @@ export default function NotificationsScreen() {
                                 {item.body}
                             </Text>
                         ) : null}
-                        <Text style={[styles.rowTime, { color: colors.textTertiary }]}>{timeAgo(item.created_at)}</Text>
+                        <Text style={[styles.rowTime, { color: colors.textTertiary }]}>
+                            {timeAgo(item.created_at ?? '')}
+                        </Text>
                     </View>
                     {!item.is_read && (
                         <View

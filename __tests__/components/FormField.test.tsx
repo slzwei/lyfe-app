@@ -2,7 +2,7 @@ import FormField from '@/components/FormField';
 import { fireEvent, render } from '@testing-library/react-native';
 import React from 'react';
 
-const COLORS = {
+const COLORS: any = {
     textSecondary: '#666',
     textTertiary: '#999',
     textPrimary: '#000',

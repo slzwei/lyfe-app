@@ -6,13 +6,7 @@
  * Supabase calls and passes data between stages.
  */
 import { supabase } from '@/lib/supabase';
-import {
-    createLead,
-    addLeadNote,
-    updateLeadStatus,
-    reassignLead,
-    fetchLeadActivities,
-} from '@/lib/leads';
+import { createLead, addLeadNote, updateLeadStatus, reassignLead, fetchLeadActivities } from '@/lib/leads';
 
 jest.mock('@/lib/supabase');
 
@@ -48,7 +42,7 @@ const LEAD_INPUT = {
     phone: '+6598765432',
     email: 'alice@example.com',
     source: 'referral' as const,
-    product_interest: 'life_insurance' as const,
+    product_interest: 'life' as const,
     notes: 'Met at roadshow',
 };
 
@@ -424,7 +418,7 @@ describe('Lead lifecycle — edge cases', () => {
                 phone: null,
                 email: null,
                 source: 'referral',
-                product_interest: 'life_insurance',
+                product_interest: 'life' as const,
                 notes: null,
             },
             AGENT_ID,

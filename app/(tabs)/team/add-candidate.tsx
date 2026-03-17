@@ -113,7 +113,7 @@ export default function AddCandidateScreen() {
                 <Pressable style={{ flex: 1 }} onPress={Keyboard.dismiss}>
                     <ScrollView contentContainerStyle={styles.scrollContent}>
                         {/* Save Error */}
-                        {saveError && <ErrorBanner message={saveError} style={styles.errorBannerSpacing} />}
+                        {saveError && <ErrorBanner message={saveError} />}
 
                         {/* Form Card */}
                         <View style={[styles.formCard, { backgroundColor: colors.cardBackground }]}>

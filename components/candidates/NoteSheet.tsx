@@ -22,7 +22,7 @@ function NoteSheet({ visible, noteText, colors, animatedStyle, onNoteTextChange,
             <KeyboardAvoidingView style={{ flex: 1 }} behavior={KAV_BEHAVIOR}>
                 <TouchableOpacity style={styles.overlay} activeOpacity={1} onPress={onClose}>
                     <Animated.View
-                        style={[styles.sheet, { backgroundColor: colors.cardBackground }, animatedStyle]}
+                        style={[styles.sheet, { backgroundColor: colors.cardBackground }, animatedStyle as any]}
                         onStartShouldSetResponder={() => true}
                     >
                         <View style={[styles.handle, { backgroundColor: colors.border }]} />

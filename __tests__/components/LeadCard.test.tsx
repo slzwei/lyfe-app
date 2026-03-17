@@ -26,8 +26,6 @@ const MOCK_LEAD: Lead = {
     status: 'new',
     product_interest: 'life',
     notes: null,
-    recording_url: null,
-    transcript: null,
     updated_at: new Date().toISOString(),
     created_at: '2026-01-01T00:00:00Z',
 };

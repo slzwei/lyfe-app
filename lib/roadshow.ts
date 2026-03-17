@@ -289,11 +289,11 @@ export async function createRoadshowBulk(
 ): Promise<{ data: { event_ids: string[]; count: number } | null; error: string | null }> {
     const { data, error } = await supabase.rpc('create_roadshow_bulk', {
         p_events: events,
-        p_config: config,
+        p_config: config as any,
         p_attendees: attendees,
         p_created_by: createdBy,
     });
 
     if (error) return { data: null, error: error.message };
-    return { data, error: null };
+    return { data: data as any, error: null };
 }

@@ -17,16 +17,8 @@ import { useFilteredList } from '@/hooks/useFilteredList';
 import { useTypedRouter } from '@/hooks/useTypedRouter';
 import { useFocusEffect } from 'expo-router';
 import React, { useCallback, useState } from 'react';
-import {
-    FlatList,
-    RefreshControl,
-    SafeAreaView,
-    StyleSheet,
-    Text,
-    TextInput,
-    TouchableOpacity,
-    View,
-} from 'react-native';
+import { FlatList, RefreshControl, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 
 export interface CandidateListScreenProps {
     /** Builds the path for the candidate detail screen given a candidate id. */

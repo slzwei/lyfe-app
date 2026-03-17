@@ -3,13 +3,15 @@ import { fetchExamResult } from '@/lib/exams';
 import { getEnneagramLabel, isEnneagramResults } from '@/lib/enneagram';
 import { displayWeight, letterSpacing } from '@/constants/platform';
 import type { EnneagramType, EnneagramResults } from '@/constants/enneagram';
-import { ENNEAGRAM_TYPES, ENNEAGRAM_TYPE_INFO, ENNEAGRAM_MIN_ANSWERED } from '@/constants/enneagram';
+import { ENNEAGRAM_TYPES, ENNEAGRAM_TYPE_INFO, ENNEAGRAM_MIN_ANSWERED_PCT } from '@/constants/enneagram';
 import { Ionicons } from '@expo/vector-icons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useLocalSearchParams, useRouter, useSegments } from 'expo-router';
 import React, { useEffect, useState } from 'react';
 import { ActivityIndicator, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+
+const ENNEAGRAM_MIN_ANSWERED = ENNEAGRAM_MIN_ANSWERED_PCT;
 
 export default function EnneagramResultsScreen() {
     const { attemptId } = useLocalSearchParams<{ attemptId: string }>();

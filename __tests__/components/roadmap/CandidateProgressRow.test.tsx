@@ -23,7 +23,7 @@ jest.mock('@/lib/roadmap', () => ({
 
 // ── Theme mock (provided by jest.setup.js globally) ──
 
-const COLORS = {
+const COLORS: any = {
     textPrimary: '#111',
     textSecondary: '#555',
     textTertiary: '#999',

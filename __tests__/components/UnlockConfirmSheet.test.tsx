@@ -6,7 +6,7 @@ import { fireEvent, render, act } from '@testing-library/react-native';
 
 import UnlockConfirmSheet from '@/components/roadmap/UnlockConfirmSheet';
 
-const COLORS = {
+const COLORS: any = {
     textPrimary: '#111',
     textSecondary: '#555',
     textTertiary: '#999',

@@ -366,7 +366,7 @@ describe('useRoadmap', () => {
         });
 
         const firstRefresh = result.current.refresh;
-        rerender();
+        rerender({ initialProps: undefined } as any);
         expect(result.current.refresh).toBe(firstRefresh);
     });
 

@@ -336,8 +336,11 @@ export default function LeadDetailScreen() {
                     )}
 
                     {/* Call Recording & Transcript */}
-                    {(lead.recording_url || lead.transcript) && (
-                        <RecordingCard recordingUrl={lead.recording_url} transcript={lead.transcript} />
+                    {((lead as any).recording_url || (lead as any).transcript) && (
+                        <RecordingCard
+                            recordingUrl={(lead as any).recording_url}
+                            transcript={(lead as any).transcript}
+                        />
                     )}
 
                     {/* Activity Timeline */}

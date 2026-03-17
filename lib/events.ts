@@ -135,7 +135,7 @@ export async function createEvent(
             end_time: input.end_time || null,
             location: input.location || null,
             created_by: createdBy,
-            external_attendees: input.external_attendees,
+            external_attendees: input.external_attendees as any,
         })
         .select()
         .single();
@@ -257,7 +257,7 @@ export async function updateEvent(
             start_time: input.start_time,
             end_time: input.end_time || null,
             location: input.location || null,
-            external_attendees: input.external_attendees,
+            external_attendees: input.external_attendees as any,
         })
         .eq('id', eventId);
 
