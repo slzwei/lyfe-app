@@ -5,7 +5,7 @@ import { useManagerOverride } from '@/hooks/useManagerOverride';
 const mockManagerCheckIn = jest.fn();
 const mockLogRoadshowActivity = jest.fn();
 
-jest.mock('@/lib/events', () => ({
+jest.mock('@/lib/roadshow', () => ({
     managerCheckIn: (...args: any[]) => mockManagerCheckIn(...args),
     logRoadshowActivity: (...args: any[]) => mockLogRoadshowActivity(...args),
 }));

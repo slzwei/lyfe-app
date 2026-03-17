@@ -7,8 +7,8 @@
  * - NODE_STATE_CONFIG opacity and scale values are within valid ranges
  * - RESOURCE_TYPE_CONFIG entries have label and icon
  */
-import { MODULE_TYPE_CONFIG, MODULE_TYPE_COLOR_KEY, NODE_STATE_CONFIG, RESOURCE_TYPE_CONFIG } from '@/types/roadmap';
-import type { ModuleType, NodeState, ResourceType } from '@/types/roadmap';
+import { MODULE_TYPE_CONFIG, MODULE_TYPE_COLOR_KEY, RESOURCE_TYPE_CONFIG } from '@/types/roadmap';
+import type { ModuleType, ResourceType } from '@/types/roadmap';
 
 // ── MODULE_TYPE_CONFIG ────────────────────────────────────────────────────────
 
@@ -113,73 +113,6 @@ describe('MODULE_TYPE_COLOR_KEY', () => {
             expect(Colors.light).toHaveProperty(colorKey);
             expect(typeof Colors.light[colorKey]).toBe('string');
         }
-    });
-});
-
-// ── NODE_STATE_CONFIG ─────────────────────────────────────────────────────────
-
-describe('NODE_STATE_CONFIG', () => {
-    const nodeStates: NodeState[] = ['completed', 'current', 'available', 'locked'];
-
-    it('is defined for all four node states', () => {
-        for (const state of nodeStates) {
-            expect(NODE_STATE_CONFIG[state]).toBeDefined();
-        }
-    });
-
-    it('each entry has opacity and scale fields', () => {
-        for (const state of nodeStates) {
-            expect(NODE_STATE_CONFIG[state]).toHaveProperty('opacity');
-            expect(NODE_STATE_CONFIG[state]).toHaveProperty('scale');
-        }
-    });
-
-    it('all opacity values are in the range [0, 1]', () => {
-        for (const state of nodeStates) {
-            const { opacity } = NODE_STATE_CONFIG[state];
-            expect(opacity).toBeGreaterThanOrEqual(0);
-            expect(opacity).toBeLessThanOrEqual(1);
-        }
-    });
-
-    it('all scale values are positive and at most 1.5', () => {
-        for (const state of nodeStates) {
-            const { scale } = NODE_STATE_CONFIG[state];
-            expect(scale).toBeGreaterThan(0);
-            expect(scale).toBeLessThanOrEqual(1.5);
-        }
-    });
-
-    it('completed state has full opacity and scale 1', () => {
-        expect(NODE_STATE_CONFIG.completed.opacity).toBe(1);
-        expect(NODE_STATE_CONFIG.completed.scale).toBe(1);
-    });
-
-    it('current state has full opacity and slightly enlarged scale', () => {
-        expect(NODE_STATE_CONFIG.current.opacity).toBe(1);
-        expect(NODE_STATE_CONFIG.current.scale).toBeGreaterThan(1);
-    });
-
-    it('available state has high opacity', () => {
-        expect(NODE_STATE_CONFIG.available.opacity).toBeGreaterThanOrEqual(0.8);
-        expect(NODE_STATE_CONFIG.available.scale).toBe(1);
-    });
-
-    it('locked state has reduced opacity (dimmed)', () => {
-        expect(NODE_STATE_CONFIG.locked.opacity).toBeLessThan(0.6);
-    });
-
-    it('locked state has reduced scale (smaller)', () => {
-        expect(NODE_STATE_CONFIG.locked.scale).toBeLessThan(1);
-    });
-
-    it('locked state is less prominent than available state', () => {
-        expect(NODE_STATE_CONFIG.locked.opacity).toBeLessThan(NODE_STATE_CONFIG.available.opacity);
-        expect(NODE_STATE_CONFIG.locked.scale).toBeLessThan(NODE_STATE_CONFIG.available.scale);
-    });
-
-    it('has exactly 4 entries', () => {
-        expect(Object.keys(NODE_STATE_CONFIG)).toHaveLength(4);
     });
 });
 

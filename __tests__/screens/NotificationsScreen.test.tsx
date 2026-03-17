@@ -128,7 +128,7 @@ describe('NotificationsScreen', () => {
 
         await waitFor(() => {
             expect(mockMarkAsRead).toHaveBeenCalledWith('notif-1');
-            expect(mockPush).toHaveBeenCalledWith('/(tabs)/events/evt-1');
+            expect(mockPush).toHaveBeenCalledWith('/(tabs)/home/event/evt-1');
         });
     });
 
@@ -143,7 +143,7 @@ describe('NotificationsScreen', () => {
 
         await waitFor(() => {
             expect(mockMarkAsRead).not.toHaveBeenCalled();
-            expect(mockPush).toHaveBeenCalledWith('/(tabs)/events/evt-2');
+            expect(mockPush).toHaveBeenCalledWith('/(tabs)/home/event/evt-2');
         });
     });
 

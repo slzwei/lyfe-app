@@ -14,6 +14,9 @@ const mockFetchRoadshowActivities = jest.fn();
 
 jest.mock('@/lib/events', () => ({
     fetchEventById: (...args: any[]) => mockFetchEventById(...args),
+}));
+
+jest.mock('@/lib/roadshow', () => ({
     fetchRoadshowConfig: (...args: any[]) => mockFetchRoadshowConfig(...args),
     fetchRoadshowAttendance: (...args: any[]) => mockFetchRoadshowAttendance(...args),
     fetchRoadshowActivities: (...args: any[]) => mockFetchRoadshowActivities(...args),

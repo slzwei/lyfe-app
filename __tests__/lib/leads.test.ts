@@ -17,7 +17,6 @@ import {
     fetchRecentActivities,
     fetchManagerDashboardStats,
     assignLead,
-    updateLeadStage,
     getTeamLeadSummary,
 } from '@/lib/leads';
 
@@ -341,51 +340,75 @@ describe('fetchTeamAgents', () => {
     });
 });
 
-// ── fetchLeadStats ──
+// ── fetchLeadStats (RPC-based) ──
 
 describe('fetchLeadStats', () => {
-    it('computes pipeline stats correctly', async () => {
-        jest.useFakeTimers();
-        jest.setSystemTime(new Date('2026-03-08T12:00:00Z'));
-
-        const chain = mockSupa.__getChain('leads');
-        mockResolve(chain, {
-            data: [
-                { id: '1', status: 'new', created_at: '2026-03-07T00:00:00Z' },
-                { id: '2', status: 'contacted', created_at: '2026-02-01T00:00:00Z' },
-                { id: '3', status: 'won', created_at: '2026-02-15T00:00:00Z' },
-                { id: '4', status: 'lost', created_at: '2026-02-15T00:00:00Z' },
-                { id: '5', status: 'qualified', created_at: '2026-03-01T00:00:00Z' },
-            ],
+    it('parses RPC result into LeadPipelineStats shape', async () => {
+        mockSupa.rpc.mockResolvedValueOnce({
+            data: {
+                totalLeads: 5,
+                newThisWeek: 1,
+                conversionRate: 50,
+                activeFollowUps: 2,
+                pipeline: [
+                    { status: 'new', count: 1 },
+                    { status: 'contacted', count: 1 },
+                    { status: 'qualified', count: 1 },
+                    { status: 'proposed', count: 0 },
+                    { status: 'won', count: 1 },
+                    { status: 'lost', count: 1 },
+                ],
+            },
             error: null,
         });
 
         const result = await fetchLeadStats('agent-1', false);
 
+        expect(mockSupa.rpc).toHaveBeenCalledWith('get_lead_pipeline_stats', {
+            p_user_id: 'agent-1',
+            p_is_manager: false,
+        });
         expect(result.data.totalLeads).toBe(5);
-        expect(result.data.newThisWeek).toBe(1); // only lead '1' is new and within 7 days
-        expect(result.data.conversionRate).toBe(50); // 1 won / 2 closed (won + lost)
-        expect(result.data.activeFollowUps).toBe(2); // contacted + qualified
-        expect(result.data.pipeline).toHaveLength(6); // all 6 statuses
+        expect(result.data.newThisWeek).toBe(1);
+        expect(result.data.conversionRate).toBe(50);
+        expect(result.data.activeFollowUps).toBe(2);
+        expect(result.data.pipeline).toHaveLength(6);
         expect(result.data.pipeline.find((p) => p.status === 'new')?.count).toBe(1);
         expect(result.data.pipeline.find((p) => p.status === 'proposed')?.count).toBe(0);
-
-        jest.useRealTimers();
     });
 
-    it('returns zeros when no leads', async () => {
-        const chain = mockSupa.__getChain('leads');
-        mockResolve(chain, { data: [], error: null });
+    it('passes isManager flag to RPC', async () => {
+        mockSupa.rpc.mockResolvedValueOnce({
+            data: {
+                totalLeads: 0,
+                newThisWeek: 0,
+                conversionRate: 0,
+                activeFollowUps: 0,
+                pipeline: [],
+            },
+            error: null,
+        });
+
+        await fetchLeadStats('manager-1', true);
+
+        expect(mockSupa.rpc).toHaveBeenCalledWith('get_lead_pipeline_stats', {
+            p_user_id: 'manager-1',
+            p_is_manager: true,
+        });
+    });
+
+    it('returns zeros when RPC returns null data', async () => {
+        mockSupa.rpc.mockResolvedValueOnce({ data: null, error: null });
 
         const result = await fetchLeadStats('agent-1', false);
         expect(result.data.totalLeads).toBe(0);
         expect(result.data.conversionRate).toBe(0);
         expect(result.data.activeFollowUps).toBe(0);
+        expect(result.data.pipeline).toEqual([]);
     });
 
-    it('returns error with zeroed stats on failure', async () => {
-        const chain = mockSupa.__getChain('leads');
-        mockResolve(chain, { data: null, error: { message: 'Timeout' } });
+    it('returns error with zeroed stats on RPC failure', async () => {
+        mockSupa.rpc.mockResolvedValueOnce({ data: null, error: { message: 'Timeout' } });
 
         const result = await fetchLeadStats('agent-1', false);
         expect(result.error).toBe('Timeout');
@@ -517,38 +540,6 @@ describe('assignLead', () => {
 
         const result = await assignLead('lead-1', 'agent-2', 'mgr-1');
         expect(result.error).toBe('Update failed');
-    });
-});
-
-// ── updateLeadStage ──
-
-describe('updateLeadStage', () => {
-    it('updates stage and logs status_change activity', async () => {
-        const leadsChain = mockSupa.__getChain('leads');
-        mockResolve(leadsChain, { data: { status: 'new' }, error: null });
-
-        const activitiesChain = mockSupa.__getChain('lead_activities');
-        mockResolve(activitiesChain, { error: null });
-
-        const result = await updateLeadStage('lead-1', 'contacted', 'agent-1');
-        expect(result.error).toBeNull();
-        expect(mockSupa.from).toHaveBeenCalledWith('lead_activities');
-    });
-
-    it('returns error when fetch fails', async () => {
-        const chain = mockSupa.__getChain('leads');
-        mockResolve(chain, { data: null, error: { message: 'Not found' } });
-
-        const result = await updateLeadStage('bad-id', 'contacted', 'agent-1');
-        expect(result.error).toBe('Not found');
-    });
-
-    it('returns error when update fails', async () => {
-        const chain = mockSupa.__getChain('leads');
-        mockResolve(chain, { error: { message: 'Update error' } });
-
-        const result = await updateLeadStage('lead-1', 'contacted', 'agent-1');
-        expect(result.error).toBe('Update error');
     });
 });
 

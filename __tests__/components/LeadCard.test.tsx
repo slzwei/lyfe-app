@@ -21,9 +21,13 @@ const MOCK_LEAD: Lead = {
     phone: '+6591234567',
     email: 'alice@example.com',
     source: 'referral',
+    source_name: null,
+    external_id: null,
     status: 'new',
     product_interest: 'life',
     notes: null,
+    recording_url: null,
+    transcript: null,
     updated_at: new Date().toISOString(),
     created_at: '2026-01-01T00:00:00Z',
 };

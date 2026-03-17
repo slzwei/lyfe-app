@@ -338,8 +338,7 @@ describe('fetchExamResult', () => {
         const papersChain = mockSupa.__getChain('exam_papers');
         mockResolve(papersChain, { data: { code: 'VARK', allow_multiple_answers: true }, error: null });
 
-        const questionsChain = mockSupa.__getChain('exam_questions');
-        mockResolve(questionsChain, { data: [], error: null });
+        mockSupa.rpc.mockResolvedValueOnce({ data: [], error: null });
 
         const result = await fetchExamResult('attempt-vark');
         expect(result.error).toBeNull();
@@ -366,8 +365,7 @@ describe('fetchExamResult', () => {
         const papersChain = mockSupa.__getChain('exam_papers');
         mockResolve(papersChain, { data: { code: 'VARK', allow_multiple_answers: true }, error: null });
 
-        const questionsChain = mockSupa.__getChain('exam_questions');
-        mockResolve(questionsChain, { data: [], error: null });
+        mockSupa.rpc.mockResolvedValueOnce({ data: [], error: null });
 
         const result = await fetchExamResult('attempt-bad');
         expect(result.error).toBeNull();

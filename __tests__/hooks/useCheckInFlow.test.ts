@@ -7,7 +7,7 @@ const mockLogRoadshowAttendanceWithPledge = jest.fn();
 const mockHasUserCheckedIn = jest.fn();
 const mockLogRoadshowActivity = jest.fn();
 
-jest.mock('@/lib/events', () => ({
+jest.mock('@/lib/roadshow', () => ({
     logRoadshowAttendanceWithPledge: (...args: any[]) => mockLogRoadshowAttendanceWithPledge(...args),
     hasUserCheckedIn: (...args: any[]) => mockHasUserCheckedIn(...args),
     logRoadshowActivity: (...args: any[]) => mockLogRoadshowActivity(...args),

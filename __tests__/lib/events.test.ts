@@ -9,6 +9,10 @@ import {
     fetchEventById,
     createEvent,
     fetchAllUsers,
+    deleteEvent,
+    updateEvent,
+} from '@/lib/events';
+import {
     hasUserCheckedIn,
     fetchRoadshowConfig,
     saveRoadshowConfig,
@@ -18,9 +22,7 @@ import {
     fetchRoadshowActivities,
     logRoadshowActivity,
     createRoadshowBulk,
-    deleteEvent,
-    updateEvent,
-} from '@/lib/events';
+} from '@/lib/roadshow';
 
 jest.mock('@/lib/supabase');
 

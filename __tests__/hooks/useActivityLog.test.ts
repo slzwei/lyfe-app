@@ -3,7 +3,7 @@ import { useActivityLog } from '@/hooks/useActivityLog';
 
 const mockLogRoadshowActivity = jest.fn();
 
-jest.mock('@/lib/events', () => ({
+jest.mock('@/lib/roadshow', () => ({
     logRoadshowActivity: (...args: any[]) => mockLogRoadshowActivity(...args),
 }));
 
@@ -189,11 +189,7 @@ describe('useActivityLog', () => {
             result.current.handleLogDeparture();
         });
 
-        expect(alertSpy).toHaveBeenCalledWith(
-            'Leave Roadshow?',
-            expect.any(String),
-            expect.any(Array),
-        );
+        expect(alertSpy).toHaveBeenCalledWith('Leave Roadshow?', expect.any(String), expect.any(Array));
     });
 
     it('handleReturnToBooth logs check_in activity', async () => {
@@ -220,9 +216,7 @@ describe('useActivityLog', () => {
     });
 
     it('myCounts returns zeros when myAttendance is null', () => {
-        const { result } = renderHook(() =>
-            useActivityLog({ ...defaultParams, myAttendance: null }),
-        );
+        const { result } = renderHook(() => useActivityLog({ ...defaultParams, myAttendance: null }));
 
         expect(result.current.myCounts).toEqual({
             sitdowns: 0,
@@ -234,12 +228,12 @@ describe('useActivityLog', () => {
 
     it('handleLogCaseClosed shows confirm for $0 AFYC', async () => {
         // Mock Alert.alert to auto-press "Cancel" so the Promise resolves
-        const alertSpy = jest.spyOn(require('react-native').Alert, 'alert').mockImplementation(
-            (_title: string, _message?: string, buttons?: any[]) => {
+        const alertSpy = jest
+            .spyOn(require('react-native').Alert, 'alert')
+            .mockImplementation((_title: string, _message?: string, buttons?: any[]) => {
                 const cancelBtn = buttons?.find((b: any) => b.text === 'Cancel');
                 if (cancelBtn?.onPress) cancelBtn.onPress();
-            },
-        );
+            });
         const { result } = renderHook(() => useActivityLog(defaultParams));
 
         // Leave afycInput empty/0
@@ -247,22 +241,18 @@ describe('useActivityLog', () => {
             await result.current.handleLogCaseClosed();
         });
 
-        expect(alertSpy).toHaveBeenCalledWith(
-            'Log $0 AFYC?',
-            expect.any(String),
-            expect.any(Array),
-        );
+        expect(alertSpy).toHaveBeenCalledWith('Log $0 AFYC?', expect.any(String), expect.any(Array));
         alertSpy.mockRestore();
     });
 
     it('handleLogCaseClosed with $0 proceeds when confirmed', async () => {
         // Mock Alert.alert to auto-press "Log" so it proceeds
-        const alertSpy = jest.spyOn(require('react-native').Alert, 'alert').mockImplementation(
-            (_title: string, _message?: string, buttons?: any[]) => {
+        const alertSpy = jest
+            .spyOn(require('react-native').Alert, 'alert')
+            .mockImplementation((_title: string, _message?: string, buttons?: any[]) => {
                 const logBtn = buttons?.find((b: any) => b.text === 'Log');
                 if (logBtn?.onPress) logBtn.onPress();
-            },
-        );
+            });
         const { result } = renderHook(() => useActivityLog(defaultParams));
 
         await act(async () => {

@@ -120,9 +120,13 @@ beforeEach(() => {
     });
     (useSegments as jest.Mock).mockReturnValue(['(tabs)', 'exams', 'take', 'paper-1']);
 
-    // Mock supabase chain for exam_questions
-    const questionsChain = mockSupa.__getChain('exam_questions');
-    questionsChain.__resolveWith({ data: MOCK_QUESTIONS, error: null });
+    // Mock supabase.rpc for get_exam_questions
+    mockSupa.rpc.mockImplementation((fn: string) => {
+        if (fn === 'get_exam_questions') {
+            return Promise.resolve({ data: MOCK_QUESTIONS, error: null });
+        }
+        return Promise.resolve({ data: null, error: null });
+    });
 
     // Mock supabase chain for exam_papers
     const papersChain = mockSupa.__getChain('exam_papers');
@@ -145,8 +149,7 @@ afterEach(() => {
 describe('TakeExamScreen', () => {
     it('shows loading state while fetching questions', () => {
         // Override to return a pending promise
-        const questionsChain = mockSupa.__getChain('exam_questions');
-        questionsChain.__resolveWith(new Promise(() => {}));
+        mockSupa.rpc.mockImplementation(() => new Promise(() => {}));
 
         const { getByText } = render(<TakeExamScreen />);
         expect(getByText('Loading questions...')).toBeTruthy();

@@ -38,7 +38,7 @@ import { useAuth } from '@/contexts/AuthContext';
 import { useTheme } from '@/contexts/ThemeContext';
 import { Colors } from '@/constants/Colors';
 import { getTeamPerformance } from '@/lib/team';
-import { getAgentActivitySummary } from '@/lib/activities';
+import { getTeamActivitySummaries } from '@/lib/activities';
 import AnalyticsScreen from '@/app/(tabs)/home/analytics';
 
 beforeEach(() => {
@@ -92,17 +92,29 @@ describe('AnalyticsScreen', () => {
             error: null,
         });
 
-        (getAgentActivitySummary as jest.Mock).mockResolvedValue({
-            data: {
-                agentId: 'a1',
-                totalActivities: 10,
-                byType: [
-                    { type: 'call', count: 5 },
-                    { type: 'meeting', count: 3 },
-                    { type: 'note', count: 2 },
-                ],
-                dateRange: { start: '', end: '' },
-            },
+        (getTeamActivitySummaries as jest.Mock).mockResolvedValue({
+            data: [
+                {
+                    agentId: 'a1',
+                    totalActivities: 10,
+                    byType: [
+                        { type: 'call', count: 5 },
+                        { type: 'meeting', count: 3 },
+                        { type: 'note', count: 2 },
+                    ],
+                    dateRange: { start: '', end: '' },
+                },
+                {
+                    agentId: 'a2',
+                    totalActivities: 10,
+                    byType: [
+                        { type: 'call', count: 5 },
+                        { type: 'meeting', count: 3 },
+                        { type: 'note', count: 2 },
+                    ],
+                    dateRange: { start: '', end: '' },
+                },
+            ],
             error: null,
         });
 
@@ -142,8 +154,8 @@ describe('AnalyticsScreen', () => {
             error: null,
         });
 
-        (getAgentActivitySummary as jest.Mock).mockResolvedValue({
-            data: { agentId: 'a1', totalActivities: 0, byType: [], dateRange: { start: '', end: '' } },
+        (getTeamActivitySummaries as jest.Mock).mockResolvedValue({
+            data: [{ agentId: 'a1', totalActivities: 0, byType: [], dateRange: { start: '', end: '' } }],
             error: null,
         });
 
@@ -175,16 +187,18 @@ describe('AnalyticsScreen', () => {
             error: null,
         });
 
-        (getAgentActivitySummary as jest.Mock).mockResolvedValue({
-            data: {
-                agentId: 'a1',
-                totalActivities: 10,
-                byType: [
-                    { type: 'call', count: 5 },
-                    { type: 'meeting', count: 3 },
-                ],
-                dateRange: { start: '', end: '' },
-            },
+        (getTeamActivitySummaries as jest.Mock).mockResolvedValue({
+            data: [
+                {
+                    agentId: 'a1',
+                    totalActivities: 10,
+                    byType: [
+                        { type: 'call', count: 5 },
+                        { type: 'meeting', count: 3 },
+                    ],
+                    dateRange: { start: '', end: '' },
+                },
+            ],
             error: null,
         });
 
@@ -208,9 +222,7 @@ describe('AnalyticsScreen', () => {
         await waitFor(() => {
             expect(getByText('No analytics yet')).toBeTruthy();
             expect(
-                getByText(
-                    'Once your team starts logging activities and closing leads, analytics will appear here.',
-                ),
+                getByText('Once your team starts logging activities and closing leads, analytics will appear here.'),
             ).toBeTruthy();
         });
     });
@@ -234,8 +246,8 @@ describe('AnalyticsScreen', () => {
             error: null,
         });
 
-        (getAgentActivitySummary as jest.Mock).mockResolvedValue({
-            data: { agentId: 'a1', totalActivities: 0, byType: [], dateRange: { start: '', end: '' } },
+        (getTeamActivitySummaries as jest.Mock).mockResolvedValue({
+            data: [{ agentId: 'a1', totalActivities: 0, byType: [], dateRange: { start: '', end: '' } }],
             error: null,
         });
 

@@ -15,11 +15,14 @@ const mockSaveRoadshowConfig = jest.fn();
 jest.mock('@/lib/events', () => ({
     createEvent: (...args: any[]) => mockCreateEvent(...args),
     updateEvent: (...args: any[]) => mockUpdateEvent(...args),
-    createRoadshowBulk: (...args: any[]) => mockCreateRoadshowBulk(...args),
     fetchEventById: (...args: any[]) => mockFetchEventById(...args),
+    fetchAllUsers: jest.fn().mockResolvedValue({ data: [], error: null }),
+}));
+
+jest.mock('@/lib/roadshow', () => ({
+    createRoadshowBulk: (...args: any[]) => mockCreateRoadshowBulk(...args),
     fetchRoadshowConfig: (...args: any[]) => mockFetchRoadshowConfig(...args),
     saveRoadshowConfig: (...args: any[]) => mockSaveRoadshowConfig(...args),
-    fetchAllUsers: jest.fn().mockResolvedValue({ data: [], error: null }),
 }));
 
 jest.mock('@/lib/dateTime', () => ({
@@ -390,12 +393,12 @@ describe('useEventForm', () => {
 
     it('handleSubmit shows confirmation for large roadshow (>14 days)', async () => {
         // Mock Alert.alert to auto-press "Cancel" so the Promise resolves
-        const alertSpy = jest.spyOn(Alert, 'alert').mockImplementation(
-            (title: string, message?: string, buttons?: any[]) => {
+        const alertSpy = jest
+            .spyOn(Alert, 'alert')
+            .mockImplementation((title: string, message?: string, buttons?: any[]) => {
                 const cancelBtn = buttons?.find((b: any) => b.text === 'Cancel');
                 if (cancelBtn?.onPress) cancelBtn.onPress();
-            },
-        );
+            });
         const { result } = renderHook(() => useEventForm());
 
         act(() => {
@@ -479,10 +482,7 @@ describe('useEventForm', () => {
             await result.current.handleSubmit();
         });
 
-        expect(mockUpdateEvent).toHaveBeenCalledWith(
-            'ev-123',
-            expect.objectContaining({ title: 'Updated Title' }),
-        );
+        expect(mockUpdateEvent).toHaveBeenCalledWith('ev-123', expect.objectContaining({ title: 'Updated Title' }));
     });
 
     it('returns sub-hook objects', () => {

@@ -113,7 +113,7 @@ describe('sentry', () => {
 
         setSentryUser({ id: 'user-1', phone: '+65123', role: 'agent' });
 
-        expect(SentryFresh.setUser).toHaveBeenCalledWith({ id: 'user-1', username: '+65123' });
+        expect(SentryFresh.setUser).toHaveBeenCalledWith({ id: 'user-1' });
         expect(SentryFresh.setTag).toHaveBeenCalledWith('user.role', 'agent');
     });
 

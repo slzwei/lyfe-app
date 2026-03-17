@@ -1,7 +1,6 @@
 import {
     formatTime,
     formatCheckinTime,
-    formatActivityTime,
     formatDateLong,
     formatDateShort,
     formatDateLabel,
@@ -54,15 +53,6 @@ describe('formatCheckinTime', () => {
         const result = formatCheckinTime('2026-03-08T14:30:00Z');
         // Depends on local timezone — just check shape
         expect(result).toMatch(/^\d{1,2}:\d{2} (AM|PM)$/);
-    });
-});
-
-// ── formatActivityTime ──
-
-describe('formatActivityTime', () => {
-    it('formats ISO timestamp to 24h HH:MM', () => {
-        const result = formatActivityTime('2026-03-08T09:05:00Z');
-        expect(result).toMatch(/^\d{2}:\d{2}$/);
     });
 });
 

@@ -8,7 +8,6 @@ import {
     fetchCandidate,
     createCandidate,
     updateCandidateStatus,
-    uploadCandidateResume,
     addCandidateActivity,
     scheduleInterview,
     updateInterview,
@@ -400,70 +399,6 @@ describe('syncAgentToMKTR', () => {
         const result = await syncAgentToMKTR({ email: 'jane@example.com', name: 'Jane', phone: '+65123' });
         expect(result.success).toBe(false);
         expect(result.error).toBe('Network down');
-    });
-});
-
-// ── uploadCandidateResume ──
-
-describe('uploadCandidateResume', () => {
-    it('uploads file and saves URL', async () => {
-        mockFetch.mockResolvedValue({
-            arrayBuffer: () => Promise.resolve(new ArrayBuffer(100)),
-        });
-
-        const storageMock = {
-            upload: jest.fn().mockResolvedValue({ error: null }),
-            getPublicUrl: jest.fn().mockReturnValue({ data: { publicUrl: 'https://cdn.example.com/resume.pdf' } }),
-        };
-        mockSupa.storage.from.mockReturnValue(storageMock);
-
-        const candidatesChain = mockSupa.__getChain('candidates');
-        mockResolve(candidatesChain, { data: [{ id: 'cand-1' }], error: null });
-
-        const result = await uploadCandidateResume('cand-1', 'file:///path/to/resume.pdf', 'resume.pdf');
-        expect(result.error).toBeNull();
-        expect(result.url).toBe('https://cdn.example.com/resume.pdf');
-    });
-
-    it('returns error when upload fails', async () => {
-        mockFetch.mockResolvedValue({
-            arrayBuffer: () => Promise.resolve(new ArrayBuffer(100)),
-        });
-
-        const storageMock = {
-            upload: jest.fn().mockResolvedValue({ error: { message: 'Storage full' } }),
-            getPublicUrl: jest.fn(),
-        };
-        mockSupa.storage.from.mockReturnValue(storageMock);
-
-        const result = await uploadCandidateResume('cand-1', 'file:///path/to/resume.pdf', 'resume.pdf');
-        expect(result.error).toBe('Storage full');
-        expect(result.url).toBeNull();
-    });
-
-    it('returns error when permission denied on save', async () => {
-        mockFetch.mockResolvedValue({
-            arrayBuffer: () => Promise.resolve(new ArrayBuffer(100)),
-        });
-
-        const storageMock = {
-            upload: jest.fn().mockResolvedValue({ error: null }),
-            getPublicUrl: jest.fn().mockReturnValue({ data: { publicUrl: 'https://cdn.example.com/resume.pdf' } }),
-        };
-        mockSupa.storage.from.mockReturnValue(storageMock);
-
-        const candidatesChain = mockSupa.__getChain('candidates');
-        mockResolve(candidatesChain, { data: [], error: null }); // empty = permission denied
-
-        const result = await uploadCandidateResume('cand-1', 'file:///path', 'resume.pdf');
-        expect(result.error).toBe('Permission denied: could not save resume URL');
-    });
-
-    it('handles fetch exception', async () => {
-        mockFetch.mockRejectedValue(new Error('File not found'));
-
-        const result = await uploadCandidateResume('cand-1', 'file:///bad', 'resume.pdf');
-        expect(result.error).toBe('File not found');
     });
 });
 

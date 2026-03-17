@@ -34,10 +34,10 @@ const DOCUMENT_ROW_2: CandidateDocument = {
 
 // ── Helpers ──
 
-function mockStorageSuccess(publicUrl = 'https://example.com/cand-1/docs/file.pdf') {
+function mockStorageSuccess(signedUrl = 'https://example.com/cand-1/docs/file.pdf?token=abc') {
     mockSupa.storage.from.mockReturnValue({
         upload: jest.fn().mockResolvedValue({ error: null }),
-        getPublicUrl: jest.fn().mockReturnValue({ data: { publicUrl } }),
+        createSignedUrl: jest.fn().mockResolvedValue({ data: { signedUrl }, error: null }),
     });
 }
 
@@ -116,7 +116,7 @@ describe('uploadCandidateDocument', () => {
         mockFetchFile();
         mockSupa.storage.from.mockReturnValue({
             upload: jest.fn().mockResolvedValue({ error: { message: 'Bucket quota exceeded' } }),
-            getPublicUrl: jest.fn(),
+            createSignedUrl: jest.fn(),
         });
 
         const result = await uploadCandidateDocument('cand-1', 'Resume', 'file:///resume.pdf', 'resume.pdf');
@@ -156,9 +156,12 @@ describe('uploadCandidateDocument', () => {
 
         const storageMock = {
             upload: jest.fn().mockResolvedValue({ error: null }),
-            getPublicUrl: jest
+            createSignedUrl: jest
                 .fn()
-                .mockReturnValue({ data: { publicUrl: 'https://example.com/cand-1/docs/safe_file.pdf' } }),
+                .mockResolvedValue({
+                    data: { signedUrl: 'https://example.com/cand-1/docs/safe_file.pdf?token=abc' },
+                    error: null,
+                }),
         };
         mockSupa.storage.from.mockReturnValue(storageMock);
 
