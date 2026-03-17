@@ -18,12 +18,12 @@ function withSwiftConcurrency(config) {
     # Swift 6 strict-concurrency errors (sending closures, Sendable, etc.)
     installer.pods_project.targets.each do |target|
       target.build_configurations.each do |bc|
-        bc.build_settings['SWIFT_VERSION'] ||= '5.0'
-        bc.build_settings['SWIFT_STRICT_CONCURRENCY'] ||= 'minimal'
+        bc.build_settings['SWIFT_VERSION'] = '5.0'
+        bc.build_settings['SWIFT_STRICT_CONCURRENCY'] = 'minimal'
       end
     end`;
 
-            if (!podfile.includes('SWIFT_STRICT_CONCURRENCY')) {
+            if (!podfile.includes('[withSwiftConcurrency]')) {
                 // Insert before the final two 'end' statements (post_install + target)
                 podfile = podfile.replace(/(react_native_post_install\([\s\S]*?\n\s*\))/, `$1\n${snippet}`);
                 fs.writeFileSync(podfilePath, podfile, 'utf8');

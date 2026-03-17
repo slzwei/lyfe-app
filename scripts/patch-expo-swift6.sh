@@ -15,4 +15,13 @@ if [ -f "$FILE" ] && grep -q "static let center" "$FILE" && ! grep -q "nonisolat
   echo "  ✓ ContentPosition.swift — added nonisolated(unsafe)"
 fi
 
+# ── expo-image: ImageLoadTask.swift ────────────────────────────────
+# Fix: "passing closure as a 'sending' parameter risks causing data races"
+# Xcode 26 compiles with Swift 6 strict concurrency; mark closure @Sendable
+FILE="node_modules/expo-image/ios/ImageLoadTask.swift"
+if [ -f "$FILE" ] && grep -q "Task { \[source, options\]" "$FILE" && ! grep -q "@Sendable" "$FILE"; then
+  sed -i.bak 's/Task { \[source, options\]/Task { @Sendable [source, options]/' "$FILE" && rm -f "$FILE.bak"
+  echo "  ✓ ImageLoadTask.swift — added @Sendable to closure"
+fi
+
 echo "✅ All patches applied."
