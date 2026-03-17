@@ -1,13 +1,6 @@
 import { useTheme } from '@/contexts/ThemeContext';
 import React from 'react';
-import {
-    Modal,
-    Platform,
-    StyleSheet,
-    Text,
-    TouchableOpacity,
-    View,
-} from 'react-native';
+import { Modal, Platform, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 
 export interface ConfirmDialogButton {
     text: string;
@@ -25,37 +18,22 @@ interface ConfirmDialogProps {
 
 /**
  * Cross-platform confirmation dialog that works on both native and web.
- * 
+ *
  * On native, Alert.alert uses the OS dialog which has issues on web
  * (window.confirm auto-cancels in some browser environments).
  * This component renders a proper React Native Modal instead.
  */
-function ConfirmDialog({
-    visible,
-    title,
-    message,
-    buttons,
-    onDismiss,
-}: ConfirmDialogProps) {
+function ConfirmDialog({ visible, title, message, buttons, onDismiss }: ConfirmDialogProps) {
     const { colors } = useTheme();
 
     if (!visible) return null;
 
     return (
-        <Modal
-            transparent
-            animationType="fade"
-            visible={visible}
-            onRequestClose={onDismiss}
-        >
+        <Modal transparent animationType="fade" visible={visible} onRequestClose={onDismiss}>
             <View style={styles.overlay}>
                 <View style={[styles.dialog, { backgroundColor: colors.cardBackground }]}>
-                    <Text style={[styles.title, { color: colors.textPrimary }]}>
-                        {title}
-                    </Text>
-                    <Text style={[styles.message, { color: colors.textSecondary }]}>
-                        {message}
-                    </Text>
+                    <Text style={[styles.title, { color: colors.textPrimary }]}>{title}</Text>
+                    <Text style={[styles.message, { color: colors.textSecondary }]}>{message}</Text>
                     <View style={styles.buttonRow}>
                         {buttons.map((btn, idx) => (
                             <TouchableOpacity
@@ -81,15 +59,14 @@ function ConfirmDialog({
                                     btn.onPress?.();
                                 }}
                                 activeOpacity={0.7}
+                                accessibilityRole="button"
+                                accessibilityLabel={btn.text}
                             >
                                 <Text
                                     style={[
                                         styles.buttonText,
                                         {
-                                            color:
-                                                btn.style === 'cancel'
-                                                    ? colors.textPrimary
-                                                    : colors.textInverse,
+                                            color: btn.style === 'cancel' ? colors.textPrimary : colors.textInverse,
                                         },
                                     ]}
                                 >

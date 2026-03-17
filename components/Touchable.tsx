@@ -28,6 +28,7 @@ export default function Touchable({
     style,
     children,
     disabled,
+    accessibilityRole = 'button',
     ...rest
 }: TouchableProps) {
     return (
@@ -42,6 +43,7 @@ export default function Touchable({
                     : undefined
             }
             disabled={disabled}
+            accessibilityRole={accessibilityRole}
             {...rest}
         >
             {children}

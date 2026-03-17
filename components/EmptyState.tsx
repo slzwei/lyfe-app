@@ -15,19 +15,18 @@ function EmptyState({ icon = 'file-tray-outline', title, subtitle, actionLabel, 
     const { colors } = useTheme();
 
     return (
-        <View style={styles.container}>
+        <View style={styles.container} accessibilityLabel={subtitle ? `${title}. ${subtitle}` : title}>
             <View style={[styles.iconWrap, { backgroundColor: colors.surfacePrimary }]}>
                 <Ionicons name={icon} size={40} color={colors.textTertiary} />
             </View>
             <Text style={[styles.title, { color: colors.textPrimary }]}>{title}</Text>
-            {subtitle && (
-                <Text style={[styles.subtitle, { color: colors.textSecondary }]}>{subtitle}</Text>
-            )}
+            {subtitle && <Text style={[styles.subtitle, { color: colors.textSecondary }]}>{subtitle}</Text>}
             {actionLabel && onAction && (
                 <TouchableOpacity
                     style={[styles.actionBtn, { backgroundColor: colors.accent }]}
                     onPress={onAction}
                     activeOpacity={0.7}
+                    accessibilityRole="button"
                 >
                     <Text style={[styles.actionText, { color: colors.textInverse }]}>{actionLabel}</Text>
                 </TouchableOpacity>

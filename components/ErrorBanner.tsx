@@ -11,18 +11,25 @@ interface ErrorBannerProps {
 
 export default function ErrorBanner({ message, onRetry, onDismiss }: ErrorBannerProps) {
     return (
-        <View style={styles.container}>
+        <View style={styles.container} accessibilityRole="alert" accessibilityLabel={message}>
             <TouchableOpacity
                 style={styles.banner}
                 onPress={onRetry}
                 activeOpacity={onRetry ? 0.7 : 1}
                 disabled={!onRetry}
+                accessibilityRole={onRetry ? 'button' : undefined}
+                accessibilityLabel={onRetry ? `Error: ${message}. Tap to retry` : undefined}
             >
                 <Ionicons name="alert-circle" size={16} color={ERROR_TEXT} />
                 <Text style={styles.errorText}>{message}</Text>
                 {onRetry && <Text style={styles.retryText}>Tap to retry</Text>}
                 {onDismiss && !onRetry && (
-                    <TouchableOpacity onPress={onDismiss} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
+                    <TouchableOpacity
+                        onPress={onDismiss}
+                        hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                        accessibilityRole="button"
+                        accessibilityLabel="Dismiss error"
+                    >
                         <Ionicons name="close" size={16} color={ERROR_TEXT} />
                     </TouchableOpacity>
                 )}
@@ -32,6 +39,8 @@ export default function ErrorBanner({ message, onRetry, onDismiss }: ErrorBanner
                     style={styles.dismissButton}
                     onPress={onDismiss}
                     hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                    accessibilityRole="button"
+                    accessibilityLabel="Dismiss error"
                 >
                     <Ionicons name="close" size={16} color={ERROR_TEXT} />
                 </TouchableOpacity>

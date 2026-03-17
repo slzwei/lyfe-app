@@ -4,10 +4,10 @@ import { Platform, StyleSheet, Text, View } from 'react-native';
 
 /**
  * MathRenderer — renders text with KaTeX math formulas.
- * 
+ *
  * On web: uses dangerouslySetInnerHTML with KaTeX CSS/JS from CDN.
  * On native: uses react-native-webview.
- * 
+ *
  * Falls back to plain text if no math delimiters found.
  * Handles invalid LaTeX gracefully (shows raw text).
  */
@@ -23,7 +23,6 @@ function hasLatex(text: string): boolean {
 }
 
 function buildKatexHtml(content: string, bgColor: string, textColor: string, fontSize: number): string {
-
     return `<!DOCTYPE html>
 <html>
 <head>
@@ -47,7 +46,7 @@ function buildKatexHtml(content: string, bgColor: string, textColor: string, fon
   </style>
 </head>
 <body>
-  <div id="content">${content.replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/\$/g, '$$')}</div>
+  <div id="content">${content.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#39;').replace(/\$/g, '$$')}</div>
   <script>
     try {
       renderMathInElement(document.getElementById('content'), {
@@ -78,23 +77,27 @@ export default function MathRenderer({ content, style, fontSize = 15 }: MathRend
             if (data.type === 'height' && data.value > 0) {
                 setWebViewHeight(data.value + 8);
             }
-        } catch (e) { if (__DEV__) console.error('[MathRenderer] Failed to parse WebView message:', e); }
+        } catch (e) {
+            if (__DEV__) console.error('[MathRenderer] Failed to parse WebView message:', e);
+        }
     }, []);
 
     // If no LaTeX, render as plain text (much faster)
     if (!hasLatex(content)) {
-        return (
-            <Text style={[styles.plainText, { color: colors.textPrimary, fontSize }, style]}>
-                {content}
-            </Text>
-        );
+        return <Text style={[styles.plainText, { color: colors.textPrimary, fontSize }, style]}>{content}</Text>;
     }
 
     // Web platform: use div with KaTeX CDN
     if (Platform.OS === 'web') {
         return (
             <View style={[styles.container, style]}>
-                <WebMathRenderer content={content} isDark={isDark} fontSize={fontSize} bgColor={colors.webViewBg} textColor={colors.webViewText} />
+                <WebMathRenderer
+                    content={content}
+                    isDark={isDark}
+                    fontSize={fontSize}
+                    bgColor={colors.webViewBg}
+                    textColor={colors.webViewText}
+                />
             </View>
         );
     }
@@ -110,7 +113,7 @@ export default function MathRenderer({ content, style, fontSize = 15 }: MathRend
                 style={[styles.webview, { height: webViewHeight }]}
                 scrollEnabled={false}
                 onMessage={onMessage}
-                originWhitelist={['*']}
+                originWhitelist={['https://*.supabase.co', 'https://cdn.jsdelivr.net']}
                 javaScriptEnabled
                 showsHorizontalScrollIndicator={false}
                 showsVerticalScrollIndicator={false}
@@ -122,7 +125,19 @@ export default function MathRenderer({ content, style, fontSize = 15 }: MathRend
 /**
  * Web-only math renderer using KaTeX auto-render via script injection.
  */
-function WebMathRenderer({ content, isDark, fontSize, bgColor, textColor }: { content: string; isDark: boolean; fontSize: number; bgColor: string; textColor: string }) {
+function WebMathRenderer({
+    content,
+    isDark,
+    fontSize,
+    bgColor,
+    textColor,
+}: {
+    content: string;
+    isDark: boolean;
+    fontSize: number;
+    bgColor: string;
+    textColor: string;
+}) {
     // For web, we render in an iframe to isolate KaTeX styles
     const html = buildKatexHtml(content, bgColor, textColor, fontSize);
     const [height, setHeight] = useState(40);
@@ -146,7 +161,9 @@ function WebMathRenderer({ content, isDark, fontSize, bgColor, textColor }: { co
                         const h = doc.body.scrollHeight;
                         if (h > 0) setHeight(h + 8);
                     }
-                } catch (e) { if (__DEV__) console.error('[MathRenderer] Failed to read iframe height:', e); }
+                } catch (e) {
+                    if (__DEV__) console.error('[MathRenderer] Failed to read iframe height:', e);
+                }
             }}
         />
     );

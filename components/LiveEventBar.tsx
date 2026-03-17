@@ -17,7 +17,7 @@ const SLIDE_INTERVAL = 5000;
 const FADE_DURATION = 400;
 const RECHECK_INTERVAL = 60000;
 
-export const LIVE_BAR_TOTAL_H = BAR_H + BAR_MARGIN_BOTTOM;
+const LIVE_BAR_TOTAL_H = BAR_H + BAR_MARGIN_BOTTOM;
 
 export default memo(function LiveEventBar() {
     const { colors } = useTheme();

@@ -21,6 +21,7 @@ function StatusBadge({ status, size = 'small' }: StatusBadgeProps) {
                     paddingVertical: isSmall ? 4 : 5,
                 },
             ]}
+            accessibilityLabel={`Status: ${config.label}`}
         >
             <Text
                 style={[

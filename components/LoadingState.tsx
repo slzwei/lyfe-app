@@ -15,14 +15,14 @@ export default function LoadingState({ rows = 3 }: LoadingStateProps) {
             Animated.sequence([
                 Animated.timing(pulse, { toValue: 1, duration: 800, useNativeDriver: true }),
                 Animated.timing(pulse, { toValue: 0.3, duration: 800, useNativeDriver: true }),
-            ])
+            ]),
         );
         animation.start();
         return () => animation.stop();
     }, [pulse]);
 
     return (
-        <View style={styles.container}>
+        <View style={styles.container} accessible accessibilityLabel="Loading content" accessibilityRole="progressbar">
             {Array.from({ length: rows }).map((_, i) => (
                 <Animated.View
                     key={i}

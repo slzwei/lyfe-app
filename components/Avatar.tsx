@@ -23,6 +23,7 @@ export default function Avatar({ name, avatarUrl, size, backgroundColor, textCol
     const fontSize = size * 0.4;
     const borderRadius = size / 2;
     const [imgError, setImgError] = useState(false);
+    const accessibilityLabel = name ? `${name}'s avatar` : 'User avatar';
 
     // Reset error state when URL changes (e.g. after re-upload)
     useEffect(() => {
@@ -39,6 +40,7 @@ export default function Avatar({ name, avatarUrl, size, backgroundColor, textCol
                     cachePolicy="memory-disk"
                     transition={200}
                     onError={() => setImgError(true)}
+                    accessibilityLabel={accessibilityLabel}
                 />
             );
         }
@@ -48,12 +50,16 @@ export default function Avatar({ name, avatarUrl, size, backgroundColor, textCol
                 style={{ width: size, height: size, borderRadius }}
                 resizeMode="cover"
                 onError={() => setImgError(true)}
+                accessibilityLabel={accessibilityLabel}
             />
         );
     }
 
     return (
-        <View style={[styles.circle, { width: size, height: size, borderRadius, backgroundColor }]}>
+        <View
+            style={[styles.circle, { width: size, height: size, borderRadius, backgroundColor }]}
+            accessibilityLabel={accessibilityLabel}
+        >
             <Text style={[styles.initial, { color: textColor, fontSize }]}>{initial}</Text>
         </View>
     );
