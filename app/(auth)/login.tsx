@@ -47,6 +47,8 @@ export default function LoginScreen() {
     const [otp, setOtp] = useState(['', '', '', '', '', '']);
     const [isLoading, setIsLoading] = useState(false);
     const [error, setError] = useState<string | null>(null);
+    const [cooldown, setCooldown] = useState(0);
+    const cooldownRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
     const [biometryType, setBiometryType] = useState<BiometryType>('none');
     const [isBiometricLoading, setIsBiometricLoading] = useState(false);
@@ -62,6 +64,27 @@ export default function LoginScreen() {
     useEffect(() => {
         getBiometryType().then(setBiometryType);
     }, []);
+
+    useEffect(() => {
+        return () => {
+            if (cooldownRef.current) clearInterval(cooldownRef.current);
+        };
+    }, []);
+
+    const startCooldown = () => {
+        setCooldown(60);
+        if (cooldownRef.current) clearInterval(cooldownRef.current);
+        cooldownRef.current = setInterval(() => {
+            setCooldown((prev) => {
+                if (prev <= 1) {
+                    clearInterval(cooldownRef.current!);
+                    cooldownRef.current = null;
+                    return 0;
+                }
+                return prev - 1;
+            });
+        }, 1000);
+    };
 
     const showBiometricButton = biometricsEnabled && biometryType !== 'none';
     const { label: biometricLabel, icon: biometricIcon } = biometricMeta(biometryType);
@@ -127,6 +150,7 @@ export default function LoginScreen() {
             setError(otpError.message);
             return;
         }
+        startCooldown();
         goToOtp();
     };
 
@@ -401,12 +425,45 @@ export default function LoginScreen() {
                                         )}
                                     </TouchableOpacity>
 
-                                    <TouchableOpacity style={styles.backLink} onPress={goToPhone} activeOpacity={0.7}>
-                                        <Ionicons name="arrow-back" size={16} color={OVERLAY_TEXT} />
-                                        <Text style={[styles.linkText, { color: OVERLAY_TEXT }]}>
-                                            Use a different number
-                                        </Text>
-                                    </TouchableOpacity>
+                                    <View style={styles.otpLinksRow}>
+                                        <TouchableOpacity
+                                            style={styles.backLink}
+                                            onPress={goToPhone}
+                                            activeOpacity={0.7}
+                                            accessibilityRole="button"
+                                            accessibilityLabel="Use a different phone number"
+                                        >
+                                            <Ionicons name="arrow-back" size={16} color={OVERLAY_TEXT} />
+                                            <Text style={[styles.linkText, { color: OVERLAY_TEXT }]}>
+                                                Different number
+                                            </Text>
+                                        </TouchableOpacity>
+
+                                        <TouchableOpacity
+                                            style={styles.backLink}
+                                            onPress={handleSendOtp}
+                                            disabled={cooldown > 0 || isLoading}
+                                            activeOpacity={0.7}
+                                            accessibilityRole="button"
+                                            accessibilityLabel={
+                                                cooldown > 0 ? `Resend OTP in ${cooldown} seconds` : 'Resend OTP'
+                                            }
+                                        >
+                                            <Ionicons
+                                                name="refresh"
+                                                size={16}
+                                                color={cooldown > 0 ? OVERLAY_TEXT_SUBTLE : OVERLAY_TEXT}
+                                            />
+                                            <Text
+                                                style={[
+                                                    styles.linkText,
+                                                    { color: cooldown > 0 ? OVERLAY_TEXT_SUBTLE : OVERLAY_TEXT },
+                                                ]}
+                                            >
+                                                {cooldown > 0 ? `Resend (${cooldown}s)` : 'Resend OTP'}
+                                            </Text>
+                                        </TouchableOpacity>
+                                    </View>
 
                                     {showBiometricButton && (
                                         <TouchableOpacity
@@ -476,6 +533,8 @@ export default function LoginScreen() {
                         placeholder="9XXX XXXX"
                         placeholderTextColor={OVERLAY_TEXT_SUBTLE}
                         maxLength={9}
+                        accessibilityLabel="Phone number"
+                        accessibilityHint="Enter your 8-digit Singapore phone number"
                     />
                 </View>
 
@@ -575,12 +634,12 @@ const styles = StyleSheet.create({
     dividerText: { fontSize: 13, fontWeight: '500' },
 
     /* OTP page links */
+    otpLinksRow: { flexDirection: 'row', justifyContent: 'space-between', marginTop: 16 },
     backLink: {
         flexDirection: 'row',
         alignItems: 'center',
         justifyContent: 'center',
         gap: 6,
-        marginTop: 16,
         padding: 8,
     },
     linkText: { fontSize: 14, fontWeight: '500' },

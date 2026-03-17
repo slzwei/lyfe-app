@@ -32,7 +32,7 @@ export { navigationIntegration };
 
 /** Set Sentry user context on login, clear on logout */
 export function setSentryUser(user: { id: string; phone?: string | null; role?: string | null }) {
-    Sentry.setUser({ id: user.id, username: user.phone ?? undefined });
+    Sentry.setUser({ id: user.id });
     if (user.role) {
         Sentry.setTag('user.role', user.role);
     }

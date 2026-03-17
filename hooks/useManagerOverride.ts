@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { Alert } from 'react-native';
 import { DEFAULT_PLEDGED_CLOSED, DEFAULT_PLEDGED_PITCHES, DEFAULT_PLEDGED_SITDOWNS } from '@/constants/ui';
-import { logRoadshowActivity, managerCheckIn, type PledgeInput } from '@/lib/events';
+import { logRoadshowActivity, managerCheckIn, type PledgeInput } from '@/lib/roadshow';
 import { formatCheckinTime } from '@/lib/dateTime';
 import type { EventAttendee, RoadshowConfig } from '@/types/event';
 

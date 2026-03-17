@@ -1,7 +1,8 @@
 import { useCallback, useState } from 'react';
 import { useFocusEffect } from 'expo-router';
 import { useRoadshowRealtime } from '@/hooks/useRoadshowRealtime';
-import { fetchEventById, fetchRoadshowActivities, fetchRoadshowAttendance, fetchRoadshowConfig } from '@/lib/events';
+import { fetchEventById } from '@/lib/events';
+import { fetchRoadshowActivities, fetchRoadshowAttendance, fetchRoadshowConfig } from '@/lib/roadshow';
 import { todayLocalStr } from '@/lib/dateTime';
 import type { AgencyEvent, RoadshowActivity, RoadshowAttendance, RoadshowConfig } from '@/types/event';
 

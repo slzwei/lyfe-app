@@ -62,6 +62,22 @@ export default function NotificationsScreen() {
         setLoadingMore(false);
     }, [hasMore, loadingMore, page, loadNotifications]);
 
+    /** Remap cross-tab routes to home tab equivalents so back navigation returns here */
+    const remapRouteToHomeTab = (route: string): string => {
+        if (route.startsWith('/(tabs)/home/')) return route;
+
+        const leadMatch = route.match(/^\/\(tabs\)\/leads\/(.+)$/);
+        if (leadMatch) return `/(tabs)/home/lead/${leadMatch[1]}`;
+
+        const eventMatch = route.match(/^\/\(tabs\)\/events\/(.+)$/);
+        if (eventMatch) return `/(tabs)/home/event/${eventMatch[1]}`;
+
+        const paCandidateMatch = route.match(/^\/\(tabs\)\/pa\/candidate\/(.+)$/);
+        if (paCandidateMatch) return `/(tabs)/home/candidate/${paCandidateMatch[1]}`;
+
+        return route;
+    };
+
     const handleTap = useCallback(
         async (notification: AppNotification) => {
             if (!notification.is_read) {
@@ -70,7 +86,7 @@ export default function NotificationsScreen() {
             }
             const data = notification.data as Record<string, string> | null;
             if (typeof data?.route === 'string' && data.route.startsWith('/(tabs)/')) {
-                router.push(data.route);
+                router.push(remapRouteToHomeTab(data.route));
             }
         },
         [markAsRead, router],

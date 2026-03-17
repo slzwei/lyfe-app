@@ -12,19 +12,7 @@ import { fetchCandidateRoadmap } from '@/lib/roadmap';
 import { fetchPAManagerIds, fetchPACandidateCount, fetchPAInterviewCount } from '@/lib/recruitment';
 import type { AgencyEvent } from '@/types/event';
 import type { ProgrammeWithModules } from '@/types/roadmap';
-import { type LeadActivity, type LeadActivityType } from '@/types/lead';
-
-const ACTIVITY_ICONS: Record<LeadActivityType, string> = {
-    created: 'person-add',
-    note: 'create',
-    call: 'call',
-    whatsapp: 'logo-whatsapp',
-    status_change: 'swap-horizontal',
-    reassignment: 'swap-horizontal',
-    email: 'mail',
-    meeting: 'calendar',
-    follow_up: 'time',
-};
+import { ACTIVITY_ICONS, type LeadActivity } from '@/types/lead';
 
 export function formatActivities(
     activities: (LeadActivity & { lead_name?: string })[],
@@ -48,7 +36,7 @@ export function formatActivities(
             leadName: a.lead_name || 'Unknown',
             detail,
             time: timeAgo(a.created_at),
-            icon: ACTIVITY_ICONS[a.type] || 'ellipse',
+            icon: ACTIVITY_ICONS[a.type]?.icon || 'ellipse',
         };
     });
 }
@@ -107,21 +95,19 @@ export function useDashboard({ userId, role, isManagerView, isAdminRole }: UseDa
                 return;
             }
             const isManagerLike = isManagerView || isAdminRole;
-            const promises: Promise<any>[] = [
+            const [statsResult, activitiesResult, managerStatsResult, eventsResult] = await Promise.all([
                 fetchLeadStats(userId, isManagerLike),
                 fetchRecentActivities(userId, isManagerLike, 5),
-            ];
-            if (isManagerLike && role) promises.push(fetchManagerDashboardStats(userId, role));
-            // Fetch events in parallel with stats — not after
-            if (!isManagerLike) promises.push(fetchUpcomingEvents(userId, 5));
-            const results = await Promise.all(promises);
-            if (results[0].data) setStats(results[0].data);
-            if (results[1].data) setRecentActivities(results[1].data);
-            const managerStatsIdx = isManagerLike && role ? 2 : -1;
-            const eventsIdx = !isManagerLike ? (managerStatsIdx >= 0 ? 3 : 2) : -1;
-            if (managerStatsIdx >= 0 && results[managerStatsIdx]?.data) setManagerStats(results[managerStatsIdx].data);
-            if (eventsIdx >= 0 && results[eventsIdx]?.data) setAgentEvents(results[eventsIdx].data);
-            if (results[0].error) setError('Failed to load dashboard data');
+                isManagerLike && role
+                    ? fetchManagerDashboardStats(userId, role)
+                    : Promise.resolve({ data: null as ManagerDashboardStats | null, error: null }),
+                !isManagerLike ? fetchUpcomingEvents(userId, 5) : Promise.resolve({ data: [] as AgencyEvent[] }),
+            ]);
+            if (statsResult.data) setStats(statsResult.data);
+            if (activitiesResult.data) setRecentActivities(activitiesResult.data);
+            if (managerStatsResult.data) setManagerStats(managerStatsResult.data);
+            if (eventsResult.data) setAgentEvents(eventsResult.data);
+            if (statsResult.error) setError('Failed to load dashboard data');
         } catch {
             setError('Failed to load dashboard data');
         } finally {

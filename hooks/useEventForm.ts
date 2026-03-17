@@ -7,15 +7,8 @@ import { useAttendeePicker } from '@/hooks/useAttendeePicker';
 import { useRoadshowConfig } from '@/hooks/useRoadshowConfig';
 import { useTimePicker } from '@/hooks/useTimePicker';
 import { dateDiffDays, dateRange, isValidDate, todayStr } from '@/lib/dateTime';
-import {
-    createEvent,
-    createRoadshowBulk,
-    fetchEventById,
-    fetchRoadshowConfig,
-    saveRoadshowConfig,
-    updateEvent,
-    type RoadshowConfigInput,
-} from '@/lib/events';
+import { createEvent, fetchEventById, updateEvent } from '@/lib/events';
+import { createRoadshowBulk, fetchRoadshowConfig, saveRoadshowConfig, type RoadshowConfigInput } from '@/lib/roadshow';
 import { supabase } from '@/lib/supabase';
 import type { CreateEventInput, EventType } from '@/types/event';
 import { useLocalSearchParams, useRouter } from 'expo-router';
@@ -47,9 +40,19 @@ export function useEventForm() {
     const { startHour, startMinIdx, startAmPm, endHour, endMinIdx, endAmPm } = timePicker;
     const { selectedAttendees, setSelectedAttendees, externalAttendees, setExternalAttendees } = attendeePicker;
     const {
-        rsStartDate, setRsStartDate, rsEndDate, setRsEndDate,
-        rsWeeklyCost, rsSlots, rsGrace, rsSitdowns, rsPitches, rsClosed,
-        rsConfigLocked, setRsConfigLocked, populateFromExisting,
+        rsStartDate,
+        setRsStartDate,
+        rsEndDate,
+        setRsEndDate,
+        rsWeeklyCost,
+        rsSlots,
+        rsGrace,
+        rsSitdowns,
+        rsPitches,
+        rsClosed,
+        rsConfigLocked,
+        setRsConfigLocked,
+        populateFromExisting,
     } = roadshowCfg;
 
     // Pre-populate form when editing
@@ -244,10 +247,7 @@ export function useEventForm() {
             const { error: cfgError } = await saveRoadshowConfig(eventId, rsConfig);
             setSubmitting(false);
             if (cfgError) {
-                Alert.alert(
-                    'Partial Save',
-                    'Event saved, but roadshow config could not be updated. Please try again.',
-                );
+                Alert.alert('Partial Save', 'Event saved, but roadshow config could not be updated. Please try again.');
                 return;
             }
         } else {

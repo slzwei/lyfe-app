@@ -1,6 +1,6 @@
 import { useCallback, useState } from 'react';
 import { Alert } from 'react-native';
-import { logRoadshowActivity } from '@/lib/events';
+import { logRoadshowActivity } from '@/lib/roadshow';
 import { PICKER_MINUTES } from '@/constants/ui';
 import type { RoadshowActivity, RoadshowAttendance } from '@/types/event';
 

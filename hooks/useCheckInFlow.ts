@@ -1,7 +1,12 @@
 import { useCallback, useState } from 'react';
 import { Alert } from 'react-native';
 import { DEFAULT_PLEDGED_CLOSED, DEFAULT_PLEDGED_PITCHES, DEFAULT_PLEDGED_SITDOWNS } from '@/constants/ui';
-import { hasUserCheckedIn, logRoadshowActivity, logRoadshowAttendanceWithPledge, type PledgeInput } from '@/lib/events';
+import {
+    hasUserCheckedIn,
+    logRoadshowActivity,
+    logRoadshowAttendanceWithPledge,
+    type PledgeInput,
+} from '@/lib/roadshow';
 import { supabase } from '@/lib/supabase';
 import type { RoadshowConfig } from '@/types/event';
 

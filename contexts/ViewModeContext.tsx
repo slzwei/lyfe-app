@@ -64,8 +64,3 @@ export function useViewMode() {
     }
     return context;
 }
-
-/** Static helper to clear view mode on sign-out */
-export async function clearViewModeStorage() {
-    await AsyncStorage.removeItem(VIEW_MODE_STORAGE_KEY);
-}

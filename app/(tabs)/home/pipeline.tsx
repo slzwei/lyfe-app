@@ -14,7 +14,7 @@ import Animated, {
     withRepeat,
     withTiming,
 } from 'react-native-reanimated';
-import { supabase } from '@/lib/supabase';
+import { fetchCandidateStatusCounts } from '@/lib/recruitment/candidates';
 
 // ── Pipeline stages (subset for funnel) ──────────────────────
 
@@ -280,12 +280,11 @@ export default function PipelineScreen() {
     const loadData = useCallback(async () => {
         if (!user?.id) return;
         try {
-            // Fetch candidates managed by this manager
-            const { data, error } = await supabase.from('candidates').select('status').eq('manager_id', user.id);
+            const { data, error } = await fetchCandidateStatusCounts(user.id);
 
             if (!error && data) {
                 const counts: Record<string, number> = {};
-                (data as { status: string }[]).forEach((c) => {
+                data.forEach((c) => {
                     counts[c.status] = (counts[c.status] || 0) + 1;
                 });
                 setStageCounts(counts);

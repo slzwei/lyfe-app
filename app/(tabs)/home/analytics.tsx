@@ -3,7 +3,7 @@ import Avatar from '@/components/Avatar';
 import ScreenHeader from '@/components/ScreenHeader';
 import { useAuth } from '@/contexts/AuthContext';
 import { useTheme } from '@/contexts/ThemeContext';
-import { getAgentActivitySummary, type ActivitySummary } from '@/lib/activities';
+import { getTeamActivitySummaries } from '@/lib/activities';
 import { getTeamPerformance, type TeamPerformanceResult } from '@/lib/team';
 import { Ionicons } from '@expo/vector-icons';
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
@@ -233,19 +233,16 @@ export default function AnalyticsScreen() {
             if (perfResult.data) {
                 setPerformance(perfResult.data);
 
-                // Aggregate activities across all agents
+                // Aggregate activities across all agents in a single query
                 const agentIds = perfResult.data.agents.map((a) => a.agentId);
-                const activityPromises = agentIds.map((id) => getAgentActivitySummary(id, dateRange));
-                const activityResults = await Promise.all(activityPromises);
+                const activitiesResult = await getTeamActivitySummaries(agentIds, dateRange);
 
                 // Merge all byType arrays
                 const typeCounts: Record<string, number> = {};
-                activityResults.forEach((r) => {
-                    if (r.data?.byType) {
-                        r.data.byType.forEach((bt) => {
-                            typeCounts[bt.type] = (typeCounts[bt.type] || 0) + bt.count;
-                        });
-                    }
+                (activitiesResult.data || []).forEach((summary) => {
+                    summary.byType.forEach((bt) => {
+                        typeCounts[bt.type] = (typeCounts[bt.type] || 0) + bt.count;
+                    });
                 });
 
                 const aggregated = Object.entries(typeCounts)
