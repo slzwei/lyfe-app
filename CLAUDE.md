@@ -6,8 +6,8 @@ Insurance agency management app — React Native + Expo + Supabase.
 
 - **Mobile**: React Native 0.81, Expo SDK 54, Expo Router 6, TypeScript 5.9
 - **Backend**: Supabase (Postgres, Auth, Storage, Edge Functions, Realtime)
-- **Monitoring**: Sentry (`@sentry/react-native ~7.2.0`)
-- **Admin panel**: Next.js (in `admin/` — separate app, still placeholder)
+- **Monitoring**: Sentry (`@sentry/react-native ~7.13.0`)
+- **Admin panel**: Next.js 16 (in `admin/` — separate app, uses pnpm)
 
 ## Project Structure
 

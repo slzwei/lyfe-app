@@ -1,6 +1,6 @@
 # Lyfe
 
-A React Native mobile app for insurance agency management — built with Expo, Supabase, and TypeScript. Lyfe serves the full agency hierarchy from directors down to candidates, giving each role a tailored experience for leads, recruitment, events, and field operations.
+A React Native mobile app for insurance agency management — built with Expo, Supabase, and TypeScript. Lyfe serves the full agency hierarchy from directors down to candidates, giving each role a tailored experience for leads, recruitment, events, training, and field operations.
 
 ---
 
@@ -15,9 +15,13 @@ A React Native mobile app for insurance agency management — built with Expo, S
 - [Authentication](#authentication)
 - [Getting Started](#getting-started)
 - [Environment Variables](#environment-variables)
+- [Scripts](#scripts)
+- [Testing](#testing)
 - [Mock Mode](#mock-mode)
 - [Edge Functions](#edge-functions)
+- [Admin Panel](#admin-panel)
 - [Building for Production](#building-for-production)
+- [Design System](#design-system)
 
 ---
 
@@ -25,12 +29,14 @@ A React Native mobile app for insurance agency management — built with Expo, S
 
 Lyfe is an internal operations platform for an insurance agency. It replaces manual tracking (WhatsApp groups, spreadsheets) with a structured mobile-first workflow covering:
 
-- Lead pipeline management
+- Lead pipeline management with MKTR webhook integration
 - Candidate recruitment and lifecycle tracking
 - Event creation and attendance
 - Roadshow field operations with real-time activity logging
+- Training roadmap with programme/module progression
+- Personality quizzes (Enneagram, VARK) in profile
 - Team hierarchy visibility for managers and directors
-- Exam preparation tracking for candidates
+- Push notifications for events, interviews, leads, and roadshows
 
 ---
 
@@ -41,12 +47,14 @@ Lyfe is an internal operations platform for an insurance agency. It replaces man
 | Framework | React Native 0.81 + Expo SDK 54 |
 | Routing | Expo Router v6 (file-based, typed routes) |
 | Backend | Supabase (PostgreSQL, Auth, Storage, Realtime, Edge Functions) |
-| Language | TypeScript 5.9 |
+| Language | TypeScript 5.9 (strict mode) |
 | UI | React Native StyleSheet — Ionicons only, no third-party component libraries |
 | Auth | Supabase OTP (SMS) + Face ID / Touch ID via `expo-local-authentication` |
 | Push Notifications | Expo Push Notifications (`expo-notifications`) |
 | Storage | Supabase Storage (avatars, candidate documents) |
 | Secure Storage | `expo-secure-store` (session tokens, biometric flag) |
+| Monitoring | Sentry (`@sentry/react-native ~7.13.0`) |
+| Admin Panel | Next.js 16 + Tailwind 4 + shadcn/ui (in `admin/`) |
 | Build & Deploy | EAS Build + EAS Submit |
 
 ---
@@ -65,42 +73,76 @@ lyfe-app/
 │       ├── team/               # Team hierarchy view
 │       ├── events/             # Events (index, create, [eventId])
 │       ├── exams/              # Exam prep (candidates only)
+│       ├── roadmap/            # Training roadmap (programmes, modules, exams)
 │       ├── pa/                 # PA-specific workflows
 │       ├── admin/              # Admin panel
-│       └── profile/            # User profile, settings, biometrics
+│       └── profile/            # User profile, settings, biometrics, quizzes
 ├── components/                 # Shared UI components
-│   ├── WheelPicker.tsx         # iOS-style scroll wheel picker (snap, opacity gradient, unified indicator)
-│   ├── Confetti.tsx            # Physics-based particle confetti burst animation
+│   ├── WheelPicker.tsx         # iOS-style scroll wheel picker
+│   ├── Confetti.tsx            # Physics-based particle confetti burst
+│   ├── CalendarPicker.tsx      # Date picker component
+│   ├── ConfirmDialog.tsx       # Confirmation modal
+│   ├── EmptyState.tsx          # Empty state placeholder
+│   ├── ErrorBanner.tsx         # Async error banner
+│   ├── LiveEventBar.tsx        # Live event indicator
+│   ├── MathRenderer.tsx        # Math formula renderer (for exams)
+│   ├── OfflineBanner.tsx       # Network offline indicator
+│   ├── candidates/             # Candidate-specific components
+│   ├── events/                 # Event-specific components
+│   ├── exams/                  # Exam-specific components
+│   ├── home/                   # Dashboard components
+│   ├── leads/                  # Lead-specific components
+│   ├── profile/                # Profile & quiz components
+│   ├── roadmap/                # Roadmap grid, module cards, item rows
 │   └── ...                     # Avatar, ScreenHeader, StatusBadge, etc.
 ├── constants/
 │   ├── Colors.ts               # Full light/dark theme token system
 │   └── Roles.ts                # Role definitions, permission helpers, tab config
 ├── contexts/
-│   ├── AuthContext.tsx         # Session, OTP, biometrics, push token registration
-│   ├── ThemeContext.tsx        # Light/dark mode
-│   └── ViewModeContext.tsx     # Manager/director can toggle to agent view
+│   ├── AuthContext.tsx          # Session, OTP, biometrics, push token registration
+│   ├── ThemeContext.tsx         # Light/dark mode
+│   ├── ViewModeContext.tsx      # Manager/director can toggle to agent view
+│   ├── NetworkContext.tsx       # Network connectivity state
+│   └── NotificationContext.tsx  # Push notification handling
+├── hooks/                      # Custom React hooks
 ├── lib/
 │   ├── supabase.ts             # Supabase client (SecureStore session adapter)
+│   ├── leads/                  # Lead service layer (crud, activities, stats)
+│   ├── recruitment/            # Candidate service layer (candidates, documents, interviews)
 │   ├── events.ts               # Events + roadshow service functions
-│   ├── leads.ts                # Leads service functions
-│   ├── recruitment.ts          # Candidates + recruitment service functions
+│   ├── roadshow.ts             # Roadshow-specific service functions
+│   ├── roadmap.ts              # Training roadmap service functions
 │   ├── team.ts                 # Team hierarchy service functions
 │   ├── exams.ts                # Exam prep service functions
+│   ├── enneagram.ts            # Enneagram quiz logic
+│   ├── vark.ts                 # VARK learning style quiz logic
+│   ├── activities.ts           # Activity feed helpers
 │   ├── biometrics.ts           # Face ID / Touch ID helpers
-│   ├── mockMode.ts             # Mock mode toggle (dev testing without backend)
+│   ├── notifications.ts        # Push notification helpers
+│   ├── notificationPreferences.ts # Per-user notification settings
+│   ├── sentry.ts               # Sentry error tracking setup
 │   ├── storage.ts              # Supabase Storage helpers (avatars, documents)
-│   └── utils.ts                # Shared formatting, date helpers
+│   ├── dateTime.ts             # Date/time formatting utilities
+│   ├── errors.ts               # Error handling utilities
+│   ├── pagination.ts           # Pagination helpers
+│   └── offline/                # Offline support layer
 ├── types/
-│   ├── database.ts             # User, base DB types
+│   ├── supabase.ts             # AUTO-GENERATED — run `npm run gen:types`, DO NOT hand-edit
+│   ├── database.ts             # Derived types via Tables<> (User, PaManagerAssignment, etc.)
 │   ├── event.ts                # AgencyEvent, RoadshowConfig, RoadshowAttendance, RoadshowActivity
-│   ├── lead.ts                 # Lead types
+│   ├── lead.ts                 # Lead types, enums derived via Enums<>
 │   ├── exam.ts                 # Exam types
-│   └── recruitment.ts          # Candidate, interview types
+│   ├── recruitment.ts          # Candidate, interview types
+│   ├── roadmap.ts              # RoadmapProgramme, RoadmapModule, etc.
+│   ├── notification.ts         # Notification types
+│   └── theme.ts                # Theme types
 ├── supabase/
 │   ├── config.toml
-│   └── functions/
-│       ├── custom-sms-hook/    # Custom OTP SMS delivery
-│       └── notify-roadshow-pledge/  # Push notification on agent check-in
+│   ├── migrations/             # Database migrations
+│   └── functions/              # 10 Edge Functions (see Edge Functions section)
+├── admin/                      # Next.js admin panel (separate package.json, uses pnpm)
+├── __tests__/                  # Jest test suites
+│   └── fixtures/               # Shared mock data and Supabase mock factory
 └── assets/                     # Images, fonts, icons
 ```
 
@@ -132,6 +174,7 @@ Managers and directors can switch between **Manager view** (full team visibility
 | Candidates | | Y (mgr view) | Y (mgr view) | | | |
 | Team | | Y (mgr view) | Y (mgr view) | | | |
 | Events | | Y | Y | Y | Y | Y |
+| Roadmap | | Y | Y | Y | Y | Y |
 | Exams | | | | | | Y |
 | PA Panel | | | | | Y | |
 | Admin | Y | | | | | |
@@ -153,7 +196,8 @@ Managers and directors can switch between **Manager view** (full team visibility
 - Full CRM pipeline: New → Contacted → Qualified → Proposed → Won / Lost
 - Lead detail with activity log, notes, and status updates
 - Managers can reassign leads within their team; admins can reassign globally
-- Lead source tracking
+- Lead source tracking with campaign and QR tags
+- **MKTR integration**: Webhook-based lead ingest via Edge Function, automatic agent matching by phone/UUID, realtime updates via Supabase Realtime
 
 ### Candidates (Recruitment)
 
@@ -217,6 +261,24 @@ Roadshows are the most feature-rich event type — field marketing events where 
 
 **Realtime:** Supabase Realtime channel (`roadshow-{eventId}`) streams new activity inserts to all connected managers and agents during live events.
 
+### Training Roadmap
+
+- 2-column card grid of training programmes (replaced earlier Duolingo S-curve)
+- Programme → Module → Module Items hierarchy
+- Module sub-item types: material, pre_quiz, quiz, exam, attendance
+- Candidates have read-only access; PA/Manager+ can mark complete at module and item level
+- Confetti on programme completion
+- Sequential progression: SproutLYFE locked until SeedLYFE complete
+- Exam integration: take exams directly from roadmap module items
+
+### Personality Quizzes
+
+Available in the Profile tab:
+- **Enneagram**: 9-type personality assessment with detailed results
+- **VARK**: Learning style assessment (Visual, Aural, Read/Write, Kinaesthetic)
+- No timer, 100% completion required, early submit button once all answered
+- Results stored per user with attempt history
+
 ### Team
 
 - Hierarchy view: director → managers → agents
@@ -225,12 +287,16 @@ Roadshows are the most feature-rich event type — field marketing events where 
 ### Exams (Candidates)
 
 - Module-by-module exam preparation tracker
+- Math formula rendering support
 - Progress visualisation for candidates moving toward licensing
 
 ### Profile
 
 - Avatar upload/remove (Supabase Storage)
 - Biometrics toggle (enable/disable Face ID)
+- Notification preferences
+- Privacy policy and terms of service
+- Personality quiz access (Enneagram, VARK)
 - Sign out (soft-lock if biometrics enabled; full sign-out otherwise)
 
 ---
@@ -243,6 +309,7 @@ Core tables:
 |---|---|
 | `users` | All app users — role, name, phone, avatar, push token, lifecycle stage |
 | `leads` | Lead pipeline records with status, source, assigned agent |
+| `lead_activities` | Activity log for leads |
 | `candidates` | Recruitment pipeline records with lifecycle stage |
 | `candidate_documents` | File references for candidate uploads |
 | `interviews` | Interview records linked to candidates |
@@ -251,6 +318,15 @@ Core tables:
 | `roadshow_configs` | Per-event roadshow settings (cost, slots, grace, suggested targets) |
 | `roadshow_attendance` | T1 agent check-in records with pledge data |
 | `roadshow_activities` | Individual activity logs (sitdown / pitch / case_closed / check_in / departure + optional AFYC) |
+| `roadmap_programmes` | Training programmes (SeedLYFE, SproutLYFE, etc.) |
+| `roadmap_modules` | Modules within programmes |
+| `roadmap_module_items` | Sub-items within modules (material, quiz, exam, attendance) |
+| `roadmap_item_progress` | Per-user completion tracking for module items |
+| `exam_papers` | Exam question papers |
+| `exam_attempts` | User exam attempt records |
+| `personality_quiz_results` | Enneagram/VARK quiz results per user |
+| `pa_manager_assignments` | PA ↔ Manager assignment mapping |
+| `notification_preferences` | Per-user notification settings |
 
 Row-Level Security (RLS) is enabled on all tables. Roadshow data is scoped to event attendees and event creators.
 
@@ -304,7 +380,7 @@ npm install
 # Start Expo dev server
 npx expo start
 
-# Run on iOS simulator
+# Run on iOS simulator (preferred for local dev)
 npx expo run:ios
 
 # Run on Android
@@ -320,9 +396,48 @@ Create a `.env` file in the project root (not committed):
 ```
 EXPO_PUBLIC_SUPABASE_URL=https://your-project.supabase.co
 EXPO_PUBLIC_SUPABASE_ANON_KEY=your-anon-key
+EXPO_PUBLIC_SENTRY_DSN=https://your-dsn@sentry.io/project-id
 ```
 
 These are accessed in `lib/supabase.ts` via `process.env.EXPO_PUBLIC_*`.
+
+---
+
+## Scripts
+
+| Command | Description |
+|---------|-------------|
+| `npm start` | Start Expo dev server |
+| `npm run ios` | Build and run on iOS simulator |
+| `npm run android` | Build and run on Android emulator |
+| `npm test` | Run Jest test suite |
+| `npm run test:watch` | Run tests in watch mode |
+| `npm run test:coverage` | Run tests with coverage report |
+| `npm run test:android` | Run tests with Android-specific config |
+| `npm run lint` | ESLint check (.ts/.tsx files) |
+| `npm run lint:fix` | ESLint auto-fix |
+| `npm run format` | Prettier format all files |
+| `npm run gen:types` | Regenerate Supabase TypeScript types |
+| `npm run seed` | Seed the database |
+| `npm run seed:reset` | Reset and seed the database |
+| `npm run seed:reset-only` | Reset database without seeding |
+
+---
+
+## Testing
+
+- **Framework**: Jest 29 + `jest-expo/ios` + `@testing-library/react-native` 13
+- **Run all**: `npm test`
+- **Run single**: `npx jest path/to/test`
+- **Coverage**: `npm run test:coverage`
+- **Thresholds**: 65% statements/functions/lines, 50% branches
+
+### Test Infrastructure
+
+- Supabase mock: `lib/__mocks__/supabase.ts` — Proxy-based chain mock with `__getChain(table)` / `__resolveWith(value)`
+- Global mocks in `jest.setup.js`: expo-secure-store, expo-notifications, expo-local-authentication, expo-router, AsyncStorage, @expo/vector-icons
+- CI: GitHub Actions runs `npm test` on every push/PR to `main`
+- Pre-commit (Husky + lint-staged): eslint --fix, prettier --write, jest --findRelatedTests
 
 ---
 
@@ -332,7 +447,7 @@ Mock mode lets you develop and test the full UI without a live Supabase connecti
 
 **Enable:** On the login screen, tap the version number 5 times to toggle mock mode. A banner confirms it is active.
 
-**Mock users** (use code `123456` for all):
+**Mock users** (use OTP code `555555` for all):
 
 | Phone | Role | Name |
 |---|---|---|
@@ -349,22 +464,50 @@ Mock mode ships with pre-populated data for all screens including roadshow event
 
 ## Edge Functions
 
-Two Supabase Edge Functions are deployed under `supabase/functions/`:
+Ten Supabase Edge Functions are deployed under `supabase/functions/`:
 
-### `custom-sms-hook`
-
-Intercepts Supabase Auth OTP events and routes SMS delivery through a custom provider.
-
-### `notify-roadshow-pledge`
-
-Triggered by the client (fire-and-forget) when a T1 agent confirms their roadshow pledge. Fetches the agent's T2 manager and T3 director, retrieves their Expo push tokens from the `users` table, and sends push notifications via the Expo Push API.
-
-The client never awaits this call — check-in succeeds regardless of notification delivery.
+| Function | Description |
+|----------|-------------|
+| `custom-sms-hook` | Intercepts Supabase Auth OTP events and routes SMS delivery through a custom provider |
+| `notify-roadshow-pledge` | Sends push notifications to T2/T3 managers when a T1 agent confirms their roadshow pledge |
+| `send-push-notification` | General-purpose push notification sender via Expo Push API |
+| `send-event-reminders` | Scheduled reminders for upcoming events |
+| `send-interview-reminders` | Scheduled reminders for upcoming interviews |
+| `send-announcement` | Broadcast announcements to targeted users |
+| `send-roadshow-summary` | Post-event roadshow summary notifications |
+| `receive-mktr-lead` | Webhook endpoint for MKTR lead ingest (verify_jwt: false) |
+| `mktr-agents` | Returns agent list for MKTR integration |
+| `check-stale-leads` | Identifies and flags stale leads for follow-up |
 
 **Deploy:**
 ```bash
-supabase functions deploy notify-roadshow-pledge
-supabase functions deploy custom-sms-hook
+supabase functions deploy <function-name>
+```
+
+External-facing functions (`receive-mktr-lead`, `mktr-agents`) are deployed with `verify_jwt: false`.
+
+---
+
+## Admin Panel
+
+The admin panel lives in `admin/` as a separate Next.js 16 application (uses pnpm).
+
+**Tech stack:** Next.js 16, Tailwind CSS 4, shadcn/ui, TanStack Table v8, React Hook Form + Zod, Supabase JS v2, Sonner toasts
+
+**Patterns:**
+- Server component pages with parallel data fetching → client tabs → DataTable + dialog forms
+- `adminAction(fn)` wrapper for server actions
+- `createServiceClient()` bypasses RLS for admin operations
+- `revalidatePath` after mutations
+
+**Fully built sections:**
+- Training CMS — full CRUD for programmes, modules, and resources with prerequisites, archive/restore
+- Exams management
+
+```bash
+cd admin
+pnpm install
+pnpm dev
 ```
 
 ---
@@ -395,7 +538,7 @@ Build profiles are defined in `eas.json`. The production profile auto-increments
 ## Design System
 
 - **Colour tokens** defined in `constants/Colors.ts` — full light and dark variants
-- **Accent colour:** Deep Teal (`#0A7E6B` light / `#2EAF97` dark)
+- **Accent colour:** Vibrant Orange (`#FF7600`)
 - **iOS system backgrounds:** `#F2F2F7` grouped, `#FFFFFF` cards (light); true black + `#1C1C1E` (dark)
 - **No third-party component libraries** — all UI is custom React Native StyleSheet
 - **Icons:** Ionicons exclusively — no emoji in the UI
