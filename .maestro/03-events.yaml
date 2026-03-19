@@ -1,0 +1,20 @@
+# Flow: Navigate events, view event detail
+appId: com.shawnlee.lyfe
+
+---
+
+- runFlow: 01-login.yaml
+
+# --- Navigate to Events tab ---
+- tapOn: "Events"
+- waitForAnimationToEnd
+
+- extendedWaitUntil:
+    visible: "Events"
+    timeout: 10000
+
+# --- Tap first event card (if any) ---
+- tapOn:
+    point: "50%,40%"
+    optional: true
+- waitForAnimationToEnd

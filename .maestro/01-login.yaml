@@ -1,0 +1,66 @@
+# Flow: Login via OTP (Manager mock user)
+appId: com.shawnlee.lyfe
+
+---
+
+- launchApp
+
+# Dismiss dev menu welcome + tools sheet
+- tapOn:
+    text: "Continue"
+    optional: true
+- waitForAnimationToEnd
+- tapOn:
+    point: "50%,10%"
+    optional: true
+- tapOn:
+    point: "50%,10%"
+    optional: true
+- waitForAnimationToEnd
+
+# === Sign out if logged in ===
+- tapOn:
+    point: "90%,97%"
+    optional: true
+- waitForAnimationToEnd
+
+- scrollUntilVisible:
+    element:
+      id: "profile-sign-out-button"
+    direction: DOWN
+    timeout: 5000
+    optional: true
+- tapOn:
+    id: "profile-sign-out-button"
+    optional: true
+- waitForAnimationToEnd
+- tapOn:
+    text: "Confirm sign out"
+    optional: true
+- waitForAnimationToEnd
+
+# === Now we should be on login screen ===
+- extendedWaitUntil:
+    visible:
+      id: "login-phone-input"
+    timeout: 15000
+
+# --- Phone Entry ---
+- tapOn:
+    id: "login-phone-input"
+- inputText: "80000003"
+- tapOn:
+    id: "login-send-otp-button"
+
+# --- OTP Entry ---
+- extendedWaitUntil:
+    visible: "Verify your number"
+    timeout: 15000
+- tapOn: "OTP input"
+- inputText: "555555"
+
+# --- Verify Dashboard ---
+- extendedWaitUntil:
+    visible:
+      id: "home-scroll-view"
+    timeout: 20000

@@ -1,0 +1,22 @@
+# Helper: Dismiss all Expo dev menus/modals
+appId: com.shawnlee.lyfe
+
+---
+
+# Dismiss "Continue" welcome modal if present
+- tapOn:
+    text: "Continue"
+    optional: true
+- waitForAnimationToEnd
+
+# Dismiss dev tools sheet by tapping above it (the dimmed area)
+- tapOn:
+    point: "50%,10%"
+    optional: true
+- waitForAnimationToEnd
+
+# One more attempt in case another modal appears
+- tapOn:
+    point: "50%,10%"
+    optional: true
+- waitForAnimationToEnd

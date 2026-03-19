@@ -1,0 +1,38 @@
+# Helper: Ensure app is on login screen (sign out if already logged in)
+# Handles 3 states: logged-in dashboard, login screen, onboarding screen
+appId: com.shawnlee.lyfe
+
+---
+
+- runFlow: dismiss-dev-menu.yaml
+
+# If on onboarding, tap Get Started to reach login
+- tapOn:
+    text: "Get Started"
+    optional: true
+- waitForAnimationToEnd
+
+# Try to tap Profile in tab bar (rightmost tab)
+- tapOn:
+    point: "90%,97%"
+    optional: true
+
+# Wait and try to find sign out button
+- waitForAnimationToEnd
+- scrollUntilVisible:
+    element:
+      id: "profile-sign-out-button"
+    direction: DOWN
+    timeout: 5000
+    optional: true
+
+- tapOn:
+    id: "profile-sign-out-button"
+    optional: true
+- waitForAnimationToEnd
+
+# Confirm sign out in modal
+- tapOn:
+    text: "Confirm sign out"
+    optional: true
+- waitForAnimationToEnd

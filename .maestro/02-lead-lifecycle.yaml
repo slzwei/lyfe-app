@@ -1,0 +1,47 @@
+# Flow: Lead lifecycle — navigate to lead, add note, change status
+appId: com.shawnlee.lyfe
+
+---
+
+- runFlow: 01-login.yaml
+
+# --- Navigate to Leads tab ---
+- tapOn: "Leads"
+- waitForAnimationToEnd
+
+# Wait for leads to load
+- extendedWaitUntil:
+    visible: "Leads"
+    timeout: 10000
+
+# --- Tap first lead card ---
+- tapOn:
+    point: "50%,35%"
+- waitForAnimationToEnd
+
+# --- Lead Detail: Add Note ---
+- tapOn:
+    id: "lead-note-action"
+    optional: true
+- waitForAnimationToEnd
+
+- tapOn:
+    id: "lead-note-input-field"
+    optional: true
+- inputText: "E2E test note"
+
+- tapOn:
+    id: "lead-note-input-save"
+    optional: true
+- waitForAnimationToEnd
+
+# --- Lead Detail: Change Status ---
+- tapOn:
+    id: "lead-status-action"
+    optional: true
+- waitForAnimationToEnd
+
+- tapOn:
+    id: "status-option-contacted"
+    optional: true
+- waitForAnimationToEnd

@@ -1,0 +1,12 @@
+# Maestro E2E Configuration
+# Run: maestro test .maestro/
+# Single flow: maestro test .maestro/01-login.yaml
+
+appId: com.shawnlee.lyfe
+
+# Environment variables for mock mode
+env:
+  MOCK_PHONE: "+6580000003"
+  MOCK_OTP: "555555"
+  ADMIN_PHONE: "+6580000001"
+  AGENT_PHONE: "+6580000004"

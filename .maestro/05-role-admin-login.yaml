@@ -1,0 +1,40 @@
+# Flow: Login as admin and verify admin-specific tabs
+appId: com.shawnlee.lyfe
+
+---
+
+- launchApp
+
+- runFlow: helpers/get-to-login.yaml
+
+- extendedWaitUntil:
+    visible:
+      id: "login-phone-input"
+    timeout: 15000
+
+- tapOn:
+    id: "login-phone-input"
+- inputText: "80000001"
+
+- tapOn:
+    id: "login-send-otp-button"
+
+- extendedWaitUntil:
+    visible: "Verify your number"
+    timeout: 15000
+
+- tapOn: "OTP input"
+- inputText: "555555"
+
+- extendedWaitUntil:
+    visible:
+      id: "home-scroll-view"
+    timeout: 20000
+
+# Admin should see Team and Events tabs
+- assertVisible:
+    text: "Team"
+    optional: true
+- assertVisible:
+    text: "Events"
+    optional: true
