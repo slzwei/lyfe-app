@@ -44,7 +44,7 @@ export default function LoginScreen() {
     const [step, setStep] = useState<'phone' | 'otp'>('phone');
     const [phoneRevealed, setPhoneRevealed] = useState(false);
     const [phone, setPhone] = useState('');
-    const [otp, setOtp] = useState(['', '', '', '', '', '']);
+    const [otpValue, setOtpValue] = useState('');
     const [isLoading, setIsLoading] = useState(false);
     const [error, setError] = useState<string | null>(null);
     const [cooldown, setCooldown] = useState(0);
@@ -53,7 +53,7 @@ export default function LoginScreen() {
     const [biometryType, setBiometryType] = useState<BiometryType>('none');
     const [isBiometricLoading, setIsBiometricLoading] = useState(false);
 
-    const otpRefs = useRef<(TextInput | null)[]>([]);
+    const hiddenOtpRef = useRef<TextInput | null>(null);
     const phoneInputRef = useRef<TextInput | null>(null);
 
     // Accordion: 0 = ghost button visible, 1 = phone input revealed
@@ -108,12 +108,12 @@ export default function LoginScreen() {
         setStep('otp');
         setError(null);
         Animated.spring(pageAnim, { toValue: 1, ...PAGE_SPRING }).start();
-        setTimeout(() => otpRefs.current[0]?.focus(), 350);
+        setTimeout(() => hiddenOtpRef.current?.focus(), 350);
     };
 
     const goToPhone = () => {
         setError(null);
-        setOtp(['', '', '', '', '', '']);
+        setOtpValue('');
         Animated.spring(pageAnim, { toValue: 0, ...PAGE_SPRING }).start(() => setStep('phone'));
     };
 
@@ -154,35 +154,15 @@ export default function LoginScreen() {
         goToOtp();
     };
 
-    const handleOtpChange = (value: string, index: number) => {
-        const digits = value.replace(/\D/g, '');
-        if (digits.length > 1) {
-            const newOtp = ['', '', '', '', '', ''];
-            digits
-                .slice(0, 6)
-                .split('')
-                .forEach((ch, i) => {
-                    newOtp[i] = ch;
-                });
-            setOtp(newOtp);
-            const lastIndex = Math.min(digits.length - 1, 5);
-            otpRefs.current[lastIndex]?.focus();
-            if (digits.length >= 6) handleVerifyOtp(newOtp.join(''));
-            return;
-        }
-        const newOtp = [...otp];
-        newOtp[index] = digits;
-        setOtp(newOtp);
-        if (digits && index < 5) otpRefs.current[index + 1]?.focus();
-        if (digits && index === 5 && newOtp.join('').length === 6) handleVerifyOtp(newOtp.join(''));
-    };
-
-    const handleOtpKeyPress = (key: string, index: number) => {
-        if (key === 'Backspace' && !otp[index] && index > 0) otpRefs.current[index - 1]?.focus();
+    const handleOtpInput = (value: string) => {
+        const digits = value.replace(/\D/g, '').slice(0, 6);
+        setOtpValue(digits);
+        setError(null);
+        if (digits.length === 6) handleVerifyOtp(digits);
     };
 
     const handleVerifyOtp = async (code?: string) => {
-        const otpCode = code || otp.join('');
+        const otpCode = code || otpValue;
         if (otpCode.length !== 6) {
             setError('Please enter the 6-digit code');
             return;
@@ -194,8 +174,8 @@ export default function LoginScreen() {
         setIsLoading(false);
         if (verifyError) {
             setError(verifyError.message);
-            setOtp(['', '', '', '', '', '']);
-            otpRefs.current[0]?.focus();
+            setOtpValue('');
+            hiddenOtpRef.current?.focus();
         }
     };
 
@@ -276,6 +256,7 @@ export default function LoginScreen() {
                                         <>
                                             {/* FaceID — always visible */}
                                             <TouchableOpacity
+                                                testID="login-biometric-button"
                                                 style={styles.biometricButton}
                                                 onPress={handleBiometricSignIn}
                                                 disabled={isBiometricLoading}
@@ -375,42 +356,63 @@ export default function LoginScreen() {
                                         Enter the 6-digit code sent to{'\n'}+65 {phone}
                                     </Text>
 
-                                    <View style={styles.otpContainer}>
-                                        {otp.map((digit, index) => (
-                                            <TextInput
-                                                key={index}
-                                                ref={(ref) => {
-                                                    otpRefs.current[index] = ref;
-                                                }}
-                                                style={[
-                                                    styles.otpInput,
-                                                    {
-                                                        backgroundColor: OVERLAY_TINT,
-                                                        borderColor: digit
-                                                            ? OVERLAY_TEXT
-                                                            : error
-                                                              ? colors.danger
-                                                              : OVERLAY_BORDER,
-                                                        color: OVERLAY_TEXT,
-                                                    },
-                                                ]}
-                                                value={digit}
-                                                onChangeText={(v) => handleOtpChange(v, index)}
-                                                onKeyPress={({ nativeEvent }) =>
-                                                    handleOtpKeyPress(nativeEvent.key, index)
-                                                }
-                                                keyboardType="number-pad"
-                                                textContentType={index === 0 ? 'oneTimeCode' : 'none'}
-                                                autoComplete={index === 0 ? 'one-time-code' : 'off'}
-                                                selectTextOnFocus
-                                                accessibilityLabel={`OTP digit ${index + 1} of 6`}
-                                            />
-                                        ))}
-                                    </View>
+                                    <TouchableOpacity
+                                        style={styles.otpContainer}
+                                        activeOpacity={1}
+                                        onPress={() => hiddenOtpRef.current?.focus()}
+                                        accessibilityLabel="OTP input"
+                                    >
+                                        <TextInput
+                                            testID="login-otp-input"
+                                            ref={hiddenOtpRef}
+                                            style={styles.hiddenOtpInput}
+                                            value={otpValue}
+                                            onChangeText={handleOtpInput}
+                                            keyboardType="number-pad"
+                                            textContentType="oneTimeCode"
+                                            autoComplete="one-time-code"
+                                            maxLength={6}
+                                            caretHidden
+                                        />
+                                        {Array.from({ length: 6 }).map((_, index) => {
+                                            const digit = otpValue[index] || '';
+                                            const isFocused = index === otpValue.length;
+                                            return (
+                                                <View
+                                                    key={index}
+                                                    style={[
+                                                        styles.otpInput,
+                                                        {
+                                                            backgroundColor: OVERLAY_TINT,
+                                                            borderColor: digit
+                                                                ? OVERLAY_TEXT
+                                                                : error
+                                                                  ? colors.danger
+                                                                  : isFocused
+                                                                    ? OVERLAY_TEXT
+                                                                    : OVERLAY_BORDER,
+                                                        },
+                                                    ]}
+                                                >
+                                                    <Text style={[styles.otpDigitText, { color: OVERLAY_TEXT }]}>
+                                                        {digit}
+                                                    </Text>
+                                                </View>
+                                            );
+                                        })}
+                                    </TouchableOpacity>
 
-                                    {error && <Text style={[styles.errorText, { color: colors.danger }]}>{error}</Text>}
+                                    {error && (
+                                        <Text
+                                            testID="login-otp-error-text"
+                                            style={[styles.errorText, { color: colors.danger }]}
+                                        >
+                                            {error}
+                                        </Text>
+                                    )}
 
                                     <TouchableOpacity
+                                        testID="login-verify-button"
                                         style={[styles.primaryButton, styles.whiteButton]}
                                         onPress={() => handleVerifyOtp()}
                                         disabled={isLoading}
@@ -488,13 +490,12 @@ export default function LoginScreen() {
                                     )}
                                 </Animated.View>
                             </View>
-
-                            <Text style={[styles.footer, { color: OVERLAY_TEXT_SUBTLE }]}>
-                                By continuing, you agree to Lyfe's Terms of Service
-                            </Text>
                         </View>
                     </KeyboardAvoidingView>
                 </TouchableWithoutFeedback>
+                <Text style={[styles.footer, { color: OVERLAY_TEXT_SUBTLE }]}>
+                    By continuing, you agree to Lyfe's Terms of Service
+                </Text>
             </SafeAreaView>
         </View>
     );
@@ -512,11 +513,12 @@ export default function LoginScreen() {
                         },
                     ]}
                 >
-                    <View style={styles.countryCodeContainer}>
+                    <View testID="login-country-code" style={styles.countryCodeContainer}>
                         <Text style={[styles.countryCodeText, { color: OVERLAY_TEXT }]}>+65</Text>
                     </View>
                     <View style={[styles.dividerVertical, { backgroundColor: OVERLAY_BORDER }]} />
                     <TextInput
+                        testID="login-phone-input"
                         ref={phoneInputRef}
                         style={[styles.phoneInput, { color: OVERLAY_TEXT }]}
                         value={phone}
@@ -538,9 +540,14 @@ export default function LoginScreen() {
                     />
                 </View>
 
-                {error && <Text style={[styles.errorText, { color: colors.danger }]}>{error}</Text>}
+                {error && (
+                    <Text testID="login-error-text" style={[styles.errorText, { color: colors.danger }]}>
+                        {error}
+                    </Text>
+                )}
 
                 <TouchableOpacity
+                    testID="login-send-otp-button"
                     style={[styles.primaryButton, styles.whiteButton]}
                     onPress={handleSendOtp}
                     disabled={isLoading}
@@ -570,9 +577,8 @@ const styles = StyleSheet.create({
         maxWidth: 400,
         alignSelf: 'center',
         // OTP page (Page 2) uses absoluteFill — its content is taller than Page 1.
-        // On Android, KAV behavior='height' shrinks the view, causing the verify
-        // button to overflow into the TOS footer. minHeight prevents this.
-        ...(Platform.OS === 'android' && { minHeight: 310 }),
+        // Without minHeight the verify button overflows into the TOS footer.
+        minHeight: 380,
     },
 
     heading: { fontSize: 28, fontWeight: '700', marginBottom: 8, letterSpacing: letterSpacing(-0.5) },
@@ -595,12 +601,21 @@ const styles = StyleSheet.create({
 
     /* OTP */
     otpContainer: { flexDirection: 'row', justifyContent: 'space-between', gap: 8, marginBottom: 8 },
+    hiddenOtpInput: {
+        position: 'absolute',
+        width: 1,
+        height: 1,
+        opacity: 0,
+    },
     otpInput: {
         width: 48,
         height: 56,
         borderWidth: 1.5,
         borderRadius: 12,
-        textAlign: 'center',
+        alignItems: 'center',
+        justifyContent: 'center',
+    },
+    otpDigitText: {
         fontSize: 22,
         fontWeight: '600',
     },
@@ -660,5 +675,5 @@ const styles = StyleSheet.create({
 
     /* Error & footer */
     errorText: { fontSize: 13, marginBottom: 16, marginTop: 4 },
-    footer: { fontSize: 12, textAlign: 'center', marginTop: 12, lineHeight: 18 },
+    footer: { fontSize: 12, textAlign: 'center', paddingBottom: 8, paddingHorizontal: 32, lineHeight: 18 },
 });
