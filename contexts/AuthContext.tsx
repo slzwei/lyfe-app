@@ -360,17 +360,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         const bioEnabled = await isBiometricsEnabled();
         const hasLiveSession = !!sessionRef.current;
 
-        if (bioEnabled && hasLiveSession) {
-            setUser(null);
-            setAuthState((prev) => ({
-                ...prev,
-                session: null,
-                isAuthenticated: false,
-                pendingBiometricSession: true,
-            }));
-            return;
-        }
-
         await supabase.auth.signOut();
         clearSentryUser();
         setUser(null);
@@ -379,7 +368,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
             session: null,
             isLoading: false,
             isAuthenticated: false,
-            pendingBiometricSession: false,
+            pendingBiometricSession: bioEnabled && hasLiveSession,
         }));
     }, []);
 

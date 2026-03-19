@@ -124,11 +124,13 @@ interface UseLeadReassignParams {
 function useLeadReassign({ lead, userId, userRole, fullName, setActivities }: UseLeadReassignParams) {
     const [showReassignModal, setShowReassignModal] = useState(false);
     const [reassignAgents, setReassignAgents] = useState<{ id: string; full_name: string }[]>([]);
+    const [allAgents, setAllAgents] = useState<{ id: string; full_name: string }[]>([]);
     const [isReassigning, setIsReassigning] = useState(false);
 
     const handleOpenReassign = useCallback(async () => {
         if (userId && lead) {
             const { data } = await fetchTeamAgents(userId, userRole);
+            setAllAgents(data);
             setReassignAgents(data.filter((a) => a.id !== lead.assigned_to));
         }
         setShowReassignModal(true);
@@ -138,7 +140,8 @@ function useLeadReassign({ lead, userId, userRole, fullName, setActivities }: Us
         async (toAgent: { id: string; full_name: string }) => {
             if (!lead || !userId) return;
             const fromId = lead.assigned_to;
-            const fromName = fromId;
+            const fromAgent = allAgents.find((a) => a.id === fromId);
+            const fromName = fromAgent?.full_name || null;
 
             const newActivity: LeadActivity = {
                 id: `a_${Date.now()}`,
@@ -167,7 +170,7 @@ function useLeadReassign({ lead, userId, userRole, fullName, setActivities }: Us
                 if (__DEV__) console.error('Failed to reassign:', error);
             }
         },
-        [lead, userId, fullName, setActivities],
+        [lead, userId, fullName, setActivities, allAgents],
     );
 
     return {
