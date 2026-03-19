@@ -13,7 +13,10 @@ interface StatusPickerProps {
 
 function StatusPicker({ currentStatus, isUpdating, colors, onChangeStatus }: StatusPickerProps) {
     return (
-        <View style={[styles.card, { backgroundColor: colors.cardBackground, borderColor: colors.cardBorder }]}>
+        <View
+            testID="status-picker"
+            style={[styles.card, { backgroundColor: colors.cardBackground, borderColor: colors.cardBorder }]}
+        >
             <Text style={[styles.sectionTitle, { color: colors.textPrimary }]}>Change Status</Text>
             <View style={styles.statusGrid}>
                 {LEAD_STATUSES.map((s) => {
@@ -22,6 +25,7 @@ function StatusPicker({ currentStatus, isUpdating, colors, onChangeStatus }: Sta
                     return (
                         <TouchableOpacity
                             key={s}
+                            testID={`status-option-${s}`}
                             style={[
                                 styles.statusOption,
                                 {
@@ -34,11 +38,7 @@ function StatusPicker({ currentStatus, isUpdating, colors, onChangeStatus }: Sta
                             onPress={() => onChangeStatus(s)}
                             disabled={isUpdating}
                         >
-                            <Ionicons
-                                name={cfg.icon as any}
-                                size={16}
-                                color={isActive ? cfg.color : colors.textTertiary}
-                            />
+                            <Ionicons name={cfg.icon} size={16} color={isActive ? cfg.color : colors.textTertiary} />
                             <Text
                                 style={[
                                     styles.statusOptionText,

@@ -1,5 +1,6 @@
 import { supabase } from '@/lib/supabase';
 import type { RoadshowActivity, RoadshowAttendance } from '@/types/event';
+import type { RealtimePostgresInsertPayload } from '@supabase/supabase-js';
 import { useEffect, useRef } from 'react';
 
 /**
@@ -30,10 +31,10 @@ export function useRoadshowRealtime(
                         table: 'roadshow_activities',
                         filter: `event_id=eq.${eventId}`,
                     },
-                    (payload: any) => {
+                    (payload: RealtimePostgresInsertPayload<Record<string, unknown>>) => {
                         retryCountRef.current = 0;
                         if (payload.new.user_id !== currentUserId) {
-                            onNewActivity(payload.new);
+                            onNewActivity(payload.new as RoadshowActivity);
                         }
                     },
                 )
@@ -45,10 +46,10 @@ export function useRoadshowRealtime(
                         table: 'roadshow_attendance',
                         filter: `event_id=eq.${eventId}`,
                     },
-                    (payload: any) => {
+                    (payload: RealtimePostgresInsertPayload<Record<string, unknown>>) => {
                         retryCountRef.current = 0;
                         if (payload.new.user_id !== currentUserId) {
-                            onNewAttendance(payload.new);
+                            onNewAttendance(payload.new as RoadshowAttendance);
                         }
                     },
                 );

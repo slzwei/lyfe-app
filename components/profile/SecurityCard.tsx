@@ -9,17 +9,21 @@ interface SecurityCardProps {
     biometryType: BiometryType;
     enabled: boolean;
     onToggle: (value: boolean) => void;
+    testID?: string;
 }
 
-export default function SecurityCard({ colors, biometryType, enabled, onToggle }: SecurityCardProps) {
+export default function SecurityCard({ colors, biometryType, enabled, onToggle, testID }: SecurityCardProps) {
     const meta = biometricMeta(biometryType);
 
     return (
-        <View style={[styles.card, { backgroundColor: colors.cardBackground, shadowColor: colors.textPrimary }]}>
+        <View
+            testID={testID}
+            style={[styles.card, { backgroundColor: colors.cardBackground, shadowColor: colors.textPrimary }]}
+        >
             <Text style={[styles.sectionLabel, { color: colors.textTertiary }]}>SECURITY</Text>
             <View style={styles.row}>
                 <View style={[styles.iconCircle, { backgroundColor: colors.accentLight }]}>
-                    <Ionicons name={meta.icon as any} size={18} color={colors.accent} />
+                    <Ionicons name={meta.icon} size={18} color={colors.accent} />
                 </View>
                 <View style={styles.textCol}>
                     <Text style={[styles.label, { color: colors.textPrimary }]}>{meta.label}</Text>

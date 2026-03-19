@@ -1,4 +1,5 @@
 import type { ThemeColors } from '@/types/theme';
+import type { IconName } from '@/types/ui';
 import { Ionicons } from '@expo/vector-icons';
 import React from 'react';
 import { StyleSheet, Text, TouchableOpacity, View } from 'react-native';
@@ -9,7 +10,7 @@ interface DisplayActivity {
     leadName: string;
     detail: string;
     time: string;
-    icon: string;
+    icon: IconName;
 }
 
 interface Props {
@@ -39,7 +40,7 @@ function RecentActivityCard({ activities, colors, onSeeAll }: Props) {
                     activities.map((activity) => (
                         <View key={activity.id} style={styles.activityRow}>
                             <View style={[styles.activityIconCircle, { backgroundColor: colors.accentLight }]}>
-                                <Ionicons name={activity.icon as any} size={18} color={colors.accent} />
+                                <Ionicons name={activity.icon} size={18} color={colors.accent} />
                             </View>
                             <View style={styles.activityContent}>
                                 <Text style={[styles.activityLeadName, { color: colors.textPrimary }]}>

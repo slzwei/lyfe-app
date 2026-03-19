@@ -1,6 +1,7 @@
 /**
  * Lead management TypeScript types
  */
+import type { IconName } from './ui';
 
 export type LeadStatus = 'new' | 'contacted' | 'qualified' | 'proposed' | 'won' | 'lost';
 export const LEAD_STATUSES: LeadStatus[] = ['new', 'contacted', 'qualified', 'proposed', 'won', 'lost'];
@@ -30,6 +31,8 @@ export interface Lead {
     status: LeadStatus;
     product_interest: ProductInterest;
     notes: string | null;
+    recording_url: string | null;
+    transcript: string | null;
     updated_at: string;
     created_at: string;
 }
@@ -40,7 +43,7 @@ export interface LeadActivity {
     user_id: string;
     type: LeadActivityType;
     description: string | null;
-    metadata: Record<string, any>;
+    metadata: Record<string, unknown>;
     created_at: string;
     actor_name?: string;
 }
@@ -55,7 +58,7 @@ export interface LeadActivity {
  * they work on both light and dark surfaces. Changing these to theme tokens
  * would break cross-theme consistency with no UX benefit.
  */
-export const STATUS_CONFIG: Record<LeadStatus, { label: string; color: string; bgColor: string; icon: string }> = {
+export const STATUS_CONFIG: Record<LeadStatus, { label: string; color: string; bgColor: string; icon: IconName }> = {
     new: { label: 'New', color: '#007AFF', bgColor: '#E5F1FF', icon: 'sparkles' },
     contacted: { label: 'Contacted', color: '#EAB308', bgColor: '#FEF9C3', icon: 'chatbubble' },
     qualified: { label: 'Qualified', color: '#34C759', bgColor: '#E8F9ED', icon: 'checkmark-circle' },
@@ -83,7 +86,7 @@ export const SOURCE_LABELS: Record<LeadSource, string> = {
 };
 
 /** Activity type icons */
-export const ACTIVITY_ICONS: Record<LeadActivityType, { icon: string; color: string }> = {
+export const ACTIVITY_ICONS: Record<LeadActivityType, { icon: IconName; color: string }> = {
     created: { icon: 'add-circle', color: '#007AFF' },
     note: { icon: 'document-text', color: '#8E8E93' },
     call: { icon: 'call', color: '#34C759' },

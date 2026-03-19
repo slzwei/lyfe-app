@@ -9,7 +9,8 @@ import { fetchTeamMembers, inviteAgent, type TeamMember } from '@/lib/team';
 import { useFilteredList } from '@/hooks/useFilteredList';
 import { letterSpacing } from '@/constants/platform';
 import { Ionicons } from '@expo/vector-icons';
-import { useFocusEffect, useRouter } from 'expo-router';
+import { useFocusEffect } from 'expo-router';
+import { useTypedRouter } from '@/hooks/useTypedRouter';
 import React, { useCallback, useMemo, useState } from 'react';
 import {
     Alert,
@@ -33,7 +34,7 @@ type FilterKey = 'all' | 'manager' | 'agent';
 export default function TeamScreen() {
     const { colors } = useTheme();
     const { user } = useAuth();
-    const router = useRouter();
+    const router = useTypedRouter();
     const [refreshing, setRefreshing] = useState(false);
     const [filter, setFilter] = useState<FilterKey>('all');
     const [search, setSearch] = useState('');
@@ -155,7 +156,7 @@ export default function TeamScreen() {
                 activeOpacity={0.7}
                 accessibilityRole="button"
                 accessibilityLabel={`View ${item.name}'s profile`}
-                onPress={() => router.push(`/(tabs)/team/agent/${item.id}` as any)}
+                onPress={() => router.push(`/(tabs)/team/agent/${item.id}`)}
             >
                 {/* Top Row: Avatar + Info + Status */}
                 <View style={styles.cardTop}>

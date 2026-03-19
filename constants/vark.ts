@@ -1,12 +1,13 @@
 /**
  * VARK Learning Style Quiz — static content and scoring config.
  */
+import type { IconName } from '@/types/ui';
 
 export type VarkType = 'V' | 'A' | 'R' | 'K';
 
 export interface VarkTypeInfo {
     label: string;
-    icon: string; // Ionicons name
+    icon: IconName;
     description: string;
     tips: string[];
 }

@@ -110,6 +110,7 @@ export default function HomeScreen() {
                 rightAction={
                     <View style={styles.headerRight}>
                         <TouchableOpacity
+                            testID="home-notifications-button"
                             style={styles.bellBtn}
                             onPress={() => router.push('/(tabs)/home/notifications')}
                             activeOpacity={0.7}
@@ -131,6 +132,7 @@ export default function HomeScreen() {
                             )}
                         </TouchableOpacity>
                         <TouchableOpacity
+                            testID="home-profile-button"
                             style={styles.avatarBtn}
                             onPress={() => router.push('/(tabs)/profile')}
                             activeOpacity={0.7}
@@ -149,6 +151,7 @@ export default function HomeScreen() {
                 }
             />
             <ScrollView
+                testID="home-scroll-view"
                 contentContainerStyle={styles.scrollContent}
                 showsVerticalScrollIndicator={false}
                 refreshControl={
@@ -196,7 +199,7 @@ export default function HomeScreen() {
                         colors={colors}
                         isLoading={isLoading}
                         onSeeAll={() => router.push('/(tabs)/events')}
-                        onEventPress={(id) => router.push(`/(tabs)/home/event/${id}` as any)}
+                        onEventPress={(id) => router.push(`/(tabs)/home/event/${id}`)}
                     />
                 )}
 
@@ -207,7 +210,7 @@ export default function HomeScreen() {
                         colors={colors}
                         isLoading={isLoading}
                         onSeeAll={() => router.push('/(tabs)/events')}
-                        onEventPress={(id) => router.push(`/(tabs)/home/event/${id}` as any)}
+                        onEventPress={(id) => router.push(`/(tabs)/home/event/${id}`)}
                     />
                 )}
 
@@ -218,7 +221,7 @@ export default function HomeScreen() {
                         colors={colors}
                         isLoading={isLoading}
                         onSeeAll={() => router.push('/(tabs)/events')}
-                        onEventPress={(id) => router.push(`/(tabs)/home/event/${id}` as any)}
+                        onEventPress={(id) => router.push(`/(tabs)/home/event/${id}`)}
                     />
                 )}
 

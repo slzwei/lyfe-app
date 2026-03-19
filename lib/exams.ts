@@ -2,6 +2,7 @@
  * Exams service — Supabase CRUD for exam attempts & answers
  */
 import type { ExamPaper, ExamQuestion, PaperStats } from '@/types/exam';
+import type { Json } from '@/types/supabase';
 import type { VarkResults } from '@/constants/vark';
 import type { EnneagramResults } from '@/constants/enneagram';
 import { computeVarkScores, isVarkResults } from './vark';
@@ -203,14 +204,15 @@ export async function submitVarkAttempt(
         p_user_id: userId,
         p_paper_id: paperId,
         p_status: status,
-        p_score: null as any,
+        // personality quiz — no score/pass fields
+        p_score: null as unknown as number,
         p_total_questions: questions.length,
-        p_percentage: null as any,
-        p_passed: null as any,
+        p_percentage: null as unknown as number,
+        p_passed: null as unknown as boolean,
         p_started_at: new Date(startedAt).toISOString(),
         p_submitted_at: new Date().toISOString(),
         p_duration_seconds: durationSeconds,
-        p_personality_results: varkResults as any,
+        p_personality_results: varkResults as unknown as Json,
         p_answers: answerRows,
     });
 
@@ -271,14 +273,15 @@ export async function submitEnneagramAttempt(
         p_user_id: userId,
         p_paper_id: paperId,
         p_status: status,
-        p_score: null as any,
+        // personality quiz — no score/pass fields
+        p_score: null as unknown as number,
         p_total_questions: questions.length,
-        p_percentage: null as any,
-        p_passed: null as any,
+        p_percentage: null as unknown as number,
+        p_passed: null as unknown as boolean,
         p_started_at: new Date(startedAt).toISOString(),
         p_submitted_at: new Date().toISOString(),
         p_duration_seconds: durationSeconds,
-        p_personality_results: enneagramResults as any,
+        p_personality_results: enneagramResults as unknown as Json,
         p_answers: answerRows,
     });
 

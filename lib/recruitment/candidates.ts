@@ -253,9 +253,9 @@ export async function uploadCandidateResume(
             return { url: null, error: 'Permission denied: could not save resume URL' };
 
         return { url: signedUrlData.signedUrl, error: null };
-    } catch (err: any) {
+    } catch (err: unknown) {
         captureError(err, { fn: 'uploadResume' });
-        return { url: null, error: err?.message || 'Upload failed' };
+        return { url: null, error: err instanceof Error ? err.message : 'Upload failed' };
     }
 }
 
@@ -265,7 +265,7 @@ export async function uploadCandidateResume(
 export async function fetchCandidateStatusCounts(
     managerId: string,
 ): Promise<{ data: { status: string }[]; error: string | null }> {
-    const { data, error } = await supabase.from('candidates').select('status').eq('manager_id', managerId);
+    const { data, error } = await supabase.from('candidates').select('status').eq('assigned_manager_id', managerId);
 
     if (error) return { data: [], error: error.message };
     return { data: (data || []) as { status: string }[], error: null };
@@ -335,9 +335,10 @@ export async function syncAgentToMKTR(candidate: {
 
         if (__DEV__) console.log('Agent synced to MKTR:', data);
         return { success: true };
-    } catch (err: any) {
+    } catch (err: unknown) {
         captureError(err, { fn: 'syncAgentToMktr' });
-        if (__DEV__) console.error('MKTR sync error:', err.message);
-        return { success: false, error: err.message };
+        const message = err instanceof Error ? err.message : 'Unknown error';
+        if (__DEV__) console.error('MKTR sync error:', message);
+        return { success: false, error: message };
     }
 }

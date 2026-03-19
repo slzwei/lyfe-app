@@ -8,7 +8,7 @@
  * Accepts all Pressable props + an optional `activeOpacity` for iOS parity.
  */
 import React from 'react';
-import { Platform, Pressable, type PressableProps, type StyleProp, type ViewStyle } from 'react-native';
+import { Platform, Pressable, type PressableProps } from 'react-native';
 
 interface TouchableProps extends Omit<PressableProps, 'style'> {
     /** iOS press opacity (default 0.7, matching TouchableOpacity default) */
@@ -17,7 +17,7 @@ interface TouchableProps extends Omit<PressableProps, 'style'> {
     rippleColor?: string;
     /** Borderless ripple (for icon buttons) */
     rippleBorderless?: boolean;
-    style?: StyleProp<ViewStyle>;
+    style?: PressableProps['style'];
     children?: React.ReactNode;
 }
 
@@ -34,7 +34,7 @@ export default function Touchable({
     return (
         <Pressable
             style={({ pressed }) => [
-                typeof style === 'function' ? (style as any)({ pressed }) : style,
+                typeof style === 'function' ? style({ pressed }) : style,
                 Platform.OS === 'ios' && pressed && !disabled ? { opacity: activeOpacity } : undefined,
             ]}
             android_ripple={

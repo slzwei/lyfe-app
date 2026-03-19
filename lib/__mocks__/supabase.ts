@@ -60,6 +60,9 @@ export const supabase: any = {
                 .mockResolvedValue({ data: { signedUrl: 'https://example.com/file.pdf?token=mock' }, error: null }),
         })),
     },
+    functions: {
+        invoke: jest.fn().mockResolvedValue({ data: { success: true }, error: null }),
+    },
     channel: jest.fn(() => ({
         on: jest.fn().mockReturnThis(),
         subscribe: jest.fn(),

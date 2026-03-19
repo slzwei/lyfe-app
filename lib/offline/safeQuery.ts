@@ -27,7 +27,7 @@ function isNetworkError(e: unknown): boolean {
 }
 
 export async function safeQuery<T>(
-    queryFn: () => Promise<{ data: T | null; error: any }>,
+    queryFn: () => Promise<{ data: T | null; error: { message: string } | null }>,
 ): Promise<SafeQueryResult<T>> {
     try {
         const { data, error } = await queryFn();
@@ -52,7 +52,7 @@ export async function safeMutation<T>(
     operation: OfflineOperation,
     payload: Record<string, unknown>,
     filters: Record<string, unknown> | undefined,
-    queryFn: () => Promise<{ data: T | null; error: any }>,
+    queryFn: () => Promise<{ data: T | null; error: { message: string } | null }>,
     queue: OfflineQueue,
 ): Promise<SafeMutationResult<T>> {
     try {

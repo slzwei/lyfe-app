@@ -30,7 +30,7 @@ function ResourceItem({ resource, colors }: Props) {
     const inner = (
         <>
             <View style={[styles.iconContainer, { backgroundColor: colors.accent + '14' }]}>
-                <Ionicons name={config.icon as any} size={20} color={colors.accent} />
+                <Ionicons name={config.icon} size={20} color={colors.accent} />
             </View>
             <View style={styles.content}>
                 <Text style={[styles.title, { color: colors.textPrimary }]} numberOfLines={1}>

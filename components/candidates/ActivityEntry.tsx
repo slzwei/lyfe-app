@@ -1,4 +1,5 @@
 import type { ThemeColors } from '@/types/theme';
+import type { IconName } from '@/types/ui';
 import type { CandidateActivity } from '@/types/recruitment';
 import { timeAgo } from '@/lib/dateTime';
 import { Ionicons } from '@expo/vector-icons';
@@ -15,7 +16,7 @@ export default function ActivityEntry({ entry, isLast, colors }: ActivityEntryPr
     const isNote = entry.type === 'note';
     const isPositive = entry.outcome === 'reached' || entry.outcome === 'sent';
     const dotColor = isNote ? colors.textTertiary : isPositive ? colors.success : colors.textTertiary;
-    const iconName = isNote ? 'create-outline' : entry.type === 'whatsapp' ? 'logo-whatsapp' : 'call';
+    const iconName: IconName = isNote ? 'create-outline' : entry.type === 'whatsapp' ? 'logo-whatsapp' : 'call';
     const iconColor = isNote ? colors.textTertiary : entry.type === 'whatsapp' ? '#25D366' : dotColor;
     const outcomeLabel =
         entry.outcome === 'reached'
@@ -31,7 +32,7 @@ export default function ActivityEntry({ entry, isLast, colors }: ActivityEntryPr
         <View style={entryStyles.row}>
             <View style={entryStyles.timelineCol}>
                 <View style={[entryStyles.dot, { backgroundColor: iconColor + '20' }]}>
-                    <Ionicons name={iconName as any} size={13} color={iconColor} />
+                    <Ionicons name={iconName} size={13} color={iconColor} />
                 </View>
                 {!isLast && <View style={[entryStyles.line, { backgroundColor: colors.border }]} />}
             </View>

@@ -15,7 +15,8 @@ import { letterSpacing } from '@/constants/platform';
 import { EVENT_TYPE_CONFIG } from '@/constants/displayConfigs';
 import { EVENT_TYPE_LABELS } from '@/types/event';
 import { Ionicons } from '@expo/vector-icons';
-import { useLocalSearchParams, useRouter } from 'expo-router';
+import { useLocalSearchParams } from 'expo-router';
+import { useTypedRouter } from '@/hooks/useTypedRouter';
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import {
     ActivityIndicator,
@@ -43,7 +44,7 @@ export default function EventDetailScreen() {
     const { colors } = useTheme();
     const { user } = useAuth();
     const { viewMode } = useViewMode();
-    const router = useRouter();
+    const router = useTypedRouter();
     const { eventId } = useLocalSearchParams<{ eventId: string }>();
     const insets = useSafeAreaInsets();
 
@@ -332,12 +333,7 @@ export default function EventDetailScreen() {
                         <View style={styles.headerActions}>
                             {canEdit && (
                                 <TouchableOpacity
-                                    onPress={() =>
-                                        router.push({
-                                            pathname: '/(tabs)/events/create' as any,
-                                            params: { eventId: event.id },
-                                        })
-                                    }
+                                    onPress={() => router.push(`/(tabs)/events/create?eventId=${event.id}`)}
                                     hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
                                     accessibilityLabel="Edit event"
                                 >

@@ -6,7 +6,7 @@ import { useMemo } from 'react';
  *
  * Items with `updated_at` are sorted most-recent-first automatically.
  */
-export function useFilteredList<T extends Record<string, any>>(
+export function useFilteredList<T extends object>(
     items: T[],
     search: string,
     activeFilter: string,

@@ -35,7 +35,8 @@ export async function fetchLeadStats(
         pipeline: [],
     };
 
-    const { data, error } = await (supabase as any).rpc('get_lead_pipeline_stats', {
+    // @ts-expect-error — get_lead_pipeline_stats RPC not yet in generated types
+    const { data, error } = await supabase.rpc('get_lead_pipeline_stats', {
         p_user_id: userId,
         p_is_manager: isManager,
     });
@@ -119,7 +120,7 @@ export async function fetchRecentActivities(
         user_id: string;
         type: string;
         description: string | null;
-        metadata: Record<string, any> | null;
+        metadata: Record<string, unknown> | null;
         created_at: string;
         leads: { full_name: string } | null;
     };
@@ -136,7 +137,7 @@ export async function fetchRecentActivities(
         lead_name: item.leads?.full_name || 'Unknown',
     }));
 
-    return { data: activities as any, error: null };
+    return { data: activities as unknown as (LeadActivity & { lead_name?: string })[], error: null };
 }
 
 /**

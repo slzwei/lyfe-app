@@ -17,6 +17,8 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
+type PledgeField = [string, number, React.Dispatch<React.SetStateAction<number>>];
+
 export interface ManagerOverrideSheetProps {
     colors: typeof Colors.light;
     overrideTarget: EventAttendee | null;
@@ -137,7 +139,7 @@ function ManagerOverrideSheetInner({
                                 ['Sitdowns', overridePledgeSitdowns, setOverridePledgeSitdowns],
                                 ['Pitches', overridePledgePitches, setOverridePledgePitches],
                                 ['Cases', overridePledgeClosed, setOverridePledgeClosed],
-                            ] as any[]
+                            ] as PledgeField[]
                         ).map(([label, val, setter]) => (
                             <View key={label} style={styles.pledgeRow}>
                                 <Text style={[styles.pledgeLabel, { color: colors.textSecondary }]}>{label}</Text>

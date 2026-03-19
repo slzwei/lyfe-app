@@ -100,7 +100,12 @@ Deno.serve(async (req) => {
         }
 
         // ── Parse and validate payload ────────────────────────────
-        let payload: any;
+        interface MktrWebhookPayload {
+            event: string;
+            deliveryId: string;
+            data: Record<string, unknown>;
+        }
+        let payload: MktrWebhookPayload;
         try {
             payload = JSON.parse(rawBody);
         } catch {

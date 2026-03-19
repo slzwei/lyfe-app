@@ -18,23 +18,18 @@ function BiometricsPrompt({ visible, biometryType, isEnabling, colors, onEnable,
     const meta = biometricMeta(biometryType);
 
     return (
-        <Modal
-            visible={visible}
-            transparent
-            animationType="slide"
-            onRequestClose={onDismiss}
-            accessibilityViewIsModal
-        >
+        <Modal visible={visible} transparent animationType="slide" onRequestClose={onDismiss} accessibilityViewIsModal>
             <View style={styles.overlay}>
                 <View style={[styles.sheet, { backgroundColor: colors.cardBackground }]}>
                     <View style={[styles.iconCircle, { backgroundColor: colors.accentLight }]}>
-                        <Ionicons name={meta.icon as any} size={40} color={colors.accent} />
+                        <Ionicons name={meta.icon} size={40} color={colors.accent} />
                     </View>
                     <Text style={[styles.title, { color: colors.textPrimary }]}>Sign in with {meta.label}</Text>
                     <Text style={[styles.subtitle, { color: colors.textSecondary }]}>
                         Skip the OTP next time — use {meta.label} to sign in instantly.
                     </Text>
                     <TouchableOpacity
+                        testID="biometrics-prompt-enable"
                         style={[styles.enableBtn, { backgroundColor: colors.accent }]}
                         onPress={onEnable}
                         disabled={isEnabling}
@@ -42,10 +37,11 @@ function BiometricsPrompt({ visible, biometryType, isEnabling, colors, onEnable,
                         accessibilityRole="button"
                         accessibilityLabel={`Enable ${meta.label}`}
                     >
-                        <Ionicons name={meta.icon as any} size={20} color={colors.textInverse} />
+                        <Ionicons name={meta.icon} size={20} color={colors.textInverse} />
                         <Text style={[styles.enableBtnText, { color: colors.textInverse }]}>Enable {meta.label}</Text>
                     </TouchableOpacity>
                     <TouchableOpacity
+                        testID="biometrics-prompt-dismiss"
                         style={styles.dismissBtn}
                         onPress={onDismiss}
                         activeOpacity={0.7}

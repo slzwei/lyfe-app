@@ -6,9 +6,13 @@ type TabRoute =
     | '/(tabs)/home/pipeline'
     | '/(tabs)/home/notifications'
     | `/(tabs)/home/lead/${string}`
+    | `/(tabs)/home/event/${string}`
     | '/(tabs)/exams'
     | `/(tabs)/exams/take/${string}`
     | `/(tabs)/exams/results/${string}`
+    | `/(tabs)/exams/results/enneagram/${string}`
+    | `/(tabs)/exams/results/vark/${string}`
+    | `/(tabs)/exams/exam/${string}`
     | '/(tabs)/exams/study'
     | '/(tabs)/events'
     | `/(tabs)/events/${string}`
@@ -18,14 +22,26 @@ type TabRoute =
     | '/(tabs)/leads/add'
     | '/(tabs)/candidates'
     | `/(tabs)/candidates/${string}`
+    | `/(tabs)/candidates/progress/${string}`
     | '/(tabs)/team'
     | `/(tabs)/team/agent/${string}`
     | `/(tabs)/team/candidate/${string}`
+    | `/(tabs)/team/lead/${string}`
     | '/(tabs)/team/add-candidate'
     | '/(tabs)/profile'
     | '/(tabs)/profile/notifications'
     | '/(tabs)/profile/privacy'
     | '/(tabs)/profile/terms'
+    | `/(tabs)/profile/results/vark/${string}`
+    | `/(tabs)/profile/results/enneagram/${string}`
+    | `/(tabs)/profile/results/${string}`
+    | `/(tabs)/profile/take/${string}`
+    | '/(tabs)/roadmap'
+    | `/(tabs)/roadmap/exam/${string}`
+    | `/(tabs)/roadmap/results/${string}`
+    | `/(tabs)/roadmap/results/enneagram/${string}`
+    | `/(tabs)/roadmap/results/vark/${string}`
+    | `/(tabs)/roadmap/module/${string}`
     | '/(tabs)/pa'
     | `/(tabs)/pa/candidate/${string}`
     | `/(tabs)/pa/event/${string}`
@@ -38,8 +54,10 @@ export type { TabRoute };
 export function useTypedRouter() {
     const router = useRouter();
     return {
-        push: (route: TabRoute | (string & {})) => router.push(route as any),
-        replace: (route: TabRoute | (string & {})) => router.replace(route as any),
+        // @ts-expect-error — Expo Router Href type doesn't accept dynamic template strings
+        push: (route: TabRoute | (string & {})) => router.push(route),
+        // @ts-expect-error — Expo Router Href type doesn't accept dynamic template strings
+        replace: (route: TabRoute | (string & {})) => router.replace(route),
         back: () => router.back(),
     };
 }

@@ -122,7 +122,7 @@ export default function NotificationsScreen() {
                                 <View key={type}>
                                     <View style={styles.row}>
                                         <View style={[styles.iconCircle, { backgroundColor: colors.accentLight }]}>
-                                            <Ionicons name={config.icon as any} size={18} color={colors.accent} />
+                                            <Ionicons name={config.icon} size={18} color={colors.accent} />
                                         </View>
                                         <View style={styles.rowText}>
                                             <Text style={[styles.rowTitle, { color: colors.textPrimary }]}>

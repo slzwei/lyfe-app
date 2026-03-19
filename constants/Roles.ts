@@ -6,6 +6,7 @@
  */
 
 import type { UserRole } from '@/types/database';
+import type { IconName } from '@/types/ui';
 export type { UserRole, LifecycleStage } from '@/types/database';
 
 // ── Capability-Based Permission System ──
@@ -136,7 +137,7 @@ export function canToggleViewMode(role: UserRole): boolean {
 }
 
 /** Tab display configuration */
-export const TAB_CONFIG: Record<string, { label: string; icon: string }> = {
+export const TAB_CONFIG: Record<string, { label: string; icon: IconName }> = {
     home: { label: 'Home', icon: 'home' },
     leads: { label: 'Leads', icon: 'people' },
     roadmap: { label: 'Roadmap', icon: 'map' },

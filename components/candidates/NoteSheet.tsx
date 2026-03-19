@@ -3,7 +3,16 @@ import { KAV_BEHAVIOR } from '@/constants/platform';
 import type { ThemeColors } from '@/types/theme';
 import { Ionicons } from '@expo/vector-icons';
 import React from 'react';
-import { KeyboardAvoidingView, Modal, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
+import {
+    KeyboardAvoidingView,
+    Modal,
+    StyleSheet,
+    Text,
+    TextInput,
+    TouchableOpacity,
+    View,
+    type ViewStyle,
+} from 'react-native';
 import Animated, { type AnimatedStyle } from 'react-native-reanimated';
 
 interface Props {
@@ -22,7 +31,11 @@ function NoteSheet({ visible, noteText, colors, animatedStyle, onNoteTextChange,
             <KeyboardAvoidingView style={{ flex: 1 }} behavior={KAV_BEHAVIOR}>
                 <TouchableOpacity style={styles.overlay} activeOpacity={1} onPress={onClose}>
                     <Animated.View
-                        style={[styles.sheet, { backgroundColor: colors.cardBackground }, animatedStyle as any]}
+                        style={[
+                            styles.sheet,
+                            { backgroundColor: colors.cardBackground },
+                            animatedStyle as unknown as ViewStyle,
+                        ]}
                         onStartShouldSetResponder={() => true}
                     >
                         <View style={[styles.handle, { backgroundColor: colors.border }]} />

@@ -6,6 +6,7 @@ import type { ModuleItemWithProgress, ModuleItemType } from '@/types/roadmap';
 import { MODULE_ITEM_TYPE_CONFIG } from '@/types/roadmap';
 import { letterSpacing } from '@/constants/platform';
 import type { ThemeColors } from '@/types/theme';
+import type { IconName } from '@/types/ui';
 
 interface Props {
     item: ModuleItemWithProgress;
@@ -27,7 +28,7 @@ function ModuleItemRow({ item, colors, isLast, onStartExam, onViewResults, onVie
     const typeConfig = MODULE_ITEM_TYPE_CONFIG[item.item_type];
 
     // Status icon (left)
-    const statusIcon = isCompleted
+    const statusIcon: IconName = isCompleted
         ? 'checkmark-circle'
         : status === 'in_progress'
           ? 'contrast-outline'
@@ -63,7 +64,7 @@ function ModuleItemRow({ item, colors, isLast, onStartExam, onViewResults, onVie
                 !isLast && { borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: colors.border + '30' },
             ]}
         >
-            {!hideStatusIcon && <Ionicons name={statusIcon as any} size={20} color={statusColor} />}
+            {!hideStatusIcon && <Ionicons name={statusIcon} size={20} color={statusColor} />}
 
             <View style={styles.content}>
                 <Text

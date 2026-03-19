@@ -106,8 +106,16 @@ Deno.serve(async (req) => {
             return jsonResponse({ error: 'Failed to fetch agents' }, 500);
         }
 
+        interface AgentRow {
+            id: string;
+            full_name: string;
+            phone: string | null;
+            email: string | null;
+            role: string;
+        }
+
         return jsonResponse({
-            agents: (agents || []).map((a: any) => ({
+            agents: (agents || []).map((a: AgentRow) => ({
                 id: a.id,
                 name: a.full_name,
                 phone: maskPhone(a.phone || ''),

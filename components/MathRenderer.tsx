@@ -71,7 +71,7 @@ export default function MathRenderer({ content, style, fontSize = 15 }: MathRend
     const { colors, isDark } = useTheme();
     const [webViewHeight, setWebViewHeight] = useState(40);
 
-    const onMessage = useCallback((event: any) => {
+    const onMessage = useCallback((event: { nativeEvent: { data: string } }) => {
         try {
             const data = JSON.parse(event.nativeEvent.data);
             if (data.type === 'height' && data.value > 0) {
@@ -151,10 +151,10 @@ function WebMathRenderer({
                 border: 'none',
                 overflow: 'hidden',
                 backgroundColor: 'transparent',
-                pointerEvents: 'none' as any, // Let clicks pass through to parent TouchableOpacity
+                pointerEvents: 'none' as const, // Let clicks pass through to parent TouchableOpacity
             }}
             scrolling="no"
-            onLoad={(e: any) => {
+            onLoad={(e: React.SyntheticEvent<HTMLIFrameElement>) => {
                 try {
                     const doc = e.target.contentDocument || e.target.contentWindow?.document;
                     if (doc) {

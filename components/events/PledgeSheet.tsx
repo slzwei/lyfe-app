@@ -16,6 +16,8 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
+type PledgeField = [string, string, React.Dispatch<React.SetStateAction<number>>, number];
+
 export interface PledgeSheetProps {
     colors: typeof Colors.light;
     showPledgeSheet: boolean;
@@ -76,7 +78,7 @@ function PledgeSheetInner({
                                 ['pledgeSitdowns', 'Sitdowns today', setPledgeSitdowns, pledgeSitdowns],
                                 ['pledgePitches', 'Pitches today', setPledgePitches, pledgePitches],
                                 ['pledgeClosed', 'Cases to close', setPledgeClosed, pledgeClosed],
-                            ] as any[]
+                            ] as PledgeField[]
                         ).map(([key, label, setter, val]) => (
                             <View key={key} style={styles.pledgeRow}>
                                 <Text style={[styles.pledgeLabel, { color: colors.textSecondary }]}>{label}</Text>

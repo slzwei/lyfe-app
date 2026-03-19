@@ -22,7 +22,8 @@ import { fetchCandidateRoadmap, unlockProgrammeForCandidate } from '@/lib/roadma
 import type { CandidateActivity, Interview, RecruitmentCandidate } from '@/types/recruitment';
 import type { ProgrammeWithModules } from '@/types/roadmap';
 import { Ionicons } from '@expo/vector-icons';
-import { useLocalSearchParams, useRouter } from 'expo-router';
+import { useLocalSearchParams } from 'expo-router';
+import { useTypedRouter } from '@/hooks/useTypedRouter';
 import React, { useCallback, useEffect, useState } from 'react';
 import { ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -32,7 +33,7 @@ export default function CandidateDetailScreen() {
     const { candidateId } = useLocalSearchParams<{ candidateId: string }>();
     const { colors } = useTheme();
     const { user } = useAuth();
-    const router = useRouter();
+    const router = useTypedRouter();
 
     const [candidate, setCandidate] = useState<RecruitmentCandidate | null>(null);
     const [isLoading, setIsLoading] = useState(true);
@@ -52,9 +53,25 @@ export default function CandidateDetailScreen() {
     // Document Manager Hook
     const docManager = useDocumentManager({ candidateId: candidateId || '' });
     const {
-        documents, showPdf, pdfUrl, pdfTitle, showAddDoc, addDocLabel, addDocCustomLabel, addDocStep, addDocError,
-        hasDocumentPicker, setShowPdf, setShowAddDoc, setAddDocLabel, setAddDocCustomLabel,
-        handleViewDocument, handleDeleteDocument, handleSelectLabel, pickAndUploadDocument, openAddDocSheet,
+        documents,
+        showPdf,
+        pdfUrl,
+        pdfTitle,
+        showAddDoc,
+        addDocLabel,
+        addDocCustomLabel,
+        addDocStep,
+        addDocError,
+        hasDocumentPicker,
+        setShowPdf,
+        setShowAddDoc,
+        setAddDocLabel,
+        setAddDocCustomLabel,
+        handleViewDocument,
+        handleDeleteDocument,
+        handleSelectLabel,
+        pickAndUploadDocument,
+        openAddDocSheet,
     } = docManager;
 
     // Contact Outcome Hook
@@ -69,8 +86,17 @@ export default function CandidateDetailScreen() {
         }, []),
     });
     const {
-        pendingType, showConfirmSheet, confirmStep, selectedOutcome, noteText, setNoteText,
-        handleCall, handleWhatsApp, handleOutcomeSelect, handleSaveActivity, handleDismissSheet,
+        pendingType,
+        showConfirmSheet,
+        confirmStep,
+        selectedOutcome,
+        noteText,
+        setNoteText,
+        handleCall,
+        handleWhatsApp,
+        handleOutcomeSelect,
+        handleSaveActivity,
+        handleDismissSheet,
     } = contactOutcome;
 
     // Interview Scheduler Hook
@@ -84,7 +110,12 @@ export default function CandidateDetailScreen() {
                 setCandidate((prev) => (prev ? { ...prev, interviews: [interview, ...prev.interviews] } : prev));
             } else if (action === 'updated') {
                 setCandidate((prev) =>
-                    prev ? { ...prev, interviews: prev.interviews.map((iv) => (iv.id === interview.id ? interview : iv)) } : prev,
+                    prev
+                        ? {
+                              ...prev,
+                              interviews: prev.interviews.map((iv) => (iv.id === interview.id ? interview : iv)),
+                          }
+                        : prev,
                 );
             } else if (action === 'deleted') {
                 setCandidate((prev) =>
@@ -94,11 +125,33 @@ export default function CandidateDetailScreen() {
         }, []),
     });
     const {
-        showScheduleSheet, editingInterview, scheduleStatus, scheduleDate, scheduleHour, scheduleMinute,
-        scheduleAmPm, scheduleType, scheduleLink, scheduleLocation, scheduleNotes, isScheduling, scheduleError,
-        setScheduleDate, setScheduleHour, setScheduleMinute, setScheduleAmPm, setScheduleType, setScheduleLink,
-        setScheduleLocation, setScheduleNotes, setScheduleStatus, openNewInterview, openEditInterview,
-        dismissScheduleSheet, handleDeleteInterview, handleSubmitSchedule,
+        showScheduleSheet,
+        editingInterview,
+        scheduleStatus,
+        scheduleDate,
+        scheduleHour,
+        scheduleMinute,
+        scheduleAmPm,
+        scheduleType,
+        scheduleLink,
+        scheduleLocation,
+        scheduleNotes,
+        isScheduling,
+        scheduleError,
+        setScheduleDate,
+        setScheduleHour,
+        setScheduleMinute,
+        setScheduleAmPm,
+        setScheduleType,
+        setScheduleLink,
+        setScheduleLocation,
+        setScheduleNotes,
+        setScheduleStatus,
+        openNewInterview,
+        openEditInterview,
+        dismissScheduleSheet,
+        handleDeleteInterview,
+        handleSubmitSchedule,
     } = scheduler;
 
     // Bottom-sheet spring animations
@@ -140,12 +193,20 @@ export default function CandidateDetailScreen() {
         if (!candidateId) return;
         setError(null);
         const { data, error: fetchError } = await fetchCandidate(candidateId);
-        if (fetchError) { setError(fetchError); } else { setCandidate(data); }
+        if (fetchError) {
+            setError(fetchError);
+        } else {
+            setCandidate(data);
+        }
         setIsLoading(false);
     }, [candidateId]);
 
-    useEffect(() => { loadCandidate(); }, [loadCandidate]);
-    useEffect(() => { if (candidateId) docManager.loadDocuments(); }, [candidateId]); // eslint-disable-line react-hooks/exhaustive-deps
+    useEffect(() => {
+        loadCandidate();
+    }, [loadCandidate]);
+    useEffect(() => {
+        if (candidateId) docManager.loadDocuments();
+    }, [candidateId]); // eslint-disable-line react-hooks/exhaustive-deps
 
     const loadRoadmap = useCallback(async () => {
         if (!candidateId || !canMarkComplete) return;
@@ -153,7 +214,9 @@ export default function CandidateDetailScreen() {
         if (data) setProgrammes(data);
     }, [candidateId, canMarkComplete]);
 
-    useEffect(() => { loadRoadmap(); }, [loadRoadmap]);
+    useEffect(() => {
+        loadRoadmap();
+    }, [loadRoadmap]);
 
     const handleUnlockConfirm = useCallback(async () => {
         if (!canMarkComplete || !user?.id || !candidateId) return;
@@ -163,7 +226,12 @@ export default function CandidateDetailScreen() {
         setUnlockError(null);
         const { error: unlockErr } = await unlockProgrammeForCandidate(candidateId, sproutProgramme.id, user.id);
         setIsUnlocking(false);
-        if (unlockErr) { setUnlockError(unlockErr); } else { setShowUnlockSheet(false); await loadRoadmap(); }
+        if (unlockErr) {
+            setUnlockError(unlockErr);
+        } else {
+            setShowUnlockSheet(false);
+            await loadRoadmap();
+        }
     }, [user?.id, candidateId, programmes, loadRoadmap]);
 
     if (isLoading) {
@@ -217,16 +285,38 @@ export default function CandidateDetailScreen() {
 
     const quickActions = [
         { icon: 'call', label: 'Call', color: colors.success, bgColor: colors.successLight, onPress: handleCall },
-        { icon: 'logo-whatsapp', label: 'WhatsApp', color: colors.success, bgColor: colors.successLight, onPress: handleWhatsApp },
-        { icon: 'calendar', label: 'Schedule', color: colors.warning, bgColor: colors.warningLight, onPress: openNewInterview },
-        { icon: 'create-outline', label: 'Note', color: colors.textTertiary, bgColor: colors.surfacePrimary || colors.background, onPress: () => setShowNoteSheet(true) },
+        {
+            icon: 'logo-whatsapp',
+            label: 'WhatsApp',
+            color: colors.success,
+            bgColor: colors.successLight,
+            onPress: handleWhatsApp,
+        },
+        {
+            icon: 'calendar',
+            label: 'Schedule',
+            color: colors.warning,
+            bgColor: colors.warningLight,
+            onPress: openNewInterview,
+        },
+        {
+            icon: 'create-outline',
+            label: 'Note',
+            color: colors.textTertiary,
+            bgColor: colors.surfacePrimary || colors.background,
+            onPress: () => setShowNoteSheet(true),
+        },
     ];
 
     return (
         <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]} edges={['top']}>
             <ScreenHeader showBack backLabel="Candidates" title={candidate.name} />
 
-            <ScrollView style={styles.scrollView} contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
+            <ScrollView
+                style={styles.scrollView}
+                contentContainerStyle={styles.scrollContent}
+                showsVerticalScrollIndicator={false}
+            >
                 <CandidateProfileCard candidate={candidate} colors={colors} />
                 <QuickActionsBar actions={quickActions} colors={colors} />
 
@@ -258,10 +348,20 @@ export default function CandidateDetailScreen() {
 
                 {/* Development Roadmap */}
                 {canMarkComplete && programmes.length > 0 && (
-                    <View style={[styles.card, { backgroundColor: colors.cardBackground, borderColor: colors.cardBorder, padding: 0, overflow: 'hidden' }]}>
+                    <View
+                        style={[
+                            styles.card,
+                            {
+                                backgroundColor: colors.cardBackground,
+                                borderColor: colors.cardBorder,
+                                padding: 0,
+                                overflow: 'hidden',
+                            },
+                        ]}
+                    >
                         <ProgressSummaryCard
                             programmes={programmes}
-                            onViewFull={() => router.push(`/(tabs)/candidates/progress/${candidateId}` as any)}
+                            onViewFull={() => router.push(`/(tabs)/candidates/progress/${candidateId}`)}
                             colors={colors}
                         />
                         {programmes.some((p) => p.slug === 'sproutlyfe' && p.isLocked) && (
@@ -271,11 +371,16 @@ export default function CandidateDetailScreen() {
                                 )}
                                 <TouchableOpacity
                                     style={[styles.unlockBtn, { borderColor: colors.accent }]}
-                                    onPress={() => { setUnlockError(null); setShowUnlockSheet(true); }}
+                                    onPress={() => {
+                                        setUnlockError(null);
+                                        setShowUnlockSheet(true);
+                                    }}
                                     activeOpacity={0.7}
                                 >
                                     <Ionicons name="lock-open-outline" size={15} color={colors.accent} />
-                                    <Text style={[styles.unlockBtnText, { color: colors.accent }]}>Unlock SproutLYFE</Text>
+                                    <Text style={[styles.unlockBtnText, { color: colors.accent }]}>
+                                        Unlock SproutLYFE
+                                    </Text>
                                 </TouchableOpacity>
                             </View>
                         )}
@@ -284,7 +389,12 @@ export default function CandidateDetailScreen() {
 
                 {/* Notes */}
                 {candidate.notes && (
-                    <View style={[styles.card, { backgroundColor: colors.cardBackground, borderColor: colors.cardBorder }]}>
+                    <View
+                        style={[
+                            styles.card,
+                            { backgroundColor: colors.cardBackground, borderColor: colors.cardBorder },
+                        ]}
+                    >
                         <Text style={[styles.sectionTitle, { color: colors.textPrimary }]}>Notes</Text>
                         <Text style={[styles.notesBody, { color: colors.textSecondary }]}>{candidate.notes}</Text>
                     </View>
@@ -294,7 +404,9 @@ export default function CandidateDetailScreen() {
                 <View style={[styles.card, { backgroundColor: colors.cardBackground, borderColor: colors.cardBorder }]}>
                     <View style={styles.sectionHeaderRow}>
                         <Text style={[styles.sectionTitle, { color: colors.textPrimary }]}>Interviews</Text>
-                        <Text style={[styles.countBadge, { color: colors.textTertiary }]}>{sortedInterviews.length}</Text>
+                        <Text style={[styles.countBadge, { color: colors.textTertiary }]}>
+                            {sortedInterviews.length}
+                        </Text>
                     </View>
                     {sortedInterviews.length === 0 ? (
                         <View style={styles.emptyInterviews}>
@@ -316,48 +428,91 @@ export default function CandidateDetailScreen() {
             </ScrollView>
 
             <ContactOutcomeSheet
-                visible={showConfirmSheet} colors={colors} animatedStyle={confirmSheetStyle}
-                pendingType={pendingType} confirmStep={confirmStep} selectedOutcome={selectedOutcome}
-                noteText={noteText} candidateName={candidate.name} candidatePhone={candidate.phone}
-                onNoteTextChange={setNoteText} onOutcomeSelect={handleOutcomeSelect}
-                onSaveActivity={handleSaveActivity} onDismiss={handleDismissSheet}
+                visible={showConfirmSheet}
+                colors={colors}
+                animatedStyle={confirmSheetStyle}
+                pendingType={pendingType}
+                confirmStep={confirmStep}
+                selectedOutcome={selectedOutcome}
+                noteText={noteText}
+                candidateName={candidate.name}
+                candidatePhone={candidate.phone}
+                onNoteTextChange={setNoteText}
+                onOutcomeSelect={handleOutcomeSelect}
+                onSaveActivity={handleSaveActivity}
+                onDismiss={handleDismissSheet}
             />
 
             <NoteSheet
-                visible={showNoteSheet} noteText={noteSheetText} colors={colors} animatedStyle={noteSheetStyle}
-                onNoteTextChange={setNoteSheetText} onSave={handleSaveNote} onClose={() => setShowNoteSheet(false)}
+                visible={showNoteSheet}
+                noteText={noteSheetText}
+                colors={colors}
+                animatedStyle={noteSheetStyle}
+                onNoteTextChange={setNoteSheetText}
+                onSave={handleSaveNote}
+                onClose={() => setShowNoteSheet(false)}
             />
 
             <InterviewSchedulerSheet
-                visible={showScheduleSheet} colors={colors} animatedStyle={scheduleSheetStyle}
-                editingInterview={editingInterview} candidateInterviewCount={candidate?.interviews.length ?? 0}
-                scheduleDate={scheduleDate} scheduleHour={scheduleHour} scheduleMinute={scheduleMinute}
-                scheduleAmPm={scheduleAmPm} scheduleType={scheduleType} scheduleLink={scheduleLink}
-                scheduleLocation={scheduleLocation} scheduleNotes={scheduleNotes} scheduleStatus={scheduleStatus}
-                scheduleError={scheduleError} isScheduling={isScheduling}
-                onDateChange={setScheduleDate} onHourChange={setScheduleHour} onMinuteChange={setScheduleMinute}
-                onAmPmChange={setScheduleAmPm} onTypeChange={setScheduleType} onLinkChange={setScheduleLink}
-                onLocationChange={setScheduleLocation} onNotesChange={setScheduleNotes} onStatusChange={setScheduleStatus}
-                onSubmit={handleSubmitSchedule} onDismiss={dismissScheduleSheet}
+                visible={showScheduleSheet}
+                colors={colors}
+                animatedStyle={scheduleSheetStyle}
+                editingInterview={editingInterview}
+                candidateInterviewCount={candidate?.interviews.length ?? 0}
+                scheduleDate={scheduleDate}
+                scheduleHour={scheduleHour}
+                scheduleMinute={scheduleMinute}
+                scheduleAmPm={scheduleAmPm}
+                scheduleType={scheduleType}
+                scheduleLink={scheduleLink}
+                scheduleLocation={scheduleLocation}
+                scheduleNotes={scheduleNotes}
+                scheduleStatus={scheduleStatus}
+                scheduleError={scheduleError}
+                isScheduling={isScheduling}
+                onDateChange={setScheduleDate}
+                onHourChange={setScheduleHour}
+                onMinuteChange={setScheduleMinute}
+                onAmPmChange={setScheduleAmPm}
+                onTypeChange={setScheduleType}
+                onLinkChange={setScheduleLink}
+                onLocationChange={setScheduleLocation}
+                onNotesChange={setScheduleNotes}
+                onStatusChange={setScheduleStatus}
+                onSubmit={handleSubmitSchedule}
+                onDismiss={dismissScheduleSheet}
             />
 
             <AddDocumentSheet
-                visible={showAddDoc} colors={colors} animatedStyle={addDocSheetStyle}
-                addDocStep={addDocStep} addDocLabel={addDocLabel} addDocCustomLabel={addDocCustomLabel}
-                addDocError={addDocError} onClose={() => setShowAddDoc(false)}
-                onSelectLabel={handleSelectLabel} onCustomLabelChange={setAddDocCustomLabel}
+                visible={showAddDoc}
+                colors={colors}
+                animatedStyle={addDocSheetStyle}
+                addDocStep={addDocStep}
+                addDocLabel={addDocLabel}
+                addDocCustomLabel={addDocCustomLabel}
+                addDocError={addDocError}
+                onClose={() => setShowAddDoc(false)}
+                onSelectLabel={handleSelectLabel}
+                onCustomLabelChange={setAddDocCustomLabel}
                 onPickAndUpload={pickAndUploadDocument}
             />
 
             <PdfViewerModal
-                visible={showPdf} pdfUrl={pdfUrl} pdfTitle={pdfTitle}
-                colors={colors} onClose={() => setShowPdf(false)}
+                visible={showPdf}
+                pdfUrl={pdfUrl}
+                pdfTitle={pdfTitle}
+                colors={colors}
+                onClose={() => setShowPdf(false)}
             />
 
             <UnlockConfirmSheet
-                visible={showUnlockSheet} candidateName={candidate?.name ?? ''}
-                programmeName="SproutLYFE" isUnlocking={isUnlocking}
-                onConfirm={handleUnlockConfirm} onCancel={() => setShowUnlockSheet(false)} colors={colors}
+                visible={showUnlockSheet}
+                candidateName={candidate?.name ?? ''}
+                programmeName="SproutLYFE"
+                isUnlocking={isUnlocking}
+                onConfirm={handleUnlockConfirm}
+                onCancel={() => setShowUnlockSheet(false)}
+                colors={colors}
             />
         </SafeAreaView>
     );

@@ -5,9 +5,10 @@ import { useAuth } from '@/contexts/AuthContext';
 import { useTheme } from '@/contexts/ThemeContext';
 import { getTeamActivitySummaries } from '@/lib/activities';
 import { getTeamPerformance, type TeamPerformanceResult } from '@/lib/team';
+import type { IconName } from '@/types/ui';
 import { Ionicons } from '@expo/vector-icons';
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
-import { RefreshControl, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { type DimensionValue, RefreshControl, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import Animated, {
     FadeInDown,
@@ -51,7 +52,7 @@ function getDateRange(period: Period): { start: string; end: string } {
 
 interface ActivityTypeConfig {
     label: string;
-    icon: string;
+    icon: IconName;
 }
 
 const ACTIVITY_TYPES: Record<string, ActivityTypeConfig> = {
@@ -79,7 +80,7 @@ function SkeletonBlock({ width, height, style }: { width: number | string; heigh
         <Animated.View
             style={[
                 {
-                    width: width as any,
+                    width: width as DimensionValue,
                     height,
                     borderRadius: 12,
                     backgroundColor: colors.borderLight,
@@ -506,11 +507,7 @@ export default function AnalyticsScreen() {
                                         style={styles.activityBarRow}
                                     >
                                         <View style={styles.activityBarLabel}>
-                                            <Ionicons
-                                                name={(config?.icon || 'ellipse') as any}
-                                                size={16}
-                                                color={barColor}
-                                            />
+                                            <Ionicons name={config?.icon || 'ellipse'} size={16} color={barColor} />
                                             <Text
                                                 style={[styles.activityBarLabelText, { color: colors.textSecondary }]}
                                             >

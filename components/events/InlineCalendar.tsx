@@ -7,6 +7,8 @@ import {
     Animated,
     Dimensions,
     FlatList,
+    type NativeScrollEvent,
+    type NativeSyntheticEvent,
     PanResponder,
     Pressable,
     StyleSheet,
@@ -386,7 +388,7 @@ export default function InlineCalendar({
                 expandAnim.setValue(next);
             },
             onPanResponderRelease: (_, gs) => {
-                const current = (expandAnim as any)._value as number;
+                const current = (expandAnim as unknown as { _value: number })._value;
                 const shouldExpand = Math.abs(gs.vy) > 0.3 ? gs.vy > 0 : current > 0.5;
                 animateToRef.current(shouldExpand ? 1 : 0);
             },
@@ -401,7 +403,7 @@ export default function InlineCalendar({
 
     // ── Month grid scroll → update label ──
     const onMonthGridScroll = useCallback(
-        (e: any) => {
+        (e: NativeSyntheticEvent<NativeScrollEvent>) => {
             const offsetX = e.nativeEvent.contentOffset.x;
             const pageIdx = Math.round(offsetX / SCREEN_W);
             const clamped = Math.max(0, Math.min(pageIdx, monthPages.length - 1));
@@ -421,7 +423,7 @@ export default function InlineCalendar({
 
     // ── Strip scroll -> update month label + today visibility ──
     const onStripScroll = useCallback(
-        (e: any) => {
+        (e: NativeSyntheticEvent<NativeScrollEvent>) => {
             const offsetX = e.nativeEvent.contentOffset.x;
             const firstVisibleIdx = Math.round(offsetX / CELL_W);
             const centerIdx = firstVisibleIdx + 3;
@@ -512,7 +514,7 @@ export default function InlineCalendar({
     );
 
     const getStripItemLayout = useCallback(
-        (_: any, index: number) => ({
+        (_: unknown, index: number) => ({
             length: CELL_W,
             offset: CELL_W * index,
             index,
@@ -521,7 +523,7 @@ export default function InlineCalendar({
     );
 
     const getMonthItemLayout = useCallback(
-        (_: any, index: number) => ({
+        (_: unknown, index: number) => ({
             length: SCREEN_W,
             offset: SCREEN_W * index,
             index,

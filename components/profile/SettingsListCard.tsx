@@ -16,11 +16,15 @@ interface SettingsListCardProps {
     title: string;
     rows: SettingsRowConfig[];
     onPress: (key: string) => void;
+    testID?: string;
 }
 
-export default function SettingsListCard({ colors, title, rows, onPress }: SettingsListCardProps) {
+export default function SettingsListCard({ colors, title, rows, onPress, testID }: SettingsListCardProps) {
     return (
-        <View style={[styles.card, { backgroundColor: colors.cardBackground, shadowColor: colors.textPrimary }]}>
+        <View
+            testID={testID}
+            style={[styles.card, { backgroundColor: colors.cardBackground, shadowColor: colors.textPrimary }]}
+        >
             <Text style={[styles.sectionLabel, { color: colors.textTertiary }]}>{title}</Text>
             {rows.map((row, index) => (
                 <React.Fragment key={row.key}>

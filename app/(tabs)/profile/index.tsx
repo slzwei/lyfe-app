@@ -5,6 +5,7 @@ import ScreenHeader from '@/components/ScreenHeader';
 import AppearanceCard from '@/components/profile/AppearanceCard';
 import AssignedManagersCard from '@/components/profile/AssignedManagersCard';
 import AvatarPickerSheet, { type AvatarAction } from '@/components/profile/AvatarPickerSheet';
+import DeleteAccountModal from '@/components/profile/DeleteAccountModal';
 import EditProfileSheet from '@/components/profile/EditProfileSheet';
 import SecurityCard from '@/components/profile/SecurityCard';
 import SettingsListCard, { type SettingsRowConfig } from '@/components/profile/SettingsListCard';
@@ -20,6 +21,7 @@ import { pickAndUploadAvatar, removeAvatar, takeAndUploadAvatar } from '@/lib/st
 import type { AssignedManager } from '@/types/recruitment';
 import { useSubmitGuard } from '@/hooks/useSubmitGuard';
 import { useTypedRouter } from '@/hooks/useTypedRouter';
+import { supabase } from '@/lib/supabase';
 import { fetchPAManagers } from '@/lib/recruitment';
 import { useFocusEffect } from 'expo-router';
 import React, { useCallback, useEffect, useState } from 'react';
@@ -50,6 +52,11 @@ export default function ProfileScreen() {
     const [avatarUploading, setAvatarUploading] = useState(false);
     const [biometryType, setBiometryType] = useState<BiometryType>('none');
     const [error, setError] = useState<string | null>(null);
+
+    // Delete account modal
+    const [showDeleteModal, setShowDeleteModal] = useState(false);
+    const [deleting, setDeleting] = useState(false);
+    const [deleteError, setDeleteError] = useState<string | null>(null);
 
     // Edit profile modal
     const [showEditModal, setShowEditModal] = useState(false);
@@ -99,6 +106,33 @@ export default function ProfileScreen() {
             await signOut();
         } catch {
             setError('Failed to sign out. Please try again.');
+        }
+    };
+
+    const confirmDeleteAccount = async () => {
+        setDeleting(true);
+        setDeleteError(null);
+        try {
+            const { data: sessionData } = await supabase.auth.getSession();
+            const token = sessionData?.session?.access_token;
+            if (!token) {
+                setDeleteError('Not authenticated. Please sign in again.');
+                setDeleting(false);
+                return;
+            }
+            const { data, error: fnError } = await supabase.functions.invoke('delete-account', {
+                headers: { Authorization: `Bearer ${token}` },
+            });
+            if (fnError || !data?.success) {
+                setDeleteError(fnError?.message || data?.error || 'Failed to delete account. Please try again.');
+                setDeleting(false);
+                return;
+            }
+            setShowDeleteModal(false);
+            await supabase.auth.signOut();
+        } catch {
+            setDeleteError('Failed to delete account. Please try again.');
+            setDeleting(false);
         }
     };
 
@@ -186,6 +220,7 @@ export default function ProfileScreen() {
             <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
                 {/* Hero User Card */}
                 <UserHeroCard
+                    testID="profile-user-hero"
                     colors={colors}
                     fullName={user?.full_name}
                     role={user?.role}
@@ -212,6 +247,7 @@ export default function ProfileScreen() {
                 {/* Security -- Biometrics */}
                 {biometryType !== 'none' && (
                     <SecurityCard
+                        testID="profile-security-card"
                         colors={colors}
                         biometryType={biometryType}
                         enabled={biometricsEnabled}
@@ -221,6 +257,7 @@ export default function ProfileScreen() {
 
                 {/* General Settings */}
                 <SettingsListCard
+                    testID="profile-general-settings"
                     colors={colors}
                     title="GENERAL"
                     rows={GENERAL_SETTINGS}
@@ -254,6 +291,7 @@ export default function ProfileScreen() {
 
                 {/* Sign Out */}
                 <TouchableOpacity
+                    testID="profile-sign-out-button"
                     style={[styles.signOutButton, { borderColor: colors.danger }]}
                     onPress={handleSignOut}
                     activeOpacity={0.7}
@@ -262,6 +300,17 @@ export default function ProfileScreen() {
                 >
                     <Ionicons name="log-out-outline" size={20} color={colors.danger} />
                     <Text style={[styles.signOutText, { color: colors.danger }]}>Sign Out</Text>
+                </TouchableOpacity>
+
+                {/* Delete Account */}
+                <TouchableOpacity
+                    style={styles.deleteAccountButton}
+                    onPress={() => setShowDeleteModal(true)}
+                    activeOpacity={0.7}
+                    accessibilityRole="button"
+                    accessibilityLabel="Delete your account"
+                >
+                    <Text style={[styles.deleteAccountText, { color: colors.textTertiary }]}>Delete Account</Text>
                 </TouchableOpacity>
             </ScrollView>
 
@@ -294,6 +343,19 @@ export default function ProfileScreen() {
                 colors={colors}
                 onCancel={() => setShowSignOutModal(false)}
                 onConfirm={confirmSignOut}
+            />
+
+            {/* Delete Account Confirmation Modal */}
+            <DeleteAccountModal
+                visible={showDeleteModal}
+                colors={colors}
+                deleting={deleting}
+                error={deleteError}
+                onCancel={() => {
+                    setShowDeleteModal(false);
+                    setDeleteError(null);
+                }}
+                onConfirm={confirmDeleteAccount}
             />
         </SafeAreaView>
     );
@@ -340,5 +402,18 @@ const styles = StyleSheet.create({
     signOutText: {
         fontSize: 15,
         fontWeight: '600',
+    },
+
+    // ── Delete Account ──
+    deleteAccountButton: {
+        alignItems: 'center',
+        justifyContent: 'center',
+        marginHorizontal: 16,
+        marginTop: 16,
+        minHeight: 44,
+    },
+    deleteAccountText: {
+        fontSize: 13,
+        fontWeight: '500',
     },
 });

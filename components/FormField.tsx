@@ -1,4 +1,5 @@
 import type { ThemeColors } from '@/types/theme';
+import type { IconName } from '@/types/ui';
 import { Ionicons } from '@expo/vector-icons';
 import React from 'react';
 import { Platform, StyleSheet, Text, TextInput, View, type ViewStyle } from 'react-native';
@@ -10,7 +11,7 @@ interface FormFieldProps {
     placeholder: string;
     error?: string;
     colors: ThemeColors;
-    icon?: string;
+    icon?: IconName;
     required?: boolean;
     keyboardType?: 'default' | 'phone-pad' | 'email-address';
     autoCapitalize?: 'none' | 'sentences' | 'words';
@@ -46,7 +47,7 @@ export default function FormField({
                         },
                     ]}
                 >
-                    <Ionicons name={icon as any} size={18} color={error ? colors.danger : colors.textTertiary} />
+                    <Ionicons name={icon} size={18} color={error ? colors.danger : colors.textTertiary} />
                     <TextInput
                         style={[styles.inputWithIcon, { color: colors.textPrimary }]}
                         value={value}

@@ -4,7 +4,11 @@ import { supabase } from '@/lib/supabase';
 
 // NetInfo requires a native module that may not be present in older dev builds.
 // Fall back to a no-op listener when the native module is missing.
-let NetInfo: any;
+type NetInfoState = { isConnected: boolean | null; isInternetReachable: boolean | null };
+interface NetInfoLike {
+    addEventListener: (listener: (state: NetInfoState) => void) => () => void;
+}
+let NetInfo: NetInfoLike;
 try {
     const mod = require('@react-native-community/netinfo');
     NetInfo = mod.default ?? mod;
@@ -14,7 +18,6 @@ try {
         addEventListener: () => () => {},
     };
 }
-type NetInfoState = { isConnected: boolean | null; isInternetReachable: boolean | null };
 
 export interface NetworkContextType {
     isConnected: boolean;

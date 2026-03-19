@@ -3,6 +3,7 @@
  */
 import type { Tables } from './supabase';
 import type { UserRole } from './database';
+import type { IconName } from '@/types/ui';
 
 export type AppNotification = Tables<'notifications'>;
 
@@ -31,7 +32,7 @@ export type NotificationType =
     | 'roadshow_summary'
     | 'system_alert';
 
-export const NOTIFICATION_TYPE_CONFIG: Record<NotificationType, { icon: string; label: string }> = {
+export const NOTIFICATION_TYPE_CONFIG: Record<NotificationType, { icon: IconName; label: string }> = {
     // Existing
     roadshow_pledge: { icon: 'hand-left', label: 'Roadshow Pledge' },
     new_lead: { icon: 'person-add', label: 'New Lead' },

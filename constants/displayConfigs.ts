@@ -3,9 +3,10 @@
  * Single source of truth for labels, colors, and icons.
  */
 import type { EventType, RoadshowActivityType } from '@/types/event';
+import type { IconName } from '@/types/ui';
 
 // ── Event type display config ──
-export const EVENT_TYPE_CONFIG: Record<EventType, { label: string; color: string; icon: string }> = {
+export const EVENT_TYPE_CONFIG: Record<EventType, { label: string; color: string; icon: IconName }> = {
     team_meeting: { label: 'Team Meeting', color: '#6366F1', icon: 'people' },
     training: { label: 'Training', color: '#FF7600', icon: 'school' },
     agency_event: { label: 'Company Event', color: '#F59E0B', icon: 'business' },
@@ -15,7 +16,7 @@ export const EVENT_TYPE_CONFIG: Record<EventType, { label: string; color: string
 };
 
 // ── Roadshow activity type display config ──
-export const ACTIVITY_TYPE_CONFIG: Record<RoadshowActivityType, { label: string; color: string; icon: string }> = {
+export const ACTIVITY_TYPE_CONFIG: Record<RoadshowActivityType, { label: string; color: string; icon: IconName }> = {
     sitdown: { label: 'Sitdown', color: '#FF7600', icon: 'people' },
     pitch: { label: 'Pitch', color: '#E67700', icon: 'megaphone' },
     case_closed: { label: 'Case Closed', color: '#F59E0B', icon: 'checkmark-circle' },

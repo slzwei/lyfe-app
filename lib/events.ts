@@ -2,6 +2,7 @@
  * Events service — Supabase CRUD for agency events & attendees
  */
 import type { AgencyEvent, CreateEventInput, EventAttendee, EventType, ExternalAttendee } from '@/types/event';
+import type { Json } from '@/types/supabase';
 import { applyPageRange, resolvePage } from './pagination';
 import { supabase } from './supabase';
 
@@ -135,7 +136,7 @@ export async function createEvent(
             end_time: input.end_time || null,
             location: input.location || null,
             created_by: createdBy,
-            external_attendees: input.external_attendees as any,
+            external_attendees: input.external_attendees as unknown as Json,
         })
         .select()
         .single();
@@ -257,7 +258,7 @@ export async function updateEvent(
             start_time: input.start_time,
             end_time: input.end_time || null,
             location: input.location || null,
-            external_attendees: input.external_attendees as any,
+            external_attendees: input.external_attendees as unknown as Json,
         })
         .eq('id', eventId);
 

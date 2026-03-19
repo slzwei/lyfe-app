@@ -6,7 +6,7 @@ import type { RoadshowActivity, RoadshowAttendance, RoadshowConfig } from '@/typ
 import type { Colors } from '@/constants/Colors';
 import { Ionicons } from '@expo/vector-icons';
 import React from 'react';
-import { StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
+import { type DimensionValue, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
 import type { EdgeInsets } from 'react-native-safe-area-context';
 import { ActivityConfirmSheet } from './ActivityConfirmSheet';
 import { AfycSheet } from './AfycSheet';
@@ -253,7 +253,7 @@ function RoadshowLiveT1Inner(props: RoadshowLiveT1Props) {
                             style={[
                                 styles.afycFill,
                                 {
-                                    width: `${Math.min(100, (myCounts.afyc / (myAttendance?.pledged_afyc ?? 1)) * 100)}%` as any,
+                                    width: `${Math.min(100, (myCounts.afyc / (myAttendance?.pledged_afyc ?? 1)) * 100)}%` as DimensionValue,
                                     backgroundColor: CASE_CLOSED_COLOR,
                                 },
                             ]}

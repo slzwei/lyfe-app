@@ -1,9 +1,12 @@
 import React, { useEffect, useState } from 'react';
-import { Image as RNImage, StyleSheet, Text, View } from 'react-native';
+import { Image as RNImage, type ImageProps, StyleSheet, Text, View } from 'react-native';
 
 // expo-image requires a native module that may not be present in older dev builds.
 // Fall back to React Native's built-in Image when the native module is missing.
-let ExpoImage: any;
+type ExpoImageComponent = React.ComponentType<
+    ImageProps & { contentFit?: string; cachePolicy?: string; transition?: number }
+> | null;
+let ExpoImage: ExpoImageComponent = null;
 try {
     ExpoImage = require('expo-image').Image;
 } catch {

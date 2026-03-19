@@ -99,8 +99,8 @@ describe('biometricMeta', () => {
         expect(biometricMeta('biometric')).toEqual({ label: 'Biometrics', icon: 'lock-closed' });
     });
 
-    it('returns empty strings for none', () => {
-        expect(biometricMeta('none')).toEqual({ label: '', icon: '' });
+    it('returns fallback for none', () => {
+        expect(biometricMeta('none')).toEqual({ label: '', icon: 'lock-closed' });
     });
 });
 

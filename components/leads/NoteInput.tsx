@@ -9,13 +9,18 @@ interface NoteInputProps {
     colors: ThemeColors;
     onSave: () => void;
     onCancel: () => void;
+    testID?: string;
 }
 
-function NoteInput({ noteText, onChangeText, isSaving, colors, onSave, onCancel }: NoteInputProps) {
+function NoteInput({ noteText, onChangeText, isSaving, colors, onSave, onCancel, testID }: NoteInputProps) {
     return (
-        <View style={[styles.card, { backgroundColor: colors.cardBackground, borderColor: colors.cardBorder }]}>
+        <View
+            testID={testID}
+            style={[styles.card, { backgroundColor: colors.cardBackground, borderColor: colors.cardBorder }]}
+        >
             <Text style={[styles.sectionTitle, { color: colors.textPrimary }]}>Add Note</Text>
             <TextInput
+                testID={testID ? `${testID}-field` : undefined}
                 style={[
                     styles.noteInput,
                     {
@@ -37,6 +42,7 @@ function NoteInput({ noteText, onChangeText, isSaving, colors, onSave, onCancel 
                     <Text style={[styles.noteCancelText, { color: colors.textSecondary }]}>Cancel</Text>
                 </TouchableOpacity>
                 <TouchableOpacity
+                    testID={testID ? `${testID}-save` : undefined}
                     style={[
                         styles.noteSave,
                         {

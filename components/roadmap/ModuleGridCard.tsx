@@ -71,7 +71,7 @@ function ModuleGridCard({ module, state, colors, onPress }: Props) {
                 {/* Type badge row */}
                 <View style={styles.typeRow}>
                     <View style={[styles.typeIconCircle, { backgroundColor: typeColor + '14' }]}>
-                        <Ionicons name={typeConfig.icon as any} size={14} color={typeColor} />
+                        <Ionicons name={typeConfig.icon} size={14} color={typeColor} />
                     </View>
                     <Text style={[styles.typeLabel, { color: typeColor }]} numberOfLines={1}>
                         {typeConfig.label}
@@ -96,7 +96,7 @@ function ModuleGridCard({ module, state, colors, onPress }: Props) {
                     <View style={styles.itemTypesRow}>
                         {summary.itemTypes.map((type: ModuleItemType) => {
                             const cfg = MODULE_ITEM_TYPE_CONFIG[type];
-                            return <Ionicons key={type} name={cfg.icon as any} size={13} color={cfg.color} />;
+                            return <Ionicons key={type} name={cfg.icon} size={13} color={cfg.color} />;
                         })}
                     </View>
                 )}

@@ -1,7 +1,7 @@
 import { letterSpacing } from '@/constants/platform';
 import type { ThemeColors } from '@/types/theme';
 import React, { useMemo, useRef, useState } from 'react';
-import { ScrollView, StyleSheet, Text, View } from 'react-native';
+import { type NativeScrollEvent, type NativeSyntheticEvent, ScrollView, StyleSheet, Text, View } from 'react-native';
 
 export const WHEEL_ITEM_H = 44;
 
@@ -38,7 +38,7 @@ export default function WheelPicker({
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, []);
 
-    const handleEnd = (e: any) => {
+    const handleEnd = (e: NativeSyntheticEvent<NativeScrollEvent>) => {
         const y = e.nativeEvent.contentOffset.y;
         const idx = Math.max(0, Math.min(items.length - 1, Math.round(y / WHEEL_ITEM_H)));
         setScrollY(idx * WHEEL_ITEM_H);

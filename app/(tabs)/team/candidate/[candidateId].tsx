@@ -5,8 +5,10 @@ import { useTheme } from '@/contexts/ThemeContext';
 import type { ThemeColors } from '@/types/theme';
 import { addCandidateActivity, fetchCandidate, syncAgentToMKTR, updateCandidateStatus } from '@/lib/recruitment';
 import { CANDIDATE_STATUS_CONFIG, type CandidateStatus, type RecruitmentCandidate } from '@/types/recruitment';
+import type { IconName } from '@/types/ui';
 import { Ionicons } from '@expo/vector-icons';
-import { useLocalSearchParams, useRouter, useSegments } from 'expo-router';
+import { useLocalSearchParams, useSegments } from 'expo-router';
+import { useTypedRouter } from '@/hooks/useTypedRouter';
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import {
     Alert,
@@ -26,7 +28,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 export default function CandidateDetailScreen() {
     const { colors } = useTheme();
     const { user } = useAuth();
-    const router = useRouter();
+    const router = useTypedRouter();
     const { candidateId } = useLocalSearchParams<{ candidateId: string }>();
     const segments = useSegments();
     const isPaStack = segments.includes('pa' as never);
@@ -122,16 +124,12 @@ export default function CandidateDetailScreen() {
         setShowNoteModal(false);
     };
 
-    const actions = [
+    const actions: { icon: IconName; label: string; onPress: () => void }[] = [
         {
             icon: 'calendar-outline',
             label: 'Schedule',
             onPress: () =>
-                router.push(
-                    isPaStack
-                        ? (`/(tabs)/pa/candidate/${candidateId}` as any)
-                        : (`/(tabs)/candidates/${candidateId}` as any),
-                ),
+                router.push(isPaStack ? `/(tabs)/pa/candidate/${candidateId}` : `/(tabs)/candidates/${candidateId}`),
         },
         {
             icon: 'create-outline',
@@ -217,7 +215,7 @@ export default function CandidateDetailScreen() {
                                 onPress={action.onPress}
                                 activeOpacity={0.7}
                             >
-                                <Ionicons name={action.icon as any} size={22} color={colors.accent} />
+                                <Ionicons name={action.icon} size={22} color={colors.accent} />
                                 <Text style={[styles.actionLabel, { color: colors.textSecondary }]}>
                                     {action.label}
                                 </Text>
@@ -431,10 +429,10 @@ function StatusStepper({
     );
 }
 
-function ContactRow({ icon, value, colors }: { icon: string; value: string; colors: ThemeColors }) {
+function ContactRow({ icon, value, colors }: { icon: IconName; value: string; colors: ThemeColors }) {
     return (
         <View style={styles.contactRow}>
-            <Ionicons name={icon as any} size={16} color={colors.textTertiary} />
+            <Ionicons name={icon} size={16} color={colors.textTertiary} />
             <Text style={[styles.contactValue, { color: colors.textSecondary }]}>{value}</Text>
         </View>
     );

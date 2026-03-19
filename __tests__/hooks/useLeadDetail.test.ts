@@ -54,6 +54,8 @@ const LEAD: Lead = {
     status: 'new',
     product_interest: 'life',
     notes: null,
+    recording_url: null,
+    transcript: null,
     updated_at: '2026-03-01T00:00:00Z',
     created_at: '2026-03-01T00:00:00Z',
 };
@@ -556,6 +558,20 @@ describe('useLeadDetail', () => {
     // -----------------------------------------------------------------------
 
     describe('handleReassign', () => {
+        const TEAM_AGENTS = [
+            { id: 'agent-1', full_name: 'Agent A' },
+            { id: 'agent-2', full_name: 'Agent B' },
+            { id: 'agent-3', full_name: 'Agent C' },
+        ];
+
+        /** Open reassign modal first so allAgents is populated */
+        async function openReassignFirst(result: any) {
+            mockFetchTeamAgents.mockResolvedValue({ data: TEAM_AGENTS });
+            await act(async () => {
+                await result.current.handleOpenReassign();
+            });
+        }
+
         it('reassigns lead and adds activity on success', async () => {
             setupSuccessfulLoad();
 
@@ -565,6 +581,7 @@ describe('useLeadDetail', () => {
                 expect(result.current.isLoading).toBe(false);
             });
 
+            await openReassignFirst(result);
             mockReassignLead.mockResolvedValue({ error: null });
 
             const toAgent = { id: 'agent-2', full_name: 'Agent B' };
@@ -577,7 +594,7 @@ describe('useLeadDetail', () => {
                 'lead-1',
                 'agent-2',
                 'agent-1', // fromId = lead.assigned_to
-                'agent-1', // fromName = lead.assigned_to
+                'Agent A', // fromName = resolved from allAgents
                 'Agent B',
                 'user-1',
             );
@@ -592,7 +609,7 @@ describe('useLeadDetail', () => {
             expect(newActivity.metadata).toEqual({
                 from_agent_id: 'agent-1',
                 to_agent_id: 'agent-2',
-                from_agent_name: 'agent-1',
+                from_agent_name: 'Agent A',
                 to_agent_name: 'Agent B',
             });
             expect(newActivity.actor_name).toBe('Test User');
@@ -607,6 +624,7 @@ describe('useLeadDetail', () => {
                 expect(result.current.isLoading).toBe(false);
             });
 
+            await openReassignFirst(result);
             mockReassignLead.mockResolvedValue({ error: 'Reassignment failed' });
 
             const toAgent = { id: 'agent-2', full_name: 'Agent B' };

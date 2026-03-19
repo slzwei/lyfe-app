@@ -4,7 +4,7 @@ import { ACTIVITY_TYPE_CONFIG } from '@/constants/displayConfigs';
 import type { AgencyEvent, EventAttendee, RoadshowAttendance, RoadshowConfig } from '@/types/event';
 import type { Colors } from '@/constants/Colors';
 import React from 'react';
-import { StyleSheet, Text, View } from 'react-native';
+import { type DimensionValue, StyleSheet, Text, View } from 'react-native';
 import { AgentStatusCard } from './AgentStatusCard';
 import { ManagerOverrideSheet } from './ManagerOverrideSheet';
 
@@ -119,7 +119,7 @@ function RoadshowLiveT2Inner(props: RoadshowLiveT2Props) {
                                 style={[
                                     styles.afycFill,
                                     {
-                                        width: `${Math.min(100, (boothTotals.afyc / boothTotals.pledgedAfyc) * 100)}%` as any,
+                                        width: `${Math.min(100, (boothTotals.afyc / boothTotals.pledgedAfyc) * 100)}%` as DimensionValue,
                                         backgroundColor: CASE_CLOSED_COLOR,
                                     },
                                 ]}

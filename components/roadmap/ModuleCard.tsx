@@ -8,6 +8,7 @@ import { MODULE_TYPE_CONFIG, MODULE_TYPE_COLOR_KEY } from '@/types/roadmap';
 import { displayWeight, letterSpacing } from '@/constants/platform';
 import { ICON } from '@/constants/ui';
 import type { ThemeColors } from '@/types/theme';
+import type { IconName } from '@/types/ui';
 
 interface Props {
     module: RoadmapModuleWithProgress;
@@ -39,7 +40,7 @@ function ModuleCard({ module, colors, onTakeExam }: Props) {
               ? colors.accent
               : colors.textTertiary;
 
-    const statusIcon =
+    const statusIcon: IconName =
         module.progress?.status === 'completed'
             ? 'checkmark-circle'
             : module.progress?.status === 'in_progress'
@@ -62,12 +63,12 @@ function ModuleCard({ module, colors, onTakeExam }: Props) {
                 {/* Badge row: type + status */}
                 <View style={styles.badgeRow}>
                     <View style={[styles.badge, { backgroundColor: typeColor + '14' }]}>
-                        <Ionicons name={typeConfig.icon as any} size={ICON.SM} color={typeColor} />
+                        <Ionicons name={typeConfig.icon} size={ICON.SM} color={typeColor} />
                         <Text style={[styles.badgeText, { color: typeColor }]}>{typeConfig.label}</Text>
                     </View>
 
                     <View style={[styles.badge, { backgroundColor: statusColor + '14' }]}>
-                        <Ionicons name={statusIcon as any} size={ICON.SM} color={statusColor} />
+                        <Ionicons name={statusIcon} size={ICON.SM} color={statusColor} />
                         <Text style={[styles.badgeText, { color: statusColor }]}>{statusLabel}</Text>
                     </View>
                 </View>

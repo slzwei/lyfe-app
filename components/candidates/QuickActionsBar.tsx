@@ -1,10 +1,11 @@
 import type { ThemeColors } from '@/types/theme';
+import type { IconName } from '@/types/ui';
 import { Ionicons } from '@expo/vector-icons';
 import React from 'react';
 import { StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 
 interface QuickActionItem {
-    icon: string;
+    icon: IconName;
     label: string;
     color: string;
     bgColor: string;
@@ -28,7 +29,7 @@ function QuickActionsBar({ actions, colors }: Props) {
                     disabled={action.disabled}
                 >
                     <View style={[styles.quickActionIcon, { backgroundColor: action.bgColor }]}>
-                        <Ionicons name={action.icon as any} size={20} color={action.color} />
+                        <Ionicons name={action.icon} size={20} color={action.color} />
                     </View>
                     <Text style={[styles.quickActionLabel, { color: action.color }]}>{action.label}</Text>
                 </TouchableOpacity>

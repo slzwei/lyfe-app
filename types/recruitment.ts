@@ -7,12 +7,13 @@
 
 // ── Candidate Statuses ──
 import type { CandidateStatus } from '@/types/database';
+import type { IconName } from '@/types/ui';
 export type { CandidateStatus } from '@/types/database';
 
 export interface CandidateStatusConfig {
     label: string;
     color: string;
-    icon: string;
+    icon: IconName;
     order: number;
 }
 

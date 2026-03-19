@@ -10,7 +10,8 @@ import {
     View,
 } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
-import { useLocalSearchParams, useRouter } from 'expo-router';
+import { useLocalSearchParams } from 'expo-router';
+import { useTypedRouter } from '@/hooks/useTypedRouter';
 import { Ionicons } from '@expo/vector-icons';
 import WebView from 'react-native-webview';
 import { useTheme } from '@/contexts/ThemeContext';
@@ -39,7 +40,7 @@ export default function ModuleDetailScreen() {
     const { colors } = useTheme();
     const { user } = useAuth();
     const { moduleId } = useLocalSearchParams<{ moduleId: string }>();
-    const router = useRouter();
+    const router = useTypedRouter();
     const { bottom } = useSafeAreaInsets();
 
     const [module, setModule] = useState<RoadmapModule | null>(null);
@@ -105,13 +106,13 @@ export default function ModuleDetailScreen() {
 
     const handleTakeExam = useCallback(() => {
         if (module?.exam_paper_id) {
-            router.push(`/(tabs)/roadmap/exam/${module.exam_paper_id}` as any);
+            router.push(`/(tabs)/roadmap/exam/${module.exam_paper_id}`);
         }
     }, [module, router]);
 
     const handleStartExam = useCallback(
         (examPaperId: string) => {
-            router.push(`/(tabs)/roadmap/exam/${examPaperId}` as any);
+            router.push(`/(tabs)/roadmap/exam/${examPaperId}`);
         },
         [router],
     );
@@ -140,7 +141,7 @@ export default function ModuleDetailScreen() {
                     typeof data.personality_results === 'object' &&
                     'topTypes' in data.personality_results;
                 const resultPath = isEnneagram ? `enneagram/${data.id}` : isVark ? `vark/${data.id}` : data.id;
-                router.push(`/(tabs)/roadmap/results/${resultPath}` as any);
+                router.push(`/(tabs)/roadmap/results/${resultPath}`);
             }
         },
         [user?.id, router],

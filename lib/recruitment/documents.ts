@@ -55,9 +55,9 @@ export async function uploadCandidateDocument(
         if (insertError || !row) return { data: null, error: insertError?.message ?? 'Failed to save document' };
 
         return { data: row as CandidateDocument, error: null };
-    } catch (err: any) {
+    } catch (err: unknown) {
         captureError(err, { fn: 'uploadCandidateDocument' });
-        return { data: null, error: err?.message || 'Upload failed' };
+        return { data: null, error: err instanceof Error ? err.message : 'Upload failed' };
     }
 }
 

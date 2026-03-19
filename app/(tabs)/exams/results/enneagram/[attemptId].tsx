@@ -136,13 +136,13 @@ export default function EnneagramResultsScreen() {
                     ]}
                 >
                     <View style={[styles.typeNumberBadge, { backgroundColor: primaryInfo.color + '18' }]}>
-                        <Ionicons name={primaryInfo.icon as any} size={28} color={primaryInfo.color} />
+                        <Ionicons name={primaryInfo.icon} size={28} color={primaryInfo.color} />
                     </View>
                     <Text style={[styles.typeLabel, { color: colors.textPrimary }]}>{typeLabel}</Text>
                     <Text style={[styles.typeName, { color: primaryInfo.color }]}>{primaryInfo.name}</Text>
                     {wingInfo && (
                         <View style={[styles.wingBadge, { backgroundColor: colors.surfacePrimary }]}>
-                            <Ionicons name={wingInfo.icon as any} size={14} color={wingInfo.color} />
+                            <Ionicons name={wingInfo.icon} size={14} color={wingInfo.color} />
                             <Text style={[styles.wingText, { color: colors.textSecondary }]}>
                                 Wing {results.wing}: {wingInfo.name}
                             </Text>

@@ -47,7 +47,7 @@ export default function ProfileCard({ candidate, colors }: ProfileCardProps) {
                 <View style={styles.profileInfo}>
                     <Text style={[styles.profileName, { color: colors.textPrimary }]}>{candidate.name}</Text>
                     <View style={[styles.statusBadge, { backgroundColor: statusConfig.color + '14' }]}>
-                        <Ionicons name={statusConfig.icon as any} size={12} color={statusConfig.color} />
+                        <Ionicons name={statusConfig.icon} size={12} color={statusConfig.color} />
                         <Text style={[styles.statusBadgeText, { color: statusConfig.color }]}>
                             {statusConfig.label}
                         </Text>

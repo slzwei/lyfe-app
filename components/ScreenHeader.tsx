@@ -5,9 +5,11 @@ import { useRouter } from 'expo-router';
 import React, { type ReactNode } from 'react';
 import { StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 
+import type { IconName } from '@/types/ui';
+
 interface BannerConfig {
     text: string;
-    icon?: string;
+    icon?: IconName;
 }
 
 interface ScreenHeaderProps {
@@ -64,7 +66,7 @@ export default function ScreenHeader({
             {/* Banner */}
             {banner && (
                 <View style={[styles.banner, { backgroundColor: colors.accentLight }]}>
-                    {banner.icon && <Ionicons name={banner.icon as any} size={14} color={colors.accent} />}
+                    {banner.icon && <Ionicons name={banner.icon} size={14} color={colors.accent} />}
                     <Text style={[styles.bannerText, { color: colors.accent }]} numberOfLines={2}>
                         {banner.text}
                     </Text>

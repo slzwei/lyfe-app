@@ -2,6 +2,7 @@
  * Roadshow service — check-in, pledges, activities, config, bulk creation
  */
 import type { RoadshowActivity, RoadshowActivityType, RoadshowAttendance, RoadshowConfig } from '@/types/event';
+import type { Json } from '@/types/supabase';
 import { applyPageRange, resolvePage } from './pagination';
 import { supabase } from './supabase';
 
@@ -289,11 +290,11 @@ export async function createRoadshowBulk(
 ): Promise<{ data: { event_ids: string[]; count: number } | null; error: string | null }> {
     const { data, error } = await supabase.rpc('create_roadshow_bulk', {
         p_events: events,
-        p_config: config as any,
+        p_config: config as unknown as Json,
         p_attendees: attendees,
         p_created_by: createdBy,
     });
 
     if (error) return { data: null, error: error.message };
-    return { data: data as any, error: null };
+    return { data: data as { event_ids: string[]; count: number }, error: null };
 }

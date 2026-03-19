@@ -3,9 +3,10 @@ import ScreenHeader from '@/components/ScreenHeader';
 import { useAuth } from '@/contexts/AuthContext';
 import { useTheme } from '@/contexts/ThemeContext';
 import { CANDIDATE_STATUS_CONFIG, type CandidateStatus } from '@/types/recruitment';
+import type { IconName } from '@/types/ui';
 import { Ionicons } from '@expo/vector-icons';
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
-import { RefreshControl, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { type DimensionValue, RefreshControl, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import Animated, {
     FadeInDown,
@@ -21,11 +22,11 @@ import { fetchCandidateStatusCounts } from '@/lib/recruitment/candidates';
 interface FunnelStage {
     key: CandidateStatus;
     label: string;
-    icon: string;
+    icon: IconName;
     count: number;
 }
 
-const FUNNEL_STAGES: { key: CandidateStatus; label: string; icon: string }[] = [
+const FUNNEL_STAGES: { key: CandidateStatus; label: string; icon: IconName }[] = [
     { key: 'applied', label: 'Applied', icon: 'person-add' },
     { key: 'interview_scheduled', label: 'Interview', icon: 'calendar' },
     { key: 'approved', label: 'Approved', icon: 'shield-checkmark' },
@@ -49,7 +50,7 @@ function SkeletonBlock({ width, height, style }: { width: number | string; heigh
         <Animated.View
             style={[
                 {
-                    width: width as any,
+                    width: width as DimensionValue,
                     height,
                     borderRadius: 12,
                     backgroundColor: colors.borderLight,
@@ -137,7 +138,7 @@ function AnimatedBar({ widthPercent, color }: { widthPercent: number; color: str
     }, [widthPercent, barWidth]);
 
     const animStyle = useAnimatedStyle(() => ({
-        width: `${barWidth.value}%` as any,
+        width: `${barWidth.value}%` as DimensionValue,
     }));
 
     return <Animated.View style={[barStyles.fill, { backgroundColor: color }, animStyle]} />;
@@ -188,7 +189,7 @@ function FunnelStageCard({
                 >
                     <View style={cardStyles.topRow}>
                         <View style={[cardStyles.iconCircle, { backgroundColor: colors.accentLight }]}>
-                            <Ionicons name={stage.icon as any} size={20} color={colors.accent} />
+                            <Ionicons name={stage.icon} size={20} color={colors.accent} />
                         </View>
                         <View style={cardStyles.labelWrap}>
                             <Text style={[cardStyles.label, { color: colors.textPrimary }]}>{stage.label}</Text>

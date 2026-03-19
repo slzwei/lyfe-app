@@ -122,7 +122,7 @@ export default function NotificationsScreen() {
                         style={[styles.iconCircle, { backgroundColor: item.is_read ? colors.border : colors.accent }]}
                     >
                         <Ionicons
-                            name={typeConfig.icon as any}
+                            name={typeConfig.icon}
                             size={18}
                             color={item.is_read ? colors.accent : colors.textInverse}
                         />

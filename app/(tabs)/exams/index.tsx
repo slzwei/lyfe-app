@@ -36,8 +36,8 @@ export default function ExamsListScreen() {
             if (fetchError) throw new Error(fetchError);
             setPapers(papersData);
             setStats(statsData);
-        } catch (err: any) {
-            setError(err.message || 'Failed to load quizzes');
+        } catch (err: unknown) {
+            setError(err instanceof Error ? err.message : 'Failed to load quizzes');
         } finally {
             setIsLoading(false);
             setIsRefreshing(false);

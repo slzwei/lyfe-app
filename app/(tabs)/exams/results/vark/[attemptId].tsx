@@ -53,7 +53,7 @@ export default function VarkResultsScreen() {
             // Fall back to Supabase
             const { data, error: fetchError } = await fetchExamResult(attemptId || '');
             if (data?.personalityResults) {
-                setVarkResults(data.personalityResults as any);
+                setVarkResults(data.personalityResults as VarkResults | null);
             } else if (fetchError) {
                 setError(fetchError);
             } else {
@@ -150,11 +150,7 @@ export default function VarkResultsScreen() {
                                     key={t}
                                     style={[styles.topIconBadge, { backgroundColor: getBarColor(t, colors) + '18' }]}
                                 >
-                                    <Ionicons
-                                        name={VARK_TYPE_INFO[t].icon as any}
-                                        size={16}
-                                        color={getBarColor(t, colors)}
-                                    />
+                                    <Ionicons name={VARK_TYPE_INFO[t].icon} size={16} color={getBarColor(t, colors)} />
                                     <Text style={[styles.topIconLabel, { color: getBarColor(t, colors) }]}>
                                         {VARK_TYPE_INFO[t].label}
                                     </Text>
@@ -192,7 +188,7 @@ export default function VarkResultsScreen() {
                         return (
                             <View key={type} style={styles.barRow}>
                                 <View style={styles.barLabelCol}>
-                                    <Ionicons name={VARK_TYPE_INFO[type].icon as any} size={16} color={barColor} />
+                                    <Ionicons name={VARK_TYPE_INFO[type].icon} size={16} color={barColor} />
                                     <Text
                                         style={[
                                             styles.barLabel,
@@ -245,7 +241,7 @@ export default function VarkResultsScreen() {
                             >
                                 <View style={styles.detailHeader}>
                                     <View style={[styles.detailIconBadge, { backgroundColor: barColor + '18' }]}>
-                                        <Ionicons name={info.icon as any} size={20} color={barColor} />
+                                        <Ionicons name={info.icon} size={20} color={barColor} />
                                     </View>
                                     <Text style={[styles.detailTitle, { color: colors.textPrimary }]}>
                                         {info.label}

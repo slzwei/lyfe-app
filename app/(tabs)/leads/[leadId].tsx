@@ -197,7 +197,7 @@ export default function LeadDetailScreen() {
                             </View>
                             <View style={styles.leadInfo}>
                                 <Text style={[styles.leadName, { color: colors.textPrimary }]}>{lead.full_name}</Text>
-                                <View style={{ marginTop: 4 }}>
+                                <View testID="lead-status-badge" style={{ marginTop: 4 }}>
                                     <StatusBadge status={currentStatus} size="medium" />
                                 </View>
                             </View>
@@ -283,6 +283,7 @@ export default function LeadDetailScreen() {
                         />
                         {isManagerView ? (
                             <QuickAction
+                                testID="lead-reassign-action"
                                 icon="git-compare-outline"
                                 label="Reassign"
                                 color={colors.statusProposed}
@@ -293,6 +294,7 @@ export default function LeadDetailScreen() {
                         ) : (
                             <>
                                 <QuickAction
+                                    testID="lead-status-action"
                                     icon="swap-horizontal"
                                     label="Status"
                                     color={colors.warning}
@@ -300,6 +302,7 @@ export default function LeadDetailScreen() {
                                     onPress={() => setShowStatusPicker(!showStatusPicker)}
                                 />
                                 <QuickAction
+                                    testID="lead-note-action"
                                     icon="create-outline"
                                     label="Note"
                                     color={colors.textTertiary}
@@ -323,6 +326,7 @@ export default function LeadDetailScreen() {
                     {/* Add Note Input */}
                     {!isManagerView && showNoteInput && (
                         <NoteInput
+                            testID="lead-note-input"
                             noteText={noteText}
                             onChangeText={setNoteText}
                             isSaving={isSavingNote}
@@ -336,15 +340,13 @@ export default function LeadDetailScreen() {
                     )}
 
                     {/* Call Recording & Transcript */}
-                    {((lead as any).recording_url || (lead as any).transcript) && (
-                        <RecordingCard
-                            recordingUrl={(lead as any).recording_url}
-                            transcript={(lead as any).transcript}
-                        />
+                    {(lead.recording_url || lead.transcript) && (
+                        <RecordingCard recordingUrl={lead.recording_url} transcript={lead.transcript} />
                     )}
 
                     {/* Activity Timeline */}
                     <View
+                        testID="lead-activity-list"
                         style={[
                             styles.card,
                             { backgroundColor: colors.cardBackground, borderColor: colors.cardBorder },

@@ -1,13 +1,14 @@
 /**
  * Enneagram Personality Type Quiz — static content and scoring config.
  */
+import type { IconName } from '@/types/ui';
 
 export type EnneagramType = 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9;
 
 export interface EnneagramTypeInfo {
     label: string;
     name: string;
-    icon: string; // Ionicons name
+    icon: IconName;
     color: string;
     description: string;
     strengths: string[];

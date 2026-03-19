@@ -72,7 +72,7 @@ export default function EventsScreen() {
     useEffect(() => {
         const parent = navigation.getParent();
         if (!parent) return;
-        const unsubscribe = parent.addListener('tabPress' as any, () => {
+        const unsubscribe = parent.addListener('tabPress' as const, () => {
             scrollToTodayRef.current?.();
         });
         return unsubscribe;
@@ -188,6 +188,7 @@ export default function EventsScreen() {
             />
 
             <ScrollView
+                testID="events-list"
                 ref={scrollRef}
                 contentContainerStyle={styles.listContent}
                 showsVerticalScrollIndicator={false}
@@ -231,7 +232,7 @@ export default function EventsScreen() {
 
                             {/* Event cards */}
                             {section.events.map((event) => (
-                                <View key={event.id} style={styles.eventCardWrap}>
+                                <View key={event.id} testID={`events-card-${event.id}`} style={styles.eventCardWrap}>
                                     <EventCard
                                         event={event}
                                         onPress={() => router.push(`/(tabs)/events/${event.id}`)}
@@ -246,6 +247,7 @@ export default function EventsScreen() {
 
             {canCreateEvents && (
                 <TouchableOpacity
+                    testID="events-create-button"
                     style={[styles.fab, { backgroundColor: colors.accent }]}
                     onPress={() => router.push('/(tabs)/events/create')}
                     activeOpacity={0.85}

@@ -6,7 +6,8 @@ import { fetchTeamMember, type TeamMember } from '@/lib/team';
 import { LEAD_STATUSES, STATUS_CONFIG, type Lead, type LeadStatus } from '@/types/lead';
 import { letterSpacing } from '@/constants/platform';
 import { Ionicons } from '@expo/vector-icons';
-import { useLocalSearchParams, useRouter } from 'expo-router';
+import { useLocalSearchParams } from 'expo-router';
+import { useTypedRouter } from '@/hooks/useTypedRouter';
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { Linking, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -16,7 +17,7 @@ const AVATAR_COLOR_KEYS = ['statusProposed', 'accent', 'danger', 'warning', 'sta
 
 export default function AgentDetailScreen() {
     const { colors } = useTheme();
-    const router = useRouter();
+    const router = useTypedRouter();
     const { agentId } = useLocalSearchParams<{ agentId: string }>();
 
     const [agent, setAgent] = useState<TeamMember | null>(null);
@@ -300,7 +301,7 @@ export default function AgentDetailScreen() {
                         <LeadCard
                             key={lead.id}
                             lead={lead}
-                            onPress={() => router.push(`/(tabs)/team/lead/${lead.id}` as any)}
+                            onPress={() => router.push(`/(tabs)/team/lead/${lead.id}`)}
                         />
                     ))
                 ) : (

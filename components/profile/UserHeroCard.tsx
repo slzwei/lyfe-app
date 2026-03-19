@@ -15,6 +15,7 @@ interface UserHeroCardProps {
     avatarUrl: string | null | undefined;
     avatarUploading: boolean;
     onAvatarPress: () => void;
+    testID?: string;
 }
 
 export default function UserHeroCard({
@@ -26,9 +27,11 @@ export default function UserHeroCard({
     avatarUrl,
     avatarUploading,
     onAvatarPress,
+    testID,
 }: UserHeroCardProps) {
     return (
         <View
+            testID={testID}
             style={[
                 styles.card,
                 styles.userCard,
@@ -69,7 +72,11 @@ export default function UserHeroCard({
 
                 {/* User Info */}
                 <View style={styles.userInfo}>
-                    <Text style={[styles.userName, { color: colors.textPrimary }]} numberOfLines={1}>
+                    <Text
+                        testID={testID ? `${testID}-name` : undefined}
+                        style={[styles.userName, { color: colors.textPrimary }]}
+                        numberOfLines={1}
+                    >
                         {fullName || 'Unknown User'}
                     </Text>
                     <View style={[styles.roleBadge, { backgroundColor: colors.accentLight }]}>

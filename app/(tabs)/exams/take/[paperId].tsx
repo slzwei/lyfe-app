@@ -15,7 +15,8 @@ import { supabase } from '@/lib/supabase';
 import type { ExamQuestion } from '@/types/exam';
 import { ACTIVE_EXAM_SCHEMA_VERSION } from '@/types/exam';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { useLocalSearchParams, useRouter, useSegments } from 'expo-router';
+import { useLocalSearchParams, useSegments } from 'expo-router';
+import { useTypedRouter } from '@/hooks/useTypedRouter';
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { ActivityIndicator, AppState, ScrollView, StyleSheet, Text, View, type AppStateStatus } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -33,7 +34,7 @@ export default function TakeExamScreen() {
     const { paperId } = useLocalSearchParams<{ paperId: string }>();
     const { colors } = useTheme();
     const { user } = useAuth();
-    const router = useRouter();
+    const router = useTypedRouter();
     const segments = useSegments();
     const tabBase =
         segments[1] === 'roadmap' ? '/(tabs)/roadmap' : segments[1] === 'profile' ? '/(tabs)/profile' : '/(tabs)/exams';
@@ -355,11 +356,9 @@ export default function TakeExamScreen() {
                 if (result.personalityResults) {
                     const isEnneagram =
                         'quizType' in result.personalityResults && result.personalityResults.quizType === 'enneagram';
-                    router.replace(
-                        `${currentTabBase}/results/${isEnneagram ? 'enneagram' : 'vark'}/${result.id}` as any,
-                    );
+                    router.replace(`${currentTabBase}/results/${isEnneagram ? 'enneagram' : 'vark'}/${result.id}`);
                 } else {
-                    router.replace(`${currentTabBase}/results/${result.id}` as any);
+                    router.replace(`${currentTabBase}/results/${result.id}`);
                 }
                 return;
             }
@@ -388,7 +387,7 @@ export default function TakeExamScreen() {
             };
             await AsyncStorage.setItem(`exam_result_${resultId}`, JSON.stringify(result));
             await AsyncStorage.removeItem(STORAGE_KEY);
-            router.replace(`${currentTabBase}/results/enneagram/${resultId}` as any);
+            router.replace(`${currentTabBase}/results/enneagram/${resultId}`);
         } else if (quizTypeRef.current === 'vark') {
             const varkResults = computeVarkScores(currentQuestions, currentAnswers);
             const resultId = `result_${Date.now()}`;
@@ -411,7 +410,7 @@ export default function TakeExamScreen() {
             };
             await AsyncStorage.setItem(`exam_result_${resultId}`, JSON.stringify(result));
             await AsyncStorage.removeItem(STORAGE_KEY);
-            router.replace(`${currentTabBase}/results/vark/${resultId}` as any);
+            router.replace(`${currentTabBase}/results/vark/${resultId}`);
         } else {
             let correct = 0;
             const answerDetails = currentQuestions.map((q) => {
@@ -435,7 +434,7 @@ export default function TakeExamScreen() {
             };
             await AsyncStorage.setItem(`exam_result_${resultId}`, JSON.stringify(result));
             await AsyncStorage.removeItem(STORAGE_KEY);
-            router.replace(`${currentTabBase}/results/${resultId}` as any);
+            router.replace(`${currentTabBase}/results/${resultId}`);
         }
     };
 
@@ -491,7 +490,7 @@ export default function TakeExamScreen() {
                 <ErrorBanner
                     message={error}
                     onRetry={() =>
-                        router.replace(`${tabBase}/${segments[1] === 'roadmap' ? 'exam' : 'take'}/${paperId}` as any)
+                        router.replace(`${tabBase}/${segments[1] === 'roadmap' ? 'exam' : 'take'}/${paperId}`)
                     }
                     onDismiss={() => setError(null)}
                 />

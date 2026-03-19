@@ -2,8 +2,10 @@ import { Ionicons } from '@expo/vector-icons';
 import React from 'react';
 import { StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 
+import type { IconName } from '@/types/ui';
+
 export interface QuickActionProps {
-    icon: string;
+    icon: IconName;
     label: string;
     color: string;
     bgColor: string;
@@ -19,7 +21,7 @@ export default function QuickAction({ icon, label, color, bgColor, onPress, disa
             disabled={disabled}
         >
             <View style={[styles.quickActionIcon, { backgroundColor: bgColor }]}>
-                <Ionicons name={icon as any} size={20} color={color} />
+                <Ionicons name={icon} size={20} color={color} />
             </View>
             <Text style={[styles.quickActionLabel, { color }]}>{label}</Text>
         </TouchableOpacity>

@@ -1,8 +1,9 @@
 import { useAuth } from '@/contexts/AuthContext';
 import { supabase } from '@/lib/supabase';
+import type { Lead } from '@/types/lead';
 import { useEffect, useRef } from 'react';
 
-export function useLeadRealtime(onNewLead: (payload: any) => void) {
+export function useLeadRealtime(onNewLead: (lead: Lead) => void) {
     const { user } = useAuth();
     const retryCountRef = useRef(0);
 
@@ -21,7 +22,7 @@ export function useLeadRealtime(onNewLead: (payload: any) => void) {
                 },
                 (payload) => {
                     retryCountRef.current = 0;
-                    onNewLead(payload.new);
+                    onNewLead(payload.new as Lead);
                 },
             )
             .subscribe((status) => {
@@ -46,7 +47,7 @@ export function useLeadRealtime(onNewLead: (payload: any) => void) {
                                 },
                                 (payload) => {
                                     retryCountRef.current = 0;
-                                    onNewLead(payload.new);
+                                    onNewLead(payload.new as Lead);
                                 },
                             )
                             .subscribe();

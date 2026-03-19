@@ -1,6 +1,7 @@
 import * as LocalAuthentication from 'expo-local-authentication';
 import * as SecureStore from 'expo-secure-store';
 import { Platform } from 'react-native';
+import type { IconName } from '@/types/ui';
 
 const BIOMETRICS_ENABLED_KEY = 'lyfe_biometrics_enabled';
 const BIOMETRICS_PROMPT_SHOWN_KEY = 'lyfe_biometrics_prompt_shown';
@@ -66,7 +67,7 @@ export async function markBiometricsPromptShown(): Promise<void> {
 }
 
 /** Platform-appropriate label and Ionicon name for a given biometry type. */
-export function biometricMeta(type: BiometryType): { label: string; icon: string } {
+export function biometricMeta(type: BiometryType): { label: string; icon: IconName } {
     switch (type) {
         case 'faceid':
             return { label: 'Face ID', icon: 'scan' };
@@ -75,7 +76,7 @@ export function biometricMeta(type: BiometryType): { label: string; icon: string
         case 'biometric':
             return { label: 'Biometrics', icon: 'lock-closed' };
         default:
-            return { label: '', icon: '' };
+            return { label: '', icon: 'lock-closed' };
     }
 }
 

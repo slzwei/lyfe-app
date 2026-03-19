@@ -1,4 +1,5 @@
 import type { Tables } from './supabase';
+import type { IconName } from '@/types/ui';
 
 // ─── Programme & Module Types ────────────────────────────────────────────────
 
@@ -80,7 +81,7 @@ export interface RoadmapNodeData {
 
 // ─── Config ─────────────────────────────────────────────────────────────────
 
-export const MODULE_TYPE_CONFIG: Record<ModuleType, { label: string; icon: string }> = {
+export const MODULE_TYPE_CONFIG: Record<ModuleType, { label: string; icon: IconName }> = {
     training: { label: 'Training', icon: 'book-outline' },
     exam: { label: 'Exam', icon: 'school-outline' },
     resource: { label: 'Resource', icon: 'folder-outline' },
@@ -93,14 +94,14 @@ export const MODULE_TYPE_COLOR_KEY = {
     resource: 'roadmapResource',
 } as const;
 
-export const RESOURCE_TYPE_CONFIG: Record<ResourceType, { label: string; icon: string }> = {
+export const RESOURCE_TYPE_CONFIG: Record<ResourceType, { label: string; icon: IconName }> = {
     link: { label: 'Link', icon: 'link-outline' },
     file: { label: 'File', icon: 'document-outline' },
     video: { label: 'Video', icon: 'videocam-outline' },
     text: { label: 'Article', icon: 'reader-outline' },
 };
 
-export const MODULE_ITEM_TYPE_CONFIG: Record<ModuleItemType, { label: string; icon: string; color: string }> = {
+export const MODULE_ITEM_TYPE_CONFIG: Record<ModuleItemType, { label: string; icon: IconName; color: string }> = {
     material: { label: 'Material', icon: 'document-text-outline', color: '#007AFF' },
     pre_quiz: { label: 'Pre-Quiz', icon: 'help-circle-outline', color: '#AF52DE' },
     quiz: { label: 'Quiz', icon: 'create-outline', color: '#FF9500' },
