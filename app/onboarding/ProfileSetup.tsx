@@ -1,7 +1,6 @@
 import { useAuth } from '@/contexts/AuthContext';
 import { useTheme } from '@/contexts/ThemeContext';
 import { supabase } from '@/lib/supabase';
-import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import React, { useState } from 'react';
 import {
@@ -26,7 +25,7 @@ export default function ProfileSetupScreen() {
 
     const handleContinue = async () => {
         if (!name.trim()) {
-            setError('Name is required');
+            setError('Please enter your name');
             return;
         }
         setError('');
@@ -36,7 +35,7 @@ export default function ProfileSetupScreen() {
             await refreshUser();
         }
 
-        router.push('/onboarding/AgencyInfo');
+        router.push('/onboarding/ProfilePhoto');
     };
 
     return (
@@ -47,56 +46,34 @@ export default function ProfileSetupScreen() {
                     contentContainerStyle={styles.scrollContent}
                     keyboardShouldPersistTaps="handled"
                 >
-                    <Text style={[styles.title, { color: colors.textPrimary }]}>Set Up Your Profile</Text>
-                    <Text style={[styles.subtitle, { color: colors.textSecondary }]}>Tell us a bit about yourself</Text>
+                    <Text style={[styles.title, { color: colors.textPrimary }]}>What's your name?</Text>
+                    <Text style={[styles.subtitle, { color: colors.textSecondary }]}>
+                        This is how your team will see you
+                    </Text>
 
-                    {/* Profile Photo Placeholder */}
-                    <TouchableOpacity
-                        style={[styles.photoPlaceholder, { backgroundColor: colors.surfacePrimary }]}
-                        testID="photo-placeholder"
-                    >
-                        <Ionicons name="camera-outline" size={32} color={colors.textTertiary} />
-                        <Text style={[styles.photoText, { color: colors.textTertiary }]}>Add Photo</Text>
-                    </TouchableOpacity>
-
-                    {/* Name Field */}
-                    <View style={styles.fieldContainer}>
-                        <Text style={[styles.label, { color: colors.textSecondary }]}>Full Name</Text>
-                        <TextInput
-                            style={[
-                                styles.input,
-                                {
-                                    backgroundColor: colors.inputBackground,
-                                    borderColor: error ? colors.danger : colors.inputBorder,
-                                    color: colors.textPrimary,
-                                },
-                            ]}
-                            value={name}
-                            onChangeText={setName}
-                            placeholder="Enter your full name"
-                            placeholderTextColor={colors.textTertiary}
-                            testID="name-input"
-                        />
-                        {error ? <Text style={[styles.errorText, { color: colors.danger }]}>{error}</Text> : null}
-                    </View>
-
-                    {/* Phone Field (read-only) */}
-                    <View style={styles.fieldContainer}>
-                        <Text style={[styles.label, { color: colors.textSecondary }]}>Phone Number</Text>
-                        <TextInput
-                            style={[
-                                styles.input,
-                                {
-                                    backgroundColor: colors.surfaceSecondary,
-                                    borderColor: colors.inputBorder,
-                                    color: colors.textTertiary,
-                                },
-                            ]}
-                            value={user?.phone ?? ''}
-                            editable={false}
-                            testID="phone-input"
-                        />
-                    </View>
+                    <TextInput
+                        style={[
+                            styles.input,
+                            {
+                                backgroundColor: colors.inputBackground,
+                                borderColor: error ? colors.danger : colors.inputBorder,
+                                color: colors.textPrimary,
+                            },
+                        ]}
+                        value={name}
+                        onChangeText={(text) => {
+                            setName(text);
+                            if (error) setError('');
+                        }}
+                        placeholder="Full name"
+                        placeholderTextColor={colors.textTertiary}
+                        autoFocus
+                        autoCapitalize="words"
+                        returnKeyType="done"
+                        onSubmitEditing={handleContinue}
+                        testID="name-input"
+                    />
+                    {error ? <Text style={[styles.errorText, { color: colors.danger }]}>{error}</Text> : null}
                 </ScrollView>
 
                 <View style={styles.footer}>
@@ -122,7 +99,7 @@ const styles = StyleSheet.create({
     },
     scrollContent: {
         paddingHorizontal: 24,
-        paddingTop: 48,
+        paddingTop: 60,
         paddingBottom: 24,
     },
     title: {
@@ -132,39 +109,18 @@ const styles = StyleSheet.create({
     },
     subtitle: {
         fontSize: 16,
-        marginBottom: 32,
-    },
-    photoPlaceholder: {
-        width: 100,
-        height: 100,
-        borderRadius: 50,
-        alignItems: 'center',
-        justifyContent: 'center',
-        alignSelf: 'center',
-        marginBottom: 32,
-    },
-    photoText: {
-        fontSize: 12,
-        marginTop: 4,
-    },
-    fieldContainer: {
-        marginBottom: 20,
-    },
-    label: {
-        fontSize: 14,
-        fontWeight: '600',
-        marginBottom: 8,
+        marginBottom: 36,
     },
     input: {
         borderWidth: 1,
-        borderRadius: 10,
+        borderRadius: 12,
         paddingHorizontal: 16,
-        paddingVertical: 14,
-        fontSize: 16,
+        paddingVertical: 16,
+        fontSize: 18,
     },
     errorText: {
         fontSize: 13,
-        marginTop: 4,
+        marginTop: 6,
         marginLeft: 4,
     },
     footer: {

@@ -40,9 +40,9 @@ beforeEach(() => {
 });
 
 describe('ProfileSetupScreen', () => {
-    it('renders without crashing', () => {
+    it('renders the name question', () => {
         const { getByText } = render(<ProfileSetupScreen />);
-        expect(getByText('Set Up Your Profile')).toBeTruthy();
+        expect(getByText("What's your name?")).toBeTruthy();
     });
 
     it('shows the name input empty for New User', () => {
@@ -50,24 +50,26 @@ describe('ProfileSetupScreen', () => {
         expect(getByTestId('name-input').props.value).toBe('');
     });
 
-    it('shows the phone input as read-only', () => {
-        const { getByTestId } = render(<ProfileSetupScreen />);
-        const phoneInput = getByTestId('phone-input');
-        expect(phoneInput.props.editable).toBe(false);
-    });
-
-    it('shows the photo placeholder', () => {
-        const { getByTestId } = render(<ProfileSetupScreen />);
-        expect(getByTestId('photo-placeholder')).toBeTruthy();
+    it('does not show a phone field', () => {
+        const { queryByTestId } = render(<ProfileSetupScreen />);
+        expect(queryByTestId('phone-input')).toBeNull();
     });
 
     it('shows validation error when name is empty', () => {
         const { getByTestId, getByText } = render(<ProfileSetupScreen />);
         fireEvent.press(getByTestId('continue-button'));
-        expect(getByText('Name is required')).toBeTruthy();
+        expect(getByText('Please enter your name')).toBeTruthy();
     });
 
-    it('saves name and navigates to AgencyInfo when valid', async () => {
+    it('clears error when user starts typing', () => {
+        const { getByTestId, getByText, queryByText } = render(<ProfileSetupScreen />);
+        fireEvent.press(getByTestId('continue-button'));
+        expect(getByText('Please enter your name')).toBeTruthy();
+        fireEvent.changeText(getByTestId('name-input'), 'J');
+        expect(queryByText('Please enter your name')).toBeNull();
+    });
+
+    it('saves name and navigates to ProfilePhoto', async () => {
         const { getByTestId } = render(<ProfileSetupScreen />);
         fireEvent.changeText(getByTestId('name-input'), 'John Doe');
         fireEvent.press(getByTestId('continue-button'));
@@ -75,7 +77,7 @@ describe('ProfileSetupScreen', () => {
         await waitFor(() => {
             expect(supabase.from).toHaveBeenCalledWith('users');
             expect(mockRefreshUser).toHaveBeenCalled();
-            expect(mockPush).toHaveBeenCalledWith('/onboarding/AgencyInfo');
+            expect(mockPush).toHaveBeenCalledWith('/onboarding/ProfilePhoto');
         });
     });
 });

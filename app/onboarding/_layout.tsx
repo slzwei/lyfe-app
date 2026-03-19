@@ -14,6 +14,7 @@ export default function OnboardingLayout() {
         >
             <Stack.Screen name="Welcome" />
             <Stack.Screen name="ProfileSetup" />
+            <Stack.Screen name="ProfilePhoto" />
             <Stack.Screen name="AgencyInfo" />
             <Stack.Screen name="OnboardingComplete" />
         </Stack>
