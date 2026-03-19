@@ -163,10 +163,12 @@ describe('setBiometricsEnabled', () => {
         expect(mockSS.setItemAsync).toHaveBeenCalledWith('lyfe_biometrics_prompt_shown', 'true');
     });
 
-    it('deletes key when disabling', async () => {
+    it('deletes all biometric keys when disabling', async () => {
         await setBiometricsEnabled(false);
 
         expect(mockSS.deleteItemAsync).toHaveBeenCalledWith('lyfe_biometrics_enabled');
+        expect(mockSS.deleteItemAsync).toHaveBeenCalledWith('lyfe_biometric_refresh_token');
+        expect(mockSS.deleteItemAsync).toHaveBeenCalledWith('lyfe_biometrics_prompt_shown');
         expect(mockSS.setItemAsync).not.toHaveBeenCalled();
     });
 });

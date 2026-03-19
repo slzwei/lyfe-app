@@ -5,6 +5,7 @@ import type { IconName } from '@/types/ui';
 
 const BIOMETRICS_ENABLED_KEY = 'lyfe_biometrics_enabled';
 const BIOMETRICS_PROMPT_SHOWN_KEY = 'lyfe_biometrics_prompt_shown';
+const BIOMETRIC_REFRESH_TOKEN_KEY = 'lyfe_biometric_refresh_token';
 
 // iOS distinguishes Face ID vs Touch ID; Android uses a unified BiometricPrompt
 // so we return a generic 'biometric' type.
@@ -50,7 +51,26 @@ export async function setBiometricsEnabled(enabled: boolean): Promise<void> {
         await SecureStore.setItemAsync(BIOMETRICS_PROMPT_SHOWN_KEY, 'true');
     } else {
         await SecureStore.deleteItemAsync(BIOMETRICS_ENABLED_KEY);
+        await SecureStore.deleteItemAsync(BIOMETRIC_REFRESH_TOKEN_KEY);
+        await SecureStore.deleteItemAsync(BIOMETRICS_PROMPT_SHOWN_KEY);
     }
+}
+
+/** Stash a refresh token so Face ID can re-establish a session after sign-out. */
+export async function storeBiometricRefreshToken(token: string): Promise<void> {
+    await SecureStore.setItemAsync(BIOMETRIC_REFRESH_TOKEN_KEY, token);
+}
+
+export async function getBiometricRefreshToken(): Promise<string | null> {
+    try {
+        return await SecureStore.getItemAsync(BIOMETRIC_REFRESH_TOKEN_KEY);
+    } catch {
+        return null;
+    }
+}
+
+export async function clearBiometricRefreshToken(): Promise<void> {
+    await SecureStore.deleteItemAsync(BIOMETRIC_REFRESH_TOKEN_KEY);
 }
 
 export async function hasShownBiometricsPrompt(): Promise<boolean> {

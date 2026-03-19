@@ -123,12 +123,11 @@ export default function LoginScreen() {
         if (isBiometricLoading) return;
         setIsBiometricLoading(true);
         setError(null);
-        try {
-            await authenticateWithBiometrics();
-        } catch (e) {
-            if (__DEV__) console.error('[FaceID] Auth error:', e);
-        } finally {
-            setIsBiometricLoading(false);
+        const { error: bioError } = await authenticateWithBiometrics();
+        setIsBiometricLoading(false);
+        if (bioError) {
+            setError(bioError);
+            if (!phoneRevealed) expandPhone();
         }
     };
 
@@ -275,6 +274,15 @@ export default function LoginScreen() {
                                                     </>
                                                 )}
                                             </TouchableOpacity>
+
+                                            {error && !phoneRevealed && (
+                                                <Text
+                                                    testID="login-biometric-error-text"
+                                                    style={[styles.errorText, { color: colors.danger, marginTop: 8 }]}
+                                                >
+                                                    {error}
+                                                </Text>
+                                            )}
 
                                             {/* Divider */}
                                             <View style={styles.dividerRow}>

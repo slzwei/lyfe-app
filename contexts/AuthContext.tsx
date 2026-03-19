@@ -35,7 +35,7 @@ const ProfileContext = createContext<ProfileContextType | undefined>(undefined);
 // ── Biometrics context ────────────────────────────────────────
 interface BiometricsContextType {
     biometricsEnabled: boolean;
-    authenticateWithBiometrics: () => Promise<{ success: boolean }>;
+    authenticateWithBiometrics: () => Promise<{ success: boolean; error?: string }>;
     enableBiometrics: () => Promise<boolean>;
     disableBiometrics: () => Promise<void>;
 }
@@ -119,7 +119,7 @@ function BiometricsProvider({
         isBiometricsEnabled().then(setBiometricsEnabledState);
     }, []);
 
-    const authenticateWithBiometrics = useCallback(async (): Promise<{ success: boolean }> => {
+    const authenticateWithBiometrics = useCallback(async (): Promise<{ success: boolean; error?: string }> => {
         try {
             const success = await authenticate('Sign in to Lyfe');
             if (!success) return { success: false };
@@ -128,9 +128,7 @@ function BiometricsProvider({
                 data: { session },
             } = await supabase.auth.getSession();
             if (!session) {
-                setBiometricsEnabledState(false);
-                await setBiometricsEnabled(false);
-                return { success: false };
+                return { success: false, error: 'Session expired — please sign in with OTP.' };
             }
 
             const profile = await fetchUserProfile(session.user.id, session.user.phone || null);
@@ -358,9 +356,13 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         await AsyncStorage.removeItem('lyfe_view_mode');
 
         const bioEnabled = await isBiometricsEnabled();
-        const hasLiveSession = !!sessionRef.current;
+        if (!bioEnabled) {
+            // Full server-side revocation — refresh token is invalidated
+            await supabase.auth.signOut();
+        }
+        // When biometrics enabled, skip supabase.auth.signOut() so the
+        // session stays in storage for Face ID to recover via getSession().
 
-        await supabase.auth.signOut();
         clearSentryUser();
         setUser(null);
         setAuthState((prev) => ({
@@ -368,7 +370,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
             session: null,
             isLoading: false,
             isAuthenticated: false,
-            pendingBiometricSession: bioEnabled && hasLiveSession,
+            pendingBiometricSession: false,
         }));
     }, []);
 

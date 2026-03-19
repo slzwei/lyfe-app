@@ -21,6 +21,7 @@ function mockResolve(chain: any, value: any) {
 const MOCK_SESSION = {
     user: { id: 'user-1', phone: '+6591234567' },
     access_token: 'tok',
+    refresh_token: 'refresh-tok',
 };
 
 const MOCK_PROFILE = {
@@ -192,7 +193,7 @@ describe('AuthContext — signOut', () => {
         expect(mockSupa.auth.signOut).toHaveBeenCalled();
     });
 
-    it('keeps session alive for biometric re-auth when biometrics enabled', async () => {
+    it('signOut skips server revocation when biometrics enabled', async () => {
         mockSupa.auth.getSession.mockResolvedValue({ data: { session: MOCK_SESSION } });
         const usersChain = mockSupa.__getChain('users');
         mockResolve(usersChain, { data: MOCK_PROFILE, error: null });
@@ -200,17 +201,16 @@ describe('AuthContext — signOut', () => {
         const { result } = renderHook(() => useAuth(), { wrapper });
         await act(async () => {});
 
-        // Now enable biometrics for sign-out check
         mockBio.isBiometricsEnabled.mockResolvedValue(true);
 
         await act(async () => {
             await result.current.signOut();
         });
 
-        // Should STILL call supabase.auth.signOut to revoke server session
-        expect(mockSupa.auth.signOut).toHaveBeenCalled();
+        // Session stays in Supabase storage so Face ID can recover it
+        expect(mockSupa.auth.signOut).not.toHaveBeenCalled();
         expect(result.current.isAuthenticated).toBe(false);
-        expect(result.current.pendingBiometricSession).toBe(true);
+        expect(result.current.pendingBiometricSession).toBe(false);
     });
 });
 
@@ -410,7 +410,7 @@ describe('BiometricsContext', () => {
         });
     });
 
-    it('authenticateWithBiometrics disables biometrics when no session', async () => {
+    it('authenticateWithBiometrics returns error when no session exists', async () => {
         mockBio.authenticate.mockResolvedValue(true);
         mockSupa.auth.getSession.mockResolvedValue({ data: { session: null } });
 
@@ -420,9 +420,8 @@ describe('BiometricsContext', () => {
         await act(async () => {
             const res = await result.current.authenticateWithBiometrics();
             expect(res.success).toBe(false);
+            expect(res.error).toMatch(/session expired/i);
         });
-
-        expect(mockBio.setBiometricsEnabled).toHaveBeenCalledWith(false);
     });
 });
 

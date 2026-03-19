@@ -49,6 +49,7 @@ export const supabase: any = {
         signInWithOtp: jest.fn().mockResolvedValue({ error: null }),
         verifyOtp: jest.fn().mockResolvedValue({ data: { session: {} }, error: null }),
         signOut: jest.fn().mockResolvedValue({ error: null }),
+        refreshSession: jest.fn().mockResolvedValue({ data: { session: null }, error: null }),
         onAuthStateChange: jest.fn(() => ({ data: { subscription: { unsubscribe: jest.fn() } } })),
     },
     storage: {

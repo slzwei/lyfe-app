@@ -129,6 +129,8 @@ export default function ProfileScreen() {
                 return;
             }
             setShowDeleteModal(false);
+            // Clear biometrics so Face ID doesn't show for a deleted account
+            if (biometricsEnabled) await disableBiometrics();
             await supabase.auth.signOut();
         } catch {
             setDeleteError('Failed to delete account. Please try again.');
