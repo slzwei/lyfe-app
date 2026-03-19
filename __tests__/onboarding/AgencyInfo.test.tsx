@@ -66,9 +66,9 @@ describe('AgencyInfoScreen', () => {
         expect(getByTestId('continue-button')).toBeTruthy();
     });
 
-    it('navigates to FirstSteps on continue press', () => {
+    it('navigates to OnboardingComplete on continue press', () => {
         const { getByTestId } = render(<AgencyInfoScreen />);
         fireEvent.press(getByTestId('continue-button'));
-        expect(mockPush).toHaveBeenCalledWith('/onboarding/FirstSteps');
+        expect(mockPush).toHaveBeenCalledWith('/onboarding/OnboardingComplete');
     });
 });

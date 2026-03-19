@@ -1,5 +1,6 @@
 import { useAuth } from '@/contexts/AuthContext';
 import { useTheme } from '@/contexts/ThemeContext';
+import { supabase } from '@/lib/supabase';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import React, { useState } from 'react';
@@ -17,50 +18,37 @@ import {
 
 export default function ProfileSetupScreen() {
     const { colors } = useTheme();
-    const { user } = useAuth();
+    const { user, refreshUser } = useAuth();
     const router = useRouter();
 
-    const [name, setName] = useState(user?.full_name === 'New User' ? '' : user?.full_name ?? '');
-    const [nricLast4, setNricLast4] = useState('');
-    const [errors, setErrors] = useState<{ name?: string; nric?: string }>({});
+    const [name, setName] = useState(user?.full_name === 'New User' ? '' : (user?.full_name ?? ''));
+    const [error, setError] = useState('');
 
-    const validate = (): boolean => {
-        const newErrors: { name?: string; nric?: string } = {};
+    const handleContinue = async () => {
         if (!name.trim()) {
-            newErrors.name = 'Name is required';
+            setError('Name is required');
+            return;
         }
-        if (!nricLast4.trim()) {
-            newErrors.nric = 'NRIC last 4 digits is required';
-        } else if (!/^[0-9]{4}$/.test(nricLast4.trim())) {
-            newErrors.nric = 'Must be exactly 4 digits';
-        }
-        setErrors(newErrors);
-        return Object.keys(newErrors).length === 0;
-    };
+        setError('');
 
-    const handleContinue = () => {
-        if (validate()) {
-            router.push('/onboarding/AgencyInfo');
+        if (user?.id) {
+            await supabase.from('users').update({ full_name: name.trim() }).eq('id', user.id);
+            await refreshUser();
         }
-    };
 
-    const maskedNric = nricLast4 ? `****${nricLast4}` : '';
+        router.push('/onboarding/AgencyInfo');
+    };
 
     return (
         <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]}>
-            <KeyboardAvoidingView
-                style={styles.flex}
-                behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-            >
+            <KeyboardAvoidingView style={styles.flex} behavior={Platform.OS === 'ios' ? 'padding' : 'height'}>
                 <ScrollView
                     style={styles.flex}
                     contentContainerStyle={styles.scrollContent}
                     keyboardShouldPersistTaps="handled"
                 >
                     <Text style={[styles.title, { color: colors.textPrimary }]}>Set Up Your Profile</Text>
-                    <Text style={[styles.subtitle, { color: colors.textSecondary }]}>
-                        Tell us a bit about yourself
-                    </Text>
+                    <Text style={[styles.subtitle, { color: colors.textSecondary }]}>Tell us a bit about yourself</Text>
 
                     {/* Profile Photo Placeholder */}
                     <TouchableOpacity
@@ -79,7 +67,7 @@ export default function ProfileSetupScreen() {
                                 styles.input,
                                 {
                                     backgroundColor: colors.inputBackground,
-                                    borderColor: errors.name ? colors.danger : colors.inputBorder,
+                                    borderColor: error ? colors.danger : colors.inputBorder,
                                     color: colors.textPrimary,
                                 },
                             ]}
@@ -89,9 +77,7 @@ export default function ProfileSetupScreen() {
                             placeholderTextColor={colors.textTertiary}
                             testID="name-input"
                         />
-                        {errors.name && (
-                            <Text style={[styles.errorText, { color: colors.danger }]}>{errors.name}</Text>
-                        )}
+                        {error ? <Text style={[styles.errorText, { color: colors.danger }]}>{error}</Text> : null}
                     </View>
 
                     {/* Phone Field (read-only) */}
@@ -110,36 +96,6 @@ export default function ProfileSetupScreen() {
                             editable={false}
                             testID="phone-input"
                         />
-                    </View>
-
-                    {/* NRIC Last 4 Digits */}
-                    <View style={styles.fieldContainer}>
-                        <Text style={[styles.label, { color: colors.textSecondary }]}>NRIC (Last 4 Digits)</Text>
-                        <TextInput
-                            style={[
-                                styles.input,
-                                {
-                                    backgroundColor: colors.inputBackground,
-                                    borderColor: errors.nric ? colors.danger : colors.inputBorder,
-                                    color: colors.textPrimary,
-                                },
-                            ]}
-                            value={nricLast4}
-                            onChangeText={(text) => setNricLast4(text.replace(/[^0-9]/g, '').slice(0, 4))}
-                            placeholder="1234"
-                            placeholderTextColor={colors.textTertiary}
-                            keyboardType="number-pad"
-                            maxLength={4}
-                            testID="nric-input"
-                        />
-                        {maskedNric ? (
-                            <Text style={[styles.maskedText, { color: colors.textTertiary }]}>
-                                Displayed as: {maskedNric}
-                            </Text>
-                        ) : null}
-                        {errors.nric && (
-                            <Text style={[styles.errorText, { color: colors.danger }]}>{errors.nric}</Text>
-                        )}
                     </View>
                 </ScrollView>
 
@@ -205,11 +161,6 @@ const styles = StyleSheet.create({
         paddingHorizontal: 16,
         paddingVertical: 14,
         fontSize: 16,
-    },
-    maskedText: {
-        fontSize: 12,
-        marginTop: 4,
-        marginLeft: 4,
     },
     errorText: {
         fontSize: 13,

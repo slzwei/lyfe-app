@@ -68,7 +68,7 @@ export default function AgencyInfoScreen() {
             <View style={styles.footer}>
                 <TouchableOpacity
                     style={[styles.button, { backgroundColor: colors.accent }]}
-                    onPress={() => router.push('/onboarding/FirstSteps')}
+                    onPress={() => router.push('/onboarding/OnboardingComplete')}
                     testID="continue-button"
                 >
                     <Text style={[styles.buttonText, { color: colors.textInverse }]}>Continue</Text>

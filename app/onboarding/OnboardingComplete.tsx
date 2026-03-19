@@ -8,7 +8,7 @@ import { SafeAreaView, StyleSheet, Text, TouchableOpacity, View } from 'react-na
 
 export default function OnboardingCompleteScreen() {
     const { colors } = useTheme();
-    const { user } = useAuth();
+    const { user, refreshUser } = useAuth();
     const router = useRouter();
     const hasMarkedComplete = useRef(false);
 
@@ -18,21 +18,33 @@ export default function OnboardingCompleteScreen() {
             hasMarkedComplete.current = true;
 
             await supabase.from('users').update({ onboarding_complete: true }).eq('id', user.id);
+            await refreshUser();
         };
 
         markComplete();
-    }, [user?.id]);
+    }, [user?.id, refreshUser]);
 
+    // Navigate only after local state confirms onboarding is complete
     useEffect(() => {
+        if (user?.onboarding_complete !== true) return;
+
         const timer = setTimeout(() => {
             router.replace('/(tabs)/home');
         }, 2000);
 
         return () => clearTimeout(timer);
-    }, [router]);
+    }, [user?.onboarding_complete, router]);
 
-    const handleGoToDashboard = () => {
-        router.replace('/(tabs)/home');
+    const handleGoToDashboard = async () => {
+        if (user?.onboarding_complete === true) {
+            router.replace('/(tabs)/home');
+            return;
+        }
+        // If the effect hasn't finished yet, do it now
+        if (user?.id) {
+            await supabase.from('users').update({ onboarding_complete: true }).eq('id', user.id);
+            await refreshUser();
+        }
     };
 
     return (

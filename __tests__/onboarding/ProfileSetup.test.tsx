@@ -1,16 +1,18 @@
-jest.mock('@/lib/supabase');
-jest.mock('@/contexts/ThemeContext');
-jest.mock('@/contexts/AuthContext');
-
 import React from 'react';
-import { render, fireEvent } from '@testing-library/react-native';
+import { render, fireEvent, waitFor } from '@testing-library/react-native';
 import { useRouter } from 'expo-router';
 import { useTheme } from '@/contexts/ThemeContext';
 import { useAuth } from '@/contexts/AuthContext';
 import { Colors } from '@/constants/Colors';
+import { supabase } from '@/lib/supabase';
 import ProfileSetupScreen from '@/app/onboarding/ProfileSetup';
 
+jest.mock('@/lib/supabase');
+jest.mock('@/contexts/ThemeContext');
+jest.mock('@/contexts/AuthContext');
+
 const mockPush = jest.fn();
+const mockRefreshUser = jest.fn().mockResolvedValue(undefined);
 
 beforeEach(() => {
     jest.clearAllMocks();
@@ -28,6 +30,12 @@ beforeEach(() => {
     });
     (useAuth as jest.Mock).mockReturnValue({
         user: { id: 'user-1', full_name: 'New User', phone: '+6580000004', role: 'agent' },
+        refreshUser: mockRefreshUser,
+    });
+    (supabase.from as jest.Mock).mockReturnValue({
+        update: jest.fn().mockReturnValue({
+            eq: jest.fn().mockResolvedValue({ error: null }),
+        }),
     });
 });
 
@@ -37,26 +45,15 @@ describe('ProfileSetupScreen', () => {
         expect(getByText('Set Up Your Profile')).toBeTruthy();
     });
 
-    it('shows subtitle text', () => {
-        const { getByText } = render(<ProfileSetupScreen />);
-        expect(getByText('Tell us a bit about yourself')).toBeTruthy();
-    });
-
-    it('shows the name input', () => {
+    it('shows the name input empty for New User', () => {
         const { getByTestId } = render(<ProfileSetupScreen />);
-        expect(getByTestId('name-input')).toBeTruthy();
+        expect(getByTestId('name-input').props.value).toBe('');
     });
 
     it('shows the phone input as read-only', () => {
         const { getByTestId } = render(<ProfileSetupScreen />);
         const phoneInput = getByTestId('phone-input');
-        expect(phoneInput).toBeTruthy();
         expect(phoneInput.props.editable).toBe(false);
-    });
-
-    it('shows the NRIC input', () => {
-        const { getByTestId } = render(<ProfileSetupScreen />);
-        expect(getByTestId('nric-input')).toBeTruthy();
     });
 
     it('shows the photo placeholder', () => {
@@ -64,31 +61,21 @@ describe('ProfileSetupScreen', () => {
         expect(getByTestId('photo-placeholder')).toBeTruthy();
     });
 
-    it('shows the continue button', () => {
-        const { getByTestId } = render(<ProfileSetupScreen />);
-        expect(getByTestId('continue-button')).toBeTruthy();
-    });
-
-    it('shows validation errors when fields are empty', () => {
+    it('shows validation error when name is empty', () => {
         const { getByTestId, getByText } = render(<ProfileSetupScreen />);
         fireEvent.press(getByTestId('continue-button'));
         expect(getByText('Name is required')).toBeTruthy();
-        expect(getByText('NRIC last 4 digits is required')).toBeTruthy();
     });
 
-    it('navigates to AgencyInfo when form is valid', () => {
+    it('saves name and navigates to AgencyInfo when valid', async () => {
         const { getByTestId } = render(<ProfileSetupScreen />);
         fireEvent.changeText(getByTestId('name-input'), 'John Doe');
-        fireEvent.changeText(getByTestId('nric-input'), '1234');
         fireEvent.press(getByTestId('continue-button'));
-        expect(mockPush).toHaveBeenCalledWith('/onboarding/AgencyInfo');
-    });
 
-    it('shows NRIC validation error for non-4-digit input', () => {
-        const { getByTestId, getByText } = render(<ProfileSetupScreen />);
-        fireEvent.changeText(getByTestId('name-input'), 'John Doe');
-        fireEvent.changeText(getByTestId('nric-input'), '12');
-        fireEvent.press(getByTestId('continue-button'));
-        expect(getByText('Must be exactly 4 digits')).toBeTruthy();
+        await waitFor(() => {
+            expect(supabase.from).toHaveBeenCalledWith('users');
+            expect(mockRefreshUser).toHaveBeenCalled();
+            expect(mockPush).toHaveBeenCalledWith('/onboarding/AgencyInfo');
+        });
     });
 });
