@@ -5,15 +5,17 @@ import { useRouter, useFocusEffect } from 'expo-router';
 import { supabase } from '@/lib/supabase';
 import { VARK_TYPE_INFO, type VarkResults } from '@/constants/vark';
 import { ENNEAGRAM_TYPE_INFO, type EnneagramResults, type EnneagramType } from '@/constants/enneagram';
+import { DISC_TYPE_INFO, type DiscResults } from '@/constants/disc';
 import { getPreferenceLabel, isVarkResults } from '@/lib/vark';
 import { isEnneagramResults } from '@/lib/enneagram';
+import { isDiscResults, getDiscLabel } from '@/lib/disc';
 import { displayWeight } from '@/constants/platform';
 import type { ThemeColors } from '@/types/theme';
 
 interface QuizResult {
     attemptId: string;
     paperId: string;
-    personalityResults: VarkResults | EnneagramResults | null;
+    personalityResults: VarkResults | EnneagramResults | DiscResults | null;
 }
 
 interface Props {
@@ -27,8 +29,10 @@ export default function PersonalityQuizzesCard({ colors, userId }: Props) {
     const router = useRouter();
     const [varkResult, setVarkResult] = useState<QuizResult | null>(null);
     const [enneagramResult, setEnneagramResult] = useState<QuizResult | null>(null);
+    const [discResult, setDiscResult] = useState<QuizResult | null>(null);
     const [varkPaperId, setVarkPaperId] = useState<string | null>(null);
     const [enneagramPaperId, setEnneagramPaperId] = useState<string | null>(null);
+    const [discPaperId, setDiscPaperId] = useState<string | null>(null);
     const [isLoading, setIsLoading] = useState(true);
 
     const loadQuizData = useCallback(async () => {
@@ -36,7 +40,7 @@ export default function PersonalityQuizzesCard({ colors, userId }: Props) {
         const { data: papers } = await supabase
             .from('exam_papers')
             .select('id, code')
-            .in('code', ['VARK-001', 'ENNEAGRAM_SAMPLER', 'ENNEAGRAM'])
+            .in('code', ['VARK-001', 'ENNEAGRAM_SAMPLER', 'ENNEAGRAM', 'DISC'])
             .eq('is_active', true);
 
         if (!papers || papers.length === 0) {
@@ -48,11 +52,13 @@ export default function PersonalityQuizzesCard({ colors, userId }: Props) {
         // Prefer sampler for "Take" button, but accept results from either enneagram paper
         const enneaSampler = papers.find((p) => p.code === 'ENNEAGRAM_SAMPLER');
         const enneaFull = papers.find((p) => p.code === 'ENNEAGRAM');
+        const discPaper = papers.find((p) => p.code === 'DISC');
         if (varkPaper) setVarkPaperId(varkPaper.id);
         setEnneagramPaperId(enneaSampler?.id ?? enneaFull?.id ?? null);
+        if (discPaper) setDiscPaperId(discPaper.id);
 
         const enneaPaperIds = [enneaSampler?.id, enneaFull?.id].filter(Boolean) as string[];
-        const paperIds = [varkPaper?.id, ...enneaPaperIds].filter(Boolean) as string[];
+        const paperIds = [varkPaper?.id, ...enneaPaperIds, discPaper?.id].filter(Boolean) as string[];
 
         // Fetch latest completed attempts for these papers
         const { data: attempts } = await supabase
@@ -67,6 +73,7 @@ export default function PersonalityQuizzesCard({ colors, userId }: Props) {
             // Take the most recent attempt per paper (already sorted desc by created_at)
             let foundVark = false;
             let foundEnnea = false;
+            let foundDisc = false;
             for (const attempt of attempts) {
                 if (attempt.paper_id === varkPaper?.id && !foundVark) {
                     foundVark = true;
@@ -86,8 +93,17 @@ export default function PersonalityQuizzesCard({ colors, userId }: Props) {
                             ? attempt.personality_results
                             : null,
                     });
+                } else if (attempt.paper_id === discPaper?.id && !foundDisc) {
+                    foundDisc = true;
+                    setDiscResult({
+                        attemptId: attempt.id,
+                        paperId: attempt.paper_id,
+                        personalityResults: isDiscResults(attempt.personality_results)
+                            ? attempt.personality_results
+                            : null,
+                    });
                 }
-                if (foundVark && foundEnnea) break;
+                if (foundVark && foundEnnea && foundDisc) break;
             }
         }
 
@@ -98,9 +114,18 @@ export default function PersonalityQuizzesCard({ colors, userId }: Props) {
         useCallback(() => {
             setVarkResult(null);
             setEnneagramResult(null);
+            setDiscResult(null);
             loadQuizData();
         }, [loadQuizData]),
     );
+
+    const handleDisc = () => {
+        if (discResult) {
+            router.push(`/(tabs)/profile/results/disc/${discResult.attemptId}` as any);
+        } else if (discPaperId) {
+            router.push({ pathname: '/(tabs)/exams/disc' as any, params: { paperId: discPaperId } });
+        }
+    };
 
     const handleVark = () => {
         if (varkResult) {
@@ -129,6 +154,10 @@ export default function PersonalityQuizzesCard({ colors, userId }: Props) {
     const enneaResults = enneagramResult?.personalityResults as EnneagramResults | null;
     const enneaType = enneaResults ? ENNEAGRAM_TYPE_INFO[enneaResults.primaryType as EnneagramType] : null;
 
+    const discResults = discResult?.personalityResults as DiscResults | null;
+    const discPrimaryInfo = discResults ? DISC_TYPE_INFO[discResults.disc_type] : null;
+    const discLabel = discResults ? getDiscLabel(discResults.disc_type) : null;
+
     if (isLoading) {
         return (
             <View style={[styles.card, { backgroundColor: colors.cardBackground, shadowColor: colors.textPrimary }]}>
@@ -139,7 +168,7 @@ export default function PersonalityQuizzesCard({ colors, userId }: Props) {
     }
 
     // Don't render if no papers exist
-    if (!varkPaperId && !enneagramPaperId) return null;
+    if (!varkPaperId && !enneagramPaperId && !discPaperId) return null;
 
     return (
         <View style={[styles.card, { backgroundColor: colors.cardBackground, shadowColor: colors.textPrimary }]}>
@@ -216,6 +245,50 @@ export default function PersonalityQuizzesCard({ colors, userId }: Props) {
                     </View>
                     <View style={styles.quizAction}>
                         {enneagramResult ? (
+                            <Ionicons name="chevron-forward" size={18} color={colors.textTertiary} />
+                        ) : (
+                            <View style={[styles.takeBadge, { backgroundColor: colors.accent }]}>
+                                <Text style={[styles.takeBadgeText, { color: colors.textInverse }]}>Take</Text>
+                            </View>
+                        )}
+                    </View>
+                </TouchableOpacity>
+            )}
+
+            {/* Divider */}
+            {(varkPaperId || enneagramPaperId) && discPaperId && (
+                <View style={[styles.divider, { backgroundColor: colors.border }]} />
+            )}
+
+            {/* DISC Row */}
+            {discPaperId && (
+                <TouchableOpacity style={styles.quizRow} onPress={handleDisc} activeOpacity={0.6}>
+                    <View
+                        style={[
+                            styles.quizIcon,
+                            {
+                                backgroundColor: discPrimaryInfo ? discPrimaryInfo.color + '14' : colors.accentLight,
+                            },
+                        ]}
+                    >
+                        <Ionicons
+                            name={discPrimaryInfo ? (discPrimaryInfo.icon as any) : 'compass-outline'}
+                            size={20}
+                            color={discPrimaryInfo ? discPrimaryInfo.color : colors.accent}
+                        />
+                    </View>
+                    <View style={styles.quizTextCol}>
+                        <Text style={[styles.quizTitle, { color: colors.textPrimary }]}>DISC Profile</Text>
+                        {discLabel ? (
+                            <Text style={[styles.quizResult, { color: discPrimaryInfo!.color }]}>{discLabel}</Text>
+                        ) : (
+                            <Text style={[styles.quizSubtitle, { color: colors.textTertiary }]}>
+                                Discover your work style
+                            </Text>
+                        )}
+                    </View>
+                    <View style={styles.quizAction}>
+                        {discResult ? (
                             <Ionicons name="chevron-forward" size={18} color={colors.textTertiary} />
                         ) : (
                             <View style={[styles.takeBadge, { backgroundColor: colors.accent }]}>

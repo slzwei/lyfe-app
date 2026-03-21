@@ -12,6 +12,8 @@ type TabRoute =
     | `/(tabs)/exams/results/${string}`
     | `/(tabs)/exams/results/enneagram/${string}`
     | `/(tabs)/exams/results/vark/${string}`
+    | `/(tabs)/exams/results/disc/${string}`
+    | `/(tabs)/exams/disc`
     | `/(tabs)/exams/exam/${string}`
     | '/(tabs)/exams/study'
     | '/(tabs)/events'
@@ -34,6 +36,7 @@ type TabRoute =
     | '/(tabs)/profile/terms'
     | `/(tabs)/profile/results/vark/${string}`
     | `/(tabs)/profile/results/enneagram/${string}`
+    | `/(tabs)/profile/results/disc/${string}`
     | `/(tabs)/profile/results/${string}`
     | `/(tabs)/profile/take/${string}`
     | '/(tabs)/roadmap'
@@ -41,6 +44,7 @@ type TabRoute =
     | `/(tabs)/roadmap/results/${string}`
     | `/(tabs)/roadmap/results/enneagram/${string}`
     | `/(tabs)/roadmap/results/vark/${string}`
+    | `/(tabs)/roadmap/results/disc/${string}`
     | `/(tabs)/roadmap/module/${string}`
     | '/(tabs)/pa'
     | `/(tabs)/pa/candidate/${string}`

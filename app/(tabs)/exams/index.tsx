@@ -54,8 +54,12 @@ export default function ExamsListScreen() {
     }, [fetchData]);
 
     const handlePaperPress = (paper: ExamPaper) => {
-        if (paper.question_count === 0) return;
-        router.push(`/(tabs)/exams/take/${paper.id}`);
+        if (paper.question_count === 0 && paper.code !== 'DISC') return;
+        if (paper.code === 'DISC') {
+            router.push({ pathname: '/(tabs)/exams/disc', params: { paperId: paper.id } } as any);
+        } else {
+            router.push(`/(tabs)/exams/take/${paper.id}`);
+        }
     };
 
     if (isLoading) {

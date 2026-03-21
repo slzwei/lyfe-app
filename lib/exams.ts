@@ -5,8 +5,10 @@ import type { ExamPaper, ExamQuestion, PaperStats } from '@/types/exam';
 import type { Json } from '@/types/supabase';
 import type { VarkResults } from '@/constants/vark';
 import type { EnneagramResults } from '@/constants/enneagram';
+import type { DiscResults } from '@/constants/disc';
 import { computeVarkScores, isVarkResults } from './vark';
 import { computeEnneagramScores, isEnneagramResults } from './enneagram';
+import { isDiscResults } from './disc';
 import { supabase } from './supabase';
 
 /** Default pass threshold when exam_papers.pass_percentage is unavailable */
@@ -97,8 +99,8 @@ export interface ExamResultData {
     }[];
     questions: ExamQuestion[];
     paperCode: string;
-    /** Present only for personality quizzes (VARK, Enneagram, etc.) */
-    personalityResults?: VarkResults | EnneagramResults | null;
+    /** Present only for personality quizzes (VARK, Enneagram, DISC, etc.) */
+    personalityResults?: VarkResults | EnneagramResults | DiscResults | null;
 }
 
 /**
@@ -308,6 +310,67 @@ export async function submitEnneagramAttempt(
     };
 }
 
+// ── Submit DISC / Personality Quiz ────────────────────────────
+
+interface SubmitDiscInput {
+    userId: string;
+    paperId: string;
+    answers: Record<number, number | string>;
+    startedAt: number; // Unix ms
+}
+
+/**
+ * Submit a DISC personality quiz attempt atomically via RPC.
+ * DISC uses a custom question format (word pairs, ratings, scenarios)
+ * with client-side scoring — no DB questions are involved.
+ */
+export async function submitDiscAttempt(
+    input: SubmitDiscInput,
+    discResults: DiscResults,
+): Promise<{ data: ExamResultData | null; error: string | null }> {
+    const { userId, paperId, startedAt } = input;
+
+    const durationSeconds = Math.floor((Date.now() - startedAt) / 1000);
+
+    const { data: rpcResult, error: rpcError } = await supabase.rpc('submit_exam_attempt', {
+        p_user_id: userId,
+        p_paper_id: paperId,
+        p_status: 'submitted',
+        // personality quiz — no score/pass fields
+        p_score: null as unknown as number,
+        p_total_questions: discResults.totalQuestions,
+        p_percentage: null as unknown as number,
+        p_passed: null as unknown as boolean,
+        p_started_at: new Date(startedAt).toISOString(),
+        p_submitted_at: new Date().toISOString(),
+        p_duration_seconds: durationSeconds,
+        p_personality_results: discResults as unknown as Json,
+        p_answers: [],
+    });
+
+    if (rpcError) {
+        return { data: null, error: rpcError.message };
+    }
+
+    const attemptId = (rpcResult as { attempt_id: string }).attempt_id;
+
+    return {
+        data: {
+            id: attemptId,
+            score: 0,
+            totalQuestions: discResults.totalQuestions,
+            percentage: 0,
+            passed: false,
+            status: 'submitted',
+            answers: [],
+            questions: [],
+            paperCode: 'DISC',
+            personalityResults: discResults,
+        },
+        error: null,
+    };
+}
+
 // ── Fetch Exam Result ────────────────────────────────────────
 
 /**
@@ -357,7 +420,9 @@ export async function fetchExamResult(
                     ? attempt.personality_results
                     : isVarkResults(attempt.personality_results)
                       ? attempt.personality_results
-                      : null,
+                      : isDiscResults(attempt.personality_results)
+                        ? attempt.personality_results
+                        : null,
             },
             error: null,
         };

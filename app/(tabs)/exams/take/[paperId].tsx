@@ -122,6 +122,11 @@ export default function TakeExamScreen() {
                     const parsed = JSON.parse(questionsData[0].explanation || '');
                     if (parsed?.quiz_type === 'enneagram') detected = 'enneagram';
                     else if (parsed?.quiz_type === 'vark') detected = 'vark';
+                    else if (parsed?.quiz_type === 'disc') {
+                        // DISC uses a dedicated screen — redirect
+                        router.replace({ pathname: `${tabBase}/disc` as any, params: { paperId } });
+                        return;
+                    }
                 } catch {
                     /* Not a personality quiz */
                 }
