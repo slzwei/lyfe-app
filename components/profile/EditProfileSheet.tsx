@@ -67,6 +67,7 @@ export default function EditProfileSheet({
                             ]}
                         >
                             <TextInput
+                                testID="edit-profile-name"
                                 style={[styles.input, { color: colors.textPrimary }]}
                                 value={name}
                                 onChangeText={onNameChange}
@@ -87,6 +88,7 @@ export default function EditProfileSheet({
                             ]}
                         >
                             <TextInput
+                                testID="edit-profile-email"
                                 style={[styles.input, { color: colors.textPrimary }]}
                                 value={email}
                                 onChangeText={onEmailChange}
@@ -102,6 +104,7 @@ export default function EditProfileSheet({
                         {error && <Text style={[styles.errorText, { color: colors.danger }]}>{error}</Text>}
 
                         <TouchableOpacity
+                            testID="edit-profile-save"
                             style={[styles.saveBtn, { backgroundColor: colors.accent, opacity: saving ? 0.5 : 1 }]}
                             onPress={onSave}
                             disabled={saving}

@@ -1,11 +1,19 @@
-# Flow: Login via OTP (Manager mock user)
+# Helper: Parameterized login — logs in as any mock user
+# Input: phone (last 8 digits, e.g. "80000003" for manager)
 appId: com.shawnlee.lyfe
-
+input:
+  phone: "80000003"
 ---
 
 - launchApp
 
-# Dismiss dev menu welcome + tools sheet
+# Connect to Metro via deep link (handles dev launcher screen)
+- openLink: "exp+lyfe-app://expo-development-client/?url=http%3A%2F%2Flocalhost%3A8081"
+- waitForAnimationToEnd
+- waitForAnimationToEnd
+- waitForAnimationToEnd
+
+# Dismiss dev menu
 - tapOn:
     text: "Continue"
     optional: true
@@ -18,12 +26,17 @@ appId: com.shawnlee.lyfe
     optional: true
 - waitForAnimationToEnd
 
-# === Sign out if logged in ===
+# Go to Home first (leftmost tab, ~10%), then Profile (rightmost ~90%)
+- tapOn:
+    point: "10%,97%"
+    optional: true
+- waitForAnimationToEnd
+
+# Sign out if logged in — navigate to Profile
 - tapOn:
     point: "90%,97%"
     optional: true
 - waitForAnimationToEnd
-
 - scrollUntilVisible:
     element:
       id: "profile-sign-out-button"
@@ -37,33 +50,27 @@ appId: com.shawnlee.lyfe
 - tapOn:
     text: "Confirm sign out"
     optional: true
-# Fallback: tap confirm button by coordinate (right side of modal, ~65% x, 56% y)
-- tapOn:
-    point: "65%,56%"
-    optional: true
 - waitForAnimationToEnd
 
-# === Now we should be on login screen ===
+# Wait for login screen
 - extendedWaitUntil:
     visible:
       id: "login-phone-input"
     timeout: 15000
 
-# --- Phone Entry ---
+# Enter phone and OTP
 - tapOn:
     id: "login-phone-input"
-- inputText: "80000003"
+- inputText: "${phone}"
 - tapOn:
     id: "login-send-otp-button"
-
-# --- OTP Entry ---
 - extendedWaitUntil:
     visible: "Verify your number"
     timeout: 15000
 - tapOn: "OTP input"
 - inputText: "555555"
 
-# --- Verify Dashboard ---
+# Wait for dashboard
 - extendedWaitUntil:
     visible:
       id: "home-scroll-view"

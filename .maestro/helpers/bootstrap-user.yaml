@@ -1,11 +1,12 @@
-# Flow: Login via OTP (Manager mock user)
+# Helper: Log in a mock user to create their auth + profile record
+# Input: phone (last 8 digits)
 appId: com.shawnlee.lyfe
-
+input:
+  phone: "80000001"
 ---
-
 - launchApp
 
-# Dismiss dev menu welcome + tools sheet
+# Dismiss dev menu
 - tapOn:
     text: "Continue"
     optional: true
@@ -18,12 +19,11 @@ appId: com.shawnlee.lyfe
     optional: true
 - waitForAnimationToEnd
 
-# === Sign out if logged in ===
+# Sign out if already logged in
 - tapOn:
     point: "90%,97%"
     optional: true
 - waitForAnimationToEnd
-
 - scrollUntilVisible:
     element:
       id: "profile-sign-out-button"
@@ -37,34 +37,33 @@ appId: com.shawnlee.lyfe
 - tapOn:
     text: "Confirm sign out"
     optional: true
-# Fallback: tap confirm button by coordinate (right side of modal, ~65% x, 56% y)
+- waitForAnimationToEnd
+
+# Handle onboarding if shown
 - tapOn:
-    point: "65%,56%"
+    id: "get-started-button"
     optional: true
 - waitForAnimationToEnd
 
-# === Now we should be on login screen ===
+# Wait for login screen
 - extendedWaitUntil:
     visible:
       id: "login-phone-input"
     timeout: 15000
 
-# --- Phone Entry ---
+# Login
 - tapOn:
     id: "login-phone-input"
-- inputText: "80000003"
+- inputText: "${phone}"
 - tapOn:
     id: "login-send-otp-button"
-
-# --- OTP Entry ---
 - extendedWaitUntil:
     visible: "Verify your number"
     timeout: 15000
 - tapOn: "OTP input"
 - inputText: "555555"
 
-# --- Verify Dashboard ---
-- extendedWaitUntil:
-    visible:
-      id: "home-scroll-view"
-    timeout: 20000
+# Wait for either dashboard or onboarding
+- waitForAnimationToEnd
+- waitForAnimationToEnd
+- waitForAnimationToEnd

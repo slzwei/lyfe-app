@@ -1,0 +1,33 @@
+# Leads: Create a new lead
+# STATUS: BLOCKED — Maestro cannot focus TextInputs in React Native modal screens.
+# The add-lead screen uses `presentation: 'modal'` which causes tap events to not
+# propagate to TextInput focus on iOS. This is a known Maestro limitation.
+# TODO: Either change presentation to 'card', or wait for Maestro fix.
+# For now, this flow verifies the modal opens and the form renders.
+appId: com.shawnlee.lyfe
+---
+- runFlow:
+    file: ../helpers/login-as.yaml
+    env:
+      phone: "80000003"
+
+# Navigate to Leads tab
+- tapOn:
+    point: "30%,97%"
+- waitForAnimationToEnd
+
+# Tap Add button — verify modal opens
+- tapOn:
+    id: "leads-add-button"
+- waitForAnimationToEnd
+- waitForAnimationToEnd
+
+# Verify form renders
+- extendedWaitUntil:
+    visible:
+      id: "add-lead-save"
+    timeout: 5000
+
+# Dismiss modal
+- tapOn: "Cancel"
+- waitForAnimationToEnd

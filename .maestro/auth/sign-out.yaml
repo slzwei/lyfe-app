@@ -1,34 +1,28 @@
-# Flow: Profile screen — verify elements and sign out
+# Auth: Sign out flow — login then sign out and verify return to login screen
 appId: com.shawnlee.lyfe
-
 ---
+- runFlow:
+    file: ../helpers/login-as.yaml
+    env:
+      phone: "80000003"
 
-- runFlow: 01-login.yaml
-
-# --- Navigate to Profile tab (rightmost tab ~90% x) ---
+# Navigate to Profile tab (5-tab: 90%)
 - tapOn:
     point: "90%,97%"
 - waitForAnimationToEnd
 
-# --- Verify profile elements ---
-- assertVisible:
-    id: "profile-user-hero"
-    optional: true
-
-# --- Sign Out ---
+# Sign out
 - scrollUntilVisible:
     element:
       id: "profile-sign-out-button"
     direction: DOWN
-
 - tapOn:
     id: "profile-sign-out-button"
 - waitForAnimationToEnd
-
 - tapOn: "Confirm sign out"
 - waitForAnimationToEnd
 
-# Should return to login screen
+# Verify login screen
 - extendedWaitUntil:
     visible:
       id: "login-phone-input"

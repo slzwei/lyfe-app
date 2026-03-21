@@ -136,6 +136,7 @@ export default function AddLeadScreen() {
                     style={[styles.saveBtn, { backgroundColor: colors.accent, opacity: isSaving ? 0.5 : 1 }]}
                     disabled={isSaving}
                     accessibilityRole="button"
+                    testID="add-lead-save"
                     accessibilityLabel="Save new lead"
                 >
                     {isSaving ? (
@@ -168,6 +169,7 @@ export default function AddLeadScreen() {
                             </Text>
 
                             <FormField
+                                testID="add-lead-name"
                                 label="Full Name *"
                                 value={name}
                                 onChangeText={setName}
@@ -177,6 +179,7 @@ export default function AddLeadScreen() {
                                 icon="person-outline"
                             />
                             <FormField
+                                testID="add-lead-phone"
                                 label="Phone *"
                                 value={phone}
                                 onChangeText={setPhone}
@@ -187,6 +190,7 @@ export default function AddLeadScreen() {
                                 keyboardType="phone-pad"
                             />
                             <FormField
+                                testID="add-lead-email"
                                 label="Email"
                                 value={email}
                                 onChangeText={setEmail}
@@ -321,6 +325,7 @@ export default function AddLeadScreen() {
                             style={[styles.modalOkBtn, { backgroundColor: colors.accent }]}
                             onPress={handleSuccessDismiss}
                             accessibilityRole="button"
+                            testID="add-lead-success-ok"
                             accessibilityLabel="OK, dismiss"
                         >
                             <Text style={[styles.modalOkBtnText, { color: colors.textInverse }]}>OK</Text>

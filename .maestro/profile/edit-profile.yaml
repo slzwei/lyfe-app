@@ -1,0 +1,30 @@
+# Profile: Open edit profile sheet and verify it renders
+# NOTE: TextInput focus in modal sheets has the same Maestro limitation.
+# This flow verifies the sheet opens with the Save button visible.
+appId: com.shawnlee.lyfe
+---
+- runFlow:
+    file: ../helpers/login-as.yaml
+    env:
+      phone: "80000003"
+
+# Navigate to Profile tab (5-tab manager: 90%)
+- tapOn:
+    point: "90%,97%"
+- waitForAnimationToEnd
+
+# Tap "Edit Profile" row
+- tapOn:
+    text: "Edit Profile"
+- waitForAnimationToEnd
+
+# Verify edit sheet opened
+- extendedWaitUntil:
+    visible:
+      id: "edit-profile-save"
+    timeout: 5000
+
+# Dismiss by tapping overlay
+- tapOn:
+    point: "50%,10%"
+- waitForAnimationToEnd

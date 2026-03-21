@@ -104,6 +104,7 @@ export default function LeadsListScreen() {
                         style={[styles.addButton, { backgroundColor: colors.accent }]}
                         onPress={() => router.push('/(tabs)/leads/add')}
                         accessibilityRole="button"
+                        testID="leads-add-button"
                         accessibilityLabel="Add new lead"
                     >
                         <Ionicons name="add" size={20} color={colors.textInverse} />

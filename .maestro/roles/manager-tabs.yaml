@@ -1,0 +1,31 @@
+# Roles: Verify manager sees correct tabs (Home, Leads, Team, Events, Profile)
+appId: com.shawnlee.lyfe
+---
+- runFlow:
+    file: ../helpers/login-as.yaml
+    env:
+      phone: "80000003"
+
+# Manager has 5 tabs in manager view — verify by navigating
+# Leads tab (30%)
+- tapOn:
+    point: "30%,97%"
+- waitForAnimationToEnd
+
+# Team tab (50%)
+- tapOn:
+    point: "50%,97%"
+- waitForAnimationToEnd
+
+# Events tab (70%)
+- tapOn:
+    point: "70%,97%"
+- waitForAnimationToEnd
+
+# Profile tab (90%)
+- tapOn:
+    point: "90%,97%"
+- waitForAnimationToEnd
+- assertVisible:
+    id: "profile-user-hero"
+    optional: true

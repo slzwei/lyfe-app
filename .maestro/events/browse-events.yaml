@@ -1,0 +1,24 @@
+# Events: Browse events list and calendar
+appId: com.shawnlee.lyfe
+---
+- runFlow:
+    file: ../helpers/login-as.yaml
+    env:
+      phone: "80000003"
+
+# Navigate to Events tab (5-tab manager: 70%)
+- tapOn:
+    point: "70%,97%"
+- waitForAnimationToEnd
+- waitForAnimationToEnd
+
+# Verify events screen loaded (calendar or event list visible)
+- assertVisible:
+    id: "events-list"
+    optional: true
+
+# Tap an event card if visible
+- tapOn:
+    point: "50%,55%"
+    optional: true
+- waitForAnimationToEnd

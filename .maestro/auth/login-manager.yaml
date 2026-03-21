@@ -1,0 +1,4 @@
+# Auth: Login as Manager — uses the proven 01-login flow
+appId: com.shawnlee.lyfe
+---
+- runFlow: ../01-login.yaml
