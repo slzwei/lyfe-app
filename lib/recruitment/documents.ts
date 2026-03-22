@@ -61,6 +61,15 @@ export async function uploadCandidateDocument(
     }
 }
 
+/**
+ * Get a signed URL for a PDF in the candidate-pdfs bucket (registration/DISC PDFs).
+ */
+export async function getGeneratedPdfUrl(filePath: string): Promise<string | null> {
+    const { data, error } = await supabase.storage.from('candidate-pdfs').createSignedUrl(filePath, 3600);
+    if (error || !data?.signedUrl) return null;
+    return data.signedUrl;
+}
+
 export async function deleteCandidateDocument(documentId: string): Promise<{ error: string | null }> {
     const { error } = await supabase.from('candidate_documents').delete().eq('id', documentId);
 

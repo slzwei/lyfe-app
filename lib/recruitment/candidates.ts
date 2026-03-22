@@ -90,6 +90,8 @@ export async function fetchCandidates(
         invite_token: r.invite_token,
         notes: r.notes,
         resume_url: r.resume_url || null,
+        profile_pdf_path: null,
+        disc_pdf_path: null,
         interviews: interviewMap[r.id] || [],
         created_at: r.created_at,
         updated_at: r.updated_at,
@@ -120,12 +122,15 @@ export async function fetchCandidate(
         if (mgr) managerName = mgr.full_name;
     }
 
-    // Interviews
-    const { data: interviews } = await supabase
-        .from('interviews')
-        .select('*')
-        .eq('candidate_id', candidateId)
-        .order('datetime', { ascending: false });
+    // Interviews + invitation PDFs (parallel)
+    const [{ data: interviews }, { data: invitation }] = await Promise.all([
+        supabase.from('interviews').select('*').eq('candidate_id', candidateId).order('datetime', { ascending: false }),
+        supabase
+            .from('invitations')
+            .select('profile_pdf_path, disc_pdf_path')
+            .eq('candidate_record_id', candidateId)
+            .single(),
+    ]);
 
     const candidate: RecruitmentCandidate = {
         id: row.id,
@@ -139,6 +144,8 @@ export async function fetchCandidate(
         invite_token: row.invite_token,
         notes: row.notes,
         resume_url: row.resume_url || null,
+        profile_pdf_path: invitation?.profile_pdf_path || null,
+        disc_pdf_path: invitation?.disc_pdf_path || null,
         interviews: (interviews || []) as Interview[],
         created_at: row.created_at ?? '',
         updated_at: row.updated_at ?? '',
@@ -154,10 +161,13 @@ export async function createCandidate(
     input: CreateCandidateInput,
     userId: string,
 ): Promise<{ data: RecruitmentCandidate | null; inviteToken: string | null; error: string | null }> {
-    // Generate a random invite token
-    const token = `inv_${Array.from({ length: 20 }, () =>
-        'abcdefghijklmnopqrstuvwxyz0123456789'.charAt(Math.floor(Math.random() * 36)),
-    ).join('')}`;
+    // Generate a 32-byte base64url invite token (matches lyfe-sg format)
+    const bytes = new Uint8Array(32);
+    crypto.getRandomValues(bytes);
+    const token = btoa(String.fromCharCode(...bytes))
+        .replace(/\+/g, '-')
+        .replace(/\//g, '_')
+        .replace(/=+$/, '');
 
     const { data: row, error } = await supabase
         .from('candidates')
@@ -176,8 +186,22 @@ export async function createCandidate(
 
     if (error) return { data: null, inviteToken: null, error: error.message };
 
+    // Also create an invitations record so lyfe-sg ATS can track this candidate
+    const { data: staffUser } = await supabase.from('users').select('full_name').eq('id', userId).single();
+    await supabase.from('invitations').insert({
+        token,
+        email: input.email || '',
+        candidate_name: input.name,
+        status: 'pending',
+        invited_by: staffUser?.full_name || 'Mobile App',
+        invited_by_user_id: userId,
+        candidate_record_id: row.id,
+    });
+
     // Fetch manager name for the response
-    const { data: mgr } = await supabase.from('users').select('full_name').eq('id', userId).single();
+    const { data: mgr } = staffUser
+        ? { data: staffUser }
+        : await supabase.from('users').select('full_name').eq('id', userId).single();
 
     const candidate: RecruitmentCandidate = {
         id: row.id,
@@ -191,6 +215,8 @@ export async function createCandidate(
         invite_token: row.invite_token,
         notes: row.notes,
         resume_url: row.resume_url || null,
+        profile_pdf_path: null,
+        disc_pdf_path: null,
         interviews: [],
         created_at: row.created_at ?? '',
         updated_at: row.updated_at ?? '',

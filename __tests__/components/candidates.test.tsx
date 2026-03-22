@@ -93,6 +93,8 @@ function makeCandidate(overrides: Partial<RecruitmentCandidate> = {}): Recruitme
         invite_token: null,
         notes: null,
         resume_url: null,
+        profile_pdf_path: null,
+        disc_pdf_path: null,
         interviews: [],
         created_at: '2026-03-01T00:00:00Z',
         updated_at: '2026-03-15T00:00:00Z',

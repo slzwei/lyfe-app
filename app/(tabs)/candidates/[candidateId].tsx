@@ -17,7 +17,7 @@ import { useTheme } from '@/contexts/ThemeContext';
 import { useContactOutcome } from '@/hooks/useContactOutcome';
 import { useDocumentManager } from '@/hooks/useDocumentManager';
 import { useInterviewScheduler } from '@/hooks/useInterviewScheduler';
-import { addCandidateActivity, fetchCandidate } from '@/lib/recruitment';
+import { addCandidateActivity, fetchCandidate, getGeneratedPdfUrl } from '@/lib/recruitment';
 import { fetchCandidateRoadmap, unlockProgrammeForCandidate } from '@/lib/roadmap';
 import type { CandidateActivity, Interview, RecruitmentCandidate } from '@/types/recruitment';
 import type { ProgrammeWithModules } from '@/types/roadmap';
@@ -136,6 +136,7 @@ export default function CandidateDetailScreen() {
         scheduleLink,
         scheduleLocation,
         scheduleNotes,
+        scheduleRecommendation,
         isScheduling,
         scheduleError,
         setScheduleDate,
@@ -147,6 +148,7 @@ export default function CandidateDetailScreen() {
         setScheduleLocation,
         setScheduleNotes,
         setScheduleStatus,
+        setScheduleRecommendation,
         openNewInterview,
         openEditInterview,
         dismissScheduleSheet,
@@ -207,6 +209,26 @@ export default function CandidateDetailScreen() {
     useEffect(() => {
         if (candidateId) docManager.loadDocuments();
     }, [candidateId]); // eslint-disable-line react-hooks/exhaustive-deps
+
+    const handleViewGeneratedPdf = useCallback(
+        async (path: string, title: string) => {
+            const url = await getGeneratedPdfUrl(path);
+            if (url) {
+                docManager.setShowPdf(true);
+                // Access the internal state setters via the exposed pdfUrl/pdfTitle pattern
+                // We need to use handleViewDocument with a synthetic doc
+                docManager.handleViewDocument({
+                    id: path,
+                    candidate_id: '',
+                    label: title,
+                    file_name: '',
+                    file_url: url,
+                    created_at: null,
+                });
+            }
+        },
+        [docManager],
+    );
 
     const loadRoadmap = useCallback(async () => {
         if (!candidateId || !canMarkComplete) return;
@@ -328,6 +350,42 @@ export default function CandidateDetailScreen() {
                             <Text style={[styles.countBadge, { color: colors.textTertiary }]}>{documents.length}</Text>
                         )}
                     </View>
+                    {/* Generated PDFs */}
+                    {(candidate.profile_pdf_path || candidate.disc_pdf_path) && (
+                        <View
+                            style={{
+                                borderBottomWidth: 1,
+                                borderBottomColor: colors.cardBorder,
+                                paddingBottom: 8,
+                                marginBottom: 8,
+                            }}
+                        >
+                            {candidate.profile_pdf_path && (
+                                <TouchableOpacity
+                                    onPress={() =>
+                                        handleViewGeneratedPdf(candidate.profile_pdf_path!, 'Registration Form')
+                                    }
+                                    style={styles.pdfRow}
+                                >
+                                    <Ionicons name="document-text-outline" size={18} color={colors.accent} />
+                                    <Text style={[styles.pdfLabel, { color: colors.textPrimary }]}>
+                                        Registration Form
+                                    </Text>
+                                    <Ionicons name="eye-outline" size={16} color={colors.textTertiary} />
+                                </TouchableOpacity>
+                            )}
+                            {candidate.disc_pdf_path && (
+                                <TouchableOpacity
+                                    onPress={() => handleViewGeneratedPdf(candidate.disc_pdf_path!, 'DISC Profile')}
+                                    style={styles.pdfRow}
+                                >
+                                    <Ionicons name="document-text-outline" size={18} color="#8b5cf6" />
+                                    <Text style={[styles.pdfLabel, { color: colors.textPrimary }]}>DISC Profile</Text>
+                                    <Ionicons name="eye-outline" size={16} color={colors.textTertiary} />
+                                </TouchableOpacity>
+                            )}
+                        </View>
+                    )}
                     <DocumentList
                         documents={documents}
                         hasDocumentPicker={hasDocumentPicker}
@@ -468,6 +526,7 @@ export default function CandidateDetailScreen() {
                 scheduleLocation={scheduleLocation}
                 scheduleNotes={scheduleNotes}
                 scheduleStatus={scheduleStatus}
+                scheduleRecommendation={scheduleRecommendation}
                 scheduleError={scheduleError}
                 isScheduling={isScheduling}
                 onDateChange={setScheduleDate}
@@ -479,6 +538,7 @@ export default function CandidateDetailScreen() {
                 onLocationChange={setScheduleLocation}
                 onNotesChange={setScheduleNotes}
                 onStatusChange={setScheduleStatus}
+                onRecommendationChange={setScheduleRecommendation}
                 onSubmit={handleSubmitSchedule}
                 onDismiss={dismissScheduleSheet}
             />
@@ -571,5 +631,17 @@ const styles = StyleSheet.create({
     unlockBtnText: {
         fontSize: 14,
         fontWeight: '600',
+    },
+    pdfRow: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 8,
+        paddingVertical: 10,
+        paddingHorizontal: 4,
+    },
+    pdfLabel: {
+        flex: 1,
+        fontSize: 14,
+        fontWeight: '500',
     },
 });

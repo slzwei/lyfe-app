@@ -17,5 +17,10 @@ export {
     syncAgentToMKTR,
 } from './candidates';
 export { scheduleInterview, updateInterview, deleteInterview } from './interviews';
-export { fetchCandidateDocuments, uploadCandidateDocument, deleteCandidateDocument } from './documents';
+export {
+    fetchCandidateDocuments,
+    uploadCandidateDocument,
+    deleteCandidateDocument,
+    getGeneratedPdfUrl,
+} from './documents';
 export { fetchPAManagerIds, fetchPAManagers, fetchPACandidateCount, fetchPAInterviewCount } from './pa-helpers';

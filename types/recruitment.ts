@@ -36,6 +36,14 @@ export const CANDIDATE_STATUSES = (
 // ── Interview ──
 export type InterviewType = 'zoom' | 'in_person';
 export type InterviewStatus = 'scheduled' | 'completed' | 'cancelled' | 'rescheduled';
+export type InterviewRecommendation = 'second_interview' | 'on_hold' | 'pass';
+
+export const RECOMMENDATION_CONFIG: Record<InterviewRecommendation, { label: string; color: string; icon: IconName }> =
+    {
+        second_interview: { label: '2nd Interview', color: '#007AFF', icon: 'refresh-outline' },
+        on_hold: { label: 'On Hold', color: '#EAB308', icon: 'pause-circle-outline' },
+        pass: { label: 'Pass', color: '#FF3B30', icon: 'close-circle-outline' },
+    };
 
 export interface Interview {
     id: string;
@@ -50,6 +58,7 @@ export interface Interview {
     google_calendar_event_id: string | null;
     status: InterviewStatus;
     notes: string | null;
+    recommendation: InterviewRecommendation | null;
     created_at: string;
 }
 
@@ -113,6 +122,8 @@ export interface RecruitmentCandidate {
     invite_token: string | null;
     notes: string | null;
     resume_url: string | null;
+    profile_pdf_path: string | null;
+    disc_pdf_path: string | null;
     interviews: Interview[];
     created_at: string;
     updated_at: string;
