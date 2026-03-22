@@ -14,7 +14,7 @@ export default function EventsLayout() {
         >
             <Stack.Screen name="index" />
             <Stack.Screen name="[eventId]" options={{ presentation: 'card' }} />
-            <Stack.Screen name="create" options={{ presentation: 'modal' }} />
+            <Stack.Screen name="create" />
         </Stack>
     );
 }
