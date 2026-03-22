@@ -2,7 +2,7 @@ import ErrorBanner from '@/components/ErrorBanner';
 import FormField from '@/components/FormField';
 import { useAuth } from '@/contexts/AuthContext';
 import { useTheme } from '@/contexts/ThemeContext';
-import { createCandidate, uploadCandidateDocument, type CreateCandidateInput } from '@/lib/recruitment';
+import { createCandidate, getInviteUrl, uploadCandidateDocument, type CreateCandidateInput } from '@/lib/recruitment';
 import { useSubmitGuard } from '@/hooks/useSubmitGuard';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
@@ -89,7 +89,7 @@ export default function AddCandidateScreen() {
                 uploadCandidateDocument(newCandidate.id, 'Resume', resumeFile.uri, resumeFile.name);
             }
 
-            setInviteLink(`https://lyfe-admin.vercel.app/invite/${inviteToken}`);
+            setInviteLink(getInviteUrl(inviteToken));
             setShowSuccess(true);
         });
 

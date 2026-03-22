@@ -3,8 +3,20 @@ import { KAV_BEHAVIOR, letterSpacing } from '@/constants/platform';
 import { useAuth } from '@/contexts/AuthContext';
 import { useTheme } from '@/contexts/ThemeContext';
 import type { ThemeColors } from '@/types/theme';
-import { addCandidateActivity, fetchCandidate, syncAgentToMKTR, updateCandidateStatus } from '@/lib/recruitment';
-import { CANDIDATE_STATUS_CONFIG, type CandidateStatus, type RecruitmentCandidate } from '@/types/recruitment';
+import {
+    addCandidateActivity,
+    fetchCandidate,
+    getInviteUrl,
+    syncAgentToMKTR,
+    updateCandidateStatus,
+} from '@/lib/recruitment';
+import {
+    CANDIDATE_STATUS_CONFIG,
+    RECOMMENDATION_CONFIG,
+    type CandidateStatus,
+    type InterviewRecommendation,
+    type RecruitmentCandidate,
+} from '@/types/recruitment';
 import type { IconName } from '@/types/ui';
 import { Ionicons } from '@expo/vector-icons';
 import { useLocalSearchParams, useSegments } from 'expo-router';
@@ -185,7 +197,7 @@ export default function CandidateDetailScreen() {
                             style={[styles.inviteBanner, { backgroundColor: colors.accentLight }]}
                             activeOpacity={0.7}
                             onPress={() => {
-                                const link = `https://lyfe-admin.vercel.app/invite/${candidate.invite_token}`;
+                                const link = getInviteUrl(candidate.invite_token!);
                                 Share.share({ message: link });
                             }}
                         >
@@ -284,6 +296,50 @@ export default function CandidateDetailScreen() {
                                             {interview.status.charAt(0).toUpperCase() + interview.status.slice(1)}
                                         </Text>
                                     </View>
+                                    {interview.recommendation &&
+                                        RECOMMENDATION_CONFIG[interview.recommendation as InterviewRecommendation] && (
+                                            <View
+                                                style={[
+                                                    styles.recBadge,
+                                                    {
+                                                        backgroundColor:
+                                                            RECOMMENDATION_CONFIG[
+                                                                interview.recommendation as InterviewRecommendation
+                                                            ].color + '14',
+                                                    },
+                                                ]}
+                                            >
+                                                <Ionicons
+                                                    name={
+                                                        RECOMMENDATION_CONFIG[
+                                                            interview.recommendation as InterviewRecommendation
+                                                        ].icon
+                                                    }
+                                                    size={12}
+                                                    color={
+                                                        RECOMMENDATION_CONFIG[
+                                                            interview.recommendation as InterviewRecommendation
+                                                        ].color
+                                                    }
+                                                />
+                                                <Text
+                                                    style={[
+                                                        styles.recBadgeText,
+                                                        {
+                                                            color: RECOMMENDATION_CONFIG[
+                                                                interview.recommendation as InterviewRecommendation
+                                                            ].color,
+                                                        },
+                                                    ]}
+                                                >
+                                                    {
+                                                        RECOMMENDATION_CONFIG[
+                                                            interview.recommendation as InterviewRecommendation
+                                                        ].label
+                                                    }
+                                                </Text>
+                                            </View>
+                                        )}
                                 </View>
                             </View>
                         ))}
@@ -548,6 +604,17 @@ const styles = StyleSheet.create({
     },
     interviewType: { fontSize: 12 },
     interviewStatus: { fontSize: 12, fontWeight: '600', marginLeft: 8 },
+    recBadge: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        alignSelf: 'flex-start',
+        gap: 4,
+        marginTop: 4,
+        paddingHorizontal: 8,
+        paddingVertical: 3,
+        borderRadius: 6,
+    },
+    recBadgeText: { fontSize: 11, fontWeight: '700' },
 
     // Notes
     notesText: { fontSize: 14, lineHeight: 20 },

@@ -5,6 +5,7 @@ import LoadingState from '@/components/LoadingState';
 import ScreenHeader from '@/components/ScreenHeader';
 import { useAuth } from '@/contexts/AuthContext';
 import { useTheme } from '@/contexts/ThemeContext';
+import { useCandidateRealtime } from '@/hooks/useCandidateRealtime';
 import { fetchCandidates } from '@/lib/recruitment';
 import {
     CANDIDATE_STATUSES,
@@ -72,6 +73,9 @@ export default function CandidateListScreen({
             loadCandidates();
         }, [loadCandidates]),
     );
+
+    // Real-time: re-fetch when any candidate pipeline data changes
+    useCandidateRealtime(loadCandidates);
 
     const { filtered: filteredCandidates, counts } = useFilteredList(
         candidates,

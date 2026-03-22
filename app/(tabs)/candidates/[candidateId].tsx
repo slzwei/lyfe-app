@@ -1,5 +1,7 @@
+import ApplicationDetailsCard from '@/components/candidates/ApplicationDetailsCard';
 import CandidateProfileCard from '@/components/candidates/CandidateProfileCard';
 import ContactHistoryCard from '@/components/candidates/ContactHistoryCard';
+import DiscResultsCard from '@/components/candidates/DiscResultsCard';
 import ContactOutcomeSheet from '@/components/candidates/ContactOutcomeSheet';
 import { AddDocumentSheet, DocumentList } from '@/components/candidates/DocumentSection';
 import InterviewSchedulerSheet from '@/components/candidates/InterviewSchedulerSheet';
@@ -340,6 +342,10 @@ export default function CandidateDetailScreen() {
                 showsVerticalScrollIndicator={false}
             >
                 <CandidateProfileCard candidate={candidate} colors={colors} />
+                {candidate.disc_results && <DiscResultsCard discResults={candidate.disc_results} colors={colors} />}
+                {candidate.profile_details && (
+                    <ApplicationDetailsCard profile={candidate.profile_details} colors={colors} />
+                )}
                 <QuickActionsBar actions={quickActions} colors={colors} />
 
                 {/* Documents */}

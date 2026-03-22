@@ -92,6 +92,8 @@ export async function fetchCandidates(
         resume_url: r.resume_url || null,
         profile_pdf_path: null,
         disc_pdf_path: null,
+        disc_results: null,
+        profile_details: null,
         interviews: interviewMap[r.id] || [],
         created_at: r.created_at,
         updated_at: r.updated_at,
@@ -122,14 +124,32 @@ export async function fetchCandidate(
         if (mgr) managerName = mgr.full_name;
     }
 
-    // Interviews + invitation PDFs (parallel)
-    const [{ data: interviews }, { data: invitation }] = await Promise.all([
+    // Fetch candidate profile (application details + user_id for DISC lookup)
+    const profileFields =
+        'user_id, completed, onboarding_step, full_name, chinese_name, alias, date_of_birth, nationality, race, gender, marital_status, address_block, address_street, address_unit, address_postal, position_applied, expected_salary, salary_period, date_available, emergency_name, emergency_relationship, emergency_contact, education, employment_history, languages, software_competencies, shorthand_wpm, typing_wpm';
+    const { data: profile } = await supabase
+        .from('candidate_profiles')
+        .select(profileFields)
+        .eq('candidate_id', candidateId)
+        .single();
+
+    // Interviews + invitation PDFs + DISC results (parallel)
+    const discPromise = profile?.user_id
+        ? supabase
+              .from('disc_results')
+              .select('d_pct, i_pct, s_pct, c_pct, disc_type, angle')
+              .eq('user_id', profile.user_id)
+              .single()
+        : Promise.resolve({ data: null });
+
+    const [{ data: interviews }, { data: invitation }, { data: discRow }] = await Promise.all([
         supabase.from('interviews').select('*').eq('candidate_id', candidateId).order('datetime', { ascending: false }),
         supabase
             .from('invitations')
             .select('profile_pdf_path, disc_pdf_path')
             .eq('candidate_record_id', candidateId)
             .single(),
+        discPromise,
     ]);
 
     const candidate: RecruitmentCandidate = {
@@ -146,6 +166,47 @@ export async function fetchCandidate(
         resume_url: row.resume_url || null,
         profile_pdf_path: invitation?.profile_pdf_path || null,
         disc_pdf_path: invitation?.disc_pdf_path || null,
+        disc_results: discRow
+            ? {
+                  d_pct: discRow.d_pct,
+                  i_pct: discRow.i_pct,
+                  s_pct: discRow.s_pct,
+                  c_pct: discRow.c_pct,
+                  disc_type: discRow.disc_type,
+                  angle: discRow.angle,
+              }
+            : null,
+        profile_details: profile
+            ? {
+                  completed: profile.completed,
+                  onboarding_step: profile.onboarding_step,
+                  full_name: profile.full_name,
+                  chinese_name: profile.chinese_name,
+                  alias: profile.alias,
+                  date_of_birth: profile.date_of_birth,
+                  nationality: profile.nationality,
+                  race: profile.race,
+                  gender: profile.gender,
+                  marital_status: profile.marital_status,
+                  address_block: profile.address_block,
+                  address_street: profile.address_street,
+                  address_unit: profile.address_unit,
+                  address_postal: profile.address_postal,
+                  position_applied: profile.position_applied,
+                  expected_salary: profile.expected_salary,
+                  salary_period: profile.salary_period,
+                  date_available: profile.date_available,
+                  emergency_name: profile.emergency_name,
+                  emergency_relationship: profile.emergency_relationship,
+                  emergency_contact: profile.emergency_contact,
+                  education: (profile.education as any[]) || [],
+                  employment_history: (profile.employment_history as any[]) || [],
+                  languages: (profile.languages as any[]) || [],
+                  software_competencies: profile.software_competencies,
+                  shorthand_wpm: profile.shorthand_wpm,
+                  typing_wpm: profile.typing_wpm,
+              }
+            : null,
         interviews: (interviews || []) as Interview[],
         created_at: row.created_at ?? '',
         updated_at: row.updated_at ?? '',
@@ -155,74 +216,76 @@ export async function fetchCandidate(
 }
 
 /**
- * Create a new candidate with a generated invite token.
+ * Create a new candidate via the shared create-candidate edge function.
+ * This ensures consistent candidate + invitation creation across both apps.
  */
 export async function createCandidate(
     input: CreateCandidateInput,
     userId: string,
 ): Promise<{ data: RecruitmentCandidate | null; inviteToken: string | null; error: string | null }> {
-    // Generate a 32-byte base64url invite token (matches lyfe-sg format)
-    const bytes = new Uint8Array(32);
-    crypto.getRandomValues(bytes);
-    const token = btoa(String.fromCharCode(...bytes))
-        .replace(/\+/g, '-')
-        .replace(/\//g, '_')
-        .replace(/=+$/, '');
+    try {
+        const {
+            data: { session },
+        } = await supabase.auth.getSession();
+        if (!session?.access_token) {
+            return { data: null, inviteToken: null, error: 'No active session' };
+        }
 
-    const { data: row, error } = await supabase
-        .from('candidates')
-        .insert({
-            name: input.name,
-            phone: input.phone,
-            email: input.email || null,
-            notes: input.notes || null,
-            status: 'applied',
-            assigned_manager_id: userId,
-            created_by_id: userId,
-            invite_token: token,
-        })
-        .select()
-        .single();
+        const supabaseUrl = process.env.EXPO_PUBLIC_SUPABASE_URL || '';
+        const response = await fetch(`${supabaseUrl}/functions/v1/create-candidate`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                Authorization: `Bearer ${session.access_token}`,
+            },
+            body: JSON.stringify({
+                name: input.name,
+                phone: input.phone,
+                email: input.email || undefined,
+                notes: input.notes || undefined,
+            }),
+        });
 
-    if (error) return { data: null, inviteToken: null, error: error.message };
+        const result = await response.json();
+        if (!response.ok) {
+            return { data: null, inviteToken: null, error: result.error || 'Failed to create candidate' };
+        }
 
-    // Also create an invitations record so lyfe-sg ATS can track this candidate
-    const { data: staffUser } = await supabase.from('users').select('full_name').eq('id', userId).single();
-    await supabase.from('invitations').insert({
-        token,
-        email: input.email || '',
-        candidate_name: input.name,
-        status: 'pending',
-        invited_by: staffUser?.full_name || 'Mobile App',
-        invited_by_user_id: userId,
-        candidate_record_id: row.id,
-    });
+        const row = result.candidate;
 
-    // Fetch manager name for the response
-    const { data: mgr } = staffUser
-        ? { data: staffUser }
-        : await supabase.from('users').select('full_name').eq('id', userId).single();
+        // Fetch manager name for the response
+        const { data: mgr } = await supabase.from('users').select('full_name').eq('id', userId).single();
 
-    const candidate: RecruitmentCandidate = {
-        id: row.id,
-        name: row.name,
-        phone: row.phone,
-        email: row.email,
-        status: row.status,
-        assigned_manager_id: row.assigned_manager_id,
-        assigned_manager_name: mgr?.full_name || 'Unknown',
-        created_by_id: row.created_by_id,
-        invite_token: row.invite_token,
-        notes: row.notes,
-        resume_url: row.resume_url || null,
-        profile_pdf_path: null,
-        disc_pdf_path: null,
-        interviews: [],
-        created_at: row.created_at ?? '',
-        updated_at: row.updated_at ?? '',
-    };
+        const candidate: RecruitmentCandidate = {
+            id: row.id,
+            name: row.name,
+            phone: row.phone,
+            email: row.email,
+            status: row.status,
+            assigned_manager_id: row.assigned_manager_id,
+            assigned_manager_name: mgr?.full_name || 'Unknown',
+            created_by_id: row.created_by_id,
+            invite_token: row.invite_token,
+            notes: row.notes,
+            resume_url: row.resume_url || null,
+            profile_pdf_path: null,
+            disc_pdf_path: null,
+            disc_results: null,
+            profile_details: null,
+            interviews: [],
+            created_at: row.created_at ?? '',
+            updated_at: row.updated_at ?? '',
+        };
 
-    return { data: candidate, inviteToken: token, error: null };
+        return { data: candidate, inviteToken: result.invite_token, error: null };
+    } catch (err: unknown) {
+        captureError(err, { fn: 'createCandidate' });
+        return {
+            data: null,
+            inviteToken: null,
+            error: err instanceof Error ? err.message : 'Failed to create candidate',
+        };
+    }
 }
 
 /**

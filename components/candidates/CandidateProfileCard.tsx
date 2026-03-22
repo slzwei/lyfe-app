@@ -1,5 +1,6 @@
 import { letterSpacing } from '@/constants/platform';
 import { formatCreatedAt, timeAgo } from '@/lib/dateTime';
+import { getInviteUrl } from '@/lib/recruitment/invite-url';
 import { CANDIDATE_STATUS_CONFIG, type RecruitmentCandidate } from '@/types/recruitment';
 import type { ThemeColors } from '@/types/theme';
 import { Ionicons } from '@expo/vector-icons';
@@ -70,7 +71,7 @@ function CandidateProfileCard({ candidate, colors }: Props) {
                     style={[styles.inviteBanner, { backgroundColor: colors.accentLight }]}
                     activeOpacity={0.7}
                     onPress={async () => {
-                        const link = `https://lyfe-admin.vercel.app/invite/${candidate.invite_token}`;
+                        const link = getInviteUrl(candidate.invite_token!);
                         if (Clipboard) {
                             await Clipboard.setStringAsync(link);
                             Alert.alert('Copied', 'Invite link copied to clipboard');

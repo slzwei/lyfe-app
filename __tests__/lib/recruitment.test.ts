@@ -206,11 +206,23 @@ describe('fetchCandidate', () => {
 // ── createCandidate ──
 
 describe('createCandidate', () => {
-    it('creates candidate with generated invite token', async () => {
-        const candidatesChain = mockSupa.__getChain('candidates');
-        mockResolve(candidatesChain, {
-            data: { ...CANDIDATE_ROW, id: 'new-cand', invite_token: 'inv_test' },
-            error: null,
+    beforeEach(() => {
+        // Mock auth session for edge function call
+        mockSupa.auth = {
+            getSession: jest.fn().mockResolvedValue({
+                data: { session: { access_token: 'test-token' } },
+            }),
+        };
+    });
+
+    it('creates candidate via edge function', async () => {
+        mockFetch.mockResolvedValueOnce({
+            ok: true,
+            json: async () => ({
+                candidate: { ...CANDIDATE_ROW, id: 'new-cand', invite_token: 'inv_test' },
+                invite_token: 'inv_test',
+                invite_url: 'https://lyfe.sg/candidate/login?token=inv_test',
+            }),
         });
 
         const usersChain = mockSupa.__getChain('users');
@@ -223,13 +235,14 @@ describe('createCandidate', () => {
 
         expect(result.error).toBeNull();
         expect(result.data?.id).toBe('new-cand');
-        expect(result.inviteToken).toBeTruthy();
-        expect(result.inviteToken!.length).toBeGreaterThan(20);
+        expect(result.inviteToken).toBe('inv_test');
     });
 
-    it('returns error on insert failure', async () => {
-        const chain = mockSupa.__getChain('candidates');
-        mockResolve(chain, { data: null, error: { message: 'Duplicate phone' } });
+    it('returns error on edge function failure', async () => {
+        mockFetch.mockResolvedValueOnce({
+            ok: false,
+            json: async () => ({ error: 'Duplicate phone' }),
+        });
 
         const result = await createCandidate({ name: 'Jane', phone: '+65123', email: null, notes: null }, 'mgr-1');
 
