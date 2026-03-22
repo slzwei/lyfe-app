@@ -1,8 +1,31 @@
-// ── Enum const arrays (used for filter dropdowns + type-checking) ──
+/**
+ * Admin panel types.
+ *
+ * Shared types (enums, core interfaces) imported from lyfe-types via synced copies.
+ * Admin-specific types (ExamPaper, RoadmapModule, etc.) defined locally.
+ *
+ * Ownership boundaries:
+ *   lyfe-sg    = candidate-facing ATS (invitations, onboarding, DISC, interviews, jobs)
+ *   admin      = system management (users, roles, exams, training, analytics, events)
+ *   lyfe-app   = field operations (leads, events, roadshows, candidate status updates)
+ */
+
+// ── Re-export shared types ──
+export type { UserRole, LifecycleStage, CandidateStatus } from './shared-types/database';
+export type {
+    LeadStatus,
+    LeadSource,
+    ProductInterest,
+    LeadActivityType,
+    Lead,
+    LeadActivity,
+} from './shared-types/lead';
+export type { EventType } from './shared-types/event';
+export { STAFF_ROLES } from './shared-types/roles';
+
+// ── Enum const arrays (for filter dropdowns) ──
 
 export const USER_ROLES = ['admin', 'director', 'manager', 'agent', 'pa', 'candidate'] as const;
-export type UserRole = (typeof USER_ROLES)[number];
-
 export const LIFECYCLE_STAGES = [
     'applied',
     'interview_scheduled',
@@ -12,17 +35,9 @@ export const LIFECYCLE_STAGES = [
     'licensed',
     'active_agent',
 ] as const;
-export type LifecycleStage = (typeof LIFECYCLE_STAGES)[number];
-
 export const LEAD_STATUSES = ['new', 'contacted', 'qualified', 'proposed', 'won', 'lost'] as const;
-export type LeadStatus = (typeof LEAD_STATUSES)[number];
-
 export const LEAD_SOURCES = ['referral', 'walk_in', 'online', 'event', 'cold_call', 'other'] as const;
-export type LeadSource = (typeof LEAD_SOURCES)[number];
-
 export const PRODUCT_INTERESTS = ['life', 'health', 'ilp', 'general'] as const;
-export type ProductInterest = (typeof PRODUCT_INTERESTS)[number];
-
 export const CANDIDATE_STATUSES = [
     'applied',
     'interview_scheduled',
@@ -32,11 +47,7 @@ export const CANDIDATE_STATUSES = [
     'licensed',
     'active_agent',
 ] as const;
-export type CandidateStatus = (typeof CANDIDATE_STATUSES)[number];
-
 export const EVENT_TYPES = ['team_meeting', 'training', 'agency_event', 'roadshow', 'exam', 'other'] as const;
-export type EventType = (typeof EVENT_TYPES)[number];
-
 export const LEAD_ACTIVITY_TYPES = [
     'created',
     'note',
@@ -47,15 +58,12 @@ export const LEAD_ACTIVITY_TYPES = [
     'meeting',
     'follow_up',
 ] as const;
-export type LeadActivityType = (typeof LEAD_ACTIVITY_TYPES)[number];
-
 export const CANDIDATE_ACTIVITY_TYPES = ['call', 'whatsapp', 'note'] as const;
 export type CandidateActivityType = (typeof CANDIDATE_ACTIVITY_TYPES)[number];
-
 export const INTERVIEW_STATUSES = ['scheduled', 'completed', 'cancelled', 'rescheduled'] as const;
 export type InterviewStatus = (typeof INTERVIEW_STATUSES)[number];
 
-// ── Row types ──
+// ── Admin-specific row types ──
 
 export interface User {
     id: string;
@@ -63,32 +71,14 @@ export interface User {
     phone: string | null;
     full_name: string;
     avatar_url: string | null;
-    role: UserRole;
+    role: (typeof USER_ROLES)[number];
     reports_to: string | null;
     reports_to_name?: string | null;
-    lifecycle_stage: LifecycleStage | null;
+    lifecycle_stage: (typeof LIFECYCLE_STAGES)[number] | null;
     date_of_birth: string | null;
     last_login_at: string | null;
     push_token: string | null;
     is_active: boolean;
-    created_at: string;
-    updated_at: string;
-}
-
-export interface Lead {
-    id: string;
-    full_name: string;
-    phone: string | null;
-    email: string | null;
-    source: LeadSource | null;
-    source_name: string | null;
-    status: LeadStatus;
-    product_interest: ProductInterest | null;
-    notes: string | null;
-    assigned_to: string;
-    assigned_to_name?: string;
-    created_by: string;
-    created_by_name?: string;
     created_at: string;
     updated_at: string;
 }
@@ -98,7 +88,7 @@ export interface Candidate {
     name: string;
     phone: string;
     email: string | null;
-    status: CandidateStatus;
+    status: (typeof CANDIDATE_STATUSES)[number];
     assigned_manager_id: string;
     assigned_manager_name?: string;
     created_by_id: string;
@@ -114,7 +104,7 @@ export interface AgencyEvent {
     id: string;
     title: string;
     description: string | null;
-    event_type: EventType;
+    event_type: (typeof EVENT_TYPES)[number];
     event_date: string;
     start_time: string;
     end_time: string | null;
@@ -151,7 +141,7 @@ export interface ExamQuestion {
     question_number: number;
     question_text: string;
     has_latex: boolean;
-    options: Record<string, string>; // { A: "...", B: "...", C: "...", D: "..." }
+    options: Record<string, string>;
     correct_answer: string;
     explanation: string | null;
     explanation_has_latex: boolean;
@@ -191,18 +181,6 @@ export interface Interview {
     updated_at: string;
 }
 
-export interface LeadActivity {
-    id: string;
-    lead_id: string;
-    user_id: string;
-    user_name?: string;
-    lead_name?: string;
-    type: LeadActivityType;
-    description: string | null;
-    metadata: Record<string, unknown> | null;
-    created_at: string;
-}
-
 export interface CandidateActivity {
     id: string;
     candidate_id: string;
@@ -212,21 +190,6 @@ export interface CandidateActivity {
     type: CandidateActivityType;
     outcome: string | null;
     note: string | null;
-    created_at: string;
-}
-
-export interface InviteToken {
-    id: string;
-    token: string;
-    intended_role: UserRole;
-    assigned_manager_id: string | null;
-    assigned_manager_name?: string;
-    created_by: string;
-    created_by_name?: string;
-    consumed_by: string | null;
-    consumed_by_name?: string;
-    consumed_at: string | null;
-    expires_at: string;
     created_at: string;
 }
 
@@ -241,7 +204,7 @@ export interface PaManagerAssignment {
 
 // ── Label maps ──
 
-export const ROLE_LABELS: Record<UserRole, string> = {
+export const ROLE_LABELS: Record<(typeof USER_ROLES)[number], string> = {
     admin: 'Admin',
     director: 'Director',
     manager: 'Manager',
@@ -250,7 +213,7 @@ export const ROLE_LABELS: Record<UserRole, string> = {
     candidate: 'Candidate',
 };
 
-export const LEAD_STATUS_LABELS: Record<LeadStatus, string> = {
+export const LEAD_STATUS_LABELS: Record<(typeof LEAD_STATUSES)[number], string> = {
     new: 'New',
     contacted: 'Contacted',
     qualified: 'Qualified',
@@ -259,7 +222,7 @@ export const LEAD_STATUS_LABELS: Record<LeadStatus, string> = {
     lost: 'Lost',
 };
 
-export const CANDIDATE_STATUS_LABELS: Record<CandidateStatus, string> = {
+export const CANDIDATE_STATUS_LABELS: Record<(typeof CANDIDATE_STATUSES)[number], string> = {
     applied: 'Applied',
     interview_scheduled: 'Interview Scheduled',
     interviewed: 'Interviewed',
@@ -269,7 +232,7 @@ export const CANDIDATE_STATUS_LABELS: Record<CandidateStatus, string> = {
     active_agent: 'Active Agent',
 };
 
-export const EVENT_TYPE_LABELS: Record<EventType, string> = {
+export const EVENT_TYPE_LABELS: Record<(typeof EVENT_TYPES)[number], string> = {
     team_meeting: 'Team Meeting',
     training: 'Training',
     agency_event: 'Agency Event',
@@ -278,7 +241,7 @@ export const EVENT_TYPE_LABELS: Record<EventType, string> = {
     other: 'Other',
 };
 
-export const LEAD_SOURCE_LABELS: Record<LeadSource, string> = {
+export const LEAD_SOURCE_LABELS: Record<(typeof LEAD_SOURCES)[number], string> = {
     referral: 'Referral',
     walk_in: 'Walk-in',
     online: 'Online',
@@ -287,7 +250,7 @@ export const LEAD_SOURCE_LABELS: Record<LeadSource, string> = {
     other: 'Other',
 };
 
-export const PRODUCT_INTEREST_LABELS: Record<ProductInterest, string> = {
+export const PRODUCT_INTEREST_LABELS: Record<(typeof PRODUCT_INTERESTS)[number], string> = {
     life: 'Life',
     health: 'Health',
     ilp: 'ILP',
@@ -295,7 +258,6 @@ export const PRODUCT_INTEREST_LABELS: Record<ProductInterest, string> = {
 };
 
 // ── Supabase join response helpers ──
-// These type the shape returned by Supabase `.select('*, relation(col)')` joins.
 
 export type WithJoin<T> = T & { [key: string]: { full_name: string } | { name: string } | null };
 
@@ -303,17 +265,15 @@ export interface NameJoin {
     full_name: string;
 }
 
-/** Extract `full_name` from a Supabase join relation, falling back to a default. */
 export function joinName(relation: NameJoin | null | undefined, fallback = 'Unknown'): string {
     return relation?.full_name ?? fallback;
 }
 
-/** Extract `name` from a Supabase join relation (e.g. candidates table). */
 export function joinCandidateName(relation: { name: string } | null | undefined, fallback = 'Unknown'): string {
     return relation?.name ?? fallback;
 }
 
-// ── Roadmap types ──
+// ── Roadmap types (admin-only — training builder) ──
 
 export const MODULE_TYPES = ['training', 'exam', 'resource'] as const;
 export type ModuleType = (typeof MODULE_TYPES)[number];
@@ -359,7 +319,6 @@ export interface RoadmapModule {
     archived_by: string | null;
     created_at: string;
     updated_at: string;
-    // Join data
     exam_papers?: { code: string; title: string } | null;
 }
 
@@ -396,8 +355,6 @@ export const RESOURCE_TYPE_LABELS: Record<ResourceType, string> = {
     text: 'Article',
 };
 
-// ── Module Item types ──
-
 export const ITEM_TYPES = ['material', 'pre_quiz', 'quiz', 'exam', 'attendance'] as const;
 export type ItemType = (typeof ITEM_TYPES)[number];
 
@@ -423,7 +380,6 @@ export interface RoadmapModuleItem {
     archived_by: string | null;
     created_at: string;
     updated_at: string;
-    // Join data
     roadmap_modules?: { title: string } | null;
     exam_papers?: { code: string; title: string } | null;
 }
