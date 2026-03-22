@@ -16,6 +16,7 @@ export type Capability =
     | 'hold_agents'
     | 'reassign_leads'
     | 'reassign_leads_globally'
+    | 'reassign_candidates'
     | 'invite_agents'
     | 'create_candidates'
     | 'schedule_interviews'
@@ -29,6 +30,7 @@ export const ROLE_CAPABILITIES: Record<UserRole, Capability[]> = {
         'hold_agents',
         'reassign_leads',
         'reassign_leads_globally',
+        'reassign_candidates',
         'invite_agents',
         'create_candidates',
         'schedule_interviews',
@@ -37,6 +39,7 @@ export const ROLE_CAPABILITIES: Record<UserRole, Capability[]> = {
     director: [
         'hold_agents',
         'reassign_leads',
+        'reassign_candidates',
         'invite_agents',
         'create_candidates',
         'schedule_interviews',
@@ -47,6 +50,7 @@ export const ROLE_CAPABILITIES: Record<UserRole, Capability[]> = {
     manager: [
         'hold_agents',
         'reassign_leads',
+        'reassign_candidates',
         'invite_agents',
         'create_candidates',
         'schedule_interviews',
@@ -73,6 +77,10 @@ export function canReassignLeads(role: UserRole): boolean {
 
 export function canReassignLeadsGlobally(role: UserRole): boolean {
     return hasCapability(role, 'reassign_leads_globally');
+}
+
+export function canReassignCandidates(role: UserRole): boolean {
+    return hasCapability(role, 'reassign_candidates');
 }
 
 export function canInviteAgents(role: UserRole): boolean {

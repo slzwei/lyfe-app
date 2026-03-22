@@ -9,10 +9,13 @@
  */
 export {
     type CreateCandidateInput,
+    type AssignableManager,
     fetchCandidates,
     fetchCandidate,
     createCandidate,
     updateCandidateStatus,
+    fetchAssignableManagers,
+    reassignCandidate,
     addCandidateActivity,
     syncAgentToMKTR,
 } from './candidates';

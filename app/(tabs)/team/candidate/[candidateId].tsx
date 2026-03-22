@@ -5,10 +5,13 @@ import { useTheme } from '@/contexts/ThemeContext';
 import type { ThemeColors } from '@/types/theme';
 import {
     addCandidateActivity,
+    fetchAssignableManagers,
     fetchCandidate,
     getInviteUrl,
+    reassignCandidate,
     syncAgentToMKTR,
     updateCandidateStatus,
+    type AssignableManager,
 } from '@/lib/recruitment';
 import {
     CANDIDATE_STATUS_CONFIG,
@@ -49,6 +52,12 @@ export default function CandidateDetailScreen() {
     const [isSavingNote, setIsSavingNote] = useState(false);
     const [candidate, setCandidate] = useState<RecruitmentCandidate | null>(null);
     const [isLoading, setIsLoading] = useState(true);
+    const [showReassignModal, setShowReassignModal] = useState(false);
+    const [reassignManagers, setReassignManagers] = useState<AssignableManager[]>([]);
+    const [isReassigning, setIsReassigning] = useState(false);
+
+    const userRole = user?.app_metadata?.role as string | undefined;
+    const isManagerPlus = userRole && ['manager', 'director', 'admin'].includes(userRole);
 
     // Sheet slide-up animations (overlay appears instantly; only the sheet slides)
     const noteSheetY = useRef(new Animated.Value(400)).current;
@@ -153,6 +162,34 @@ export default function CandidateDetailScreen() {
         },
         { icon: 'call-outline', label: 'Call', onPress: () => Linking.openURL(`tel:${candidate.phone}`) },
     ];
+
+    if (isManagerPlus) {
+        actions.push({
+            icon: 'swap-horizontal-outline',
+            label: 'Reassign',
+            onPress: async () => {
+                if (user?.id && userRole) {
+                    const { data } = await fetchAssignableManagers(user.id, userRole);
+                    setReassignManagers(data);
+                }
+                setShowReassignModal(true);
+            },
+        });
+    }
+
+    const handleReassign = async (managerId: string) => {
+        if (!user?.id || !candidate) return;
+        setIsReassigning(true);
+        const { error } = await reassignCandidate(candidate.id, managerId, user.id);
+        setIsReassigning(false);
+        setShowReassignModal(false);
+        if (error) {
+            Alert.alert('Error', error);
+        } else {
+            Alert.alert('Reassigned', 'Candidate has been reassigned');
+            loadCandidate();
+        }
+    };
 
     return (
         <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]} edges={['top']}>
@@ -410,6 +447,62 @@ export default function CandidateDetailScreen() {
                     </TouchableOpacity>
                 </KeyboardAvoidingView>
             </Modal>
+
+            {/* Reassign Modal */}
+            <Modal
+                visible={showReassignModal}
+                transparent
+                animationType="fade"
+                onRequestClose={() => setShowReassignModal(false)}
+            >
+                <TouchableOpacity
+                    style={styles.modalOverlay}
+                    activeOpacity={1}
+                    onPress={() => setShowReassignModal(false)}
+                >
+                    <View
+                        style={[styles.reassignSheet, { backgroundColor: colors.cardBackground }]}
+                        onStartShouldSetResponder={() => true}
+                    >
+                        <View style={[styles.noteHandle, { backgroundColor: colors.border }]} />
+                        <Text style={[styles.noteTitle, { color: colors.textPrimary }]}>Reassign Candidate</Text>
+                        <Text style={{ color: colors.textTertiary, fontSize: 13, marginBottom: 12 }}>
+                            Select a new manager for {candidate?.name}
+                        </Text>
+                        <ScrollView style={{ maxHeight: 300 }}>
+                            {reassignManagers.map((m) => (
+                                <TouchableOpacity
+                                    key={m.id}
+                                    style={[styles.reassignOption, { borderBottomColor: colors.border }]}
+                                    onPress={() => handleReassign(m.id)}
+                                    disabled={isReassigning}
+                                    activeOpacity={0.7}
+                                >
+                                    <Text style={[styles.reassignName, { color: colors.textPrimary }]}>
+                                        {m.full_name}
+                                    </Text>
+                                    <Text
+                                        style={{
+                                            color: colors.textTertiary,
+                                            fontSize: 13,
+                                            textTransform: 'capitalize',
+                                        }}
+                                    >
+                                        {m.role}
+                                    </Text>
+                                </TouchableOpacity>
+                            ))}
+                        </ScrollView>
+                        {isReassigning && (
+                            <Text
+                                style={{ color: colors.textTertiary, textAlign: 'center', marginTop: 8, fontSize: 13 }}
+                            >
+                                Reassigning...
+                            </Text>
+                        )}
+                    </View>
+                </TouchableOpacity>
+            </Modal>
         </SafeAreaView>
     );
 }
@@ -655,6 +748,25 @@ const styles = StyleSheet.create({
         flex: 1,
         backgroundColor: 'rgba(0,0,0,0.4)',
         justifyContent: 'flex-end',
+    },
+
+    // Reassign
+    reassignSheet: {
+        borderTopLeftRadius: 20,
+        borderTopRightRadius: 20,
+        padding: 20,
+        paddingBottom: 40,
+    },
+    reassignOption: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'space-between',
+        paddingVertical: 14,
+        borderBottomWidth: StyleSheet.hairlineWidth,
+    },
+    reassignName: {
+        fontSize: 16,
+        fontWeight: '500',
     },
 });
 

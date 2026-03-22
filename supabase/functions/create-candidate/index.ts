@@ -15,6 +15,7 @@ interface CreatePayload {
     email?: string;
     notes?: string;
     job_id?: string;
+    assigned_manager_id?: string;
 }
 
 const LYFE_SG_URL = Deno.env.get('LYFE_SG_URL') || 'https://lyfe.sg';
@@ -68,7 +69,7 @@ Deno.serve(async (req) => {
 
         // ── Input validation ──────────────────────────────────────
         const payload: CreatePayload = await req.json();
-        const { name, phone, email, notes, job_id } = payload;
+        const { name, phone, email, notes, job_id, assigned_manager_id } = payload;
 
         if (!name?.trim()) return jsonResponse({ error: 'name is required' }, 400);
         if (!phone?.trim()) return jsonResponse({ error: 'phone is required' }, 400);
@@ -78,6 +79,43 @@ Deno.serve(async (req) => {
 
         // Get caller's name for invitation
         const { data: staffUser } = await admin.from('users').select('full_name').eq('id', caller.id).single();
+
+        // ── Resolve assigned manager ──────────────────────────────
+        let managerId = caller.id; // Default: assign to self
+
+        if (assigned_manager_id && assigned_manager_id !== caller.id) {
+            // Validate target exists and is a manager/director/admin
+            const { data: targetUser } = await admin
+                .from('users')
+                .select('id, role, is_active')
+                .eq('id', assigned_manager_id)
+                .single();
+
+            if (!targetUser || !targetUser.is_active) {
+                return jsonResponse({ error: 'Target manager not found or inactive' }, 400);
+            }
+
+            const validRoles = ['manager', 'director', 'admin'];
+            if (!validRoles.includes(targetUser.role)) {
+                return jsonResponse({ error: 'Target user is not a manager/director/admin' }, 403);
+            }
+
+            // If caller is PA, verify they are assigned to this manager
+            if (callerRole === 'pa') {
+                const { data: assignment } = await admin
+                    .from('pa_manager_assignments')
+                    .select('id')
+                    .eq('pa_id', caller.id)
+                    .eq('manager_id', assigned_manager_id)
+                    .single();
+
+                if (!assignment) {
+                    return jsonResponse({ error: 'You are not assigned to this manager' }, 403);
+                }
+            }
+
+            managerId = assigned_manager_id;
+        }
 
         // Generate invite token
         const inviteToken = generateToken();
@@ -111,7 +149,7 @@ Deno.serve(async (req) => {
                 job_id: job_id || null,
                 current_stage_id: stageId,
                 stage_entered_at: stageEnteredAt,
-                assigned_manager_id: caller.id,
+                assigned_manager_id: managerId,
                 created_by_id: caller.id,
                 invite_token: inviteToken,
             })

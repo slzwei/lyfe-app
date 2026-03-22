@@ -2,7 +2,14 @@ import ErrorBanner from '@/components/ErrorBanner';
 import FormField from '@/components/FormField';
 import { useAuth } from '@/contexts/AuthContext';
 import { useTheme } from '@/contexts/ThemeContext';
-import { createCandidate, getInviteUrl, uploadCandidateDocument, type CreateCandidateInput } from '@/lib/recruitment';
+import {
+    createCandidate,
+    fetchAssignableManagers,
+    getInviteUrl,
+    uploadCandidateDocument,
+    type AssignableManager,
+    type CreateCandidateInput,
+} from '@/lib/recruitment';
 import { useSubmitGuard } from '@/hooks/useSubmitGuard';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
@@ -51,6 +58,22 @@ export default function AddCandidateScreen() {
     const [inviteLink, setInviteLink] = useState('');
     const { isSubmitting: isSaving, guard } = useSubmitGuard();
     const [saveError, setSaveError] = useState<string | null>(null);
+    const [managers, setManagers] = useState<AssignableManager[]>([]);
+    const [selectedManagerId, setSelectedManagerId] = useState<string>('');
+    const [showManagerPicker, setShowManagerPicker] = useState(false);
+
+    const userRole = user?.app_metadata?.role as string | undefined;
+    const isPA = userRole === 'pa';
+
+    React.useEffect(() => {
+        if (user?.id && userRole) {
+            fetchAssignableManagers(user.id, userRole).then(({ data }) => {
+                setManagers(data);
+            });
+        }
+    }, [user?.id, userRole]);
+
+    const selectedManager = managers.find((m) => m.id === selectedManagerId);
 
     const candidateFieldStyle = { paddingHorizontal: 16, paddingVertical: 12, marginBottom: 0 } as const;
 
@@ -58,6 +81,7 @@ export default function AddCandidateScreen() {
         const newErrors: Record<string, string> = {};
         if (!name.trim()) newErrors.name = 'Name is required';
         if (!phone.trim()) newErrors.phone = 'Phone number is required';
+        if (isPA && !selectedManagerId) newErrors.manager = 'Please select a manager';
         setErrors(newErrors);
         return Object.keys(newErrors).length === 0;
     };
@@ -77,6 +101,7 @@ export default function AddCandidateScreen() {
                 phone: phone.trim(),
                 email: email.trim() || null,
                 notes: notes.trim() || null,
+                assigned_manager_id: selectedManagerId || undefined,
             };
 
             const { data: newCandidate, inviteToken, error } = await createCandidate(input, user.id);
@@ -214,6 +239,46 @@ export default function AddCandidateScreen() {
                             </View>
                         </View>
 
+                        {/* Manager Assignment Picker — shown when managers are available */}
+                        {managers.length > 0 && (
+                            <View style={[styles.formCard, { backgroundColor: colors.cardBackground, marginTop: 16 }]}>
+                                <View style={styles.fieldContainer}>
+                                    <Text style={[styles.fieldLabel, { color: colors.textSecondary }]}>
+                                        Assign to Manager{isPA ? ' *' : ''}
+                                    </Text>
+                                    <TouchableOpacity
+                                        style={[
+                                            styles.managerPickerBtn,
+                                            { borderColor: errors.manager ? '#ef4444' : colors.border },
+                                        ]}
+                                        onPress={() => setShowManagerPicker(true)}
+                                        activeOpacity={0.7}
+                                    >
+                                        <Ionicons name="person-outline" size={18} color={colors.accent} />
+                                        <Text
+                                            style={[
+                                                styles.managerPickerText,
+                                                { color: selectedManager ? colors.textPrimary : colors.textTertiary },
+                                            ]}
+                                            numberOfLines={1}
+                                        >
+                                            {selectedManager
+                                                ? `${selectedManager.full_name} (${selectedManager.role})`
+                                                : isPA
+                                                  ? 'Select a manager...'
+                                                  : 'Myself (default)'}
+                                        </Text>
+                                        <Ionicons name="chevron-down" size={16} color={colors.textTertiary} />
+                                    </TouchableOpacity>
+                                    {errors.manager && (
+                                        <Text style={{ color: '#ef4444', fontSize: 12, marginTop: 4 }}>
+                                            {errors.manager}
+                                        </Text>
+                                    )}
+                                </View>
+                            </View>
+                        )}
+
                         <Text style={[styles.infoText, { color: colors.textTertiary }]}>
                             An invite link will be generated for the candidate to complete their registration.
                         </Text>
@@ -239,6 +304,55 @@ export default function AddCandidateScreen() {
                     </TouchableOpacity>
                 </View>
             </KeyboardAvoidingView>
+
+            {/* Manager Picker Modal */}
+            <Modal visible={showManagerPicker} transparent animationType="fade">
+                <Pressable style={styles.modalOverlay} onPress={() => setShowManagerPicker(false)}>
+                    <View style={[styles.modalContent, { backgroundColor: colors.cardBackground, maxHeight: '60%' }]}>
+                        <Text style={[styles.modalTitle, { color: colors.textPrimary, marginBottom: 12 }]}>
+                            Select Manager
+                        </Text>
+                        <ScrollView>
+                            {!isPA && (
+                                <TouchableOpacity
+                                    style={[
+                                        styles.managerOption,
+                                        !selectedManagerId && { backgroundColor: colors.accentLight },
+                                    ]}
+                                    onPress={() => {
+                                        setSelectedManagerId('');
+                                        setShowManagerPicker(false);
+                                    }}
+                                >
+                                    <Text style={[styles.managerOptionName, { color: colors.textPrimary }]}>
+                                        Myself (default)
+                                    </Text>
+                                </TouchableOpacity>
+                            )}
+                            {managers.map((m) => (
+                                <TouchableOpacity
+                                    key={m.id}
+                                    style={[
+                                        styles.managerOption,
+                                        selectedManagerId === m.id && { backgroundColor: colors.accentLight },
+                                    ]}
+                                    onPress={() => {
+                                        setSelectedManagerId(m.id);
+                                        setShowManagerPicker(false);
+                                    }}
+                                >
+                                    <Text style={[styles.managerOptionName, { color: colors.textPrimary }]}>
+                                        {m.full_name}
+                                    </Text>
+                                    <Text style={[styles.managerOptionRole, { color: colors.textTertiary }]}>
+                                        {m.role}
+                                    </Text>
+                                </TouchableOpacity>
+                            ))}
+                        </ScrollView>
+                    </View>
+                </Pressable>
+            </Modal>
 
             {/* Success Modal */}
             <Modal visible={showSuccess} transparent animationType="fade">
@@ -412,4 +526,27 @@ const styles = StyleSheet.create({
         justifyContent: 'center',
     },
     doneText: { fontSize: 16, fontWeight: '600' },
+
+    // Manager Picker
+    managerPickerBtn: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 8,
+        borderWidth: StyleSheet.hairlineWidth,
+        borderRadius: 8,
+        paddingHorizontal: 12,
+        paddingVertical: 10,
+        marginTop: 4,
+    },
+    managerPickerText: { fontSize: 15, flex: 1 },
+    managerOption: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'space-between',
+        paddingHorizontal: 16,
+        paddingVertical: 14,
+        borderRadius: 8,
+    },
+    managerOptionName: { fontSize: 16, fontWeight: '500' },
+    managerOptionRole: { fontSize: 13, textTransform: 'capitalize' },
 });

@@ -11,6 +11,7 @@ export interface CreateCandidateInput {
     phone: string;
     email: string | null;
     notes: string | null;
+    assigned_manager_id?: string;
 }
 
 /**
@@ -243,6 +244,7 @@ export async function createCandidate(
                 phone: input.phone,
                 email: input.email || undefined,
                 notes: input.notes || undefined,
+                assigned_manager_id: input.assigned_manager_id || undefined,
             }),
         });
 
@@ -299,6 +301,96 @@ export async function updateCandidateStatus(
 
     if (error) return { error: error.message };
     return { error: null };
+}
+
+export interface AssignableManager {
+    id: string;
+    full_name: string;
+    role: string;
+}
+
+/**
+ * Fetch managers/directors that the current user can assign candidates to.
+ * PAs: only their assigned managers. Manager+: all active managers/directors/admins.
+ */
+export async function fetchAssignableManagers(
+    userId: string,
+    userRole: string,
+): Promise<{ data: AssignableManager[]; error: string | null }> {
+    try {
+        if (userRole === 'pa') {
+            const { data: assignments, error: aErr } = await supabase
+                .from('pa_manager_assignments')
+                .select('manager_id')
+                .eq('pa_id', userId);
+
+            if (aErr || !assignments?.length) return { data: [], error: aErr?.message || null };
+
+            const managerIds = assignments.map((a) => a.manager_id);
+            const { data: managers, error: mErr } = await supabase
+                .from('users')
+                .select('id, full_name, role')
+                .in('id', managerIds)
+                .eq('is_active', true)
+                .order('full_name');
+
+            return { data: (managers || []) as AssignableManager[], error: mErr?.message || null };
+        }
+
+        const { data: managers, error } = await supabase
+            .from('users')
+            .select('id, full_name, role')
+            .in('role', ['manager', 'director', 'admin'])
+            .eq('is_active', true)
+            .order('full_name');
+
+        return { data: (managers || []) as AssignableManager[], error: error?.message || null };
+    } catch (err: unknown) {
+        captureError(err, { fn: 'fetchAssignableManagers' });
+        return { data: [], error: err instanceof Error ? err.message : 'Failed to fetch managers' };
+    }
+}
+
+/**
+ * Reassign a candidate to a different manager.
+ */
+export async function reassignCandidate(
+    candidateId: string,
+    newManagerId: string,
+    userId: string,
+): Promise<{ error: string | null }> {
+    try {
+        // Get old manager name for activity log
+        const { data: candidate } = await supabase
+            .from('candidates')
+            .select('assigned_manager_id')
+            .eq('id', candidateId)
+            .single();
+
+        const { error } = await supabase
+            .from('candidates')
+            .update({ assigned_manager_id: newManagerId })
+            .eq('id', candidateId);
+
+        if (error) return { error: error.message };
+
+        // Get names for activity log
+        const ids = [candidate?.assigned_manager_id, newManagerId].filter(Boolean) as string[];
+        const { data: users } = await supabase.from('users').select('id, full_name').in('id', ids);
+        const nameMap = new Map((users || []).map((u: { id: string; full_name: string }) => [u.id, u.full_name]));
+
+        await supabase.from('candidate_activities').insert({
+            candidate_id: candidateId,
+            user_id: userId,
+            type: 'reassignment',
+            note: `Reassigned from ${nameMap.get(candidate?.assigned_manager_id) || 'Unknown'} to ${nameMap.get(newManagerId) || 'Unknown'}`,
+        });
+
+        return { error: null };
+    } catch (err: unknown) {
+        captureError(err, { fn: 'reassignCandidate' });
+        return { error: err instanceof Error ? err.message : 'Failed to reassign' };
+    }
 }
 
 /**
