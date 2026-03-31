@@ -115,34 +115,26 @@ export async function submitExamAttempt(
 ): Promise<{ data: ExamResultData | null; error: string | null }> {
     const { userId, paperId, questions, answers, status, startedAt } = input;
 
-    // Calculate score
-    let correct = 0;
+    // Build answer details for local display (server is authoritative for scoring)
     const answerDetails = questions.map((q) => {
         const selected = answers[q.id] || null;
         const isCorrect = selected === q.correct_answer;
-        if (isCorrect) correct++;
         return { questionId: q.id, selected, isCorrect, correctAnswer: q.correct_answer };
     });
 
-    const percentage = Math.round((correct / questions.length) * 100);
-    const passed = percentage >= DEFAULT_PASS_PERCENTAGE;
     const durationSeconds = Math.floor((Date.now() - startedAt) / 1000);
 
-    // Build answers array for RPC
+    // Build answers array for RPC (server computes is_correct + score)
     const answerRows = questions.map((q) => ({
         question_id: q.id,
         selected_answer: answers[q.id] || null,
-        is_correct: (answers[q.id] || null) === q.correct_answer,
     }));
 
     const { data: rpcResult, error: rpcError } = await supabase.rpc('submit_exam_attempt', {
         p_user_id: userId,
         p_paper_id: paperId,
         p_status: status,
-        p_score: correct,
         p_total_questions: questions.length,
-        p_percentage: percentage,
-        p_passed: passed,
         p_started_at: new Date(startedAt).toISOString(),
         p_submitted_at: new Date().toISOString(),
         p_duration_seconds: durationSeconds,
@@ -154,15 +146,15 @@ export async function submitExamAttempt(
         return { data: null, error: rpcError.message };
     }
 
-    const attemptId = (rpcResult as { attempt_id: string }).attempt_id;
+    const result = rpcResult as { attempt_id: string; score: number; percentage: number; passed: boolean };
 
     return {
         data: {
-            id: attemptId,
-            score: correct,
+            id: result.attempt_id,
+            score: result.score,
             totalQuestions: questions.length,
-            percentage,
-            passed,
+            percentage: result.percentage,
+            passed: result.passed,
             status,
             answers: answerDetails,
             questions,
@@ -195,22 +187,17 @@ export async function submitVarkAttempt(
         correctAnswer: q.correct_answer,
     }));
 
-    // Build answers array for RPC (is_correct = null for personality quizzes)
+    // Build answers array for RPC (server sets is_correct = NULL for personality)
     const answerRows = questions.map((q) => ({
         question_id: q.id,
         selected_answer: answers[q.id] || null,
-        is_correct: null,
     }));
 
     const { data: rpcResult, error: rpcError } = await supabase.rpc('submit_exam_attempt', {
         p_user_id: userId,
         p_paper_id: paperId,
         p_status: status,
-        // personality quiz — no score/pass fields
-        p_score: null as unknown as number,
         p_total_questions: questions.length,
-        p_percentage: null as unknown as number,
-        p_passed: null as unknown as boolean,
         p_started_at: new Date(startedAt).toISOString(),
         p_submitted_at: new Date().toISOString(),
         p_duration_seconds: durationSeconds,
@@ -264,22 +251,17 @@ export async function submitEnneagramAttempt(
         correctAnswer: q.correct_answer,
     }));
 
-    // Build answers array for RPC (single-select, is_correct = null)
+    // Build answers array for RPC (server sets is_correct = NULL for personality)
     const answerRows = questions.map((q) => ({
         question_id: q.id,
         selected_answer: answers[q.id] || null,
-        is_correct: null,
     }));
 
     const { data: rpcResult, error: rpcError } = await supabase.rpc('submit_exam_attempt', {
         p_user_id: userId,
         p_paper_id: paperId,
         p_status: status,
-        // personality quiz — no score/pass fields
-        p_score: null as unknown as number,
         p_total_questions: questions.length,
-        p_percentage: null as unknown as number,
-        p_passed: null as unknown as boolean,
         p_started_at: new Date(startedAt).toISOString(),
         p_submitted_at: new Date().toISOString(),
         p_duration_seconds: durationSeconds,
@@ -336,11 +318,7 @@ export async function submitDiscAttempt(
         p_user_id: userId,
         p_paper_id: paperId,
         p_status: 'submitted',
-        // personality quiz — no score/pass fields
-        p_score: null as unknown as number,
         p_total_questions: discResults.totalQuestions,
-        p_percentage: null as unknown as number,
-        p_passed: null as unknown as boolean,
         p_started_at: new Date(startedAt).toISOString(),
         p_submitted_at: new Date().toISOString(),
         p_duration_seconds: durationSeconds,

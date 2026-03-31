@@ -88,10 +88,13 @@ afterEach(() => {
 // ── submitExamAttempt ──
 
 describe('submitExamAttempt', () => {
-    it('calculates score and creates attempt with answers', async () => {
-        mockSupa.rpc.mockResolvedValueOnce({ data: { attempt_id: 'attempt-1' }, error: null });
+    it('returns server-computed score and creates attempt with answers', async () => {
+        // Server computes: 5/5 correct → score=5, percentage=100, passed=true
+        mockSupa.rpc.mockResolvedValueOnce({
+            data: { attempt_id: 'attempt-1', score: 5, percentage: 100, passed: true },
+            error: null,
+        });
 
-        // All correct → 100%, pass
         const result = await submitExamAttempt(
             {
                 userId: 'u1',
@@ -112,12 +115,22 @@ describe('submitExamAttempt', () => {
         expect(result.data?.paperCode).toBe('M9');
         expect(result.data?.answers).toHaveLength(5);
         expect(result.data?.answers.every((a) => a.isCorrect)).toBe(true);
+
+        // Verify RPC is NOT sent client-computed score params
+        const rpcCall = mockSupa.rpc.mock.calls[0];
+        expect(rpcCall[0]).toBe('submit_exam_attempt');
+        expect(rpcCall[1]).not.toHaveProperty('p_score');
+        expect(rpcCall[1]).not.toHaveProperty('p_percentage');
+        expect(rpcCall[1]).not.toHaveProperty('p_passed');
     });
 
-    it('calculates passing score at 70% threshold', async () => {
-        mockSupa.rpc.mockResolvedValueOnce({ data: { attempt_id: 'attempt-2' }, error: null });
+    it('returns server-computed passing score', async () => {
+        // Server computes: 4/5 correct → score=4, percentage=80, passed=true
+        mockSupa.rpc.mockResolvedValueOnce({
+            data: { attempt_id: 'attempt-2', score: 4, percentage: 80, passed: true },
+            error: null,
+        });
 
-        // 4/5 correct → 80%, pass
         const result = await submitExamAttempt(
             {
                 userId: 'u1',
@@ -135,10 +148,13 @@ describe('submitExamAttempt', () => {
         expect(result.data?.passed).toBe(true);
     });
 
-    it('calculates failing score below 70%', async () => {
-        mockSupa.rpc.mockResolvedValueOnce({ data: { attempt_id: 'attempt-3' }, error: null });
+    it('returns server-computed failing score', async () => {
+        // Server computes: 3/5 correct → score=3, percentage=60, passed=false
+        mockSupa.rpc.mockResolvedValueOnce({
+            data: { attempt_id: 'attempt-3', score: 3, percentage: 60, passed: false },
+            error: null,
+        });
 
-        // 3/5 correct → 60%, fail
         const result = await submitExamAttempt(
             {
                 userId: 'u1',
@@ -157,7 +173,11 @@ describe('submitExamAttempt', () => {
     });
 
     it('handles unanswered questions as incorrect', async () => {
-        mockSupa.rpc.mockResolvedValueOnce({ data: { attempt_id: 'attempt-4' }, error: null });
+        // Server computes: 1/5 correct → score=1, percentage=20, passed=false
+        mockSupa.rpc.mockResolvedValueOnce({
+            data: { attempt_id: 'attempt-4', score: 1, percentage: 20, passed: false },
+            error: null,
+        });
 
         // Only answer q1, leave rest blank
         const result = await submitExamAttempt(
@@ -222,7 +242,10 @@ describe('submitExamAttempt', () => {
     });
 
     it('tracks answer correctness per question', async () => {
-        mockSupa.rpc.mockResolvedValueOnce({ data: { attempt_id: 'attempt-6' }, error: null });
+        mockSupa.rpc.mockResolvedValueOnce({
+            data: { attempt_id: 'attempt-6', score: 3, percentage: 60, passed: false },
+            error: null,
+        });
 
         const result = await submitExamAttempt(
             {

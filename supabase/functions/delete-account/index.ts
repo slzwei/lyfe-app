@@ -3,13 +3,14 @@
  *
  * Called by the authenticated user to permanently delete their account.
  * 1. Verifies the caller's JWT
- * 2. Deletes the auth.users entry FIRST (safe to retry if this fails)
- * 3. Removes user data from public tables (cascading FKs properly)
+ * 2. Deactivates the user record (is_active = false) — immediate lockout via RLS
+ * 3. Removes user data from public tables (best-effort, continues on failure)
+ * 4. Deletes the auth.users entry LAST (only after data cleanup)
  *
- * Order rationale: auth deletion is the irreversible gate. If it fails,
- * no data has been touched and the user can simply retry. Once auth is
- * deleted the user can no longer log in, so orphaned data is acceptable
- * (cleaned up below) but a zombie auth account with no data is not.
+ * Order rationale: deactivation is the instant gate — the user can no longer
+ * act via RLS even if auth deletion takes time. Data cleanup runs best-effort
+ * so a single table failure doesn't orphan the rest. Auth deletion is last
+ * because it's the only truly irreversible step.
  */
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 
@@ -100,13 +101,15 @@ Deno.serve(async (req) => {
         });
 
         // ══════════════════════════════════════════════════════════
-        // Phase 1: Delete auth account FIRST
+        // Phase 1: Deactivate user immediately
+        //          is_active = false blocks further API access via RLS.
         //          If this fails, nothing has been touched — safe to retry.
         // ══════════════════════════════════════════════════════════
 
-        const { error: authDeleteError } = await admin.auth.admin.deleteUser(uid);
-        if (authDeleteError) {
-            console.error('[delete-account] auth delete failed:', authDeleteError.message);
+        const { error: deactivateError } = await admin.from('users').update({ is_active: false }).eq('id', uid);
+
+        if (deactivateError) {
+            console.error('[delete-account] deactivation failed:', deactivateError.message);
             return jsonResponse(
                 req,
                 { error: 'Unable to delete account. No data was changed — please try again.' },
@@ -115,72 +118,111 @@ Deno.serve(async (req) => {
         }
 
         // ══════════════════════════════════════════════════════════
-        // Phase 2: Cascade-delete rows in tables with NOT NULL FKs
-        //          Auth is already deleted, so user cannot log in.
-        //          Any failure here means partial cleanup — flag it.
+        // Phase 2-4: Best-effort data cleanup
+        //            Each group is wrapped in try/catch so a failure
+        //            in one table doesn't block cleanup of others.
         // ══════════════════════════════════════════════════════════
 
-        // ── Leads (assigned_to / created_by are NOT NULL) ────────
-        const { data: userLeads } = await admin
-            .from('leads')
-            .select('id')
-            .or(`assigned_to.eq.${uid},created_by.eq.${uid}`);
-        if (userLeads?.length) {
-            const leadIds = userLeads.map((l: { id: string }) => l.id);
-            await del(admin, 'lead_activities', 'lead_id', leadIds);
-            await del(admin, 'leads', 'id', leadIds);
+        const failures: string[] = [];
+
+        // ── Phase 2: Cascade-delete rows in tables with NOT NULL FKs
+
+        // Leads
+        try {
+            const { data: userLeads } = await admin
+                .from('leads')
+                .select('id')
+                .or(`assigned_to.eq.${uid},created_by.eq.${uid}`);
+            if (userLeads?.length) {
+                const leadIds = userLeads.map((l: { id: string }) => l.id);
+                await del(admin, 'lead_activities', 'lead_id', leadIds);
+                await del(admin, 'leads', 'id', leadIds);
+            }
+        } catch (err) {
+            const msg = err instanceof Error ? err.message : String(err);
+            failures.push(`leads: ${msg}`);
+            console.error('[delete-account] leads cleanup failed:', msg);
         }
 
-        // ── Events (created_by is NOT NULL) ──────────────────────
-        const { data: userEvents } = await admin.from('events').select('id').eq('created_by', uid);
-        if (userEvents?.length) {
-            const eventIds = userEvents.map((e: { id: string }) => e.id);
-            await del(admin, 'event_attendees', 'event_id', eventIds);
-            await del(admin, 'roadshow_activities', 'event_id', eventIds);
-            await del(admin, 'roadshow_attendance', 'event_id', eventIds);
-            await del(admin, 'roadshow_configs', 'event_id', eventIds);
-            await del(admin, 'events', 'id', eventIds);
+        // Events
+        try {
+            const { data: userEvents } = await admin.from('events').select('id').eq('created_by', uid);
+            if (userEvents?.length) {
+                const eventIds = userEvents.map((e: { id: string }) => e.id);
+                await del(admin, 'event_attendees', 'event_id', eventIds);
+                await del(admin, 'roadshow_activities', 'event_id', eventIds);
+                await del(admin, 'roadshow_attendance', 'event_id', eventIds);
+                await del(admin, 'roadshow_configs', 'event_id', eventIds);
+                await del(admin, 'events', 'id', eventIds);
+            }
+        } catch (err) {
+            const msg = err instanceof Error ? err.message : String(err);
+            failures.push(`events: ${msg}`);
+            console.error('[delete-account] events cleanup failed:', msg);
         }
 
-        // ── Interviews (manager_id / scheduled_by_id are NOT NULL)
-        await del(admin, 'interviews', 'manager_id', uid);
-        await del(admin, 'interviews', 'scheduled_by_id', uid);
-
-        // ── Candidates (assigned_manager_id / created_by_id NOT NULL)
-        const { data: userCandidates } = await admin
-            .from('candidates')
-            .select('id')
-            .or(`assigned_manager_id.eq.${uid},created_by_id.eq.${uid}`);
-        if (userCandidates?.length) {
-            const candIds = userCandidates.map((c: { id: string }) => c.id);
-            await del(admin, 'candidate_activities', 'candidate_id', candIds);
-            await del(admin, 'candidate_documents', 'candidate_id', candIds);
-            await del(admin, 'candidate_programme_enrollment', 'candidate_id', candIds);
-            await del(admin, 'candidates', 'id', candIds);
+        // Interviews
+        try {
+            await del(admin, 'interviews', 'manager_id', uid);
+            await del(admin, 'interviews', 'scheduled_by_id', uid);
+        } catch (err) {
+            const msg = err instanceof Error ? err.message : String(err);
+            failures.push(`interviews: ${msg}`);
+            console.error('[delete-account] interviews cleanup failed:', msg);
         }
 
-        // ══════════════════════════════════════════════════════════
-        // Phase 3: Delete user's own rows (by user_id)
-        // ══════════════════════════════════════════════════════════
-
-        // Exam answers depend on exam_attempts — delete answers first
-        const { data: attempts } = await admin.from('exam_attempts').select('id').eq('user_id', uid);
-        if (attempts?.length) {
-            const ids = attempts.map((a: { id: string }) => a.id);
-            await del(admin, 'exam_answers', 'attempt_id', ids);
+        // Candidates (created/managed by this user)
+        try {
+            const { data: userCandidates } = await admin
+                .from('candidates')
+                .select('id')
+                .or(`assigned_manager_id.eq.${uid},created_by_id.eq.${uid}`);
+            if (userCandidates?.length) {
+                const candIds = userCandidates.map((c: { id: string }) => c.id);
+                await del(admin, 'candidate_activities', 'candidate_id', candIds);
+                await del(admin, 'candidate_documents', 'candidate_id', candIds);
+                await del(admin, 'candidate_programme_enrollment', 'candidate_id', candIds);
+                await del(admin, 'candidates', 'id', candIds);
+            }
+        } catch (err) {
+            const msg = err instanceof Error ? err.message : String(err);
+            failures.push(`candidates: ${msg}`);
+            console.error('[delete-account] candidates cleanup failed:', msg);
         }
 
-        // Resolve candidate_id BEFORE deleting candidate_profiles (needed for progress cleanup)
-        const { data: profile } = await admin
-            .from('candidate_profiles')
-            .select('candidate_id')
-            .eq('user_id', uid)
-            .maybeSingle();
-        if (profile?.candidate_id) {
-            await del(admin, 'candidate_module_item_progress', 'candidate_id', profile.candidate_id);
-            await del(admin, 'candidate_module_progress', 'candidate_id', profile.candidate_id);
+        // ── Phase 3: Delete user's own rows (by user_id)
+
+        // Exam answers depend on exam_attempts
+        try {
+            const { data: attempts } = await admin.from('exam_attempts').select('id').eq('user_id', uid);
+            if (attempts?.length) {
+                const ids = attempts.map((a: { id: string }) => a.id);
+                await del(admin, 'exam_answers', 'attempt_id', ids);
+            }
+        } catch (err) {
+            const msg = err instanceof Error ? err.message : String(err);
+            failures.push(`exam_answers: ${msg}`);
+            console.error('[delete-account] exam_answers cleanup failed:', msg);
         }
 
+        // Resolve candidate_id for progress cleanup
+        try {
+            const { data: profile } = await admin
+                .from('candidate_profiles')
+                .select('candidate_id')
+                .eq('user_id', uid)
+                .maybeSingle();
+            if (profile?.candidate_id) {
+                await del(admin, 'candidate_module_item_progress', 'candidate_id', profile.candidate_id);
+                await del(admin, 'candidate_module_progress', 'candidate_id', profile.candidate_id);
+            }
+        } catch (err) {
+            const msg = err instanceof Error ? err.message : String(err);
+            failures.push(`candidate_progress: ${msg}`);
+            console.error('[delete-account] candidate_progress cleanup failed:', msg);
+        }
+
+        // User-keyed tables
         const ownedTables = [
             'notifications',
             'lead_activities',
@@ -189,62 +231,101 @@ Deno.serve(async (req) => {
             'roadshow_attendance',
             'roadshow_activities',
             'exam_attempts',
-            // lyfe-sg ATS tables (user_id FK)
             'disc_results',
             'disc_responses',
             'candidate_profiles',
         ];
         for (const table of ownedTables) {
-            await del(admin, table, 'user_id', uid);
+            try {
+                await del(admin, table, 'user_id', uid);
+            } catch (err) {
+                const msg = err instanceof Error ? err.message : String(err);
+                failures.push(`${table}: ${msg}`);
+                console.error(`[delete-account] ${table} cleanup failed:`, msg);
+            }
         }
 
-        // invitations: null out user_id (nullable FK, keep invitation record for audit)
-        await nullOut(admin, 'invitations', 'user_id', uid);
+        // Invitations: null out user_id (keep for audit)
+        try {
+            await nullOut(admin, 'invitations', 'user_id', uid);
+        } catch (err) {
+            const msg = err instanceof Error ? err.message : String(err);
+            failures.push(`invitations: ${msg}`);
+            console.error('[delete-account] invitations cleanup failed:', msg);
+        }
 
-        // pa_manager_assignments uses manager_id / pa_id
-        {
+        // PA/manager assignments
+        try {
             const { error } = await admin
                 .from('pa_manager_assignments')
                 .delete()
                 .or(`manager_id.eq.${uid},pa_id.eq.${uid}`);
             if (error) throw new DeleteError('pa_manager_assignments', 'manager_id|pa_id', error.message);
+        } catch (err) {
+            const msg = err instanceof Error ? err.message : String(err);
+            failures.push(`pa_manager_assignments: ${msg}`);
+            console.error('[delete-account] pa_manager_assignments cleanup failed:', msg);
         }
 
-        // ══════════════════════════════════════════════════════════
-        // Phase 4: Null out nullable FK columns on shared rows
-        // ══════════════════════════════════════════════════════════
+        // ── Phase 4: Null out nullable FK columns on shared rows
 
-        await nullOut(admin, 'roadshow_attendance', 'checked_in_by', uid);
-        await nullOut(admin, 'candidate_module_progress', 'completed_by', uid);
-        await nullOut(admin, 'candidate_module_item_progress', 'completed_by', uid);
-        await nullOut(admin, 'candidate_programme_enrollment', 'unlocked_by', uid);
-        await nullOut(admin, 'roadmap_programmes', 'archived_by', uid);
-        await nullOut(admin, 'roadmap_modules', 'archived_by', uid);
-        await nullOut(admin, 'users', 'reports_to', uid);
+        const nullOuts: [string, string][] = [
+            ['roadshow_attendance', 'checked_in_by'],
+            ['candidate_module_progress', 'completed_by'],
+            ['candidate_module_item_progress', 'completed_by'],
+            ['candidate_programme_enrollment', 'unlocked_by'],
+            ['roadmap_programmes', 'archived_by'],
+            ['roadmap_modules', 'archived_by'],
+            ['users', 'reports_to'],
+        ];
+        for (const [table, column] of nullOuts) {
+            try {
+                await nullOut(admin, table, column, uid);
+            } catch (err) {
+                const msg = err instanceof Error ? err.message : String(err);
+                failures.push(`${table}.${column}: ${msg}`);
+                console.error(`[delete-account] ${table}.${column} null-out failed:`, msg);
+            }
+        }
 
         // ══════════════════════════════════════════════════════════
         // Phase 5: Delete user profile row
         // ══════════════════════════════════════════════════════════
 
-        await del(admin, 'users', 'id', uid);
+        try {
+            await del(admin, 'users', 'id', uid);
+        } catch (err) {
+            const msg = err instanceof Error ? err.message : String(err);
+            failures.push(`users: ${msg}`);
+            console.error('[delete-account] users row deletion failed:', msg);
+        }
+
+        // ══════════════════════════════════════════════════════════
+        // Phase 6: Delete auth account LAST
+        //          Data is already cleaned. If this fails, the user
+        //          is deactivated with no data — admin can finish.
+        // ══════════════════════════════════════════════════════════
+
+        const { error: authDeleteError } = await admin.auth.admin.deleteUser(uid);
+        if (authDeleteError) {
+            failures.push(`auth: ${authDeleteError.message}`);
+            console.error('[delete-account] auth delete failed:', authDeleteError.message);
+        }
+
+        if (failures.length > 0) {
+            console.error(`[delete-account] Completed with ${failures.length} failures for user ${uid}:`, failures);
+            return jsonResponse(req, {
+                success: true,
+                warning:
+                    'Your account has been deleted but some data could not be removed automatically. ' +
+                    'Please contact support if you notice any remaining data.',
+                failures: failures.length,
+            });
+        }
 
         return jsonResponse(req, { success: true });
     } catch (err) {
         console.error('[delete-account]', err);
-
-        if (err instanceof DeleteError) {
-            console.error(`[delete-account] DeleteError at ${err.table}.${err.column}: ${err.message}`);
-            return jsonResponse(
-                req,
-                {
-                    error:
-                        'Your account has been deleted but some data could not be removed automatically. ' +
-                        'Please contact support for cleanup.',
-                },
-                500,
-            );
-        }
-
         return jsonResponse(req, { error: 'Internal server error' }, 500);
     }
 });
