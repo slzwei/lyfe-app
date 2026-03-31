@@ -21,6 +21,7 @@ export default function HomeLayout() {
             <Stack.Screen name="lead/[leadId]" />
             <Stack.Screen name="event/[eventId]" options={{ presentation: 'card' }} />
             <Stack.Screen name="add-candidate" options={{ presentation: 'modal' }} />
+            <Stack.Screen name="invite-member" options={{ presentation: 'modal' }} />
         </Stack>
     );
 }

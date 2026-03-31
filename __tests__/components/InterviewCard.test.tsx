@@ -29,6 +29,7 @@ const MOCK_INTERVIEW = {
     location: null,
     google_calendar_event_id: null,
     notes: 'Test notes',
+    recommendation: null,
     created_at: '2026-01-01',
 };
 
@@ -71,5 +72,38 @@ describe('InterviewCard', () => {
             <InterviewCard interview={withLocation} colors={COLORS} onEdit={() => {}} onDelete={() => {}} />,
         );
         expect(getByText('Office Room 3')).toBeTruthy();
+    });
+
+    it('shows recommendation badge when set', () => {
+        const withRec = { ...MOCK_INTERVIEW, recommendation: 'second_interview' };
+        const { getByText } = render(
+            <InterviewCard interview={withRec} colors={COLORS} onEdit={() => {}} onDelete={() => {}} />,
+        );
+        expect(getByText('2nd Interview')).toBeTruthy();
+    });
+
+    it('shows on_hold recommendation badge', () => {
+        const withRec = { ...MOCK_INTERVIEW, recommendation: 'on_hold' };
+        const { getByText } = render(
+            <InterviewCard interview={withRec} colors={COLORS} onEdit={() => {}} onDelete={() => {}} />,
+        );
+        expect(getByText('On Hold')).toBeTruthy();
+    });
+
+    it('shows pass recommendation badge', () => {
+        const withRec = { ...MOCK_INTERVIEW, recommendation: 'pass' };
+        const { getByText } = render(
+            <InterviewCard interview={withRec} colors={COLORS} onEdit={() => {}} onDelete={() => {}} />,
+        );
+        expect(getByText('Pass')).toBeTruthy();
+    });
+
+    it('does not show recommendation badge when null', () => {
+        const { queryByText } = render(
+            <InterviewCard interview={MOCK_INTERVIEW} colors={COLORS} onEdit={() => {}} onDelete={() => {}} />,
+        );
+        expect(queryByText('2nd Interview')).toBeNull();
+        expect(queryByText('On Hold')).toBeNull();
+        expect(queryByText('Pass')).toBeNull();
     });
 });

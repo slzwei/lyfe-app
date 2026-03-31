@@ -32,12 +32,6 @@ export const examQuestionSchema = z.object({
     explanation: z.string().nullable(),
 });
 
-export const inviteTokenSchema = z.object({
-    intended_role: z.enum(['candidate', 'agent']),
-    assigned_manager_id: z.string().uuid().nullable(),
-    expires_at: z.string().min(1, 'Expiry date is required'),
-});
-
 export const paAssignmentSchema = z.object({
     pa_id: z.string().uuid('Select a PA'),
     manager_id: z.string().uuid('Select a manager'),
@@ -46,7 +40,6 @@ export const paAssignmentSchema = z.object({
 export type UserUpdateInput = z.infer<typeof userUpdateSchema>;
 export type ExamPaperInput = z.infer<typeof examPaperSchema>;
 export type ExamQuestionInput = z.infer<typeof examQuestionSchema>;
-export type InviteTokenInput = z.infer<typeof inviteTokenSchema>;
 export type PaAssignmentInput = z.infer<typeof paAssignmentSchema>;
 
 // ── Roadmap schemas ──

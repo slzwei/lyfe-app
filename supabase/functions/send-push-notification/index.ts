@@ -83,6 +83,14 @@ Deno.serve(async (req) => {
             });
         }
 
+        // Validate Expo push token format
+        if (!/^ExponentPushToken\[.+\]$/.test(user.push_token)) {
+            console.error('[send-push-notification] Invalid push token format:', user.push_token);
+            return new Response(JSON.stringify({ skipped: true, reason: 'invalid push token format' }), {
+                headers: { 'Content-Type': 'application/json' },
+            });
+        }
+
         // Check if user opted out of push for this notification type
         const prefs = (user.notification_preferences as Record<string, boolean>) || {};
         if (prefs[record.type] === false) {
@@ -107,6 +115,11 @@ Deno.serve(async (req) => {
         });
 
         const pushResult = await pushResponse.json();
+
+        // Check for Expo push errors (e.g. DeviceNotRegistered, InvalidCredentials)
+        if (pushResult?.data?.status === 'error') {
+            console.error('[send-push-notification] Expo error:', pushResult.data.message);
+        }
 
         return new Response(JSON.stringify({ sent: true }), {
             headers: { 'Content-Type': 'application/json' },

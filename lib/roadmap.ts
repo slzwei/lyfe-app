@@ -17,6 +17,22 @@ import type {
     ModuleItemType,
 } from '@/types/roadmap';
 
+// ─── Resolve candidates.id from users.id via candidate_profiles bridge ──────
+
+export async function getCandidateIdForUser(userId: string): Promise<string | null> {
+    const { data, error } = await supabase
+        .from('candidate_profiles')
+        .select('candidate_id')
+        .eq('user_id', userId)
+        .maybeSingle();
+
+    if (error) {
+        captureError(error, { context: 'getCandidateIdForUser', userId });
+        return null;
+    }
+    return data?.candidate_id ?? null;
+}
+
 // ─── Fetch a single module by ID ────────────────────────────────────────────
 
 export async function fetchModule(moduleId: string): Promise<{
@@ -288,36 +304,53 @@ export async function fetchCandidateRoadmap(
         if (!options?.includeDisabled) moduleQuery = moduleQuery.eq('is_active', true);
         if (!options?.includeArchived) moduleQuery = moduleQuery.is('archived_at', null);
 
-        const [programmesRes, modulesRes, progressRes, enrollmentRes, prerequisitesRes] = await Promise.all([
-            supabase
-                .from('roadmap_programmes')
-                .select(
-                    'id, title, slug, description, icon_type, display_order, is_active, archived_at, archived_by, created_at, updated_at',
-                )
-                .eq('is_active', true)
-                .is('archived_at', null)
-                .order('display_order'),
-            moduleQuery,
-            supabase
-                .from('candidate_module_progress')
-                .select(
-                    'id, candidate_id, module_id, status, score, notes, completed_at, completed_by, created_at, updated_at',
-                )
-                .eq('candidate_id', candidateId),
-            supabase
-                .from('candidate_programme_enrollment')
-                .select(
-                    'id, candidate_id, programme_id, status, started_at, completed_at, manually_unlocked, unlocked_by, unlocked_at, created_at',
-                )
-                .eq('candidate_id', candidateId),
-            supabase.from('roadmap_prerequisites').select('id, module_id, required_module_id, created_at'),
-        ]);
+        const [programmesSettled, modulesSettled, progressSettled, enrollmentSettled, prerequisitesSettled] =
+            await Promise.allSettled([
+                supabase
+                    .from('roadmap_programmes')
+                    .select(
+                        'id, title, slug, description, icon_type, display_order, is_active, archived_at, archived_by, created_at, updated_at',
+                    )
+                    .eq('is_active', true)
+                    .is('archived_at', null)
+                    .order('display_order'),
+                moduleQuery,
+                supabase
+                    .from('candidate_module_progress')
+                    .select(
+                        'id, candidate_id, module_id, status, score, notes, completed_at, completed_by, created_at, updated_at',
+                    )
+                    .eq('candidate_id', candidateId),
+                supabase
+                    .from('candidate_programme_enrollment')
+                    .select(
+                        'id, candidate_id, programme_id, status, started_at, completed_at, manually_unlocked, unlocked_by, unlocked_at, created_at',
+                    )
+                    .eq('candidate_id', candidateId),
+                supabase.from('roadmap_prerequisites').select('id, module_id, required_module_id, created_at'),
+            ]);
 
+        // Programmes and modules are required — fail if either is unavailable
+        if (programmesSettled.status === 'rejected') throw programmesSettled.reason;
+        if (modulesSettled.status === 'rejected') throw modulesSettled.reason;
+        const programmesRes = programmesSettled.value;
+        const modulesRes = modulesSettled.value;
         if (programmesRes.error) throw programmesRes.error;
         if (modulesRes.error) throw modulesRes.error;
-        if (progressRes.error) throw progressRes.error;
-        if (enrollmentRes.error) throw enrollmentRes.error;
-        if (prerequisitesRes.error) throw prerequisitesRes.error;
+
+        // Progress, enrollment, and prerequisites are optional — degrade gracefully
+        const progressRes =
+            progressSettled.status === 'fulfilled' && !progressSettled.value.error
+                ? progressSettled.value
+                : { data: [] };
+        const enrollmentRes =
+            enrollmentSettled.status === 'fulfilled' && !enrollmentSettled.value.error
+                ? enrollmentSettled.value
+                : { data: [] };
+        const prerequisitesRes =
+            prerequisitesSettled.status === 'fulfilled' && !prerequisitesSettled.value.error
+                ? prerequisitesSettled.value
+                : { data: [] };
 
         // Fetch item summaries for grid cards (lightweight — just counts + types)
         const allModuleIds = (modulesRes.data ?? []).map((m) => m.id);
@@ -498,6 +531,27 @@ export async function unlockProgrammeForCandidate(
     programmeId: string,
     unlockedBy: string,
 ): Promise<{ error: string | null }> {
+    // Validate the programme exists and is active
+    const { data: programme, error: progError } = await supabase
+        .from('roadmap_programmes')
+        .select('id, is_active, archived_at')
+        .eq('id', programmeId)
+        .maybeSingle();
+
+    if (progError) return { error: progError.message };
+    if (!programme) return { error: 'Programme not found' };
+    if (!programme.is_active || programme.archived_at) return { error: 'Programme is not active' };
+
+    // Validate the candidate exists
+    const { data: candidate, error: candError } = await supabase
+        .from('candidates')
+        .select('id')
+        .eq('id', candidateId)
+        .maybeSingle();
+
+    if (candError) return { error: candError.message };
+    if (!candidate) return { error: 'Candidate not found' };
+
     const { error } = await supabase.from('candidate_programme_enrollment').upsert(
         {
             candidate_id: candidateId,

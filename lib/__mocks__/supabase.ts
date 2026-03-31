@@ -55,6 +55,7 @@ export const supabase: any = {
     storage: {
         from: jest.fn(() => ({
             upload: jest.fn().mockResolvedValue({ error: null }),
+            remove: jest.fn().mockResolvedValue({ error: null }),
             getPublicUrl: jest.fn().mockReturnValue({ data: { publicUrl: 'https://example.com/file.pdf' } }),
             createSignedUrl: jest
                 .fn()

@@ -1,6 +1,7 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
 const STORAGE_KEY = 'lyfe_offline_queue';
+const MAX_QUEUE_SIZE = 500;
 
 export type OfflineOperation = 'insert' | 'update' | 'upsert' | 'delete';
 
@@ -11,6 +12,7 @@ export interface QueueItem {
     payload: Record<string, unknown>;
     filters?: Record<string, unknown>;
     createdAt: string;
+    retryCount: number;
 }
 
 function generateId(): string {
@@ -29,7 +31,13 @@ export class OfflineQueue {
         if (this.loaded) return;
         try {
             const raw = await AsyncStorage.getItem(STORAGE_KEY);
-            this.items = raw ? JSON.parse(raw) : [];
+            // Backfill retryCount for items persisted before this field existed
+            this.items = raw
+                ? (JSON.parse(raw) as QueueItem[]).map((item) => ({
+                      ...item,
+                      retryCount: item.retryCount ?? 0,
+                  }))
+                : [];
         } catch {
             this.items = [];
         }
@@ -40,14 +48,29 @@ export class OfflineQueue {
         await AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(this.items));
     }
 
-    async enqueue(
-        item: Omit<QueueItem, 'id' | 'createdAt'>,
-    ): Promise<QueueItem> {
+    private dedupKey(item: Pick<QueueItem, 'table' | 'operation' | 'filters'>): string | null {
+        if (item.operation === 'insert' || !item.filters) return null;
+        return `${item.table}:${JSON.stringify(item.filters)}`;
+    }
+
+    async enqueue(item: Omit<QueueItem, 'id' | 'createdAt' | 'retryCount'>): Promise<QueueItem | null> {
         await this.load();
+        if (this.items.length >= MAX_QUEUE_SIZE) {
+            return null;
+        }
+        // Dedup: newer operation for the same record replaces the older one
+        const key = this.dedupKey(item);
+        if (key) {
+            const existingIndex = this.items.findIndex((existing) => this.dedupKey(existing) === key);
+            if (existingIndex !== -1) {
+                this.items.splice(existingIndex, 1);
+            }
+        }
         const queueItem: QueueItem = {
             ...item,
             id: generateId(),
             createdAt: new Date().toISOString(),
+            retryCount: 0,
         };
         this.items.push(queueItem);
         await this.persist();
@@ -88,5 +111,14 @@ export class OfflineQueue {
         this.items.splice(index, 1);
         await this.persist();
         return true;
+    }
+
+    async incrementRetry(id: string): Promise<void> {
+        await this.load();
+        const item = this.items.find((i) => i.id === id);
+        if (item) {
+            item.retryCount += 1;
+            await this.persist();
+        }
     }
 }

@@ -6,17 +6,35 @@
  */
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 
+async function timingSafeEqual(a: string, b: string): Promise<boolean> {
+    const enc = new TextEncoder();
+    const keyData = enc.encode('comparison-key');
+    const key = await crypto.subtle.importKey('raw', keyData, { name: 'HMAC', hash: 'SHA-256' }, false, ['sign']);
+    const sigA = await crypto.subtle.sign('HMAC', key, enc.encode(a));
+    const sigB = await crypto.subtle.sign('HMAC', key, enc.encode(b));
+    const arrA = new Uint8Array(sigA);
+    const arrB = new Uint8Array(sigB);
+    if (arrA.length !== arrB.length) return false;
+    let result = 0;
+    for (let i = 0; i < arrA.length; i++) result |= arrA[i] ^ arrB[i];
+    return result === 0;
+}
+
 Deno.serve(async (req) => {
     if (req.method === 'OPTIONS') {
         return new Response(null, { status: 204 });
     }
 
-    // ── Cron authentication — accept CRON_SECRET or service role key ──
+    // ── Cron authentication (timing-safe) — accept CRON_SECRET or service role key ──
     const cronSecret = Deno.env.get('CRON_SECRET');
     const serviceRoleKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY');
     const authHeader = req.headers.get('Authorization');
     const token = authHeader?.startsWith('Bearer ') ? authHeader.slice(7) : null;
-    if (!token || (token !== cronSecret && token !== serviceRoleKey)) {
+    const authorized =
+        token &&
+        ((cronSecret && (await timingSafeEqual(token, cronSecret))) ||
+            (serviceRoleKey && (await timingSafeEqual(token, serviceRoleKey))));
+    if (!authorized) {
         return new Response(JSON.stringify({ error: 'Unauthorized' }), {
             status: 401,
             headers: { 'Content-Type': 'application/json' },
@@ -27,6 +45,7 @@ Deno.serve(async (req) => {
         const supabase = createClient(Deno.env.get('SUPABASE_URL')!, Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!);
 
         const now = new Date();
+        const SGT_OFFSET_MS = 8 * 60 * 60 * 1000;
         let totalSent = 0;
 
         // Check both 24h and 1h windows
@@ -34,13 +53,20 @@ Deno.serve(async (req) => {
             const windowStart = new Date(now.getTime() + hoursAhead * 60 * 60 * 1000 - 2.5 * 60 * 1000);
             const windowEnd = new Date(now.getTime() + hoursAhead * 60 * 60 * 1000 + 2.5 * 60 * 1000);
 
+            // event_date is stored as a SGT calendar date, so convert window
+            // bounds to SGT before extracting the date portion for filtering.
+            // Without this, near the UTC/SGT day boundary (16:00–00:00 UTC)
+            // the UTC date is one day behind SGT and events are missed.
+            const filterDateStart = new Date(windowStart.getTime() + SGT_OFFSET_MS).toISOString().split('T')[0];
+            const filterDateEnd = new Date(windowEnd.getTime() + SGT_OFFSET_MS).toISOString().split('T')[0];
+
             // Find events starting within the window
             // Combine event_date + start_time into a comparable timestamp
             const { data: events } = await supabase
                 .from('events')
                 .select('id, title, event_date, start_time, location')
-                .gte('event_date', windowStart.toISOString().split('T')[0])
-                .lte('event_date', windowEnd.toISOString().split('T')[0]);
+                .gte('event_date', filterDateStart)
+                .lte('event_date', filterDateEnd);
 
             if (!events || events.length === 0) continue;
 

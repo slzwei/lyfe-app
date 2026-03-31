@@ -116,8 +116,8 @@ describe('permission wrappers', () => {
     it('canToggleViewMode returns true only for roles with both hold_agents and view_leads', () => {
         expect(canToggleViewMode('manager')).toBe(true);
         expect(canToggleViewMode('director')).toBe(true);
-        // admin has hold_agents but not view_leads
-        expect(canToggleViewMode('admin')).toBe(false);
+        // admin has both hold_agents and view_leads
+        expect(canToggleViewMode('admin')).toBe(true);
         expect(canToggleViewMode('agent')).toBe(false);
         expect(canToggleViewMode('pa')).toBe(false);
         expect(canToggleViewMode('candidate')).toBe(false);

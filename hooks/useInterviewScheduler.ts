@@ -6,7 +6,7 @@ import { useCallback, useState } from 'react';
 import { Alert } from 'react-native';
 import { deleteInterview, scheduleInterview, updateInterview } from '@/lib/recruitment';
 import { useSubmitGuard } from '@/hooks/useSubmitGuard';
-import type { Interview } from '@/types/recruitment';
+import type { Interview, InterviewRecommendation } from '@/types/recruitment';
 
 interface UseInterviewSchedulerParams {
     candidateId: string;
@@ -28,6 +28,7 @@ interface InterviewSchedulerState {
     scheduleLink: string;
     scheduleLocation: string;
     scheduleNotes: string;
+    scheduleRecommendation: InterviewRecommendation | null;
     isScheduling: boolean;
     scheduleError: string | null;
     setScheduleDate: (d: Date | ((prev: Date) => Date)) => void;
@@ -39,6 +40,7 @@ interface InterviewSchedulerState {
     setScheduleLocation: (v: string) => void;
     setScheduleNotes: (v: string) => void;
     setScheduleStatus: (s: Interview['status']) => void;
+    setScheduleRecommendation: (r: InterviewRecommendation | null) => void;
     openNewInterview: () => void;
     openEditInterview: (interview: Interview) => void;
     closeScheduleSheet: () => void;
@@ -69,6 +71,7 @@ export function useInterviewScheduler({
     const [scheduleLink, setScheduleLink] = useState('');
     const [scheduleLocation, setScheduleLocation] = useState('');
     const [scheduleNotes, setScheduleNotes] = useState('');
+    const [scheduleRecommendation, setScheduleRecommendation] = useState<InterviewRecommendation | null>(null);
     const { isSubmitting: isScheduling, guard: scheduleGuard } = useSubmitGuard();
     const [scheduleError, setScheduleError] = useState<string | null>(null);
 
@@ -83,6 +86,7 @@ export function useInterviewScheduler({
         setScheduleLink('');
         setScheduleLocation('');
         setScheduleNotes('');
+        setScheduleRecommendation(null);
         setScheduleError(null);
         setScheduleStatus('scheduled');
         setEditingInterview(null);
@@ -109,6 +113,7 @@ export function useInterviewScheduler({
         setScheduleLink(interview.zoom_link || '');
         setScheduleLocation(interview.location || '');
         setScheduleNotes(interview.notes || '');
+        setScheduleRecommendation(interview.recommendation ?? null);
         setScheduleStatus(interview.status);
         setScheduleError(null);
         setShowScheduleSheet(true);
@@ -140,9 +145,13 @@ export function useInterviewScheduler({
                     {
                         text: 'Delete',
                         style: 'destructive',
-                        onPress: () => {
+                        onPress: async () => {
+                            const { error } = await deleteInterview(interview.id);
+                            if (error) {
+                                Alert.alert('Error', 'Failed to delete interview.');
+                                return;
+                            }
                             onInterviewChanged('deleted', interview);
-                            deleteInterview(interview.id);
                         },
                     },
                 ],
@@ -172,6 +181,7 @@ export function useInterviewScheduler({
                         zoomLink: link,
                         notes,
                         status: scheduleStatus,
+                        recommendation: scheduleRecommendation,
                     });
                     if (updErr || !updated) {
                         setScheduleError(updErr ?? 'Failed to update interview');
@@ -206,6 +216,7 @@ export function useInterviewScheduler({
             scheduleLink,
             scheduleNotes,
             scheduleStatus,
+            scheduleRecommendation,
             userId,
             editingInterview,
             candidateId,
@@ -259,6 +270,7 @@ export function useInterviewScheduler({
         scheduleLink,
         scheduleLocation,
         scheduleNotes,
+        scheduleRecommendation,
         isScheduling,
         scheduleError,
         setScheduleDate,
@@ -270,6 +282,7 @@ export function useInterviewScheduler({
         setScheduleLocation,
         setScheduleNotes,
         setScheduleStatus,
+        setScheduleRecommendation,
         openNewInterview,
         openEditInterview,
         closeScheduleSheet,

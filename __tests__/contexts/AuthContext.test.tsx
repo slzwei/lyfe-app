@@ -193,7 +193,7 @@ describe('AuthContext — signOut', () => {
         expect(mockSupa.auth.signOut).toHaveBeenCalled();
     });
 
-    it('signOut skips server revocation when biometrics enabled', async () => {
+    it('signOut always revokes server session even with biometrics enabled', async () => {
         mockSupa.auth.getSession.mockResolvedValue({ data: { session: MOCK_SESSION } });
         const usersChain = mockSupa.__getChain('users');
         mockResolve(usersChain, { data: MOCK_PROFILE, error: null });
@@ -207,10 +207,9 @@ describe('AuthContext — signOut', () => {
             await result.current.signOut();
         });
 
-        // Session stays in Supabase storage so Face ID can recover it
-        expect(mockSupa.auth.signOut).not.toHaveBeenCalled();
+        // Server session is always revoked to prevent session leaks (Phase 1 security fix)
+        expect(mockSupa.auth.signOut).toHaveBeenCalled();
         expect(result.current.isAuthenticated).toBe(false);
-        expect(result.current.pendingBiometricSession).toBe(false);
     });
 });
 

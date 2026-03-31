@@ -35,8 +35,9 @@ export function useCandidateRealtime(onUpdate: () => void) {
                         const delay = Math.min(1000 * 2 ** retryCountRef.current, 30000);
                         retryCountRef.current++;
                         if (__DEV__) console.warn(`[useCandidateRealtime] ${status}, reconnecting in ${delay}ms`);
+                        const erroredChannel = channel;
                         setTimeout(() => {
-                            supabase.removeChannel(channel);
+                            supabase.removeChannel(erroredChannel);
                             channel = subscribe();
                         }, delay);
                     }

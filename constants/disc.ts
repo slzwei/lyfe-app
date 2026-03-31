@@ -377,6 +377,24 @@ export const DISC_TYPE_INFO: Record<DiscResultType, DiscTypeInfo> = {
     },
 };
 
+// ── Subtype Display Codes (Everything DiSC convention) ──────────
+
+/** Everything DiSC display code for each result type (I is always lowercase 'i'). */
+export const DISC_SUBTYPE_DISPLAY: Record<Exclude<DiscResultType, 'Balanced'>, string> = {
+    D: 'D',
+    Di: 'Di',
+    Dc: 'DC',
+    I: 'i',
+    Id: 'iD',
+    Is: 'iS',
+    S: 'S',
+    Si: 'Si',
+    Sc: 'SC',
+    C: 'C',
+    Cs: 'CS',
+    Cd: 'CD',
+};
+
 // ── Question Formats ─────────────────────────────────────────────
 
 export interface DiscWordPairQuestion {
@@ -603,3 +621,37 @@ export const DISC_PRIORITIES: PriorityDef[] = [
         description: 'You focus on helping others, creating stability, and being dependable.',
     },
 ];
+
+// ── Secondary Type Content ──────────────────────────────────────
+
+/** One-line bridge text keyed by "Primary-Secondary" (e.g. "C-S"). */
+export const DISC_BRIDGE_TEXT: Record<string, string> = {
+    'D-I': 'As a Drive type with strong Influence traits, you combine decisive action with people skills.',
+    'D-S': 'As a Drive type with strong Support traits, you combine results-focus with steady reliability.',
+    'D-C': 'As a Drive type with strong Clarity traits, you combine decisiveness with analytical precision.',
+    'I-D': 'As an Influence type with strong Drive traits, you combine enthusiasm with decisive action.',
+    'I-S': 'As an Influence type with strong Support traits, you combine social energy with genuine care for others.',
+    'I-C': 'As an Influence type with strong Clarity traits, you combine creativity with thoughtful analysis.',
+    'S-D': 'As a Support type with strong Drive traits, you combine patience with purposeful action.',
+    'S-I': 'As a Support type with strong Influence traits, you combine dependability with warm engagement.',
+    'S-C': 'As a Support type with strong Clarity traits, you combine steady reliability with careful precision.',
+    'C-D': 'As a Clarity type with strong Drive traits, you combine analytical depth with decisive execution.',
+    'C-I': 'As a Clarity type with strong Influence traits, you combine precision with persuasive communication.',
+    'C-S': 'As a Clarity type with strong Support traits, you combine analytical rigour with reliability.',
+};
+
+/** Single secondary-influenced strength per DISC type. */
+export const DISC_SECONDARY_STRENGTHS: Record<DiscType, string> = {
+    D: 'Brings purposeful drive and accountability when the team needs direction',
+    I: 'Adds warmth and enthusiasm that energises team collaborations',
+    S: 'Provides steady, dependable support to team processes',
+    C: 'Brings careful attention to detail that elevates work quality',
+};
+
+/** Single secondary-influenced blind spot per DISC type. */
+export const DISC_SECONDARY_BLIND_SPOTS: Record<DiscType, string> = {
+    D: 'May push for change faster than the team is comfortable with',
+    I: 'May prioritise social harmony over addressing tough issues directly',
+    S: 'May resist change even when current systems need updating',
+    C: 'May over-analyse situations where quick action would be more effective',
+};

@@ -520,6 +520,66 @@ describe('fetchCandidateRoadmap', () => {
         expect(m1.prerequisiteIds).toEqual([]);
     });
 
+    it('degrades gracefully when progress query returns error', async () => {
+        mockSupa.__getChain('roadmap_programmes').__resolveWith({ data: [SEED_PROGRAMME], error: null });
+        mockSupa.__getChain('roadmap_modules').__resolveWith({ data: [SEED_MODULE_1, SEED_MODULE_2], error: null });
+        mockSupa.__getChain('candidate_module_progress').__resolveWith({
+            data: null,
+            error: { message: 'Progress query failed' },
+        });
+        mockSupa.__getChain('candidate_programme_enrollment').__resolveWith({ data: [], error: null });
+        mockSupa.__getChain('roadmap_prerequisites').__resolveWith({ data: [], error: null });
+
+        const result = await fetchCandidateRoadmap('cand-1');
+
+        expect(result.error).toBeNull();
+        expect(result.data).toHaveLength(1);
+        // Modules have no progress attached (graceful degradation)
+        const seedProg = result.data![0];
+        expect(seedProg.modules.every((m) => m.progress === null)).toBe(true);
+    });
+
+    it('degrades gracefully when enrollment query returns error', async () => {
+        mockSupa.__getChain('roadmap_programmes').__resolveWith({
+            data: [SEED_PROGRAMME, SPROUT_PROGRAMME],
+            error: null,
+        });
+        mockSupa.__getChain('roadmap_modules').__resolveWith({ data: [SEED_MODULE_1], error: null });
+        mockSupa.__getChain('candidate_module_progress').__resolveWith({ data: [], error: null });
+        mockSupa.__getChain('candidate_programme_enrollment').__resolveWith({
+            data: null,
+            error: { message: 'Enrollment query failed' },
+        });
+        mockSupa.__getChain('roadmap_prerequisites').__resolveWith({ data: [], error: null });
+
+        const result = await fetchCandidateRoadmap('cand-1');
+
+        expect(result.error).toBeNull();
+        expect(result.data).toHaveLength(2);
+        // SproutLYFE is locked by default (SeedLYFE incomplete, no enrollment to override)
+        const sproutProg = result.data!.find((p) => p.slug === 'sproutlyfe')!;
+        expect(sproutProg.isLocked).toBe(true);
+    });
+
+    it('degrades gracefully when prerequisites query returns error', async () => {
+        mockSupa.__getChain('roadmap_programmes').__resolveWith({ data: [SEED_PROGRAMME], error: null });
+        mockSupa.__getChain('roadmap_modules').__resolveWith({ data: [SEED_MODULE_1, SEED_MODULE_2], error: null });
+        mockSupa.__getChain('candidate_module_progress').__resolveWith({ data: [], error: null });
+        mockSupa.__getChain('candidate_programme_enrollment').__resolveWith({ data: [], error: null });
+        mockSupa.__getChain('roadmap_prerequisites').__resolveWith({
+            data: null,
+            error: { message: 'Prerequisites query failed' },
+        });
+
+        const result = await fetchCandidateRoadmap('cand-1');
+
+        expect(result.error).toBeNull();
+        expect(result.data).toHaveLength(1);
+        // Modules have no prerequisite locks (graceful degradation)
+        const seedProg = result.data![0];
+        expect(seedProg.modules.every((m) => m.prerequisiteIds.length === 0)).toBe(true);
+    });
+
     it('sets isArchived correctly on modules', async () => {
         const archivedModule = makeModule('m-arch', 'prog-seed', {
             display_order: 3,
@@ -639,9 +699,17 @@ describe('enrollCandidate', () => {
 // ── unlockProgrammeForCandidate ──
 
 describe('unlockProgrammeForCandidate', () => {
+    function setupValidUnlock() {
+        const progChain = mockSupa.__getChain('roadmap_programmes');
+        progChain.__resolveWith({ data: { id: 'prog-sprout', is_active: true, archived_at: null }, error: null });
+        const candChain = mockSupa.__getChain('candidates');
+        candChain.__resolveWith({ data: { id: 'cand-1' }, error: null });
+        const enrollChain = mockSupa.__getChain('candidate_programme_enrollment');
+        enrollChain.__resolveWith({ error: null });
+    }
+
     it('returns null error on successful unlock', async () => {
-        const chain = mockSupa.__getChain('candidate_programme_enrollment');
-        chain.__resolveWith({ error: null });
+        setupValidUnlock();
 
         const result = await unlockProgrammeForCandidate('cand-1', 'prog-sprout', 'mgr-1');
 
@@ -650,12 +718,54 @@ describe('unlockProgrammeForCandidate', () => {
     });
 
     it('returns error message when unlock fails', async () => {
-        const chain = mockSupa.__getChain('candidate_programme_enrollment');
-        chain.__resolveWith({ error: { message: 'Permission denied' } });
+        const progChain = mockSupa.__getChain('roadmap_programmes');
+        progChain.__resolveWith({ data: { id: 'prog-sprout', is_active: true, archived_at: null }, error: null });
+        const candChain = mockSupa.__getChain('candidates');
+        candChain.__resolveWith({ data: { id: 'cand-1' }, error: null });
+        const enrollChain = mockSupa.__getChain('candidate_programme_enrollment');
+        enrollChain.__resolveWith({ error: { message: 'Permission denied' } });
 
         const result = await unlockProgrammeForCandidate('cand-1', 'prog-sprout', 'mgr-1');
 
         expect(result.error).toBe('Permission denied');
+    });
+
+    it('returns error when programme not found', async () => {
+        const progChain = mockSupa.__getChain('roadmap_programmes');
+        progChain.__resolveWith({ data: null, error: null });
+
+        const result = await unlockProgrammeForCandidate('cand-1', 'bad-prog', 'mgr-1');
+
+        expect(result.error).toBe('Programme not found');
+    });
+
+    it('returns error when programme is inactive', async () => {
+        const progChain = mockSupa.__getChain('roadmap_programmes');
+        progChain.__resolveWith({ data: { id: 'prog-old', is_active: false, archived_at: null }, error: null });
+
+        const result = await unlockProgrammeForCandidate('cand-1', 'prog-old', 'mgr-1');
+
+        expect(result.error).toBe('Programme is not active');
+    });
+
+    it('returns error when programme is archived', async () => {
+        const progChain = mockSupa.__getChain('roadmap_programmes');
+        progChain.__resolveWith({ data: { id: 'prog-old', is_active: true, archived_at: '2026-01-01' }, error: null });
+
+        const result = await unlockProgrammeForCandidate('cand-1', 'prog-old', 'mgr-1');
+
+        expect(result.error).toBe('Programme is not active');
+    });
+
+    it('returns error when candidate not found', async () => {
+        const progChain = mockSupa.__getChain('roadmap_programmes');
+        progChain.__resolveWith({ data: { id: 'prog-sprout', is_active: true, archived_at: null }, error: null });
+        const candChain = mockSupa.__getChain('candidates');
+        candChain.__resolveWith({ data: null, error: null });
+
+        const result = await unlockProgrammeForCandidate('bad-cand', 'prog-sprout', 'mgr-1');
+
+        expect(result.error).toBe('Candidate not found');
     });
 });
 

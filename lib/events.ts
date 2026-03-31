@@ -280,18 +280,9 @@ export async function updateEvent(
     }
 
     // Step 3: remove attendees that are no longer in the list
-    // Use .filter() with PostgREST syntax — keepIds are UUIDs validated by the
-    // attendee picker upstream, so the parenthesised list is safe for PostgREST.
-    // Using .filter() is equivalent to .not().in() but avoids the SDK's string
-    // interpolation pitfalls with the .not('col','in','(...)') overload.
+    const deleteQuery = supabase.from('event_attendees').delete().eq('event_id', eventId);
     const { error: deleteError } =
-        keepIds.length > 0
-            ? await supabase
-                  .from('event_attendees')
-                  .delete()
-                  .eq('event_id', eventId)
-                  .filter('user_id', 'not.in', `(${keepIds.join(',')})`)
-            : await supabase.from('event_attendees').delete().eq('event_id', eventId);
+        keepIds.length > 0 ? await deleteQuery.not('user_id', 'in', `(${keepIds.join(',')})`) : await deleteQuery;
 
     if (deleteError) return { data: null, error: deleteError.message };
 

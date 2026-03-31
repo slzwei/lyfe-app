@@ -51,6 +51,7 @@ export async function updateInterview(
         zoomLink: string | null;
         notes: string | null;
         status: 'scheduled' | 'completed' | 'cancelled' | 'rescheduled';
+        recommendation: string | null;
     },
 ): Promise<{ data: Interview | null; error: string | null }> {
     const { data: row, error } = await supabase
@@ -62,6 +63,7 @@ export async function updateInterview(
             zoom_link: input.zoomLink,
             notes: input.notes,
             status: input.status,
+            recommendation: input.recommendation,
         })
         .eq('id', interviewId)
         .select()

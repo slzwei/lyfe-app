@@ -38,12 +38,12 @@ describe('QuickAction', () => {
         const { toJSON } = render(<QuickAction {...baseProps} disabled />);
         const tree = toJSON();
         expect(tree).toBeTruthy();
-        expect(tree?.props?.style).toEqual(expect.objectContaining({ opacity: 0.4 }));
+        expect(tree?.props?.style).toEqual(expect.objectContaining({ opacity: 0.35 }));
     });
 
     it('renders with full opacity when enabled', () => {
         const { toJSON } = render(<QuickAction {...baseProps} />);
         const tree = toJSON();
-        expect(tree?.props?.style).toEqual(expect.objectContaining({ opacity: 1 }));
+        expect(tree?.props?.style).not.toEqual(expect.objectContaining({ opacity: 0.35 }));
     });
 });

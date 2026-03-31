@@ -1,8 +1,11 @@
 import { useTheme } from '@/contexts/ThemeContext';
+import { useRequireRole } from '@/hooks/useRequireRole';
 import { Stack } from 'expo-router';
 
 export default function RoadmapLayout() {
     const { colors } = useTheme();
+    const authorized = useRequireRole('candidate');
+    if (!authorized) return null;
 
     return (
         <Stack

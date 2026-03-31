@@ -232,7 +232,7 @@ export default function LoginScreen() {
     return (
         <View style={[styles.container, { backgroundColor: BRAND_ORANGE }]}>
             <SafeAreaView style={styles.safeArea}>
-                <TouchableWithoutFeedback onPress={Keyboard.dismiss} accessible={false}>
+                <TouchableWithoutFeedback onPress={step === 'phone' ? Keyboard.dismiss : undefined} accessible={false}>
                     <KeyboardAvoidingView
                         style={styles.keyboardView}
                         behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
@@ -501,9 +501,6 @@ export default function LoginScreen() {
                         </View>
                     </KeyboardAvoidingView>
                 </TouchableWithoutFeedback>
-                <Text style={[styles.footer, { color: OVERLAY_TEXT_SUBTLE }]}>
-                    By continuing, you agree to Lyfe's Terms of Service
-                </Text>
             </SafeAreaView>
         </View>
     );
@@ -611,9 +608,12 @@ const styles = StyleSheet.create({
     otpContainer: { flexDirection: 'row', justifyContent: 'space-between', gap: 8, marginBottom: 8 },
     hiddenOtpInput: {
         position: 'absolute',
-        width: 1,
-        height: 1,
-        opacity: 0,
+        top: 0,
+        left: 0,
+        width: '100%',
+        height: '100%',
+        opacity: 0.01,
+        color: 'transparent',
     },
     otpInput: {
         width: 48,
@@ -683,5 +683,4 @@ const styles = StyleSheet.create({
 
     /* Error & footer */
     errorText: { fontSize: 13, marginBottom: 16, marginTop: 4 },
-    footer: { fontSize: 12, textAlign: 'center', paddingBottom: 8, paddingHorizontal: 32, lineHeight: 18 },
 });

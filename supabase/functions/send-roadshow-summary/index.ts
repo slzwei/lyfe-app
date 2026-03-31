@@ -8,17 +8,35 @@
  */
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 
+async function timingSafeEqual(a: string, b: string): Promise<boolean> {
+    const enc = new TextEncoder();
+    const keyData = enc.encode('comparison-key');
+    const key = await crypto.subtle.importKey('raw', keyData, { name: 'HMAC', hash: 'SHA-256' }, false, ['sign']);
+    const sigA = await crypto.subtle.sign('HMAC', key, enc.encode(a));
+    const sigB = await crypto.subtle.sign('HMAC', key, enc.encode(b));
+    const arrA = new Uint8Array(sigA);
+    const arrB = new Uint8Array(sigB);
+    if (arrA.length !== arrB.length) return false;
+    let result = 0;
+    for (let i = 0; i < arrA.length; i++) result |= arrA[i] ^ arrB[i];
+    return result === 0;
+}
+
 Deno.serve(async (req) => {
     if (req.method === 'OPTIONS') {
         return new Response(null, { status: 204 });
     }
 
-    // ── Cron authentication — accept CRON_SECRET or service role key ──
+    // ── Cron authentication (timing-safe) — accept CRON_SECRET or service role key ──
     const cronSecret = Deno.env.get('CRON_SECRET');
     const serviceRoleKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY');
     const authHeader = req.headers.get('Authorization');
     const token = authHeader?.startsWith('Bearer ') ? authHeader.slice(7) : null;
-    if (!token || (token !== cronSecret && token !== serviceRoleKey)) {
+    const authorized =
+        token &&
+        ((cronSecret && (await timingSafeEqual(token, cronSecret))) ||
+            (serviceRoleKey && (await timingSafeEqual(token, serviceRoleKey))));
+    if (!authorized) {
         return new Response(JSON.stringify({ error: 'Unauthorized' }), {
             status: 401,
             headers: { 'Content-Type': 'application/json' },

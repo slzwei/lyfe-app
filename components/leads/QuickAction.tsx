@@ -18,12 +18,15 @@ function QuickAction({ icon, label, color, bgColor, onPress, disabled, testID }:
     return (
         <TouchableOpacity
             testID={testID}
-            style={[styles.quickAction, { opacity: disabled ? 0.4 : 1 }]}
+            style={[styles.quickAction, disabled && styles.disabled]}
             onPress={onPress}
             disabled={disabled}
+            activeOpacity={0.7}
+            accessibilityRole="button"
+            accessibilityLabel={label}
         >
             <View style={[styles.quickActionIcon, { backgroundColor: bgColor }]}>
-                <Ionicons name={icon} size={20} color={color} />
+                <Ionicons name={icon} size={22} color={color} />
             </View>
             <Text style={[styles.quickActionLabel, { color }]}>{label}</Text>
         </TouchableOpacity>
@@ -35,14 +38,16 @@ export default React.memo(QuickAction);
 const styles = StyleSheet.create({
     quickAction: {
         alignItems: 'center',
-        gap: 4,
+        gap: 7,
+        minWidth: 60,
     },
+    disabled: { opacity: 0.35 },
     quickActionIcon: {
-        width: 44,
-        height: 44,
-        borderRadius: 12,
+        width: 52,
+        height: 52,
+        borderRadius: 16,
         alignItems: 'center',
         justifyContent: 'center',
     },
-    quickActionLabel: { fontSize: 11, fontWeight: '600' },
+    quickActionLabel: { fontSize: 11, fontWeight: '600', letterSpacing: 0.1 },
 });

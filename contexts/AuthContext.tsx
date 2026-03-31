@@ -1,4 +1,12 @@
-import { authenticate, isBiometricsAvailable, isBiometricsEnabled, setBiometricsEnabled } from '@/lib/biometrics';
+import {
+    authenticate,
+    clearBiometricRefreshToken,
+    getBiometricRefreshToken,
+    isBiometricsAvailable,
+    isBiometricsEnabled,
+    setBiometricsEnabled,
+    storeBiometricRefreshToken,
+} from '@/lib/biometrics';
 import { clearSentryUser, setSentryUser } from '@/lib/sentry';
 import { supabase } from '@/lib/supabase';
 import type { User } from '@/types/database';
@@ -7,11 +15,14 @@ import type { Session } from '@supabase/supabase-js';
 import React, { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react';
 
 // ── Auth-only context ─────────────────────────────────────────
+type InvitationStatus = 'checking' | 'valid' | 'rejected' | 'skipped';
+
 interface AuthState {
     session: Session | null;
     isLoading: boolean;
     isAuthenticated: boolean;
     pendingBiometricSession: boolean;
+    invitationStatus: InvitationStatus;
 }
 
 interface AuthContextType extends AuthState {
@@ -44,45 +55,71 @@ const BiometricsContext = createContext<BiometricsContextType | undefined>(undef
 
 // ── Helpers ───────────────────────────────────────────────────
 
-/** Fetch the user profile from public.users, creating it if needed */
-async function fetchUserProfile(userId: string, phone?: string | null): Promise<User | null> {
-    const { data, error } = await supabase.from('users').select('*').eq('id', userId).single();
+// Cutoff: users created before this date are grandfathered in (skip invitation check)
+const INVITATION_SYSTEM_CUTOFF = '2026-03-29T00:00:00Z';
 
-    if (data) return data as User;
-
-    if (error?.code === 'PGRST116') {
-        const { data: newUser, error: insertError } = await supabase
-            .from('users')
-            .insert({
-                id: userId,
-                phone: phone || null,
-                full_name: 'New User',
-                role: 'candidate',
-            })
-            .select()
-            .single();
-
-        if (insertError) {
-            // Unique constraint violation — user was created by a concurrent request
-            if (insertError.code === '23505') {
-                const { data: retry } = await supabase.from('users').select('*').eq('id', userId).single();
-                return retry as User | null;
-            }
-            if (__DEV__) console.error('Error creating user profile:', insertError.message);
+/**
+ * Fetch the user profile from public.users.
+ * The handle_new_user DB trigger creates the row on auth signup,
+ * so we retry briefly if the row hasn't appeared yet (race condition).
+ */
+async function fetchUserProfile(userId: string, _phone?: string | null): Promise<User | null> {
+    for (let attempt = 0; attempt < 3; attempt++) {
+        const { data, error } = await supabase.from('users').select('*').eq('id', userId).single();
+        if (data) return data as User;
+        if (error?.code !== 'PGRST116') {
+            if (__DEV__) console.error('Error fetching user profile:', error?.message);
             return null;
         }
-        return newUser as User;
+        // Row not yet created by trigger — wait briefly and retry
+        if (attempt < 2) await new Promise((r) => setTimeout(r, 150));
+    }
+    if (__DEV__) console.error('User profile not found after retries');
+    return null;
+}
+
+/**
+ * Check whether the user has a valid invitation.
+ * - Users created before the invitation system cutoff are auto-skipped.
+ * - Otherwise, check member_invitations or legacy invitations table.
+ */
+async function checkInvitationStatus(userId: string, createdAt: string | null): Promise<InvitationStatus> {
+    // Existing users before the system went live are grandfathered
+    if (createdAt && new Date(createdAt) < new Date(INVITATION_SYSTEM_CUTOFF)) {
+        return 'skipped';
     }
 
-    if (error) {
-        if (__DEV__) console.error('Error fetching user profile:', error.message);
-        return null;
-    }
-    return null;
+    // Check member_invitations (new system)
+    const { data: memberInv } = await supabase
+        .from('member_invitations')
+        .select('id')
+        .eq('accepted_by_id', userId)
+        .eq('status', 'accepted')
+        .limit(1)
+        .maybeSingle();
+
+    if (memberInv) return 'valid';
+
+    // Check legacy invitations (lyfe-sg candidate flow)
+    const { data: legacyInv } = await supabase
+        .from('invitations')
+        .select('id')
+        .eq('user_id', userId)
+        .limit(1)
+        .maybeSingle();
+
+    if (legacyInv) return 'valid';
+
+    return 'rejected';
 }
 
 async function updateLastLogin(userId: string) {
     await supabase.from('users').update({ last_login_at: new Date().toISOString() }).eq('id', userId);
+}
+
+/** Sync public.users name + role into auth JWT metadata */
+async function syncAuthMetadata() {
+    await supabase.rpc('sync_auth_metadata');
 }
 
 async function registerPushToken(userId: string) {
@@ -105,7 +142,7 @@ async function registerPushToken(userId: string) {
 
 function BiometricsProvider({
     children,
-    sessionRef,
+    sessionRef: _sessionRef,
     onBiometricUnlock,
 }: {
     children: React.ReactNode;
@@ -124,15 +161,39 @@ function BiometricsProvider({
             const success = await authenticate('Sign in to Lyfe');
             if (!success) return { success: false };
 
-            const {
-                data: { session },
-            } = await supabase.auth.getSession();
+            let session: Session | null = null;
+
+            // Try stored refresh token first (saved during sign-out with biometrics)
+            const storedToken = await getBiometricRefreshToken();
+            if (storedToken) {
+                const { data, error } = await supabase.auth.refreshSession({
+                    refresh_token: storedToken,
+                });
+                if (error || !data.session) {
+                    await clearBiometricRefreshToken();
+                    return { success: false, error: 'Session expired — please sign in with OTP.' };
+                }
+                session = data.session;
+                await clearBiometricRefreshToken();
+            } else {
+                // Fallback: try existing session in storage (first launch after enabling biometrics)
+                const {
+                    data: { session: existingSession },
+                } = await supabase.auth.getSession();
+                session = existingSession;
+            }
+
             if (!session) {
                 return { success: false, error: 'Session expired — please sign in with OTP.' };
             }
 
             const profile = await fetchUserProfile(session.user.id, session.user.phone || null);
-            if (profile) await updateLastLogin(session.user.id);
+            if (profile) {
+                await updateLastLogin(session.user.id);
+                syncAuthMetadata().catch((e) => {
+                    if (__DEV__) console.error('[BiometricsContext] syncAuthMetadata failed:', e);
+                });
+            }
 
             onBiometricUnlock(session, profile);
             return { success: true };
@@ -227,6 +288,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         isLoading: true,
         isAuthenticated: false,
         pendingBiometricSession: false,
+        invitationStatus: 'checking',
     });
     const [user, setUser] = useState<User | null>(null);
 
@@ -234,17 +296,28 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     sessionRef.current = authState.session;
 
     /** Called by BiometricsProvider after successful Face ID */
-    const handleBiometricUnlock = useCallback((session: Session, profile: User | null) => {
+    const handleBiometricUnlock = useCallback(async (session: Session, profile: User | null) => {
         if (profile) {
+            const invStatus = await checkInvitationStatus(profile.id, profile.created_at);
             setSentryUser({ id: session.user.id, phone: session.user.phone, role: profile.role });
+            setUser(profile);
+            setAuthState((prev) => ({
+                ...prev,
+                session,
+                isAuthenticated: true,
+                pendingBiometricSession: false,
+                invitationStatus: invStatus,
+            }));
+        } else {
+            setUser(null);
+            setAuthState((prev) => ({
+                ...prev,
+                session,
+                isAuthenticated: false,
+                pendingBiometricSession: false,
+                invitationStatus: 'rejected',
+            }));
         }
-        setUser(profile);
-        setAuthState((prev) => ({
-            ...prev,
-            session,
-            isAuthenticated: !!profile,
-            pendingBiometricSession: false,
-        }));
     }, []);
 
     useEffect(() => {
@@ -254,40 +327,62 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
                     data: { session },
                 } = await supabase.auth.getSession();
 
-                if (session?.user) {
-                    const bioEnabled = await isBiometricsEnabled();
-                    const bioAvailable = await isBiometricsAvailable();
+                const bioEnabled = await isBiometricsEnabled();
+                const bioAvailable = bioEnabled && (await isBiometricsAvailable());
 
-                    if (bioEnabled && bioAvailable) {
+                if (bioEnabled && bioAvailable) {
+                    // Biometric gate: show prompt whether we have a session or a stored refresh token
+                    const hasStoredToken = !!(await getBiometricRefreshToken());
+                    if (session?.user || hasStoredToken) {
                         setAuthState({
                             session: null,
                             isLoading: false,
                             isAuthenticated: false,
                             pendingBiometricSession: true,
+                            invitationStatus: 'checking',
                         });
                         return;
                     }
+                }
 
+                if (session?.user) {
                     const phone = session.user.phone || null;
                     const profile = await fetchUserProfile(session.user.id, phone);
                     if (profile) {
+                        const invStatus = await checkInvitationStatus(profile.id, profile.created_at);
                         await updateLastLogin(session.user.id);
-                        registerPushToken(session.user.id);
+                        syncAuthMetadata().catch((e) => {
+                            if (__DEV__) console.error('[AuthContext] syncAuthMetadata failed:', e);
+                        });
+                        registerPushToken(session.user.id).catch((e) => {
+                            if (__DEV__) console.error('[AuthContext] registerPushToken failed:', e);
+                        });
                         setSentryUser({ id: session.user.id, phone, role: profile.role });
+                        setUser(profile);
+                        setAuthState({
+                            session,
+                            isLoading: false,
+                            isAuthenticated: true,
+                            pendingBiometricSession: false,
+                            invitationStatus: invStatus,
+                        });
+                    } else {
+                        setUser(null);
+                        setAuthState({
+                            session,
+                            isLoading: false,
+                            isAuthenticated: false,
+                            pendingBiometricSession: false,
+                            invitationStatus: 'rejected',
+                        });
                     }
-                    setUser(profile);
-                    setAuthState({
-                        session,
-                        isLoading: false,
-                        isAuthenticated: !!profile,
-                        pendingBiometricSession: false,
-                    });
                 } else {
                     setAuthState({
                         session: null,
                         isLoading: false,
                         isAuthenticated: false,
                         pendingBiometricSession: false,
+                        invitationStatus: 'checking',
                     });
                 }
             } catch (e) {
@@ -297,6 +392,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
                     isLoading: false,
                     isAuthenticated: false,
                     pendingBiometricSession: false,
+                    invitationStatus: 'checking',
                 });
             }
         };
@@ -311,21 +407,35 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
             if (session?.user) {
                 const profile = await fetchUserProfile(session.user.id, session.user.phone || null);
                 if (profile) {
-                    registerPushToken(session.user.id);
+                    const invStatus = await checkInvitationStatus(profile.id, profile.created_at);
+                    registerPushToken(session.user.id).catch((e) => {
+                        if (__DEV__) console.error('[AuthContext] registerPushToken failed:', e);
+                    });
                     setSentryUser({
                         id: session.user.id,
                         phone: session.user.phone,
                         role: profile.role,
                     });
+                    setUser(profile);
+                    setAuthState((prev) => ({
+                        ...prev,
+                        session,
+                        isLoading: false,
+                        isAuthenticated: true,
+                        pendingBiometricSession: false,
+                        invitationStatus: invStatus,
+                    }));
+                } else {
+                    setUser(null);
+                    setAuthState((prev) => ({
+                        ...prev,
+                        session,
+                        isLoading: false,
+                        isAuthenticated: false,
+                        pendingBiometricSession: false,
+                        invitationStatus: 'rejected',
+                    }));
                 }
-                setUser(profile);
-                setAuthState((prev) => ({
-                    ...prev,
-                    session,
-                    isLoading: false,
-                    isAuthenticated: !!profile,
-                    pendingBiometricSession: false,
-                }));
             } else {
                 clearSentryUser();
                 setUser(null);
@@ -335,6 +445,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
                     isLoading: false,
                     isAuthenticated: false,
                     pendingBiometricSession: false,
+                    invitationStatus: 'checking',
                 }));
             }
         });
@@ -356,12 +467,18 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         await AsyncStorage.removeItem('lyfe_view_mode');
 
         const bioEnabled = await isBiometricsEnabled();
-        if (!bioEnabled) {
-            // Full server-side revocation — refresh token is invalidated
-            await supabase.auth.signOut();
+        if (bioEnabled) {
+            // Save refresh token for biometric re-auth before revoking
+            const {
+                data: { session },
+            } = await supabase.auth.getSession();
+            if (session?.refresh_token) {
+                await storeBiometricRefreshToken(session.refresh_token);
+            }
         }
-        // When biometrics enabled, skip supabase.auth.signOut() so the
-        // session stays in storage for Face ID to recover via getSession().
+
+        // Always revoke the server session
+        await supabase.auth.signOut();
 
         clearSentryUser();
         setUser(null);
@@ -370,7 +487,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
             session: null,
             isLoading: false,
             isAuthenticated: false,
-            pendingBiometricSession: false,
+            pendingBiometricSession: bioEnabled,
+            invitationStatus: 'checking',
         }));
     }, []);
 

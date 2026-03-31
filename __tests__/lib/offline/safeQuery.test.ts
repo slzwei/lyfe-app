@@ -15,9 +15,7 @@ describe('safeQuery', () => {
     });
 
     it('returns Supabase error on query failure', async () => {
-        const result = await safeQuery(() =>
-            Promise.resolve({ data: null, error: { message: 'Row not found' } }),
-        );
+        const result = await safeQuery(() => Promise.resolve({ data: null, error: { message: 'Row not found' } }));
 
         expect(result.data).toBeNull();
         expect(result.error).toBe('Row not found');
@@ -109,7 +107,7 @@ describe('safeMutation', () => {
 
     it('queues mutation on network error and returns queued: true', async () => {
         const result = await safeMutation(
-            'users',
+            'leads',
             'update',
             { full_name: 'Updated' },
             { id: '123' },
@@ -125,7 +123,7 @@ describe('safeMutation', () => {
 
         const items = await queue.getAll();
         expect(items).toHaveLength(1);
-        expect(items[0].table).toBe('users');
+        expect(items[0].table).toBe('leads');
         expect(items[0].operation).toBe('update');
         expect(items[0].payload).toEqual({ full_name: 'Updated' });
         expect(items[0].filters).toEqual({ id: '123' });

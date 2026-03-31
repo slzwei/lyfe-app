@@ -59,6 +59,30 @@ export async function createLead(
     input: CreateLeadInput,
     userId: string,
 ): Promise<{ data: Lead | null; error: string | null }> {
+    // ── Input validation ──────────────────────────────────────
+    const trimmedName = input.full_name?.trim();
+    if (!trimmedName) {
+        return { data: null, error: 'full_name is required' };
+    }
+
+    const trimmedSource = typeof input.source === 'string' ? input.source.trim() : '';
+    if (!trimmedSource) {
+        return { data: null, error: 'source is required' };
+    }
+
+    if (input.phone != null && input.phone.trim().length > 0) {
+        const phone = input.phone.trim();
+        if (phone.length < 6 || phone.length > 20 || !/^[+\d][\d\s()-]{4,}$/.test(phone)) {
+            return { data: null, error: 'Invalid phone format' };
+        }
+    }
+
+    if (input.email != null && input.email.trim().length > 0) {
+        if (!input.email.includes('@')) {
+            return { data: null, error: 'Invalid email format' };
+        }
+    }
+
     const { data: lead, error: leadError } = await supabase
         .from('leads')
         .insert({

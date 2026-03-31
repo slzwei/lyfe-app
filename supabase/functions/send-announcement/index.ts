@@ -41,10 +41,9 @@ Deno.serve(async (req) => {
         // Service-role client for data lookups
         const supabase = createClient(Deno.env.get('SUPABASE_URL')!, Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!);
 
-        // Verify caller is admin
-        const { data: callerProfile } = await supabase.from('users').select('role').eq('id', caller.id).single();
-
-        if (callerProfile?.role !== 'admin') {
+        // Verify caller is admin via JWT claim (avoids TOCTOU with DB lookup)
+        const callerRole = caller.app_metadata?.role || caller.user_metadata?.role;
+        if (callerRole !== 'admin') {
             return new Response(JSON.stringify({ error: 'Only admins can send announcements' }), {
                 status: 403,
                 headers: { 'Content-Type': 'application/json' },
@@ -79,6 +78,7 @@ Deno.serve(async (req) => {
         const BATCH_SIZE = 500;
         let totalSent = 0;
 
+        const errors: string[] = [];
         for (let i = 0; i < users.length; i += BATCH_SIZE) {
             const batch = users.slice(i, i + BATCH_SIZE);
             const rows = batch.map((u: { id: string }) => ({
@@ -89,11 +89,23 @@ Deno.serve(async (req) => {
                 data: { route: '/(tabs)/home/notifications' },
             }));
 
-            await supabase.from('notifications').insert(rows);
-            totalSent += rows.length;
+            const { error: batchError } = await supabase.from('notifications').insert(rows);
+            if (batchError) {
+                console.error(
+                    `[send-announcement] Batch ${Math.floor(i / BATCH_SIZE) + 1} failed:`,
+                    batchError.message,
+                );
+                errors.push(`Batch ${Math.floor(i / BATCH_SIZE) + 1}: ${batchError.message}`);
+            } else {
+                totalSent += rows.length;
+            }
         }
 
-        return new Response(JSON.stringify({ sent: totalSent }), {
+        const result: Record<string, unknown> = { sent: totalSent };
+        if (errors.length > 0) result.failedBatches = errors.length;
+
+        return new Response(JSON.stringify(result), {
+            status: errors.length > 0 && totalSent === 0 ? 500 : 200,
             headers: { 'Content-Type': 'application/json' },
         });
     } catch (err) {

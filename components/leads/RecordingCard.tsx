@@ -1,4 +1,5 @@
 import { useTheme } from '@/contexts/ThemeContext';
+import { shadow } from '@/constants/platform';
 import { Ionicons } from '@expo/vector-icons';
 // TODO: Migrate from expo-av to expo-audio when expo-audio is installed.
 // expo-audio is the replacement API in SDK 52+ but is not yet in this project's
@@ -85,31 +86,50 @@ export default function RecordingCard({ recordingUrl, transcript }: RecordingCar
     }, []);
 
     return (
-        <View style={[styles.card, { backgroundColor: colors.cardBackground, borderColor: colors.cardBorder }]}>
-            <Text style={[styles.sectionTitle, { color: colors.textPrimary }]}>
-                {recordingUrl ? 'Call Recording' : 'Call Transcript'}
-            </Text>
+        <View style={[styles.card, { backgroundColor: colors.cardBackground }, shadow('sm')]}>
+            {/* Header */}
+            <View style={styles.cardHeader}>
+                <View style={[styles.headerIcon, { backgroundColor: colors.accentLight }]}>
+                    <Ionicons name="mic-outline" size={16} color={colors.accent} />
+                </View>
+                <Text style={[styles.sectionTitle, { color: colors.textPrimary }]}>
+                    {recordingUrl ? 'Call Recording' : 'Call Transcript'}
+                </Text>
+            </View>
 
             {/* Audio Player */}
             {recordingUrl && (
-                <View style={styles.playerRow}>
+                <View style={[styles.playerContainer, { backgroundColor: colors.surfaceSecondary }]}>
                     <TouchableOpacity
                         onPress={togglePlay}
                         disabled={isLoading}
                         style={[styles.playBtn, { backgroundColor: colors.accent }]}
+                        activeOpacity={0.8}
+                        accessibilityRole="button"
+                        accessibilityLabel={
+                            isLoading ? 'Loading audio' : isPlaying ? 'Pause recording' : 'Play recording'
+                        }
                     >
                         <Ionicons
                             name={isLoading ? 'hourglass-outline' : isPlaying ? 'pause' : 'play'}
-                            size={20}
+                            size={18}
                             color="#fff"
                         />
                     </TouchableOpacity>
-                    <View style={styles.progressContainer}>
-                        <View style={[styles.progressTrack, { backgroundColor: colors.borderLight }]}>
+                    <View style={styles.progressSection}>
+                        {/* Progress bar */}
+                        <View style={[styles.progressTrack, { backgroundColor: colors.border }]}>
                             <View
                                 style={[
                                     styles.progressFill,
                                     { backgroundColor: colors.accent, width: `${progress * 100}%` },
+                                ]}
+                            />
+                            {/* Scrubber dot */}
+                            <View
+                                style={[
+                                    styles.scrubberDot,
+                                    { backgroundColor: colors.accent, left: `${progress * 100}%` },
                                 ]}
                             />
                         </View>
@@ -130,10 +150,13 @@ export default function RecordingCard({ recordingUrl, transcript }: RecordingCar
                 <>
                     <TouchableOpacity
                         onPress={() => setShowTranscript(!showTranscript)}
-                        style={[styles.transcriptToggle, { borderTopColor: colors.borderLight }]}
+                        style={[styles.transcriptToggle, { borderTopColor: colors.border }]}
+                        activeOpacity={0.7}
+                        accessibilityRole="button"
+                        accessibilityLabel={showTranscript ? 'Hide transcript' : 'Show transcript'}
                     >
                         <View style={styles.transcriptToggleInner}>
-                            <Ionicons name="document-text-outline" size={16} color={colors.textTertiary} />
+                            <Ionicons name="document-text-outline" size={15} color={colors.textTertiary} />
                             <Text style={[styles.transcriptToggleText, { color: colors.textSecondary }]}>
                                 Transcript
                             </Text>
@@ -145,7 +168,7 @@ export default function RecordingCard({ recordingUrl, transcript }: RecordingCar
                         />
                     </TouchableOpacity>
                     {showTranscript && (
-                        <View style={[styles.transcriptBody, { backgroundColor: colors.surfacePrimary }]}>
+                        <View style={[styles.transcriptBody, { backgroundColor: colors.surfaceSecondary }]}>
                             <Text style={[styles.transcriptText, { color: colors.textSecondary }]}>{transcript}</Text>
                         </View>
                     )}
@@ -157,16 +180,37 @@ export default function RecordingCard({ recordingUrl, transcript }: RecordingCar
 
 const styles = StyleSheet.create({
     card: {
-        borderRadius: 14,
-        borderWidth: 0.5,
+        borderRadius: 16,
         padding: 16,
-        marginBottom: 12,
+        overflow: 'hidden',
     },
-    sectionTitle: { fontSize: 15, fontWeight: '700', marginBottom: 12 },
-    playerRow: {
+
+    // ── Header ──
+    cardHeader: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 10,
+        marginBottom: 14,
+    },
+    headerIcon: {
+        width: 30,
+        height: 30,
+        borderRadius: 9,
+        alignItems: 'center',
+        justifyContent: 'center',
+    },
+    sectionTitle: {
+        fontSize: 15,
+        fontWeight: '700',
+    },
+
+    // ── Player ──
+    playerContainer: {
         flexDirection: 'row',
         alignItems: 'center',
         gap: 12,
+        borderRadius: 12,
+        padding: 12,
     },
     playBtn: {
         width: 40,
@@ -174,30 +218,42 @@ const styles = StyleSheet.create({
         borderRadius: 20,
         alignItems: 'center',
         justifyContent: 'center',
+        flexShrink: 0,
     },
-    progressContainer: { flex: 1 },
+    progressSection: { flex: 1 },
     progressTrack: {
-        height: 4,
-        borderRadius: 2,
-        overflow: 'hidden',
+        height: 5,
+        borderRadius: 2.5,
+        overflow: 'visible',
+        position: 'relative',
     },
     progressFill: {
         height: '100%',
-        borderRadius: 2,
+        borderRadius: 2.5,
+    },
+    scrubberDot: {
+        position: 'absolute',
+        top: -3.5,
+        width: 12,
+        height: 12,
+        borderRadius: 6,
+        marginLeft: -6,
     },
     timeRow: {
         flexDirection: 'row',
         justifyContent: 'space-between',
-        marginTop: 4,
+        marginTop: 5,
     },
-    timeText: { fontSize: 11 },
+    timeText: { fontSize: 11, fontWeight: '500' },
+
+    // ── Transcript ──
     transcriptToggle: {
         flexDirection: 'row',
         alignItems: 'center',
         justifyContent: 'space-between',
         marginTop: 14,
         paddingTop: 14,
-        borderTopWidth: 0.5,
+        borderTopWidth: StyleSheet.hairlineWidth,
     },
     transcriptToggleInner: {
         flexDirection: 'row',
@@ -208,7 +264,7 @@ const styles = StyleSheet.create({
     transcriptBody: {
         marginTop: 10,
         padding: 12,
-        borderRadius: 8,
+        borderRadius: 10,
     },
     transcriptText: { fontSize: 13, lineHeight: 20 },
 });

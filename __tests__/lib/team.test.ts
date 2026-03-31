@@ -3,7 +3,7 @@
  */
 import { supabase } from '@/lib/supabase';
 
-import { fetchTeamMembers, fetchTeamMember, getTeamPerformance, inviteAgent } from '@/lib/team';
+import { fetchTeamMembers, fetchTeamMember, getTeamPerformance } from '@/lib/team';
 
 jest.mock('@/lib/supabase');
 
@@ -254,55 +254,5 @@ describe('getTeamPerformance', () => {
 
         expect(result.error).toBe('Invalid date range: start must be before or equal to end');
         expect(result.data.agents).toEqual([]);
-    });
-});
-
-// ── inviteAgent ──
-
-describe('inviteAgent', () => {
-    it('creates invite token for agent', async () => {
-        const chain = mockSupa.__getChain('invite_tokens');
-        mockResolve(chain, { data: { token: 'inv_123_abc' }, error: null });
-
-        const result = await inviteAgent('agent@example.com', 'mgr-1');
-        expect(result.error).toBeNull();
-        expect(result.data?.token).toBe('inv_123_abc');
-        expect(mockSupa.from).toHaveBeenCalledWith('invite_tokens');
-    });
-
-    it('returns error when insert fails', async () => {
-        const chain = mockSupa.__getChain('invite_tokens');
-        mockResolve(chain, { data: null, error: { message: 'Duplicate email' } });
-
-        const result = await inviteAgent('agent@example.com', 'mgr-1');
-        expect(result.error).toBe('Duplicate email');
-        expect(result.data).toBeNull();
-    });
-
-    it('returns error for invalid email format', async () => {
-        const result = await inviteAgent('not-an-email', 'mgr-1');
-        expect(result.error).toBe('Invalid email format');
-        expect(result.data).toBeNull();
-    });
-
-    it('returns error for empty email', async () => {
-        const result = await inviteAgent('', 'mgr-1');
-        expect(result.error).toBe('Invalid email format');
-        expect(result.data).toBeNull();
-    });
-
-    it('returns error for email without domain', async () => {
-        const result = await inviteAgent('user@', 'mgr-1');
-        expect(result.error).toBe('Invalid email format');
-        expect(result.data).toBeNull();
-    });
-
-    it('accepts valid email formats', async () => {
-        const chain = mockSupa.__getChain('invite_tokens');
-        mockResolve(chain, { data: { token: 'inv_123_abc' }, error: null });
-
-        const result = await inviteAgent('user@domain.co', 'mgr-1');
-        expect(result.error).toBeNull();
-        expect(result.data?.token).toBeTruthy();
     });
 });

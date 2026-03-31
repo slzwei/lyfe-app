@@ -396,14 +396,25 @@ export async function reassignCandidate(
 /**
  * Upload a PDF resume for a candidate and save the URL to the candidate record.
  */
+const MAX_RESUME_BYTES = 10 * 1024 * 1024; // 10 MB
+
 export async function uploadCandidateResume(
     candidateId: string,
     fileUri: string,
     fileName: string,
 ): Promise<{ url: string | null; error: string | null }> {
     try {
+        const ext = fileName.slice(fileName.lastIndexOf('.')).toLowerCase();
+        if (ext !== '.pdf') {
+            return { url: null, error: 'Only PDF files are allowed.' };
+        }
+
         const response = await fetch(fileUri);
         const arrayBuffer = await response.arrayBuffer();
+
+        if (arrayBuffer.byteLength > MAX_RESUME_BYTES) {
+            return { url: null, error: 'File must be under 10 MB.' };
+        }
 
         const safeName = fileName.replace(/[^a-zA-Z0-9._-]/g, '_');
         const filePath = `${candidateId}/${Date.now()}_${safeName}`;

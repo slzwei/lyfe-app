@@ -1,5 +1,6 @@
 import { serve } from 'https://deno.land/std@0.177.0/http/server.ts';
 import { AwsClient } from 'https://esm.sh/aws4fetch@1.0.19';
+import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 
 function maskPhone(phone: string): string {
     if (phone.length < 7) return '***';
@@ -41,6 +42,36 @@ serve(async (req) => {
             status: 200,
             headers: { 'Content-Type': 'application/json' },
         });
+    }
+
+    // ── Invitation gate — block OTP for uninvited numbers ──────
+    // Allow existing users (returning login) and invited numbers
+    // Phone formats: hook receives with '+', DB may store with or without '+'
+    const admin = createClient(Deno.env.get('SUPABASE_URL')!, Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!);
+    const phoneNoPlus = phone.replace(/^\+/, '');
+
+    const { data: existingUser } = await admin
+        .from('users')
+        .select('id')
+        .in('phone', [phone, phoneNoPlus])
+        .maybeSingle();
+
+    if (!existingUser) {
+        // Not an existing user — check for a pending invitation
+        const { data: invitation } = await admin
+            .from('member_invitations')
+            .select('id')
+            .in('phone', [phone, phoneNoPlus])
+            .eq('status', 'pending')
+            .maybeSingle();
+
+        if (!invitation) {
+            console.log(`[custom-sms-hook] Blocked OTP for uninvited number: ${maskPhone(phone)}`);
+            return new Response(JSON.stringify({ error: 'No invitation found for this number' }), {
+                status: 400,
+                headers: { 'Content-Type': 'application/json' },
+            });
+        }
     }
 
     const body = new URLSearchParams({

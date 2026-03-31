@@ -74,6 +74,11 @@ Deno.serve(async (req) => {
         if (!name?.trim()) return jsonResponse({ error: 'name is required' }, 400);
         if (!phone?.trim()) return jsonResponse({ error: 'phone is required' }, 400);
 
+        const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+        if (job_id && !UUID_RE.test(job_id)) return jsonResponse({ error: 'Invalid job_id format' }, 400);
+        if (assigned_manager_id && !UUID_RE.test(assigned_manager_id))
+            return jsonResponse({ error: 'Invalid assigned_manager_id format' }, 400);
+
         // ── Service-role client for inserts ────────────────────────
         const admin = createClient(Deno.env.get('SUPABASE_URL')!, Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!);
 
@@ -193,6 +198,6 @@ Deno.serve(async (req) => {
         });
     } catch (err) {
         console.error('[create-candidate]', err);
-        return jsonResponse({ error: err instanceof Error ? err.message : 'Internal error' }, 500);
+        return jsonResponse({ error: 'Failed to create candidate. Please try again.' }, 500);
     }
 });

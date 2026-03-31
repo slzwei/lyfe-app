@@ -113,8 +113,11 @@ export default function MathRenderer({ content, style, fontSize = 15 }: MathRend
                 style={[styles.webview, { height: webViewHeight }]}
                 scrollEnabled={false}
                 onMessage={onMessage}
-                originWhitelist={['https://*.supabase.co', 'https://cdn.jsdelivr.net']}
+                originWhitelist={['about:blank']}
                 javaScriptEnabled
+                allowFileAccess={false}
+                allowUniversalAccessFromFileURLs={false}
+                mixedContentMode="never"
                 showsHorizontalScrollIndicator={false}
                 showsVerticalScrollIndicator={false}
             />

@@ -22,6 +22,7 @@ const INTERVIEW_ROW = {
     zoom_link: 'https://zoom.us/j/123456',
     google_calendar_event_id: null,
     notes: null,
+    recommendation: null,
     status: 'scheduled' as const,
     created_at: '2026-03-10T08:00:00Z',
 };
@@ -114,6 +115,7 @@ describe('updateInterview', () => {
         zoomLink: 'https://zoom.us/j/999',
         notes: 'Rescheduled by candidate',
         status: 'rescheduled' as const,
+        recommendation: null as string | null,
     };
 
     it('returns the updated interview on success', async () => {
@@ -154,6 +156,23 @@ describe('updateInterview', () => {
         expect(result.error).toBeNull();
         expect(result.data?.status).toBe('completed');
         expect(result.data?.notes).toBe('Rescheduled by candidate');
+    });
+
+    it('includes recommendation in update', async () => {
+        const chain = mockSupa.__getChain('interviews');
+        chain.__resolveWith({
+            data: { ...INTERVIEW_ROW, status: 'completed', recommendation: 'second_interview' },
+            error: null,
+        });
+
+        const result = await updateInterview('iv-1', {
+            ...UPDATE_INPUT,
+            status: 'completed',
+            recommendation: 'second_interview',
+        });
+
+        expect(result.error).toBeNull();
+        expect(result.data?.recommendation).toBe('second_interview');
     });
 
     it('handles all valid status values', async () => {

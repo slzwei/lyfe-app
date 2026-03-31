@@ -11,7 +11,7 @@ import { Colors } from '@/constants/Colors';
 import { fetchLeadStats, fetchRecentActivities, fetchManagerDashboardStats } from '@/lib/leads';
 import { fetchUpcomingEvents } from '@/lib/events';
 import { fetchPAManagerIds, fetchPACandidateCount, fetchPAInterviewCount } from '@/lib/recruitment';
-import { fetchCandidateRoadmap } from '@/lib/roadmap';
+import { fetchCandidateRoadmap, getCandidateIdForUser } from '@/lib/roadmap';
 import * as biometrics from '@/lib/biometrics';
 import HomeScreen from '@/app/(tabs)/home/index';
 
@@ -95,6 +95,7 @@ beforeEach(() => {
     (fetchPAManagerIds as jest.Mock).mockResolvedValue([]);
     (fetchPACandidateCount as jest.Mock).mockResolvedValue(0);
     (fetchPAInterviewCount as jest.Mock).mockResolvedValue(0);
+    (getCandidateIdForUser as jest.Mock).mockResolvedValue('candidate-record-id');
     (fetchCandidateRoadmap as jest.Mock).mockResolvedValue({
         data: [
             {

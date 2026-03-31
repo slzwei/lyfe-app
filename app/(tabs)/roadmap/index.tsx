@@ -1,4 +1,4 @@
-import React, { useCallback } from 'react';
+import React, { useCallback, useEffect, useState } from 'react';
 import { ActivityIndicator, RefreshControl, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
@@ -7,6 +7,7 @@ import { useReducedMotion } from 'react-native-reanimated';
 import { useTheme } from '@/contexts/ThemeContext';
 import { useAuth } from '@/contexts/AuthContext';
 import { useRoadmap } from '@/hooks/useRoadmap';
+import { getCandidateIdForUser } from '@/lib/roadmap';
 import ScreenHeader from '@/components/ScreenHeader';
 import ProgrammeHero from '@/components/roadmap/ProgrammeHero';
 import ProgrammeTabs from '@/components/roadmap/ProgrammeTabs';
@@ -23,7 +24,14 @@ export default function RoadmapScreen() {
     const { bottom } = useSafeAreaInsets();
     const reducedMotion = useReducedMotion();
 
-    const candidateId = user?.id;
+    // Resolve candidates.id from users.id via candidate_profiles bridge
+    const [candidateId, setCandidateId] = useState<string | undefined>();
+    useEffect(() => {
+        if (!user?.id) return;
+        getCandidateIdForUser(user.id).then((id) => {
+            if (id) setCandidateId(id);
+        });
+    }, [user?.id]);
 
     const {
         programmes,

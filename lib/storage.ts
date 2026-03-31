@@ -15,9 +15,7 @@ function getImagePicker(): typeof import('expo-image-picker') | null {
     }
 }
 
-export async function pickAndUploadAvatar(
-    userId: string,
-): Promise<{ url: string | null; error: string | null }> {
+export async function pickAndUploadAvatar(userId: string): Promise<{ url: string | null; error: string | null }> {
     const ImagePicker = getImagePicker();
     if (!ImagePicker) return { url: null, error: 'Photo uploads require a native rebuild (npx expo run:ios).' };
 
@@ -35,9 +33,7 @@ export async function pickAndUploadAvatar(
     return _uploadUri(userId, result.assets[0].uri);
 }
 
-export async function takeAndUploadAvatar(
-    userId: string,
-): Promise<{ url: string | null; error: string | null }> {
+export async function takeAndUploadAvatar(userId: string): Promise<{ url: string | null; error: string | null }> {
     const ImagePicker = getImagePicker();
     if (!ImagePicker) return { url: null, error: 'Camera requires a native rebuild (npx expo run:ios).' };
 
@@ -54,25 +50,28 @@ export async function takeAndUploadAvatar(
     return _uploadUri(userId, result.assets[0].uri);
 }
 
-export async function removeAvatar(
-    userId: string,
-): Promise<{ error: string | null }> {
+export async function removeAvatar(userId: string): Promise<{ error: string | null }> {
     const path = `${userId}/avatar.jpg`;
     const { error } = await supabase.storage.from('avatars').remove([path]);
     if (error) return { error: error.message };
-    await supabase.from('users').update({ avatar_url: null }).eq('id', userId);
+    const { error: updateError } = await supabase.from('users').update({ avatar_url: null }).eq('id', userId);
+    if (updateError) return { error: updateError.message };
     return { error: null };
 }
 
-async function _uploadUri(
-    userId: string,
-    uri: string,
-): Promise<{ url: string | null; error: string | null }> {
+const MAX_AVATAR_BYTES = 5 * 1024 * 1024; // 5 MB
+
+async function _uploadUri(userId: string, uri: string): Promise<{ url: string | null; error: string | null }> {
     const response = await fetch(uri);
     const blob = await response.blob();
     // Convert to ArrayBuffer — Supabase JS can't serialize RN blobs correctly,
     // resulting in 0-byte uploads. ArrayBuffer works reliably.
     const arrayBuffer = await new Response(blob).arrayBuffer();
+
+    if (arrayBuffer.byteLength > MAX_AVATAR_BYTES) {
+        return { url: null, error: 'Image must be under 5 MB.' };
+    }
+
     const path = `${userId}/avatar.jpg`;
 
     const { error: uploadError } = await supabase.storage
@@ -84,6 +83,11 @@ async function _uploadUri(
     const { data } = supabase.storage.from('avatars').getPublicUrl(path);
     const url = `${data.publicUrl}?t=${Date.now()}`;
 
-    await supabase.from('users').update({ avatar_url: url }).eq('id', userId);
+    const { error: updateError } = await supabase.from('users').update({ avatar_url: url }).eq('id', userId);
+    if (updateError) {
+        // Rollback: remove the just-uploaded file
+        await supabase.storage.from('avatars').remove([path]);
+        return { url: null, error: updateError.message };
+    }
     return { url, error: null };
 }

@@ -147,14 +147,26 @@ Deno.serve(async (req) => {
                 return jsonResponse({ error: 'Lead is not assigned to the specified agent' }, 409);
             }
 
-            const { error: deleteError } = await supabase.from('leads').delete().eq('id', existing.id);
+            const { error: updateError } = await supabase
+                .from('leads')
+                .update({ assigned_to: null })
+                .eq('id', existing.id);
 
-            if (deleteError) {
-                console.error('[receive-mktr-lead] Lead delete error:', deleteError);
-                return jsonResponse({ error: 'Failed to delete lead' }, 500);
+            if (updateError) {
+                console.error('[receive-mktr-lead] Lead unassign error:', updateError);
+                return jsonResponse({ error: 'Failed to unassign lead' }, 500);
             }
 
-            return jsonResponse({ success: true, leadId: existing.id, deleted: true });
+            // Log the unassignment activity
+            await supabase.from('lead_activities').insert({
+                lead_id: existing.id,
+                user_id: data.previousAgentId,
+                type: 'unassignment',
+                description: 'Lead unassigned via MKTR',
+                metadata: { source: 'mktr', delivery_id: deliveryId, previous_agent_id: data.previousAgentId },
+            });
+
+            return jsonResponse({ success: true, leadId: existing.id, unassigned: true });
         }
 
         // ── Resolve agent ─────────────────────────────────────────
@@ -162,21 +174,40 @@ Deno.serve(async (req) => {
         let agentId: string;
 
         if (event === 'lead.created') {
-            if (!routing?.agentPhone) {
-                return jsonResponse({ error: 'Missing data.routing.agentPhone' }, 400);
+            // Try matching by phone first, then fall back to agentExternalId
+            if (routing?.agentPhone) {
+                const normalizedPhone = routing.agentPhone.replace(/^\+/, '');
+                const { data: agent } = await supabase
+                    .from('users')
+                    .select('id')
+                    .eq('phone', normalizedPhone)
+                    .maybeSingle();
+                if (agent) {
+                    agentId = agent.id;
+                }
             }
-            // Strip '+' prefix — DB stores phones without it (e.g. 6580000012)
-            const normalizedPhone = routing.agentPhone.replace(/^\+/, '');
-            const { data: agent } = await supabase
-                .from('users')
-                .select('id')
-                .eq('phone', normalizedPhone)
-                .maybeSingle();
-            if (!agent) {
-                console.warn(`[receive-mktr-lead] Agent not found for phone: ${maskPhone(routing.agentPhone)}`);
-                return jsonResponse({ error: 'Agent not found for the provided phone number' }, 422);
+
+            // Fall back to agentExternalId (handles System Agent or agents without phone)
+            if (!agentId && routing?.agentExternalId) {
+                const { data: agent } = await supabase
+                    .from('users')
+                    .select('id')
+                    .eq('id', routing.agentExternalId)
+                    .maybeSingle();
+                if (agent) {
+                    agentId = agent.id;
+                }
             }
-            agentId = agent.id;
+
+            if (!agentId) {
+                const identifier = routing?.agentPhone
+                    ? `phone: ${maskPhone(routing.agentPhone)}`
+                    : routing?.agentExternalId
+                      ? `id: ${routing.agentExternalId}`
+                      : 'no routing info';
+                console.warn(`[receive-mktr-lead] Agent not found (${identifier})`);
+                return jsonResponse({ error: 'Agent not found for the provided routing info' }, 422);
+            }
         } else {
             // lead.assigned — agentExternalId is the Supabase user UUID (returned by mktr-agents endpoint)
             if (!routing?.agentExternalId) {

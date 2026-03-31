@@ -136,4 +136,62 @@ describe('useContactOutcome', () => {
         expect(result.current.showConfirmSheet).toBe(true);
         expect(result.current.confirmStep).toBe('outcome');
     });
+
+    it('does not re-trigger sheet on subsequent bg/fg cycles after it was shown', () => {
+        let appStateCallback: (state: string) => void = () => {};
+        const mockRemove = jest.fn();
+        jest.spyOn(AppState, 'addEventListener').mockImplementation((_type, handler) => {
+            appStateCallback = handler as (state: string) => void;
+            return { remove: mockRemove } as any;
+        });
+
+        const { result } = renderHook(() => useContactOutcome(defaultParams));
+
+        // Call → bg → fg → sheet shows
+        act(() => result.current.handleCall());
+        act(() => appStateCallback('background'));
+        act(() => appStateCallback('active'));
+        expect(result.current.showConfirmSheet).toBe(true);
+
+        // User selects outcome → moves to note step
+        act(() => result.current.handleOutcomeSelect('reached'));
+        expect(result.current.confirmStep).toBe('note');
+
+        // Another bg/fg cycle should NOT reset confirmStep back to 'outcome'
+        act(() => appStateCallback('background'));
+        act(() => appStateCallback('active'));
+        expect(result.current.confirmStep).toBe('note');
+    });
+
+    it('does not show sheet after dismiss on next bg/fg cycle', () => {
+        let appStateCallback: (state: string) => void = () => {};
+        const mockRemove = jest.fn();
+        jest.spyOn(AppState, 'addEventListener').mockImplementation((_type, handler) => {
+            appStateCallback = handler as (state: string) => void;
+            return { remove: mockRemove } as any;
+        });
+
+        const { result } = renderHook(() => useContactOutcome(defaultParams));
+
+        // Call → bg → fg → sheet shows → dismiss
+        act(() => result.current.handleCall());
+        act(() => appStateCallback('background'));
+        act(() => appStateCallback('active'));
+        act(() => result.current.handleDismissSheet());
+        expect(result.current.showConfirmSheet).toBe(false);
+
+        // Next bg/fg cycle should NOT show sheet again
+        act(() => appStateCallback('background'));
+        act(() => appStateCallback('active'));
+        expect(result.current.showConfirmSheet).toBe(false);
+    });
+
+    it('clears pending state when Linking.openURL fails', async () => {
+        jest.spyOn(Linking, 'openURL').mockRejectedValue(new Error('Cannot open URL'));
+        const { result } = renderHook(() => useContactOutcome(defaultParams));
+
+        await act(async () => result.current.handleCall());
+
+        expect(result.current.pendingType).toBeNull();
+    });
 });

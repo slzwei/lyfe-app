@@ -1,5 +1,22 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
 import type { OfflineQueue, QueueItem } from './queue';
+import { captureError } from '../sentry';
+
+const MAX_RETRIES = 3;
+
+/** Tables allowed for sync — must match ALLOWED_SYNC_TABLES in safeQuery.ts */
+const ALLOWED_SYNC_TABLES = new Set([
+    'leads',
+    'lead_activities',
+    'roadshow_activities',
+    'roadshow_attendance',
+    'candidate_module_progress',
+    'candidate_module_item_progress',
+    'notifications',
+]);
+
+/** Operations allowed for sync — must match OfflineOperation type in queue.ts */
+const ALLOWED_OPERATIONS = new Set(['insert', 'update', 'upsert', 'delete']);
 
 export interface SyncStatus {
     pending: number;
@@ -41,8 +58,17 @@ export class SyncManager {
 
     private async executeItem(item: QueueItem): Promise<{ error: string | null }> {
         try {
-            let query;
             const { table, operation, payload, filters } = item;
+
+            if (!ALLOWED_SYNC_TABLES.has(table)) {
+                return { error: `Blocked: table "${table}" is not in the sync allowlist` };
+            }
+
+            if (!ALLOWED_OPERATIONS.has(operation)) {
+                return { error: `Blocked: operation "${operation}" is not allowed` };
+            }
+
+            let query;
 
             switch (operation) {
                 case 'insert':
@@ -88,16 +114,30 @@ export class SyncManager {
         await this.emitStatus();
 
         try {
-            while (true) {
-                const item = await this.queue.peek();
-                if (!item) break;
+            // Snapshot the queue to avoid peek/remove races
+            const items = await this.queue.getAll();
+
+            for (const item of items) {
+                // Dead-letter items that exceeded max retries
+                if (item.retryCount >= MAX_RETRIES) {
+                    captureError(new Error(`Offline sync item dead-lettered after ${MAX_RETRIES} retries`), {
+                        table: item.table,
+                        operation: item.operation,
+                        queueItemId: item.id,
+                    });
+                    await this.queue.removeById(item.id);
+                    await this.emitStatus();
+                    continue;
+                }
 
                 const { error } = await this.executeItem(item);
 
                 if (error) {
                     this.lastError = error;
+                    await this.queue.incrementRetry(item.id);
                     await this.emitStatus();
-                    break;
+                    // Continue processing remaining items instead of blocking
+                    continue;
                 }
 
                 await this.queue.removeById(item.id);

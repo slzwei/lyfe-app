@@ -16,6 +16,12 @@ export function useRoadshowRealtime(
     onNewAttendance: (attendance: RoadshowAttendance) => void,
 ) {
     const retryCountRef = useRef(0);
+    const onNewActivityRef = useRef(onNewActivity);
+    onNewActivityRef.current = onNewActivity;
+    const onNewAttendanceRef = useRef(onNewAttendance);
+    onNewAttendanceRef.current = onNewAttendance;
+    const currentUserIdRef = useRef(currentUserId);
+    currentUserIdRef.current = currentUserId;
 
     useEffect(() => {
         if (!eventId || !isLiveRoadshow) return;
@@ -33,8 +39,8 @@ export function useRoadshowRealtime(
                     },
                     (payload: RealtimePostgresInsertPayload<Record<string, unknown>>) => {
                         retryCountRef.current = 0;
-                        if (payload.new.user_id !== currentUserId) {
-                            onNewActivity(payload.new as RoadshowActivity);
+                        if (payload.new.user_id !== currentUserIdRef.current) {
+                            onNewActivityRef.current(payload.new as RoadshowActivity);
                         }
                     },
                 )
@@ -48,8 +54,8 @@ export function useRoadshowRealtime(
                     },
                     (payload: RealtimePostgresInsertPayload<Record<string, unknown>>) => {
                         retryCountRef.current = 0;
-                        if (payload.new.user_id !== currentUserId) {
-                            onNewAttendance(payload.new as RoadshowAttendance);
+                        if (payload.new.user_id !== currentUserIdRef.current) {
+                            onNewAttendanceRef.current(payload.new as RoadshowAttendance);
                         }
                     },
                 );
@@ -62,8 +68,9 @@ export function useRoadshowRealtime(
                 const delay = Math.min(1000 * 2 ** retryCountRef.current, 30000);
                 retryCountRef.current++;
                 if (__DEV__) console.warn(`[useRoadshowRealtime] ${status}, reconnecting in ${delay}ms`);
+                const erroredChannel = channel;
                 setTimeout(() => {
-                    supabase.removeChannel(channel);
+                    supabase.removeChannel(erroredChannel);
                     channel = createChannel().subscribe();
                 }, delay);
             }
@@ -72,5 +79,5 @@ export function useRoadshowRealtime(
         return () => {
             supabase.removeChannel(channel);
         };
-    }, [eventId, isLiveRoadshow, currentUserId, onNewActivity, onNewAttendance]);
+    }, [eventId, isLiveRoadshow]);
 }

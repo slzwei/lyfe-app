@@ -4,27 +4,16 @@ import LoadingState from '@/components/LoadingState';
 import ScreenHeader from '@/components/ScreenHeader';
 import { useAuth } from '@/contexts/AuthContext';
 import { useTheme } from '@/contexts/ThemeContext';
-import { canInviteAgents, type UserRole } from '@/constants/Roles';
-import { fetchTeamMembers, inviteAgent, type TeamMember } from '@/lib/team';
+import { fetchTeamMembers, type TeamMember } from '@/lib/team';
+import { canInviteMembers } from '@/lib/invitations';
 import { useFilteredList } from '@/hooks/useFilteredList';
 import { letterSpacing } from '@/constants/platform';
 import { Ionicons } from '@expo/vector-icons';
 import { useFocusEffect } from 'expo-router';
 import { useTypedRouter } from '@/hooks/useTypedRouter';
 import React, { useCallback, useMemo, useState } from 'react';
-import {
-    Alert,
-    FlatList,
-    Modal,
-    RefreshControl,
-    StyleSheet,
-    Text,
-    TextInput,
-    TouchableOpacity,
-    View,
-} from 'react-native';
+import { FlatList, RefreshControl, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import Animated, { useAnimatedStyle, useSharedValue, withSpring } from 'react-native-reanimated';
 
 const TEAM_SEARCH_FIELDS: (keyof TeamMember)[] = ['name', 'phone', 'email'];
 const AVATAR_COLOR_KEYS = ['statusProposed', 'accent', 'danger', 'warning', 'statusProposed', 'info'] as const;
@@ -43,56 +32,23 @@ export default function TeamScreen() {
     const [error, setError] = useState<string | null>(null);
 
     const canFilter = user?.role === 'director' || user?.role === 'admin' || user?.role === 'manager';
-    const showInvite = user?.role ? canInviteAgents(user.role as UserRole) : false;
-
-    // Invite modal state
-    const [showInviteModal, setShowInviteModal] = useState(false);
-    const [inviteEmail, setInviteEmail] = useState('');
-    const [inviteSending, setInviteSending] = useState(false);
-    const [inviteError, setInviteError] = useState<string | null>(null);
-    const inviteSheetY = useSharedValue(300);
-
-    const openInviteModal = useCallback(() => {
-        setInviteEmail('');
-        setInviteError(null);
-        setShowInviteModal(true);
-        inviteSheetY.value = 300;
-        inviteSheetY.value = withSpring(0, { damping: 20, stiffness: 200 });
-    }, [inviteSheetY]);
-
-    const closeInviteModal = useCallback(() => {
-        setShowInviteModal(false);
-    }, []);
-
-    const handleInvite = useCallback(async () => {
-        if (!user?.id) return;
-        setInviteSending(true);
-        setInviteError(null);
-        const { data, error: err } = await inviteAgent(inviteEmail, user.id);
-        setInviteSending(false);
-        if (err) {
-            setInviteError(err);
-            return;
-        }
-        setShowInviteModal(false);
-        Alert.alert('Invite Sent', `Invite token: ${data?.token}\n\nShare this with the agent to join.`);
-    }, [inviteEmail, user?.id]);
-
-    const inviteSheetStyle = useAnimatedStyle(() => ({
-        transform: [{ translateY: inviteSheetY.value }],
-    }));
 
     const loadMembers = useCallback(async () => {
         if (!user?.id) return;
         setError(null);
-        const { data, error: fetchError } = await fetchTeamMembers(user.id, user.role || 'agent');
-        if (fetchError) {
-            setError(fetchError);
-        } else {
-            setMembers(data);
+        try {
+            const { data, error: fetchError } = await fetchTeamMembers(user.id, user.role || 'agent');
+            if (fetchError) {
+                setError(fetchError);
+            } else {
+                setMembers(data);
+            }
+        } catch {
+            setError('Failed to load team members');
+        } finally {
+            setIsLoading(false);
         }
-        setIsLoading(false);
-    }, [user?.id, user?.role, canFilter]);
+    }, [user?.id, user?.role]);
 
     useFocusEffect(
         useCallback(() => {
@@ -132,10 +88,123 @@ export default function TeamScreen() {
           ]
         : [{ key: 'all', label: 'All' }];
 
-    const getAvatarColor = (name: string) => {
-        const index = name.charCodeAt(0) % AVATAR_COLOR_KEYS.length;
-        return colors[AVATAR_COLOR_KEYS[index]];
-    };
+    const getAvatarColor = useCallback(
+        (name: string) => {
+            const index = name.charCodeAt(0) % AVATAR_COLOR_KEYS.length;
+            return colors[AVATAR_COLOR_KEYS[index]];
+        },
+        [colors],
+    );
+
+    const renderMember = useCallback(
+        ({ item }: { item: TeamMember }) => {
+            const avatarColor = getAvatarColor(item.name);
+            const isManager = item.role === 'manager';
+
+            return (
+                <TouchableOpacity
+                    style={[styles.card, { backgroundColor: colors.cardBackground, shadowColor: colors.textPrimary }]}
+                    activeOpacity={0.7}
+                    accessibilityRole="button"
+                    accessibilityLabel={`View ${item.name}'s profile`}
+                    onPress={() => router.push(`/(tabs)/team/agent/${item.id}`)}
+                >
+                    {/* Top Row: Avatar + Info + Status */}
+                    <View style={styles.cardTop}>
+                        <View style={[styles.avatar, { backgroundColor: avatarColor + '18' }]}>
+                            <Text style={[styles.avatarText, { color: avatarColor }]}>
+                                {item.name
+                                    .split(' ')
+                                    .map((n) => n[0])
+                                    .join('')}
+                            </Text>
+                        </View>
+
+                        <View style={styles.cardInfo}>
+                            <Text style={[styles.name, { color: colors.textPrimary }]} numberOfLines={1}>
+                                {item.name}
+                            </Text>
+                            <View style={styles.metaRow}>
+                                <View
+                                    style={[
+                                        styles.roleBadge,
+                                        {
+                                            backgroundColor: isManager
+                                                ? colors.statusProposed + '18'
+                                                : colors.accentLight,
+                                        },
+                                    ]}
+                                >
+                                    <View
+                                        style={[
+                                            styles.roleDot,
+                                            { backgroundColor: isManager ? colors.statusProposed : colors.accent },
+                                        ]}
+                                    />
+                                    <Text
+                                        style={[
+                                            styles.roleText,
+                                            { color: isManager ? colors.statusProposed : colors.accent },
+                                        ]}
+                                    >
+                                        {isManager ? 'Manager' : 'Agent'}
+                                    </Text>
+                                </View>
+                            </View>
+                        </View>
+
+                        <View
+                            style={[
+                                styles.statusPill,
+                                { backgroundColor: item.isActive ? colors.successLight : colors.surfaceSecondary },
+                            ]}
+                        >
+                            <View
+                                style={[
+                                    styles.statusDot,
+                                    { backgroundColor: item.isActive ? colors.success : colors.textTertiary },
+                                ]}
+                            />
+                            <Text
+                                style={[
+                                    styles.statusText,
+                                    { color: item.isActive ? colors.success : colors.textTertiary },
+                                ]}
+                            >
+                                {item.isActive ? 'Active' : 'Inactive'}
+                            </Text>
+                        </View>
+                    </View>
+
+                    {/* Stats Row */}
+                    <View style={[styles.statsRow, { borderTopColor: colors.border }]}>
+                        <View style={styles.statItem}>
+                            <Text style={[styles.statValue, { color: colors.textPrimary }]}>{item.leadsCount}</Text>
+                            <Text style={[styles.statLabel, { color: colors.textTertiary }]}>Leads</Text>
+                        </View>
+                        <View style={[styles.statDivider, { backgroundColor: colors.border }]} />
+                        <View style={styles.statItem}>
+                            <Text style={[styles.statValue, { color: colors.textPrimary }]}>{item.wonCount}</Text>
+                            <Text style={[styles.statLabel, { color: colors.textTertiary }]}>Won</Text>
+                        </View>
+                        <View style={[styles.statDivider, { backgroundColor: colors.border }]} />
+                        <View style={styles.statItem}>
+                            <Text
+                                style={[
+                                    styles.statValue,
+                                    { color: item.conversionRate >= 30 ? colors.success : colors.textPrimary },
+                                ]}
+                            >
+                                {item.conversionRate}%
+                            </Text>
+                            <Text style={[styles.statLabel, { color: colors.textTertiary }]}>Conv.</Text>
+                        </View>
+                    </View>
+                </TouchableOpacity>
+            );
+        },
+        [colors, router, getAvatarColor],
+    );
 
     if (isLoading) {
         return (
@@ -146,109 +215,22 @@ export default function TeamScreen() {
         );
     }
 
-    const renderMember = ({ item }: { item: TeamMember }) => {
-        const avatarColor = getAvatarColor(item.name);
-        const isManager = item.role === 'manager';
-
-        return (
-            <TouchableOpacity
-                style={[styles.card, { backgroundColor: colors.cardBackground, shadowColor: colors.textPrimary }]}
-                activeOpacity={0.7}
-                accessibilityRole="button"
-                accessibilityLabel={`View ${item.name}'s profile`}
-                onPress={() => router.push(`/(tabs)/team/agent/${item.id}`)}
-            >
-                {/* Top Row: Avatar + Info + Status */}
-                <View style={styles.cardTop}>
-                    <View style={[styles.avatar, { backgroundColor: avatarColor + '18' }]}>
-                        <Text style={[styles.avatarText, { color: avatarColor }]}>
-                            {item.name
-                                .split(' ')
-                                .map((n) => n[0])
-                                .join('')}
-                        </Text>
-                    </View>
-
-                    <View style={styles.cardInfo}>
-                        <Text style={[styles.name, { color: colors.textPrimary }]} numberOfLines={1}>
-                            {item.name}
-                        </Text>
-                        <View style={styles.metaRow}>
-                            <View
-                                style={[
-                                    styles.roleBadge,
-                                    { backgroundColor: isManager ? colors.statusProposed + '18' : colors.accentLight },
-                                ]}
-                            >
-                                <View
-                                    style={[
-                                        styles.roleDot,
-                                        { backgroundColor: isManager ? colors.statusProposed : colors.accent },
-                                    ]}
-                                />
-                                <Text
-                                    style={[
-                                        styles.roleText,
-                                        { color: isManager ? colors.statusProposed : colors.accent },
-                                    ]}
-                                >
-                                    {isManager ? 'Manager' : 'Agent'}
-                                </Text>
-                            </View>
-                        </View>
-                    </View>
-
-                    <View
-                        style={[
-                            styles.statusPill,
-                            { backgroundColor: item.isActive ? colors.successLight : colors.surfaceSecondary },
-                        ]}
-                    >
-                        <View
-                            style={[
-                                styles.statusDot,
-                                { backgroundColor: item.isActive ? colors.success : colors.textTertiary },
-                            ]}
-                        />
-                        <Text
-                            style={[styles.statusText, { color: item.isActive ? colors.success : colors.textTertiary }]}
-                        >
-                            {item.isActive ? 'Active' : 'Inactive'}
-                        </Text>
-                    </View>
-                </View>
-
-                {/* Stats Row */}
-                <View style={[styles.statsRow, { borderTopColor: colors.border }]}>
-                    <View style={styles.statItem}>
-                        <Text style={[styles.statValue, { color: colors.textPrimary }]}>{item.leadsCount}</Text>
-                        <Text style={[styles.statLabel, { color: colors.textTertiary }]}>Leads</Text>
-                    </View>
-                    <View style={[styles.statDivider, { backgroundColor: colors.border }]} />
-                    <View style={styles.statItem}>
-                        <Text style={[styles.statValue, { color: colors.textPrimary }]}>{item.wonCount}</Text>
-                        <Text style={[styles.statLabel, { color: colors.textTertiary }]}>Won</Text>
-                    </View>
-                    <View style={[styles.statDivider, { backgroundColor: colors.border }]} />
-                    <View style={styles.statItem}>
-                        <Text
-                            style={[
-                                styles.statValue,
-                                { color: item.conversionRate >= 30 ? colors.success : colors.textPrimary },
-                            ]}
-                        >
-                            {item.conversionRate}%
-                        </Text>
-                        <Text style={[styles.statLabel, { color: colors.textTertiary }]}>Conv.</Text>
-                    </View>
-                </View>
-            </TouchableOpacity>
-        );
-    };
-
     return (
         <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]} edges={['top']}>
-            <ScreenHeader title="Team" />
+            <ScreenHeader
+                title="Team"
+                rightAction={
+                    canInviteMembers((user?.role ?? 'agent') as import('@/types/shared/roles').UserRole) ? (
+                        <TouchableOpacity
+                            onPress={() => router.push('/(tabs)/team/invite-member')}
+                            hitSlop={8}
+                            testID="team-invite-button"
+                        >
+                            <Ionicons name="person-add-outline" size={22} color={colors.accent} />
+                        </TouchableOpacity>
+                    ) : undefined
+                }
+            />
 
             {/* Pinned Search + Filters */}
             <View style={styles.stickyHeader}>
@@ -384,81 +366,6 @@ export default function TeamScreen() {
                     />
                 }
             />
-
-            {/* Invite Agent FAB */}
-            {showInvite && (
-                <TouchableOpacity
-                    style={[styles.fab, { backgroundColor: colors.accent }]}
-                    onPress={openInviteModal}
-                    activeOpacity={0.85}
-                    accessibilityRole="button"
-                    accessibilityLabel="Invite agent"
-                >
-                    <Ionicons name="person-add" size={24} color={colors.textInverse} />
-                </TouchableOpacity>
-            )}
-
-            {/* Invite Modal */}
-            <Modal
-                visible={showInviteModal}
-                transparent
-                animationType="none"
-                onRequestClose={closeInviteModal}
-                accessibilityViewIsModal
-            >
-                <TouchableOpacity style={styles.sheetOverlay} activeOpacity={1} onPress={closeInviteModal}>
-                    <Animated.View style={[styles.sheet, { backgroundColor: colors.cardBackground }, inviteSheetStyle]}>
-                        <TouchableOpacity activeOpacity={1}>
-                            <View style={styles.sheetHandle}>
-                                <View style={[styles.handleBar, { backgroundColor: colors.border }]} />
-                            </View>
-                            <Text style={[styles.sheetTitle, { color: colors.textPrimary }]}>Invite Agent</Text>
-                            <Text style={[styles.sheetSubtitle, { color: colors.textSecondary }]}>
-                                Enter the agent's email to generate an invite token.
-                            </Text>
-
-                            <TextInput
-                                style={[
-                                    styles.sheetInput,
-                                    {
-                                        color: colors.textPrimary,
-                                        backgroundColor: colors.inputBackground,
-                                        borderColor: inviteError ? colors.danger : colors.border,
-                                    },
-                                ]}
-                                placeholder="agent@example.com"
-                                placeholderTextColor={colors.textTertiary}
-                                value={inviteEmail}
-                                onChangeText={setInviteEmail}
-                                keyboardType="email-address"
-                                autoCapitalize="none"
-                                autoComplete="email"
-                            />
-
-                            {inviteError && (
-                                <Text style={[styles.sheetError, { color: colors.danger }]}>{inviteError}</Text>
-                            )}
-
-                            <TouchableOpacity
-                                style={[
-                                    styles.sheetBtn,
-                                    {
-                                        backgroundColor: colors.accent,
-                                        opacity: inviteSending || !inviteEmail.trim() ? 0.5 : 1,
-                                    },
-                                ]}
-                                onPress={handleInvite}
-                                disabled={inviteSending || !inviteEmail.trim()}
-                                activeOpacity={0.8}
-                            >
-                                <Text style={[styles.sheetBtnText, { color: colors.textInverse }]}>
-                                    {inviteSending ? 'Sending...' : 'Send Invite'}
-                                </Text>
-                            </TouchableOpacity>
-                        </TouchableOpacity>
-                    </Animated.View>
-                </TouchableOpacity>
-            </Modal>
         </SafeAreaView>
     );
 }
@@ -644,75 +551,5 @@ const styles = StyleSheet.create({
     statDivider: {
         width: StyleSheet.hairlineWidth,
         height: '100%',
-    },
-
-    // ── FAB ──
-    fab: {
-        position: 'absolute',
-        right: 20,
-        bottom: 28,
-        width: 56,
-        height: 56,
-        borderRadius: 28,
-        alignItems: 'center',
-        justifyContent: 'center',
-        shadowColor: '#000',
-        shadowOffset: { width: 0, height: 4 },
-        shadowOpacity: 0.2,
-        shadowRadius: 8,
-        elevation: 6,
-    },
-
-    // ── Invite Sheet ──
-    sheetOverlay: {
-        flex: 1,
-        backgroundColor: 'rgba(0,0,0,0.4)',
-        justifyContent: 'flex-end',
-    },
-    sheet: {
-        borderTopLeftRadius: 20,
-        borderTopRightRadius: 20,
-        paddingHorizontal: 20,
-        paddingBottom: 40,
-    },
-    sheetHandle: {
-        alignItems: 'center',
-        paddingVertical: 12,
-    },
-    handleBar: {
-        width: 36,
-        height: 4,
-        borderRadius: 2,
-    },
-    sheetTitle: {
-        fontSize: 20,
-        fontWeight: '700',
-        marginBottom: 4,
-    },
-    sheetSubtitle: {
-        fontSize: 14,
-        marginBottom: 20,
-    },
-    sheetInput: {
-        fontSize: 16,
-        borderRadius: 12,
-        borderWidth: 1,
-        paddingHorizontal: 16,
-        paddingVertical: 14,
-        marginBottom: 8,
-    },
-    sheetError: {
-        fontSize: 13,
-        marginBottom: 8,
-    },
-    sheetBtn: {
-        borderRadius: 12,
-        paddingVertical: 16,
-        alignItems: 'center',
-        marginTop: 8,
-    },
-    sheetBtnText: {
-        fontSize: 16,
-        fontWeight: '600',
     },
 });

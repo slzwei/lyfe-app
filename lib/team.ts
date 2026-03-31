@@ -5,9 +5,6 @@ import type { Lead } from '@/types/lead';
 import { captureError } from './sentry';
 import { supabase } from './supabase';
 
-/** 7-day invite token expiry (milliseconds) */
-const INVITE_TOKEN_EXPIRY_MS = 7 * 24 * 60 * 60 * 1000;
-
 // ── Types ────────────────────────────────────────────────────
 
 export interface TeamMember {
@@ -257,50 +254,5 @@ export async function getTeamPerformance(
     } catch (err) {
         captureError(err, { fn: 'getTeamPerformance' });
         return { data: emptyResult, error: err instanceof Error ? err.message : 'Unknown error fetching performance' };
-    }
-}
-
-/**
- * Send an invite to an agent to join a manager's team.
- * Creates an invite_tokens record that the agent can use to register.
- *
- * @param email - Valid email address for the agent to invite
- * @param managerId - The manager's user ID sending the invite
- * @returns The generated invite token, or an error message
- */
-export async function inviteAgent(
-    email: string,
-    managerId: string,
-): Promise<{ data: { token: string } | null; error: string | null }> {
-    try {
-        // Validate email format
-        const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-        if (!email || !emailRegex.test(email)) {
-            return { data: null, error: 'Invalid email format' };
-        }
-        // Generate a cryptographically secure token
-        const randomBytes = new Uint8Array(24);
-        crypto.getRandomValues(randomBytes);
-        const hex = Array.from(randomBytes, (b) => b.toString(16).padStart(2, '0')).join('');
-        const token = `inv_${hex}`;
-        const expiresAt = new Date(Date.now() + INVITE_TOKEN_EXPIRY_MS).toISOString();
-
-        const { data, error } = await supabase
-            .from('invite_tokens')
-            .insert({
-                token,
-                created_by: managerId,
-                assigned_manager_id: managerId,
-                intended_role: 'agent',
-                expires_at: expiresAt,
-            })
-            .select('token')
-            .single();
-
-        if (error) return { data: null, error: error.message };
-        return { data: { token: (data as { token: string }).token }, error: null };
-    } catch (err) {
-        captureError(err, { fn: 'sendTeamInvite' });
-        return { data: null, error: err instanceof Error ? err.message : 'Unknown error sending invite' };
     }
 }

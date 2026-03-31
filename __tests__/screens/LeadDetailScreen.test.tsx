@@ -17,6 +17,8 @@ import {
     reassignLead,
 } from '@/lib/leads';
 
+import LeadDetailScreen from '@/app/(tabs)/leads/[leadId]';
+
 jest.mock('@/lib/supabase');
 jest.mock('@/contexts/AuthContext');
 jest.mock('@/contexts/ThemeContext');
@@ -135,8 +137,6 @@ jest.mock('@/components/leads/ReassignModal', () => {
     };
 });
 
-import LeadDetailScreen from '@/app/(tabs)/leads/[leadId]';
-
 const MOCK_LEAD = {
     id: 'lead-1',
     full_name: 'John Doe',
@@ -237,7 +237,7 @@ describe('LeadDetailScreen', () => {
 
         await waitFor(() => {
             expect(getByText('Activity')).toBeTruthy();
-            expect(getByText('1 entries')).toBeTruthy();
+            expect(getByText('1')).toBeTruthy();
             expect(getByTestId('activity-item')).toBeTruthy();
         });
     });
@@ -245,10 +245,9 @@ describe('LeadDetailScreen', () => {
     it('shows empty activity state when no activities', async () => {
         (fetchLeadActivities as jest.Mock).mockResolvedValue({ data: [], error: null });
 
-        const { getByText, getByTestId } = render(<LeadDetailScreen />);
+        const { getByTestId } = render(<LeadDetailScreen />);
 
         await waitFor(() => {
-            expect(getByText('0 entries')).toBeTruthy();
             expect(getByTestId('empty-state')).toBeTruthy();
         });
     });

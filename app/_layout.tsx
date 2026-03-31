@@ -21,7 +21,7 @@ initSentry();
 SplashScreen.preventAutoHideAsync();
 
 function AuthGate({ children }: { children: React.ReactNode }) {
-    const { isAuthenticated, isLoading, user } = useAuth();
+    const { isAuthenticated, isLoading, invitationStatus, user } = useAuth();
     const segments = useSegments();
     const router = useRouter();
 
@@ -34,18 +34,28 @@ function AuthGate({ children }: { children: React.ReactNode }) {
         if (!isAuthenticated && !inAuthGroup) {
             // Not authenticated → redirect to login
             router.replace('/(auth)/login');
-        } else if (isAuthenticated && inAuthGroup) {
-            // Already authenticated → check onboarding status
-            if (user && user.onboarding_complete === false) {
+        } else if (isAuthenticated && invitationStatus === 'rejected') {
+            // Authenticated but no invitation → rejection screen
+            if (segments[1] !== 'rejected') {
+                router.replace('/(auth)/rejected');
+            }
+        } else if (isAuthenticated && inAuthGroup && invitationStatus !== 'rejected') {
+            // Authenticated with valid invitation → proceed
+            if (user?.role === 'candidate' && user.email_verified !== true) {
+                router.replace('/onboarding/EmailVerification');
+            } else if (user && user.onboarding_complete !== true) {
                 router.replace('/onboarding/Welcome');
             } else {
                 router.replace('/(tabs)/home');
             }
-        } else if (isAuthenticated && !inOnboarding && user && user.onboarding_complete === false) {
+        } else if (isAuthenticated && !inOnboarding && user?.role === 'candidate' && user.email_verified !== true) {
+            // Candidate needs email verification
+            router.replace('/onboarding/EmailVerification');
+        } else if (isAuthenticated && !inOnboarding && user && user.onboarding_complete !== true) {
             // Authenticated but needs onboarding
             router.replace('/onboarding/Welcome');
         }
-    }, [isAuthenticated, isLoading, segments, router, user]);
+    }, [isAuthenticated, isLoading, invitationStatus, segments, router, user]);
 
     // Block all rendering until auth state is resolved.
     // This prevents any protected screen from flashing before the redirect fires.

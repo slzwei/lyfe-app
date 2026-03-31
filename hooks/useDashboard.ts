@@ -8,7 +8,7 @@ import {
 } from '@/lib/leads';
 import { timeAgo } from '@/lib/dateTime';
 import { fetchUpcomingEvents } from '@/lib/events';
-import { fetchCandidateRoadmap } from '@/lib/roadmap';
+import { fetchCandidateRoadmap, getCandidateIdForUser } from '@/lib/roadmap';
 import { fetchPAManagerIds, fetchPACandidateCount, fetchPAInterviewCount } from '@/lib/recruitment';
 import type { AgencyEvent } from '@/types/event';
 import type { ProgrammeWithModules } from '@/types/roadmap';
@@ -72,8 +72,11 @@ export function useDashboard({ userId, role, isManagerView, isAdminRole }: UseDa
         try {
             setError(null);
             if (isCandidate) {
+                const candidateId = await getCandidateIdForUser(userId);
                 const [roadmapResult, eventsResult] = await Promise.all([
-                    fetchCandidateRoadmap(userId),
+                    candidateId
+                        ? fetchCandidateRoadmap(candidateId)
+                        : Promise.resolve({ data: null, error: 'No candidate profile found' }),
                     fetchUpcomingEvents(userId, 3),
                 ]);
                 if (roadmapResult.data) setCandidateRoadmap(roadmapResult.data);

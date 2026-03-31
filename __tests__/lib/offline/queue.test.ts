@@ -17,31 +17,28 @@ describe('OfflineQueue', () => {
     describe('enqueue', () => {
         it('adds an item and persists to AsyncStorage', async () => {
             const item = await queue.enqueue({
-                table: 'users',
+                table: 'leads',
                 operation: 'insert',
                 payload: { full_name: 'Test' },
             });
 
             expect(item.id).toBeDefined();
-            expect(item.table).toBe('users');
+            expect(item.table).toBe('leads');
             expect(item.operation).toBe('insert');
             expect(item.payload).toEqual({ full_name: 'Test' });
             expect(item.createdAt).toBeDefined();
-            expect(mockSetItem).toHaveBeenCalledWith(
-                'lyfe_offline_queue',
-                expect.stringContaining('"table":"users"'),
-            );
+            expect(mockSetItem).toHaveBeenCalledWith('lyfe_offline_queue', expect.stringContaining('"table":"leads"'));
         });
 
         it('generates unique IDs for each item', async () => {
-            const item1 = await queue.enqueue({ table: 'users', operation: 'insert', payload: { a: 1 } });
-            const item2 = await queue.enqueue({ table: 'users', operation: 'insert', payload: { b: 2 } });
+            const item1 = await queue.enqueue({ table: 'leads', operation: 'insert', payload: { a: 1 } });
+            const item2 = await queue.enqueue({ table: 'leads', operation: 'insert', payload: { b: 2 } });
             expect(item1.id).not.toBe(item2.id);
         });
 
         it('preserves filters when provided', async () => {
             const item = await queue.enqueue({
-                table: 'users',
+                table: 'leads',
                 operation: 'update',
                 payload: { full_name: 'Updated' },
                 filters: { id: '123' },
@@ -68,7 +65,7 @@ describe('OfflineQueue', () => {
         });
 
         it('persists after dequeue', async () => {
-            await queue.enqueue({ table: 'users', operation: 'insert', payload: {} });
+            await queue.enqueue({ table: 'leads', operation: 'insert', payload: {} });
             mockSetItem.mockClear();
 
             await queue.dequeue();
@@ -82,10 +79,10 @@ describe('OfflineQueue', () => {
         });
 
         it('returns first item without removing it', async () => {
-            await queue.enqueue({ table: 'users', operation: 'insert', payload: {} });
+            await queue.enqueue({ table: 'leads', operation: 'insert', payload: {} });
 
             const peeked = await queue.peek();
-            expect(peeked?.table).toBe('users');
+            expect(peeked?.table).toBe('leads');
 
             const size = await queue.size();
             expect(size).toBe(1);
@@ -108,7 +105,7 @@ describe('OfflineQueue', () => {
         });
 
         it('returns a copy (not a reference)', async () => {
-            await queue.enqueue({ table: 'users', operation: 'insert', payload: {} });
+            await queue.enqueue({ table: 'leads', operation: 'insert', payload: {} });
             const items = await queue.getAll();
             items.pop();
             expect(await queue.size()).toBe(1);
@@ -156,12 +153,52 @@ describe('OfflineQueue', () => {
         });
     });
 
+    describe('incrementRetry', () => {
+        it('increments retryCount and persists', async () => {
+            const item = await queue.enqueue({ table: 'leads', operation: 'insert', payload: {} });
+            expect(item.retryCount).toBe(0);
+
+            await queue.incrementRetry(item.id);
+            const items = await queue.getAll();
+            expect(items[0].retryCount).toBe(1);
+
+            await queue.incrementRetry(item.id);
+            const items2 = await queue.getAll();
+            expect(items2[0].retryCount).toBe(2);
+
+            expect(mockSetItem).toHaveBeenCalled();
+        });
+
+        it('does nothing for non-existent ID', async () => {
+            await queue.enqueue({ table: 'leads', operation: 'insert', payload: {} });
+            mockSetItem.mockClear();
+
+            await queue.incrementRetry('nonexistent');
+            // Should not persist since nothing changed
+            expect(mockSetItem).not.toHaveBeenCalled();
+        });
+    });
+
+    describe('retryCount backfill', () => {
+        it('defaults retryCount to 0 for legacy items', async () => {
+            // Simulate old items without retryCount
+            const stored = [
+                { id: 'old', table: 'leads', operation: 'insert', payload: {}, createdAt: '2024-01-01T00:00:00.000Z' },
+            ];
+            mockGetItem.mockResolvedValue(JSON.stringify(stored));
+
+            const freshQueue = new OfflineQueue();
+            const items = await freshQueue.getAll();
+            expect(items[0].retryCount).toBe(0);
+        });
+    });
+
     describe('persistence', () => {
         it('loads from AsyncStorage on first access', async () => {
             const stored: QueueItem[] = [
                 {
                     id: 'abc',
-                    table: 'users',
+                    table: 'leads',
                     operation: 'insert',
                     payload: { name: 'Persisted' },
                     createdAt: '2024-01-01T00:00:00.000Z',

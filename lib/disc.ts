@@ -12,6 +12,7 @@ import type { DiscType, DiscResults, DiscResultType } from '@/constants/disc';
 import {
     DISC_TYPES,
     DISC_TYPE_INFO,
+    DISC_SUBTYPE_DISPLAY,
     DISC_WORD_PAIR_QUESTIONS,
     DISC_SINGLE_WORD_QUESTIONS,
     DISC_SCENARIO_QUESTIONS,
@@ -214,9 +215,34 @@ export function isDiscResults(val: unknown): val is DiscResults {
     );
 }
 
+// ── Secondary Type ──────────────────────────────────────────────
+
+/**
+ * Get the secondary DISC type for a result.
+ * For subtypes (e.g. 'Cs') the secondary is the second character.
+ * For pure types (e.g. 'C') the secondary is the highest-scoring non-primary type.
+ */
+export function getSecondaryType(results: DiscResults): DiscType | null {
+    if (results.disc_type === 'Balanced') return null;
+    const primary = results.disc_type.charAt(0) as DiscType;
+    if (results.disc_type.length === 2) {
+        return results.disc_type.charAt(1).toUpperCase() as DiscType;
+    }
+    const pcts: [DiscType, number][] = [
+        ['D', results.d_pct],
+        ['I', results.i_pct],
+        ['S', results.s_pct],
+        ['C', results.c_pct],
+    ];
+    return pcts.filter(([t]) => t !== primary).sort(([, a], [, b]) => b - a)[0]?.[0] ?? null;
+}
+
 // ── Display Helpers ──────────────────────────────────────────────
 
-/** Get the human-readable full name for a DISC result type. */
+/** Get the human-readable label for a DISC result type, e.g. "Clarity (CS)". */
 export function getDiscLabel(discType: DiscResultType): string {
-    return DISC_TYPE_INFO[discType].fullName;
+    const info = DISC_TYPE_INFO[discType];
+    if (discType === 'Balanced') return info.fullName;
+    const displayCode = DISC_SUBTYPE_DISPLAY[discType];
+    return displayCode && displayCode !== info.name ? `${info.name} (${displayCode})` : info.name;
 }

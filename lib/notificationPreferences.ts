@@ -24,32 +24,49 @@ export async function fetchNotificationPreferences(
 
 /**
  * Update a single notification preference.
+ *
+ * Calls are serialised so rapid toggles cannot race — each
+ * fetch-modify-write cycle completes before the next one starts.
  */
-export async function updateNotificationPreference(
+let _updateChain: Promise<unknown> = Promise.resolve();
+
+export function updateNotificationPreference(
     userId: string,
     type: NotificationType,
     enabled: boolean,
 ): Promise<{ error: string | null }> {
-    // Fetch current preferences
-    const { data: user, error: fetchError } = await supabase
-        .from('users')
-        .select('notification_preferences')
-        .eq('id', userId)
-        .single();
+    const task = _updateChain.then(async (): Promise<{ error: string | null }> => {
+        // Fetch current preferences
+        const { data: user, error: fetchError } = await supabase
+            .from('users')
+            .select('notification_preferences')
+            .eq('id', userId)
+            .single();
 
-    if (fetchError) return { error: fetchError.message };
+        if (fetchError) return { error: fetchError.message };
 
-    const currentPrefs = (user?.notification_preferences as NotificationPreferences) || {};
-    const updatedPrefs = { ...currentPrefs };
+        const currentPrefs = (user?.notification_preferences as NotificationPreferences) || {};
+        const updatedPrefs = { ...currentPrefs };
 
-    if (enabled) {
-        // Remove the key (absent = enabled by default)
-        delete updatedPrefs[type];
-    } else {
-        updatedPrefs[type] = false;
-    }
+        if (enabled) {
+            // Remove the key (absent = enabled by default)
+            delete updatedPrefs[type];
+        } else {
+            updatedPrefs[type] = false;
+        }
 
-    const { error } = await supabase.from('users').update({ notification_preferences: updatedPrefs }).eq('id', userId);
+        const { error } = await supabase
+            .from('users')
+            .update({ notification_preferences: updatedPrefs })
+            .eq('id', userId);
 
-    return { error: error ? error.message : null };
+        return { error: error ? error.message : null };
+    });
+
+    // Keep chain alive even if this task rejects
+    _updateChain = task.then(
+        () => {},
+        () => {},
+    );
+    return task;
 }

@@ -22,9 +22,11 @@ jest.mock('@/lib/events', () => ({
 }));
 
 const mockFetchCandidateRoadmap = jest.fn();
+const mockGetCandidateIdForUser = jest.fn();
 
 jest.mock('@/lib/roadmap', () => ({
     fetchCandidateRoadmap: (...args: any[]) => mockFetchCandidateRoadmap(...args),
+    getCandidateIdForUser: (...args: any[]) => mockGetCandidateIdForUser(...args),
 }));
 
 const mockFetchPAManagerIds = jest.fn();
@@ -103,6 +105,7 @@ function setupManagerMocks() {
 }
 
 function setupCandidateMocks() {
+    mockGetCandidateIdForUser.mockResolvedValue('cand1-candidate-id');
     mockFetchCandidateRoadmap.mockResolvedValue({ data: defaultRoadmap });
     mockFetchUpcomingEvents.mockResolvedValue({ data: defaultEvents });
 }
@@ -458,7 +461,8 @@ describe('useDashboard', () => {
                 expect(result.current.isLoading).toBe(false);
             });
 
-            expect(mockFetchCandidateRoadmap).toHaveBeenCalledWith('cand1');
+            expect(mockGetCandidateIdForUser).toHaveBeenCalledWith('cand1');
+            expect(mockFetchCandidateRoadmap).toHaveBeenCalledWith('cand1-candidate-id');
             expect(mockFetchUpcomingEvents).toHaveBeenCalledWith('cand1', 3);
             expect(result.current.candidateRoadmap).toEqual(defaultRoadmap);
             expect(result.current.candidateEvents).toEqual(defaultEvents);
@@ -478,6 +482,7 @@ describe('useDashboard', () => {
         });
 
         it('handles null roadmap data gracefully', async () => {
+            mockGetCandidateIdForUser.mockResolvedValue('cand1-candidate-id');
             mockFetchCandidateRoadmap.mockResolvedValue({ data: null });
             mockFetchUpcomingEvents.mockResolvedValue({ data: [] });
 

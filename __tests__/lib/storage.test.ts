@@ -1,6 +1,9 @@
 /**
  * Tests for lib/storage.ts — Avatar upload/remove service
  */
+import { supabase } from '@/lib/supabase';
+import { pickAndUploadAvatar, takeAndUploadAvatar, removeAvatar } from '@/lib/storage';
+
 jest.mock('@/lib/supabase');
 
 // Mock expo-image-picker as a lazy require
@@ -12,9 +15,6 @@ const mockImagePicker = {
 };
 
 jest.mock('expo-image-picker', () => mockImagePicker);
-
-import { supabase } from '@/lib/supabase';
-import { pickAndUploadAvatar, takeAndUploadAvatar, removeAvatar } from '@/lib/storage';
 
 const mockSupa = supabase as any;
 
@@ -151,6 +151,50 @@ describe('takeAndUploadAvatar', () => {
 
         expect(result.error).toBeNull();
         expect(result.url).toContain('https://example.com/avatars/user-1/avatar.jpg');
+    });
+});
+
+// ── _uploadUri size validation ──
+
+describe('avatar file size validation', () => {
+    it('rejects images over 5 MB', async () => {
+        mockImagePicker.requestMediaLibraryPermissionsAsync.mockResolvedValue({ status: 'granted' });
+        mockImagePicker.launchImageLibraryAsync.mockResolvedValue({
+            canceled: false,
+            assets: [{ uri: 'file:///huge.jpg' }],
+        });
+
+        // 6 MB ArrayBuffer
+        const oversized = new ArrayBuffer(6 * 1024 * 1024);
+        (global as any).Response = jest.fn().mockImplementation(() => ({
+            arrayBuffer: jest.fn().mockResolvedValue(oversized),
+        }));
+
+        const result = await pickAndUploadAvatar('user-1');
+        expect(result.error).toBe('Image must be under 5 MB.');
+        expect(result.url).toBeNull();
+        // Should not attempt upload
+        expect(mockSupa.storage.from).not.toHaveBeenCalled();
+    });
+
+    it('accepts images at exactly 5 MB', async () => {
+        mockImagePicker.requestMediaLibraryPermissionsAsync.mockResolvedValue({ status: 'granted' });
+        mockImagePicker.launchImageLibraryAsync.mockResolvedValue({
+            canceled: false,
+            assets: [{ uri: 'file:///photo.jpg' }],
+        });
+
+        const exact5MB = new ArrayBuffer(5 * 1024 * 1024);
+        (global as any).Response = jest.fn().mockImplementation(() => ({
+            arrayBuffer: jest.fn().mockResolvedValue(exact5MB),
+        }));
+
+        const usersChain = mockSupa.__getChain('users');
+        usersChain.__resolveWith({ error: null });
+
+        const result = await pickAndUploadAvatar('user-1');
+        expect(result.error).toBeNull();
+        expect(mockSupa.storage.from).toHaveBeenCalledWith('avatars');
     });
 });
 

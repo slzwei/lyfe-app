@@ -1,5 +1,6 @@
 import type { ThemeColors } from '@/types/theme';
-import type { Interview } from '@/types/recruitment';
+import type { Interview, InterviewRecommendation } from '@/types/recruitment';
+import { RECOMMENDATION_CONFIG } from '@/types/recruitment';
 import WheelPicker from '@/components/WheelPicker';
 import { Ionicons } from '@expo/vector-icons';
 import React from 'react';
@@ -39,6 +40,7 @@ interface InterviewSchedulerSheetProps {
     scheduleLocation: string;
     scheduleNotes: string;
     scheduleStatus: Interview['status'];
+    scheduleRecommendation: InterviewRecommendation | null;
     scheduleError: string | null;
     isScheduling: boolean;
     onDateChange: (d: Date | ((prev: Date) => Date)) => void;
@@ -50,6 +52,7 @@ interface InterviewSchedulerSheetProps {
     onLocationChange: (v: string) => void;
     onNotesChange: (v: string) => void;
     onStatusChange: (s: Interview['status']) => void;
+    onRecommendationChange: (r: InterviewRecommendation | null) => void;
     onSubmit: () => void;
     onDismiss: () => void;
 }
@@ -84,6 +87,7 @@ export default function InterviewSchedulerSheet({
     scheduleLocation,
     scheduleNotes,
     scheduleStatus,
+    scheduleRecommendation,
     scheduleError,
     isScheduling,
     onDateChange,
@@ -95,6 +99,7 @@ export default function InterviewSchedulerSheet({
     onLocationChange,
     onNotesChange,
     onStatusChange,
+    onRecommendationChange,
     onSubmit,
     onDismiss,
 }: InterviewSchedulerSheetProps) {
@@ -134,6 +139,8 @@ export default function InterviewSchedulerSheet({
                                 <TouchableOpacity
                                     onPress={() => onDateChange((d) => addDays(d, -1))}
                                     hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
+                                    accessibilityRole="button"
+                                    accessibilityLabel="Previous day"
                                 >
                                     <Ionicons name="chevron-back" size={22} color={colors.textSecondary} />
                                 </TouchableOpacity>
@@ -148,12 +155,19 @@ export default function InterviewSchedulerSheet({
                                 <TouchableOpacity
                                     onPress={() => onDateChange((d) => addDays(d, 1))}
                                     hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
+                                    accessibilityRole="button"
+                                    accessibilityLabel="Next day"
                                 >
                                     <Ionicons name="chevron-forward" size={22} color={colors.textSecondary} />
                                 </TouchableOpacity>
                             </View>
                             {!isToday(scheduleDate) && (
-                                <TouchableOpacity onPress={() => onDateChange(new Date())} style={schedStyles.todayBtn}>
+                                <TouchableOpacity
+                                    onPress={() => onDateChange(new Date())}
+                                    style={schedStyles.todayBtn}
+                                    accessibilityRole="button"
+                                    accessibilityLabel="Jump to today"
+                                >
                                     <Text style={[schedStyles.todayBtnText, { color: colors.accent }]}>
                                         Jump to today
                                     </Text>
@@ -206,6 +220,9 @@ export default function InterviewSchedulerSheet({
                                         },
                                     ]}
                                     onPress={() => onTypeChange('zoom')}
+                                    accessibilityRole="radio"
+                                    accessibilityState={{ checked: scheduleType === 'zoom' }}
+                                    accessibilityLabel="Zoom"
                                 >
                                     <Ionicons
                                         name="videocam-outline"
@@ -233,6 +250,9 @@ export default function InterviewSchedulerSheet({
                                         },
                                     ]}
                                     onPress={() => onTypeChange('in_person')}
+                                    accessibilityRole="radio"
+                                    accessibilityState={{ checked: scheduleType === 'in_person' }}
+                                    accessibilityLabel="In-person"
                                 >
                                     <Ionicons
                                         name="business-outline"
@@ -326,6 +346,9 @@ export default function InterviewSchedulerSheet({
                                                     },
                                                 ]}
                                                 onPress={() => onStatusChange(s)}
+                                                accessibilityRole="radio"
+                                                accessibilityState={{ checked: scheduleStatus === s }}
+                                                accessibilityLabel={s.charAt(0).toUpperCase() + s.slice(1)}
                                             >
                                                 <Text
                                                     style={[
@@ -344,6 +367,58 @@ export default function InterviewSchedulerSheet({
                                             </TouchableOpacity>
                                         ))}
                                     </View>
+
+                                    <Text style={[schedStyles.fieldLabel, { color: colors.textTertiary }]}>
+                                        Recommendation
+                                    </Text>
+                                    <View style={[schedStyles.typeToggle, { flexWrap: 'wrap' }]}>
+                                        {(['second_interview', 'on_hold', 'pass'] as InterviewRecommendation[]).map(
+                                            (r) => {
+                                                const cfg = RECOMMENDATION_CONFIG[r];
+                                                const isSelected = scheduleRecommendation === r;
+                                                return (
+                                                    <TouchableOpacity
+                                                        key={r}
+                                                        style={[
+                                                            schedStyles.typeBtn,
+                                                            {
+                                                                backgroundColor: isSelected
+                                                                    ? cfg.color + '20'
+                                                                    : colors.surfacePrimary,
+                                                                borderWidth: isSelected ? 1.5 : 0,
+                                                                borderColor: isSelected ? cfg.color : 'transparent',
+                                                                flex: undefined,
+                                                                paddingHorizontal: 14,
+                                                            },
+                                                        ]}
+                                                        onPress={() => onRecommendationChange(isSelected ? null : r)}
+                                                        accessibilityRole="radio"
+                                                        accessibilityState={{ checked: isSelected }}
+                                                        accessibilityLabel={cfg.label}
+                                                    >
+                                                        <Ionicons
+                                                            name={cfg.icon as 'refresh-outline'}
+                                                            size={14}
+                                                            color={isSelected ? cfg.color : colors.textSecondary}
+                                                        />
+                                                        <Text
+                                                            style={[
+                                                                schedStyles.typeBtnText,
+                                                                {
+                                                                    color: isSelected
+                                                                        ? cfg.color
+                                                                        : colors.textSecondary,
+                                                                    fontSize: 13,
+                                                                },
+                                                            ]}
+                                                        >
+                                                            {cfg.label}
+                                                        </Text>
+                                                    </TouchableOpacity>
+                                                );
+                                            },
+                                        )}
+                                    </View>
                                 </>
                             )}
 
@@ -355,6 +430,10 @@ export default function InterviewSchedulerSheet({
                                 onPress={onSubmit}
                                 activeOpacity={0.85}
                                 disabled={isScheduling}
+                                accessibilityRole="button"
+                                accessibilityLabel={
+                                    isScheduling ? 'Saving' : editingInterview ? 'Save changes' : 'Confirm schedule'
+                                }
                             >
                                 <Ionicons name="calendar-outline" size={18} color={colors.textInverse} />
                                 <Text style={[sheetStyles.primaryBtnText, { color: colors.textInverse }]}>

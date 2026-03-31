@@ -51,8 +51,8 @@ describe('SyncManager', () => {
             const client = createMockClient();
             const manager = new SyncManager(client, queue);
 
-            await queue.enqueue({ table: 'users', operation: 'insert', payload: { name: 'A' } });
-            await queue.enqueue({ table: 'users', operation: 'insert', payload: { name: 'B' } });
+            await queue.enqueue({ table: 'leads', operation: 'insert', payload: { name: 'A' } });
+            await queue.enqueue({ table: 'leads', operation: 'insert', payload: { name: 'B' } });
 
             const status = await manager.sync();
 
@@ -78,14 +78,14 @@ describe('SyncManager', () => {
             const manager = new SyncManager(client, queue);
 
             await queue.enqueue({
-                table: 'users',
+                table: 'leads',
                 operation: 'update',
                 payload: { full_name: 'Updated' },
                 filters: { id: '123' },
             });
 
             await manager.sync();
-            expect(client.from).toHaveBeenCalledWith('users');
+            expect(client.from).toHaveBeenCalledWith('leads');
         });
 
         it('executes delete operations with filters', async () => {
@@ -93,14 +93,14 @@ describe('SyncManager', () => {
             const manager = new SyncManager(client, queue);
 
             await queue.enqueue({
-                table: 'users',
+                table: 'leads',
                 operation: 'delete',
                 payload: {},
                 filters: { id: '456' },
             });
 
             await manager.sync();
-            expect(client.from).toHaveBeenCalledWith('users');
+            expect(client.from).toHaveBeenCalledWith('leads');
         });
 
         it('executes upsert operations', async () => {
@@ -108,28 +108,42 @@ describe('SyncManager', () => {
             const manager = new SyncManager(client, queue);
 
             await queue.enqueue({
-                table: 'users',
+                table: 'leads',
                 operation: 'upsert',
                 payload: { id: '123', full_name: 'Upserted' },
             });
 
             await manager.sync();
-            expect(client.from).toHaveBeenCalledWith('users');
+            expect(client.from).toHaveBeenCalledWith('leads');
         });
     });
 
     describe('sync - partial failure', () => {
-        it('stops processing on error and preserves remaining items', async () => {
-            const client = createMockClient({ insertError: 'Permission denied' });
+        it('continues past failed items and processes remaining', async () => {
+            let callCount = 0;
+            const client = {
+                from: jest.fn(() => ({
+                    insert: jest.fn().mockImplementation(() => {
+                        callCount++;
+                        // First call fails, second succeeds
+                        if (callCount === 1) {
+                            return Promise.resolve({ error: { message: 'Permission denied' } });
+                        }
+                        return Promise.resolve({ error: null });
+                    }),
+                })),
+            } as any;
             const manager = new SyncManager(client, queue);
 
-            await queue.enqueue({ table: 'users', operation: 'insert', payload: { name: 'Fail' } });
-            await queue.enqueue({ table: 'users', operation: 'insert', payload: { name: 'Never reached' } });
+            await queue.enqueue({ table: 'leads', operation: 'insert', payload: { name: 'Fail' } });
+            await queue.enqueue({ table: 'leads', operation: 'insert', payload: { name: 'OK' } });
 
             const status = await manager.sync();
 
-            expect(status.pending).toBe(2);
+            // Failed item stays (retry count incremented), successful item removed
+            expect(status.pending).toBe(1);
             expect(status.lastError).toBe('Permission denied');
+            expect(client.from).toHaveBeenCalledTimes(2);
         });
 
         it('handles thrown exceptions during sync', async () => {
@@ -140,11 +154,73 @@ describe('SyncManager', () => {
             } as any;
             const manager = new SyncManager(client, queue);
 
-            await queue.enqueue({ table: 'users', operation: 'insert', payload: {} });
+            await queue.enqueue({ table: 'leads', operation: 'insert', payload: {} });
 
             const status = await manager.sync();
             expect(status.lastError).toBe('Network failure');
             expect(status.pending).toBe(1);
+        });
+    });
+
+    describe('retry and dead-lettering', () => {
+        it('increments retry count on failure', async () => {
+            const client = createMockClient({ insertError: 'DB error' });
+            const manager = new SyncManager(client, queue);
+
+            await queue.enqueue({ table: 'leads', operation: 'insert', payload: {} });
+
+            await manager.sync();
+            const items = await queue.getAll();
+            expect(items[0].retryCount).toBe(1);
+
+            await manager.sync();
+            const items2 = await queue.getAll();
+            expect(items2[0].retryCount).toBe(2);
+        });
+
+        it('dead-letters items after MAX_RETRIES (3)', async () => {
+            const client = createMockClient({ insertError: 'Permanent error' });
+            const manager = new SyncManager(client, queue);
+
+            await queue.enqueue({ table: 'leads', operation: 'insert', payload: {} });
+
+            // Retry 3 times (retryCount goes 0→1, 1→2, 2→3)
+            await manager.sync();
+            await manager.sync();
+            await manager.sync();
+            expect(await queue.size()).toBe(1); // Still there, retryCount=3
+
+            // 4th sync: retryCount >= MAX_RETRIES → dead-lettered
+            await manager.sync();
+            expect(await queue.size()).toBe(0);
+        });
+
+        it('processes successful items even when earlier items are failing', async () => {
+            let callIndex = 0;
+            const client = {
+                from: jest.fn(() => ({
+                    insert: jest.fn().mockImplementation(() => {
+                        callIndex++;
+                        if (callIndex % 2 === 1) {
+                            return Promise.resolve({ error: { message: 'fail' } });
+                        }
+                        return Promise.resolve({ error: null });
+                    }),
+                })),
+            } as any;
+            const manager = new SyncManager(client, queue);
+
+            await queue.enqueue({ table: 'leads', operation: 'insert', payload: {} });
+            await queue.enqueue({ table: 'lead_activities', operation: 'insert', payload: {} });
+            await queue.enqueue({ table: 'notifications', operation: 'insert', payload: {} });
+
+            await manager.sync();
+
+            // leads failed (retryCount=1), lead_activities succeeded (removed), notifications failed (retryCount=1)
+            const remaining = await queue.getAll();
+            expect(remaining).toHaveLength(2);
+            expect(remaining[0].table).toBe('leads');
+            expect(remaining[1].table).toBe('notifications');
         });
     });
 
@@ -161,13 +237,13 @@ describe('SyncManager', () => {
             } as any;
             const manager = new SyncManager(client, queue);
 
-            await queue.enqueue({ table: 'first', operation: 'insert', payload: {} });
-            await queue.enqueue({ table: 'second', operation: 'insert', payload: {} });
-            await queue.enqueue({ table: 'third', operation: 'insert', payload: {} });
+            await queue.enqueue({ table: 'leads', operation: 'insert', payload: {} });
+            await queue.enqueue({ table: 'lead_activities', operation: 'insert', payload: {} });
+            await queue.enqueue({ table: 'notifications', operation: 'insert', payload: {} });
 
             await manager.sync();
 
-            expect(callOrder).toEqual(['first', 'second', 'third']);
+            expect(callOrder).toEqual(['leads', 'lead_activities', 'notifications']);
         });
     });
 
@@ -179,7 +255,7 @@ describe('SyncManager', () => {
 
             manager.onStatusChange((s) => statuses.push({ ...s }));
 
-            await queue.enqueue({ table: 'users', operation: 'insert', payload: {} });
+            await queue.enqueue({ table: 'leads', operation: 'insert', payload: {} });
             await manager.sync();
 
             // Should have been called multiple times (start, after item, end)
@@ -195,7 +271,7 @@ describe('SyncManager', () => {
 
             manager.onStatusChange((s) => statuses.push({ ...s }));
 
-            await queue.enqueue({ table: 'users', operation: 'insert', payload: {} });
+            await queue.enqueue({ table: 'leads', operation: 'insert', payload: {} });
             await manager.sync();
 
             const errorStatus = statuses.find((s) => s.lastError !== null);
@@ -220,7 +296,7 @@ describe('SyncManager', () => {
             const client = createMockClient();
             const manager = new SyncManager(client, queue);
 
-            await queue.enqueue({ table: 'users', operation: 'insert', payload: {} });
+            await queue.enqueue({ table: 'leads', operation: 'insert', payload: {} });
 
             // Start two syncs at once
             const [status1, status2] = await Promise.all([manager.sync(), manager.sync()]);

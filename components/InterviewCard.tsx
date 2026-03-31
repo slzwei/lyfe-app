@@ -1,6 +1,7 @@
 import { INTERVIEW_STATUS_COLORS } from '@/constants/ui';
 import { formatDateTime } from '@/lib/dateTime';
-import type { Interview } from '@/types/recruitment';
+import type { Interview, InterviewRecommendation } from '@/types/recruitment';
+import { RECOMMENDATION_CONFIG } from '@/types/recruitment';
 import type { ThemeColors } from '@/types/theme';
 import { Ionicons } from '@expo/vector-icons';
 import React from 'react';
@@ -45,6 +46,8 @@ export default function InterviewCard({ interview, colors, onEdit, onDelete }: I
                     onPress={onEdit}
                     hitSlop={{ top: 12, bottom: 12, left: 12, right: 8 }}
                     style={{ marginLeft: 8, padding: 4 }}
+                    accessibilityRole="button"
+                    accessibilityLabel="Edit interview"
                 >
                     <Ionicons name="pencil-outline" size={16} color={colors.textTertiary} />
                 </TouchableOpacity>
@@ -52,11 +55,16 @@ export default function InterviewCard({ interview, colors, onEdit, onDelete }: I
                     onPress={onDelete}
                     hitSlop={{ top: 12, bottom: 12, left: 8, right: 12 }}
                     style={{ marginLeft: 4, padding: 4 }}
+                    accessibilityRole="button"
+                    accessibilityLabel="Delete interview"
                 >
                     <Ionicons name="trash-outline" size={16} color={colors.textTertiary} />
                 </TouchableOpacity>
             </View>
 
+            {interview.recommendation && (
+                <RecommendationBadge recommendation={interview.recommendation as InterviewRecommendation} />
+            )}
             {interview.location && (
                 <View style={styles.detailRow}>
                     <Ionicons name="location-outline" size={14} color={colors.textTertiary} />
@@ -64,7 +72,12 @@ export default function InterviewCard({ interview, colors, onEdit, onDelete }: I
                 </View>
             )}
             {interview.zoom_link && isUpcoming && (
-                <TouchableOpacity style={styles.detailRow} onPress={() => Linking.openURL(interview.zoom_link!)}>
+                <TouchableOpacity
+                    style={styles.detailRow}
+                    onPress={() => Linking.openURL(interview.zoom_link!)}
+                    accessibilityRole="button"
+                    accessibilityLabel="Join Zoom meeting"
+                >
                     <Ionicons name="videocam-outline" size={14} color={colors.accent} />
                     <Text style={[styles.detailText, { color: colors.accent }]}>Join Zoom Meeting</Text>
                 </TouchableOpacity>
@@ -75,6 +88,17 @@ export default function InterviewCard({ interview, colors, onEdit, onDelete }: I
                     <Text style={[styles.detailText, { color: colors.textSecondary }]}>{interview.notes}</Text>
                 </View>
             )}
+        </View>
+    );
+}
+
+function RecommendationBadge({ recommendation }: { recommendation: InterviewRecommendation }) {
+    const cfg = RECOMMENDATION_CONFIG[recommendation];
+    if (!cfg) return null;
+    return (
+        <View style={[styles.recBadge, { backgroundColor: cfg.color + '14' }]}>
+            <Ionicons name={cfg.icon as 'refresh-outline'} size={13} color={cfg.color} />
+            <Text style={[styles.recBadgeText, { color: cfg.color }]}>{cfg.label}</Text>
         </View>
     );
 }
@@ -115,4 +139,15 @@ const styles = StyleSheet.create({
         marginTop: 8,
     },
     detailText: { fontSize: 13 },
+    recBadge: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        alignSelf: 'flex-start',
+        gap: 5,
+        marginTop: 8,
+        paddingHorizontal: 10,
+        paddingVertical: 5,
+        borderRadius: 8,
+    },
+    recBadgeText: { fontSize: 12, fontWeight: '700' },
 });

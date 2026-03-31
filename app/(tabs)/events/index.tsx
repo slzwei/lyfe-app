@@ -1,3 +1,4 @@
+import ErrorBanner from '@/components/ErrorBanner';
 import EventCard from '@/components/events/EventCard';
 import InlineCalendar from '@/components/events/InlineCalendar';
 import LoadingState from '@/components/LoadingState';
@@ -11,7 +12,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { useFocusEffect, useNavigation, useRouter } from 'expo-router';
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { RefreshControl, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 
 // ── Helpers ────────────────────────────────────────────────────
 
@@ -58,6 +59,7 @@ export default function EventsScreen() {
     const { user } = useAuth();
     const router = useRouter();
     const navigation = useNavigation();
+    const { bottom } = useSafeAreaInsets();
 
     const scrollToTodayRef = useRef<(() => void) | null>(null);
 
@@ -87,11 +89,23 @@ export default function EventsScreen() {
     const isPA = user?.role === 'pa' || user?.role === 'admin';
     const canCreateEvents = user?.role && ['admin', 'director', 'manager', 'pa'].includes(user.role);
 
+    const [eventError, setEventError] = useState<string | null>(null);
+
     const loadEvents = useCallback(async () => {
         if (!user?.id) return;
-        const { data, error } = isPA ? await fetchAllEvents() : await fetchEvents(user.id);
-        if (!error) setAllEvents(data);
-        setIsLoading(false);
+        setEventError(null);
+        try {
+            const { data, error } = isPA ? await fetchAllEvents() : await fetchEvents(user.id);
+            if (error) {
+                setEventError(error);
+            } else {
+                setAllEvents(data);
+            }
+        } catch {
+            setEventError('Failed to load events');
+        } finally {
+            setIsLoading(false);
+        }
     }, [user?.id, isPA]);
 
     useFocusEffect(
@@ -179,6 +193,8 @@ export default function EventsScreen() {
         <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]} edges={['top']}>
             <ScreenHeader title="Events" />
 
+            {eventError && <ErrorBanner message={eventError} onRetry={loadEvents} />}
+
             <InlineCalendar
                 selectedDate={selectedDate}
                 onSelectDate={setSelectedDate}
@@ -248,7 +264,7 @@ export default function EventsScreen() {
             {canCreateEvents && (
                 <TouchableOpacity
                     testID="events-create-button"
-                    style={[styles.fab, { backgroundColor: colors.accent }]}
+                    style={[styles.fab, { backgroundColor: colors.accent, bottom: 28 + bottom }]}
                     onPress={() => router.push('/(tabs)/events/create')}
                     activeOpacity={0.85}
                     accessibilityLabel="Create event"
@@ -305,7 +321,6 @@ const styles = StyleSheet.create({
     fab: {
         position: 'absolute',
         right: 20,
-        bottom: 28,
         width: 56,
         height: 56,
         borderRadius: 28,

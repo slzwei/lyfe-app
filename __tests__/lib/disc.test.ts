@@ -1,4 +1,4 @@
-import { computeDiscScores, isDiscResults, getDiscLabel, getCircumplexType } from '@/lib/disc';
+import { computeDiscScores, isDiscResults, getDiscLabel, getCircumplexType, getSecondaryType } from '@/lib/disc';
 import type { DiscResults } from '@/constants/disc';
 
 describe('computeDiscScores', () => {
@@ -290,17 +290,104 @@ describe('isDiscResults', () => {
 });
 
 describe('getDiscLabel', () => {
-    it('returns full name for pure type', () => {
-        expect(getDiscLabel('D')).toBe('Drive');
-        expect(getDiscLabel('I')).toBe('Influence');
+    it('returns name with display code for pure type', () => {
+        expect(getDiscLabel('D')).toBe('Drive (D)');
+        expect(getDiscLabel('I')).toBe('Influence (i)');
     });
 
-    it('returns combined name for subtype', () => {
-        expect(getDiscLabel('Di')).toBe('Drive/influence');
-        expect(getDiscLabel('Is')).toBe('Influence/support');
+    it('returns name with display code for subtype', () => {
+        expect(getDiscLabel('Di')).toBe('Drive (Di)');
+        expect(getDiscLabel('Is')).toBe('Influence (iS)');
     });
 
     it('returns Balanced for balanced type', () => {
         expect(getDiscLabel('Balanced')).toBe('Balanced');
+    });
+});
+
+describe('getSecondaryType', () => {
+    it('returns secondary from subtype code (Cs → S)', () => {
+        const result: DiscResults = {
+            quizType: 'disc',
+            d_raw: 5,
+            i_raw: 2,
+            s_raw: 8,
+            c_raw: 7,
+            d_pct: 58,
+            i_pct: 27,
+            s_pct: 61,
+            c_pct: 58,
+            disc_type: 'Cs',
+            angle: 255,
+            profile_strength: 'moderate',
+            strength_pct: 30,
+            priorities: ['Accuracy', 'Stability', 'Challenge'],
+            totalQuestions: 39,
+        };
+        expect(getSecondaryType(result)).toBe('S');
+    });
+
+    it('returns secondary from subtype code (Di → I)', () => {
+        const result: DiscResults = {
+            quizType: 'disc',
+            d_raw: 10,
+            i_raw: 5,
+            s_raw: -3,
+            c_raw: 2,
+            d_pct: 72,
+            i_pct: 58,
+            s_pct: 35,
+            c_pct: 48,
+            disc_type: 'Di',
+            angle: 105,
+            profile_strength: 'strong',
+            strength_pct: 55,
+            priorities: ['Action', 'Results', 'Enthusiasm'],
+            totalQuestions: 39,
+        };
+        expect(getSecondaryType(result)).toBe('I');
+    });
+
+    it('derives secondary from highest non-primary pct for pure types', () => {
+        const result: DiscResults = {
+            quizType: 'disc',
+            d_raw: 3,
+            i_raw: -2,
+            s_raw: 6,
+            c_raw: 8,
+            d_pct: 55,
+            i_pct: 30,
+            s_pct: 65,
+            c_pct: 70,
+            disc_type: 'C',
+            angle: 225,
+            profile_strength: 'strong',
+            strength_pct: 50,
+            priorities: ['Accuracy', 'Stability', 'Challenge'],
+            totalQuestions: 39,
+        };
+        // S has highest non-C pct (65%)
+        expect(getSecondaryType(result)).toBe('S');
+    });
+
+    it('returns null for Balanced type', () => {
+        const result: DiscResults = {
+            quizType: 'disc',
+            d_raw: 2,
+            i_raw: 2,
+            s_raw: 2,
+            c_raw: 2,
+            d_pct: 50,
+            i_pct: 50,
+            s_pct: 50,
+            c_pct: 50,
+            disc_type: 'Balanced',
+            angle: 45,
+            profile_strength: 'balanced',
+            strength_pct: 5,
+            priorities: ['Enthusiasm', 'Collaboration', 'Action'],
+            totalQuestions: 39,
+        };
+        expect(getSecondaryType(result)).toBeNull();
     });
 });

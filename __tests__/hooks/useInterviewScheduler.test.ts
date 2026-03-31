@@ -19,6 +19,7 @@ jest.mock('@/lib/recruitment', () => ({
             google_calendar_event_id: null,
             status: 'scheduled',
             notes: null,
+            recommendation: null,
             created_at: '2026-03-09T00:00:00.000Z',
         },
         error: null,
@@ -37,6 +38,7 @@ jest.mock('@/lib/recruitment', () => ({
             google_calendar_event_id: null,
             status: 'scheduled',
             notes: null,
+            recommendation: null,
             created_at: '2026-03-09T00:00:00.000Z',
         },
         error: null,
@@ -59,6 +61,7 @@ const mockInterview: Interview = {
     google_calendar_event_id: null,
     status: 'scheduled',
     notes: 'Test notes',
+    recommendation: null,
     created_at: '2026-03-09T00:00:00.000Z',
 };
 
@@ -83,6 +86,7 @@ describe('useInterviewScheduler', () => {
         expect(result.current.scheduleAmPm).toBe('AM');
         expect(result.current.isScheduling).toBe(false);
         expect(result.current.scheduleError).toBeNull();
+        expect(result.current.scheduleRecommendation).toBeNull();
     });
 
     it('openNewInterview resets form state and opens sheet', () => {
@@ -140,7 +144,7 @@ describe('useInterviewScheduler', () => {
         expect(defaultParams.onInterviewChanged).toHaveBeenCalledWith('created', expect.any(Object));
     });
 
-    it('handleDeleteInterview calls deleteInterview', () => {
+    it('handleDeleteInterview calls deleteInterview', async () => {
         const onChanged = jest.fn();
         const { result } = renderHook(() => useInterviewScheduler({ ...defaultParams, onInterviewChanged: onChanged }));
 
@@ -153,9 +157,9 @@ describe('useInterviewScheduler', () => {
             expect.any(Array),
         );
 
-        // Simulate pressing "Delete"
+        // Simulate pressing "Delete" (now async — awaits deleteInterview before calling onChanged)
         const deleteBtn = alertSpy.mock.calls[0][2]!.find((b: any) => b.text === 'Delete');
-        act(() => deleteBtn!.onPress!());
+        await act(async () => deleteBtn!.onPress!());
 
         expect(deleteInterview).toHaveBeenCalledWith('iv_1');
         expect(onChanged).toHaveBeenCalledWith('deleted', mockInterview);
@@ -229,9 +233,7 @@ describe('useInterviewScheduler', () => {
         const futureDate = new Date();
         futureDate.setDate(futureDate.getDate() + 7);
 
-        const { result } = renderHook(() =>
-            useInterviewScheduler({ ...defaultParams, userId: undefined }),
-        );
+        const { result } = renderHook(() => useInterviewScheduler({ ...defaultParams, userId: undefined }));
         act(() => result.current.openNewInterview());
         act(() => result.current.setScheduleDate(futureDate));
 
@@ -247,9 +249,7 @@ describe('useInterviewScheduler', () => {
         futureDate.setDate(futureDate.getDate() + 7);
 
         const onChanged = jest.fn();
-        const { result } = renderHook(() =>
-            useInterviewScheduler({ ...defaultParams, onInterviewChanged: onChanged }),
-        );
+        const { result } = renderHook(() => useInterviewScheduler({ ...defaultParams, onInterviewChanged: onChanged }));
 
         // Open edit mode with the mock interview
         act(() => result.current.openEditInterview(mockInterview));
@@ -319,11 +319,7 @@ describe('useInterviewScheduler', () => {
             await result.current.handleSubmitSchedule();
         });
 
-        expect(alertSpy).toHaveBeenCalledWith(
-            'Date in the past',
-            expect.any(String),
-            expect.any(Array),
-        );
+        expect(alertSpy).toHaveBeenCalledWith('Date in the past', expect.any(String), expect.any(Array));
     });
 
     it('openEditInterview handles PM time correctly', () => {
@@ -381,6 +377,7 @@ describe('useInterviewScheduler', () => {
             result.current.setScheduleLocation('Room A');
             result.current.setScheduleNotes('Some notes');
             result.current.setScheduleStatus('completed');
+            result.current.setScheduleRecommendation('second_interview');
         });
 
         expect(result.current.scheduleHour).toBe(3);
@@ -391,6 +388,31 @@ describe('useInterviewScheduler', () => {
         expect(result.current.scheduleLocation).toBe('Room A');
         expect(result.current.scheduleNotes).toBe('Some notes');
         expect(result.current.scheduleStatus).toBe('completed');
+        expect(result.current.scheduleRecommendation).toBe('second_interview');
+    });
+
+    it('openEditInterview populates recommendation from existing interview', () => {
+        const interviewWithRec: Interview = {
+            ...mockInterview,
+            recommendation: 'on_hold',
+        };
+        const { result } = renderHook(() => useInterviewScheduler(defaultParams));
+        act(() => result.current.openEditInterview(interviewWithRec));
+
+        expect(result.current.scheduleRecommendation).toBe('on_hold');
+    });
+
+    it('recommendation resets to null on openNewInterview', () => {
+        const interviewWithRec: Interview = {
+            ...mockInterview,
+            recommendation: 'pass',
+        };
+        const { result } = renderHook(() => useInterviewScheduler(defaultParams));
+        act(() => result.current.openEditInterview(interviewWithRec));
+        expect(result.current.scheduleRecommendation).toBe('pass');
+
+        act(() => result.current.openNewInterview());
+        expect(result.current.scheduleRecommendation).toBeNull();
     });
 
     it('handleSubmitSchedule with in_person type passes location not link', async () => {

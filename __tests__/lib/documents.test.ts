@@ -156,12 +156,10 @@ describe('uploadCandidateDocument', () => {
 
         const storageMock = {
             upload: jest.fn().mockResolvedValue({ error: null }),
-            createSignedUrl: jest
-                .fn()
-                .mockResolvedValue({
-                    data: { signedUrl: 'https://example.com/cand-1/docs/safe_file.pdf?token=abc' },
-                    error: null,
-                }),
+            createSignedUrl: jest.fn().mockResolvedValue({
+                data: { signedUrl: 'https://example.com/cand-1/docs/safe_file.pdf?token=abc' },
+                error: null,
+            }),
         };
         mockSupa.storage.from.mockReturnValue(storageMock);
 
@@ -189,26 +187,81 @@ describe('uploadCandidateDocument', () => {
         expect(result.data).toBeNull();
         expect(result.error).toBe('Network unreachable');
     });
+
+    it('rejects non-PDF file extensions', async () => {
+        const result = await uploadCandidateDocument('cand-1', 'Photo', 'file:///photo.jpg', 'photo.jpg');
+
+        expect(result.data).toBeNull();
+        expect(result.error).toBe('Only PDF files are allowed.');
+        expect(mockFetch).not.toHaveBeenCalled();
+    });
+
+    it('rejects files without an extension', async () => {
+        const result = await uploadCandidateDocument('cand-1', 'Unknown', 'file:///noext', 'noext');
+
+        expect(result.data).toBeNull();
+        expect(result.error).toBe('Only PDF files are allowed.');
+    });
+
+    it('rejects files over 10 MB', async () => {
+        mockFetchFile(new ArrayBuffer(11 * 1024 * 1024));
+
+        const result = await uploadCandidateDocument('cand-1', 'Resume', 'file:///big.pdf', 'big.pdf');
+
+        expect(result.data).toBeNull();
+        expect(result.error).toBe('File must be under 10 MB.');
+        expect(mockSupa.storage.from).not.toHaveBeenCalled();
+    });
 });
 
 // ── deleteCandidateDocument ──
 
 describe('deleteCandidateDocument', () => {
-    it('returns null error on successful deletion', async () => {
+    it('fetches the record, deletes storage file, then deletes DB row', async () => {
         const chain = mockSupa.__getChain('candidate_documents');
-        chain.__resolveWith({ error: null });
+        chain.__resolveWith({ data: { file_url: 'cand-1/docs/123_resume.pdf' }, error: null });
+
+        const removeMock = jest.fn().mockResolvedValue({ error: null });
+        mockSupa.storage.from.mockReturnValue({ remove: removeMock });
 
         const result = await deleteCandidateDocument('doc-1');
 
         expect(result.error).toBeNull();
+        expect(mockSupa.storage.from).toHaveBeenCalledWith('candidate-resumes');
+        expect(removeMock).toHaveBeenCalledWith(['cand-1/docs/123_resume.pdf']);
     });
 
-    it('returns error message when deletion fails', async () => {
+    it('returns error when fetch fails (before any deletion)', async () => {
         const chain = mockSupa.__getChain('candidate_documents');
-        chain.__resolveWith({ error: { message: 'Record not found' } });
+        chain.__resolveWith({ data: null, error: { message: 'Record not found' } });
 
         const result = await deleteCandidateDocument('doc-999');
 
         expect(result.error).toBe('Record not found');
+        // Storage should not be touched
+        expect(mockSupa.storage.from).not.toHaveBeenCalledWith('candidate-resumes');
+    });
+
+    it('still deletes DB row when storage removal fails', async () => {
+        const chain = mockSupa.__getChain('candidate_documents');
+        chain.__resolveWith({ data: { file_url: 'cand-1/docs/123_resume.pdf' }, error: null });
+
+        const removeMock = jest.fn().mockResolvedValue({ error: { message: 'Storage error' } });
+        mockSupa.storage.from.mockReturnValue({ remove: removeMock });
+
+        const result = await deleteCandidateDocument('doc-1');
+
+        // DB delete still succeeds (chain resolves with error: null)
+        expect(result.error).toBeNull();
+    });
+
+    it('skips storage delete when file_url is null', async () => {
+        const chain = mockSupa.__getChain('candidate_documents');
+        chain.__resolveWith({ data: { file_url: null }, error: null });
+
+        const result = await deleteCandidateDocument('doc-1');
+
+        expect(result.error).toBeNull();
+        expect(mockSupa.storage.from).not.toHaveBeenCalledWith('candidate-resumes');
     });
 });

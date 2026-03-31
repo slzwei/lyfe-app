@@ -1,5 +1,16 @@
 import type { OfflineQueue, OfflineOperation } from './queue';
 
+/** Tables allowed for offline queuing — restrict to prevent arbitrary writes from tampered AsyncStorage */
+const ALLOWED_SYNC_TABLES = new Set([
+    'leads',
+    'lead_activities',
+    'roadshow_activities',
+    'roadshow_attendance',
+    'candidate_module_progress',
+    'candidate_module_item_progress',
+    'notifications',
+]);
+
 export interface SafeQueryResult<T> {
     data: T | null;
     error: string | null;
@@ -63,6 +74,9 @@ export async function safeMutation<T>(
         return { data, error: null, queued: false };
     } catch (e: unknown) {
         if (isNetworkError(e)) {
+            if (!ALLOWED_SYNC_TABLES.has(table)) {
+                return { data: null, error: `Table "${table}" is not allowed for offline queuing`, queued: false };
+            }
             await queue.enqueue({ table, operation, payload, filters });
             return { data: null, error: null, queued: true };
         }

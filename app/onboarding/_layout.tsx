@@ -12,6 +12,7 @@ export default function OnboardingLayout() {
                 gestureEnabled: false,
             }}
         >
+            <Stack.Screen name="EmailVerification" />
             <Stack.Screen name="Welcome" />
             <Stack.Screen name="ProfileSetup" />
             <Stack.Screen name="ProfilePhoto" />

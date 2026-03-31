@@ -7,7 +7,7 @@
 import { useAuth } from '@/contexts/AuthContext';
 import { fetchUnreadCount, markAllAsRead as markAllAsReadSvc, markAsRead as markAsReadSvc } from '@/lib/notifications';
 import { supabase } from '@/lib/supabase';
-import React, { createContext, useCallback, useContext, useEffect, useState } from 'react';
+import React, { createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react';
 
 interface NotificationContextType {
     unreadCount: number;
@@ -74,21 +74,21 @@ export function NotificationProvider({ children }: { children: React.ReactNode }
 
     const markAllAsRead = useCallback(async () => {
         if (!user?.id) return;
-        const prevCount = unreadCount;
         // Optimistic reset
         setUnreadCount(0);
         const { error } = await markAllAsReadSvc(user.id);
         if (error) {
-            // Rollback on error
-            setUnreadCount(prevCount);
+            // Re-fetch actual count instead of rolling back to stale prevCount
+            await refreshUnreadCount();
         }
-    }, [user?.id, unreadCount]);
+    }, [user?.id, refreshUnreadCount]);
 
-    return (
-        <NotificationContext.Provider value={{ unreadCount, refreshUnreadCount, markAsRead, markAllAsRead }}>
-            {children}
-        </NotificationContext.Provider>
+    const value = useMemo(
+        () => ({ unreadCount, refreshUnreadCount, markAsRead, markAllAsRead }),
+        [unreadCount, refreshUnreadCount, markAsRead, markAllAsRead],
     );
+
+    return <NotificationContext.Provider value={value}>{children}</NotificationContext.Provider>;
 }
 
 export function useNotifications() {

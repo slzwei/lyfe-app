@@ -6,6 +6,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { AppState, Linking } from 'react-native';
 import { addCandidateActivity } from '@/lib/recruitment';
+import { captureError } from '@/lib/sentry';
 import type { CandidateActivity, CandidateOutcome } from '@/types/recruitment';
 
 interface UseContactOutcomeParams {
@@ -53,6 +54,9 @@ export function useContactOutcome({
                 wentToBackground.current = true;
             } else if (nextState === 'active' && wentToBackground.current && hasPendingContact.current) {
                 wentToBackground.current = false;
+                // Clear immediately — the sheet takes over from here.
+                // Prevents re-triggering on subsequent bg/fg cycles while sheet is visible.
+                hasPendingContact.current = false;
                 setConfirmStep('outcome');
                 setShowConfirmSheet(true);
             }
@@ -72,13 +76,19 @@ export function useContactOutcome({
     const handleCall = useCallback(() => {
         hasPendingContact.current = true;
         setPendingType('call');
-        Linking.openURL(`tel:${candidatePhone.replace(/\s/g, '')}`);
+        Linking.openURL(`tel:${candidatePhone.replace(/\s/g, '')}`).catch(() => {
+            hasPendingContact.current = false;
+            setPendingType(null);
+        });
     }, [candidatePhone]);
 
     const handleWhatsApp = useCallback(() => {
         hasPendingContact.current = true;
         setPendingType('whatsapp');
-        Linking.openURL(`https://wa.me/${candidatePhone.replace(/[\s+]/g, '')}`);
+        Linking.openURL(`https://wa.me/${candidatePhone.replace(/[\s+]/g, '')}`).catch(() => {
+            hasPendingContact.current = false;
+            setPendingType(null);
+        });
     }, [candidatePhone]);
 
     const handleOutcomeSelect = useCallback((outcome: CandidateOutcome) => {
@@ -102,7 +112,9 @@ export function useContactOutcome({
             };
             onActivityLogged(activity);
             if (userId) {
-                addCandidateActivity(candidateId, userId, pendingType, selectedOutcome, note);
+                addCandidateActivity(candidateId, userId, pendingType, selectedOutcome, note).catch((err) =>
+                    captureError(err, { context: 'useContactOutcome.addCandidateActivity', candidateId }),
+                );
             }
             handleDismissSheet();
         },
