@@ -58,6 +58,7 @@ export function NotificationProvider({ children }: { children: React.ReactNode }
             .subscribe();
 
         return () => {
+            channel.unsubscribe?.();
             supabase.removeChannel(channel);
         };
     }, [user?.id]);

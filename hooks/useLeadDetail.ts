@@ -222,7 +222,7 @@ export function useLeadDetail({ leadId, userId, userRole, fullName }: UseLeadDet
     }, [loadData]);
 
     const logActivity = useCallback(
-        (type: 'call' | 'whatsapp', description: string, metadata: Record<string, any>) => {
+        async (type: 'call' | 'whatsapp', description: string, metadata: Record<string, any>) => {
             if (!lead) return;
             const optimistic: LeadActivity = {
                 id: `a_${Date.now()}`,
@@ -236,7 +236,12 @@ export function useLeadDetail({ leadId, userId, userRole, fullName }: UseLeadDet
             };
             setActivities((prev) => [optimistic, ...prev]);
             if (userId) {
-                addLeadActivity(lead.id, userId, type, description, metadata);
+                const { error } = await addLeadActivity(lead.id, userId, type, description, metadata);
+                if (error) {
+                    // Rollback optimistic entry
+                    setActivities((prev) => prev.filter((a) => a.id !== optimistic.id));
+                    if (__DEV__) console.error('Failed to log activity:', error);
+                }
             }
         },
         [lead, userId, fullName],

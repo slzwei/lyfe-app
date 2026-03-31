@@ -8,6 +8,7 @@ import { useEffect, useRef } from 'react';
  */
 export function useCandidateRealtime(onUpdate: () => void) {
     const retryCountRef = useRef(0);
+    const retryTimeoutRef = useRef<ReturnType<typeof setTimeout>>();
     const onUpdateRef = useRef(onUpdate);
     onUpdateRef.current = onUpdate;
 
@@ -36,7 +37,7 @@ export function useCandidateRealtime(onUpdate: () => void) {
                         retryCountRef.current++;
                         if (__DEV__) console.warn(`[useCandidateRealtime] ${status}, reconnecting in ${delay}ms`);
                         const erroredChannel = channel;
-                        setTimeout(() => {
+                        retryTimeoutRef.current = setTimeout(() => {
                             supabase.removeChannel(erroredChannel);
                             channel = subscribe();
                         }, delay);
@@ -46,6 +47,7 @@ export function useCandidateRealtime(onUpdate: () => void) {
         let channel = subscribe();
 
         return () => {
+            clearTimeout(retryTimeoutRef.current);
             supabase.removeChannel(channel);
         };
     }, []);

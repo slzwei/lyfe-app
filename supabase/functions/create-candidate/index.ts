@@ -191,9 +191,14 @@ Deno.serve(async (req) => {
         const inviteUrl = `${LYFE_SG_URL}/candidate/login?token=${inviteToken}`;
 
         return jsonResponse({
-            candidate,
-            invitation,
-            invite_token: inviteToken,
+            candidate: {
+                id: candidate.id,
+                name: candidate.name,
+                phone: candidate.phone,
+                email: candidate.email,
+                status: candidate.status,
+            },
+            invitation: { id: invitation.id, status: invitation.status },
             invite_url: inviteUrl,
         });
     } catch (err) {

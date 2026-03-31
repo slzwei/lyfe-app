@@ -58,8 +58,11 @@ export function useEventForm() {
     // Pre-populate form when editing
     useEffect(() => {
         if (!isEditing || !eventId) return;
+        let cancelled = false;
 
-        fetchEventById(eventId).then(async ({ data }) => {
+        (async () => {
+            const { data } = await fetchEventById(eventId);
+            if (cancelled) return;
             if (data) {
                 setTitle(data.title);
                 setEventType(data.event_type);
@@ -87,7 +90,7 @@ export function useEventForm() {
                 if (data.event_type === 'roadshow') {
                     setIsEditingRoadshow(true);
                     const { data: cfg } = await fetchRoadshowConfig(eventId);
-                    if (cfg) {
+                    if (!cancelled && cfg) {
                         populateFromExisting(cfg, data.event_date);
                     }
                     const { data: att } = await supabase
@@ -95,11 +98,15 @@ export function useEventForm() {
                         .select('id')
                         .eq('event_id', eventId)
                         .limit(1);
-                    setRsConfigLocked((att ?? []).length > 0);
+                    if (!cancelled) setRsConfigLocked((att ?? []).length > 0);
                 }
             }
-            setLoadingEvent(false);
-        });
+            if (!cancelled) setLoadingEvent(false);
+        })();
+
+        return () => {
+            cancelled = true;
+        };
     }, [isEditing, eventId]);
 
     const validate = (): boolean => {

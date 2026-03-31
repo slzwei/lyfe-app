@@ -707,6 +707,7 @@ describe('useLeadDetail', () => {
     describe('logActivity', () => {
         it('adds optimistic activity and calls addLeadActivity', async () => {
             setupSuccessfulLoad();
+            mockAddLeadActivity.mockResolvedValue({ error: null });
 
             const { result } = renderHook(() => useLeadDetail(defaultParams));
 
@@ -714,8 +715,8 @@ describe('useLeadDetail', () => {
                 expect(result.current.isLoading).toBe(false);
             });
 
-            act(() => {
-                result.current.logActivity('call', 'Called client', { duration: 120 });
+            await act(async () => {
+                await result.current.logActivity('call', 'Called client', { duration: 120 });
             });
 
             // Optimistic activity prepended
@@ -735,6 +736,7 @@ describe('useLeadDetail', () => {
 
         it('logs whatsapp activity type', async () => {
             setupSuccessfulLoad();
+            mockAddLeadActivity.mockResolvedValue({ error: null });
 
             const { result } = renderHook(() => useLeadDetail(defaultParams));
 
@@ -742,8 +744,8 @@ describe('useLeadDetail', () => {
                 expect(result.current.isLoading).toBe(false);
             });
 
-            act(() => {
-                result.current.logActivity('whatsapp', 'Sent WhatsApp', { template: 'intro' });
+            await act(async () => {
+                await result.current.logActivity('whatsapp', 'Sent WhatsApp', { template: 'intro' });
             });
 
             const activity = result.current.activities[0];

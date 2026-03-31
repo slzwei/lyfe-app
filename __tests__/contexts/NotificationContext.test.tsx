@@ -25,10 +25,14 @@ jest.mock('@/lib/notifications', () => ({
 // Mock lib/supabase
 jest.mock('@/lib/supabase', () => ({
     supabase: {
-        channel: jest.fn(() => ({
-            on: jest.fn().mockReturnThis(),
-            subscribe: jest.fn(),
-        })),
+        channel: jest.fn(() => {
+            const ch = {
+                on: jest.fn().mockReturnThis(),
+                subscribe: jest.fn().mockReturnThis(),
+                unsubscribe: jest.fn(),
+            };
+            return ch;
+        }),
         removeChannel: jest.fn(),
     },
 }));

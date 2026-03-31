@@ -115,7 +115,7 @@ Deno.serve(async (req) => {
         const { event, deliveryId, data } = payload;
         const SUPPORTED_EVENTS = ['lead.created', 'lead.assigned', 'lead.unassigned'];
         if (!SUPPORTED_EVENTS.includes(event)) {
-            return jsonResponse({ error: `Unsupported event: ${event}` }, 400);
+            return jsonResponse({ error: 'Unsupported event type' }, 400);
         }
         if (!data?.lead?.externalId) {
             return jsonResponse({ error: 'Missing data.lead.externalId' }, 400);
