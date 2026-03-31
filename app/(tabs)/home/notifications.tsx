@@ -62,8 +62,18 @@ export default function NotificationsScreen() {
         setLoadingMore(false);
     }, [hasMore, loadingMore, page, loadNotifications]);
 
+    /** Known route patterns that notifications can navigate to */
+    const ALLOWED_ROUTE_PATTERNS = [
+        /^\/\(tabs\)\/home\//,
+        /^\/\(tabs\)\/leads\/[^/]+$/,
+        /^\/\(tabs\)\/events\/[^/]+$/,
+        /^\/\(tabs\)\/pa\/candidate\/[^/]+$/,
+        /^\/\(tabs\)\/team\/candidate\/[^/]+$/,
+    ];
+
     /** Remap cross-tab routes to home tab equivalents so back navigation returns here */
-    const remapRouteToHomeTab = (route: string): string => {
+    const remapRouteToHomeTab = (route: string): string | null => {
+        if (!ALLOWED_ROUTE_PATTERNS.some((p) => p.test(route))) return null;
         if (route.startsWith('/(tabs)/home/')) return route;
 
         const leadMatch = route.match(/^\/\(tabs\)\/leads\/(.+)$/);
@@ -75,6 +85,9 @@ export default function NotificationsScreen() {
         const paCandidateMatch = route.match(/^\/\(tabs\)\/pa\/candidate\/(.+)$/);
         if (paCandidateMatch) return `/(tabs)/home/candidate/${paCandidateMatch[1]}`;
 
+        const teamCandidateMatch = route.match(/^\/\(tabs\)\/team\/candidate\/(.+)$/);
+        if (teamCandidateMatch) return `/(tabs)/home/candidate/${teamCandidateMatch[1]}`;
+
         return route;
     };
 
@@ -85,8 +98,9 @@ export default function NotificationsScreen() {
                 setNotifications((prev) => prev.map((n) => (n.id === notification.id ? { ...n, is_read: true } : n)));
             }
             const data = notification.data as Record<string, string> | null;
-            if (typeof data?.route === 'string' && data.route.startsWith('/(tabs)/')) {
-                router.push(remapRouteToHomeTab(data.route));
+            if (typeof data?.route === 'string') {
+                const resolved = remapRouteToHomeTab(data.route);
+                if (resolved) router.push(resolved);
             }
         },
         [markAsRead, router],
@@ -203,6 +217,10 @@ export default function NotificationsScreen() {
                     }
                     onEndReached={onEndReached}
                     onEndReachedThreshold={0.3}
+                    removeClippedSubviews={true}
+                    maxToRenderPerBatch={10}
+                    windowSize={5}
+                    initialNumToRender={10}
                     ListEmptyComponent={
                         <View style={styles.emptyState}>
                             <Ionicons name="notifications-off-outline" size={48} color={colors.textTertiary} />

@@ -50,6 +50,15 @@ serve(async (req) => {
         });
     }
 
+    // ── Country code allowlist — Singapore only ─────────────────
+    if (!phone.startsWith('+65')) {
+        console.log(`[custom-sms-hook] Blocked non-SG number: ${maskPhone(phone)}`);
+        return new Response(JSON.stringify({ error: 'Unsupported country code' }), {
+            status: 400,
+            headers: { 'Content-Type': 'application/json' },
+        });
+    }
+
     // ── Invitation gate — block OTP for uninvited numbers ──────
     // Allow existing users (returning login) and invited numbers
     // Phone formats: hook receives with '+', DB may store with or without '+'

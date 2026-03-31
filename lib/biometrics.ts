@@ -56,14 +56,36 @@ export async function setBiometricsEnabled(enabled: boolean): Promise<void> {
     }
 }
 
+/** Max age for biometric refresh tokens (7 days in ms). */
+const BIOMETRIC_TOKEN_MAX_AGE_MS = 7 * 24 * 60 * 60 * 1000;
+
 /** Stash a refresh token so Face ID can re-establish a session after sign-out. */
 export async function storeBiometricRefreshToken(token: string): Promise<void> {
-    await SecureStore.setItemAsync(BIOMETRIC_REFRESH_TOKEN_KEY, token);
+    const payload = JSON.stringify({ token, storedAt: Date.now() });
+    await SecureStore.setItemAsync(BIOMETRIC_REFRESH_TOKEN_KEY, payload);
 }
 
 export async function getBiometricRefreshToken(): Promise<string | null> {
     try {
-        return await SecureStore.getItemAsync(BIOMETRIC_REFRESH_TOKEN_KEY);
+        const raw = await SecureStore.getItemAsync(BIOMETRIC_REFRESH_TOKEN_KEY);
+        if (!raw) return null;
+
+        // New format: {token, storedAt}
+        try {
+            const parsed = JSON.parse(raw);
+            if (parsed.token && parsed.storedAt) {
+                if (Date.now() - parsed.storedAt > BIOMETRIC_TOKEN_MAX_AGE_MS) {
+                    await clearBiometricRefreshToken();
+                    return null;
+                }
+                return parsed.token;
+            }
+        } catch {
+            // Not JSON — fall through to legacy format
+        }
+
+        // Legacy format: plain string token (no expiry check, migrate on next store)
+        return raw;
     } catch {
         return null;
     }

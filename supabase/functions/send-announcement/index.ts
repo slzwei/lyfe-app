@@ -71,7 +71,7 @@ Deno.serve(async (req) => {
         }
 
         // ── Fetch all users ──────────────────────────────────────────
-        const { data: users } = await supabase.from('users').select('id');
+        const { data: users } = await supabase.from('users').select('id').eq('is_active', true);
 
         if (!users || users.length === 0) {
             return new Response(JSON.stringify({ sent: 0 }), {

@@ -7,6 +7,13 @@ import type { Database } from '@/types/supabase';
 const supabaseUrl = process.env.EXPO_PUBLIC_SUPABASE_URL || '';
 const supabaseAnonKey = process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY || '';
 
+if (!supabaseUrl || !supabaseAnonKey) {
+    throw new Error(
+        'Missing required Supabase environment variables. ' +
+            'Set EXPO_PUBLIC_SUPABASE_URL and EXPO_PUBLIC_SUPABASE_ANON_KEY in .env',
+    );
+}
+
 // SecureStore has a 2048-byte limit per item. Large values (e.g. Supabase
 // session JWTs) are split into 2000-byte chunks stored in SecureStore.
 const CHUNK_SIZE = 2000;

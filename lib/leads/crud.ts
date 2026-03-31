@@ -84,15 +84,17 @@ export async function createLead(
         }
     }
 
+    const trimmedNotes = input.notes?.trim().slice(0, 2000) || null;
+
     const { data: lead, error: leadError } = await supabase
         .from('leads')
         .insert({
-            full_name: input.full_name,
-            phone: input.phone || null,
-            email: input.email || null,
-            source: input.source,
+            full_name: trimmedName,
+            phone: input.phone?.trim() || null,
+            email: input.email?.trim() || null,
+            source: trimmedSource,
             product_interest: input.product_interest,
-            notes: input.notes || null,
+            notes: trimmedNotes,
             status: 'new' as LeadStatus,
             assigned_to: userId,
             created_by: userId,
