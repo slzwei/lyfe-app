@@ -17,7 +17,7 @@ jobs:
           node-version: 20
           cache: npm
 
-      - run: npm ci --legacy-peer-deps
+      - run: npm ci
 
       - name: Lint
         run: npm run lint
@@ -25,8 +25,11 @@ jobs:
       - name: Type Check
         run: npx tsc --noEmit
 
-      - name: Test with coverage
+      - name: Test (iOS)
         run: npx jest --coverage
+
+      - name: Test (Android)
+        run: npx jest --config jest.config.android.js --no-coverage
 
       - name: Validate Expo config
         run: npx expo-doctor@latest || echo "::warning::expo-doctor found issues — review output above"
