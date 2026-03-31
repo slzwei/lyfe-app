@@ -9,7 +9,7 @@
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 
 const CORS_HEADERS = {
-    'Access-Control-Allow-Origin': Deno.env.get('ALLOWED_ORIGINS')?.split(',')[0] || '*',
+    'Access-Control-Allow-Origin': Deno.env.get('ALLOWED_ORIGINS')?.split(',')[0] || 'https://lyfe.sg',
     'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 };
 
@@ -207,6 +207,6 @@ Deno.serve(async (req) => {
         return jsonResponse({ success: true });
     } catch (err) {
         console.error('[send-email-otp]', err);
-        return jsonResponse({ error: err instanceof Error ? err.message : 'Internal error' }, 500);
+        return jsonResponse({ error: 'Internal server error' }, 500);
     }
 });

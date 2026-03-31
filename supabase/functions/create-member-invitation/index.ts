@@ -37,7 +37,7 @@ function generateToken(): string {
 }
 
 const CORS_HEADERS = {
-    'Access-Control-Allow-Origin': Deno.env.get('ALLOWED_ORIGINS')?.split(',')[0] || '*',
+    'Access-Control-Allow-Origin': Deno.env.get('ALLOWED_ORIGINS')?.split(',')[0] || 'https://lyfe.sg',
     'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 };
 
@@ -201,7 +201,8 @@ Deno.serve(async (req) => {
             .single();
 
         if (invErr) {
-            return jsonResponse({ error: invErr.message }, 500);
+            console.error('[create-member-invitation] insert:', invErr.message);
+            return jsonResponse({ error: 'Failed to create invitation' }, 500);
         }
 
         // ── For candidates: also create candidates + invitations rows ──
@@ -229,7 +230,8 @@ Deno.serve(async (req) => {
             if (candidateErr) {
                 // Rollback member_invitation
                 await admin.from('member_invitations').delete().eq('id', invitation.id);
-                return jsonResponse({ error: candidateErr.message }, 500);
+                console.error('[create-member-invitation] candidate insert:', candidateErr.message);
+                return jsonResponse({ error: 'Failed to create candidate record' }, 500);
             }
 
             // Insert lyfe-sg invitation record
@@ -248,7 +250,8 @@ Deno.serve(async (req) => {
                 // Rollback both
                 await admin.from('candidates').delete().eq('id', candidate.id);
                 await admin.from('member_invitations').delete().eq('id', invitation.id);
-                return jsonResponse({ error: legacyInvErr.message }, 500);
+                console.error('[create-member-invitation] legacy invite insert:', legacyInvErr.message);
+                return jsonResponse({ error: 'Failed to create invitation record' }, 500);
             }
 
             inviteUrl = `${LYFE_SG_URL}/candidate/login?token=${inviteToken}`;
@@ -260,6 +263,6 @@ Deno.serve(async (req) => {
         });
     } catch (err) {
         console.error('[create-member-invitation]', err);
-        return jsonResponse({ error: err instanceof Error ? err.message : 'Internal error' }, 500);
+        return jsonResponse({ error: 'Internal server error' }, 500);
     }
 });

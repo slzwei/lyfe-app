@@ -25,7 +25,7 @@
         "*.{ts,tsx}": [
             "eslint --fix",
             "prettier --write",
-            "jest --bail --passWithNoTests --findRelatedTests"
+            "jest --bail --passWithNoTests --forceExit --findRelatedTests"
         ],
         "*.{js,json}": [
             "prettier --write"

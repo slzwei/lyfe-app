@@ -122,16 +122,28 @@ Deno.serve(async (req) => {
             managerId = assigned_manager_id;
         }
 
-        // Dedup: check for existing candidate with same phone
+        // Dedup: check for existing candidate with same phone or email
         const normalizedPhone = phone.trim().replace(/^\+/, '');
-        const { data: existingCandidate } = await admin
+        const { data: existingByPhone } = await admin
             .from('candidates')
             .select('id')
             .eq('phone', normalizedPhone)
             .maybeSingle();
 
-        if (existingCandidate) {
+        if (existingByPhone) {
             return jsonResponse({ error: 'A candidate with this phone number already exists' }, 409);
+        }
+
+        if (email?.trim()) {
+            const { data: existingByEmail } = await admin
+                .from('candidates')
+                .select('id')
+                .eq('email', email.trim())
+                .maybeSingle();
+
+            if (existingByEmail) {
+                return jsonResponse({ error: 'A candidate with this email already exists' }, 409);
+            }
         }
 
         // Generate invite token
@@ -174,7 +186,8 @@ Deno.serve(async (req) => {
             .single();
 
         if (candidateErr) {
-            return jsonResponse({ error: candidateErr.message }, 500);
+            console.error('[create-candidate] candidate insert:', candidateErr.message);
+            return jsonResponse({ error: 'Failed to create candidate record' }, 500);
         }
 
         // ── Insert invitation ─────────────────────────────────────
@@ -196,7 +209,8 @@ Deno.serve(async (req) => {
         if (inviteErr) {
             // Rollback candidate if invitation fails
             await admin.from('candidates').delete().eq('id', candidate.id);
-            return jsonResponse({ error: inviteErr.message }, 500);
+            console.error('[create-candidate] invitation insert:', inviteErr.message);
+            return jsonResponse({ error: 'Failed to create invitation' }, 500);
         }
 
         // ── Build invite URL ──────────────────────────────────────

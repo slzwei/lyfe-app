@@ -32,6 +32,7 @@ const MOCK_PROFILE = {
     role: 'agent',
     avatar_url: null,
     is_active: true,
+    created_at: '2026-03-20T00:00:00Z', // before INVITATION_SYSTEM_CUTOFF → grandfathered
 };
 
 const wrapper = ({ children }: { children: React.ReactNode }) => <AuthProvider>{children}</AuthProvider>;
@@ -441,6 +442,85 @@ describe('AuthContext — user auto-creation', () => {
         // Verify that from('users') was called (for insert)
         expect(mockSupa.from).toHaveBeenCalledWith('users');
         consoleSpy.mockRestore();
+    });
+});
+
+// ── Invitation status ──
+
+describe('AuthContext — checkInvitationStatus', () => {
+    it('skips invitation check for users created before cutoff (grandfathered)', async () => {
+        mockSupa.auth.getSession.mockResolvedValue({ data: { session: MOCK_SESSION } });
+
+        // MOCK_PROFILE.created_at is 2026-03-20, before cutoff 2026-03-29 → skipped
+        const usersChain = mockSupa.__getChain('users');
+        mockResolve(usersChain, { data: MOCK_PROFILE, error: null });
+
+        const { result } = renderHook(() => useAuth(), { wrapper });
+        await act(async () => {});
+
+        expect(result.current.isAuthenticated).toBe(true);
+        expect(result.current.invitationStatus).toBe('skipped');
+    });
+
+    it('returns valid when user has an accepted member_invitation', async () => {
+        mockSupa.auth.getSession.mockResolvedValue({ data: { session: MOCK_SESSION } });
+
+        const postCutoffProfile = { ...MOCK_PROFILE, created_at: '2026-04-01T00:00:00Z' };
+        const usersChain = mockSupa.__getChain('users');
+        mockResolve(usersChain, { data: postCutoffProfile, error: null });
+
+        // member_invitations query returns a match
+        const memberInvChain = mockSupa.__getChain('member_invitations');
+        mockResolve(memberInvChain, { data: { id: 'inv-1' }, error: null });
+
+        const { result } = renderHook(() => useAuth(), { wrapper });
+        await act(async () => {});
+
+        expect(result.current.invitationStatus).toBe('valid');
+        expect(result.current.isAuthenticated).toBe(true);
+    });
+
+    it('returns valid when user has a legacy invitation', async () => {
+        mockSupa.auth.getSession.mockResolvedValue({ data: { session: MOCK_SESSION } });
+
+        const postCutoffProfile = { ...MOCK_PROFILE, created_at: '2026-04-01T00:00:00Z' };
+        const usersChain = mockSupa.__getChain('users');
+        mockResolve(usersChain, { data: postCutoffProfile, error: null });
+
+        // member_invitations query returns null (no match)
+        const memberInvChain = mockSupa.__getChain('member_invitations');
+        mockResolve(memberInvChain, { data: null, error: null });
+
+        // legacy invitations query returns a match
+        const invChain = mockSupa.__getChain('invitations');
+        mockResolve(invChain, { data: { id: 'legacy-1' }, error: null });
+
+        const { result } = renderHook(() => useAuth(), { wrapper });
+        await act(async () => {});
+
+        expect(result.current.invitationStatus).toBe('valid');
+        expect(result.current.isAuthenticated).toBe(true);
+    });
+
+    it('returns rejected when no invitation exists for post-cutoff user', async () => {
+        mockSupa.auth.getSession.mockResolvedValue({ data: { session: MOCK_SESSION } });
+
+        const postCutoffProfile = { ...MOCK_PROFILE, created_at: '2026-04-01T00:00:00Z' };
+        const usersChain = mockSupa.__getChain('users');
+        mockResolve(usersChain, { data: postCutoffProfile, error: null });
+
+        // member_invitations query returns null
+        const memberInvChain = mockSupa.__getChain('member_invitations');
+        mockResolve(memberInvChain, { data: null, error: null });
+
+        // legacy invitations query returns null
+        const invChain = mockSupa.__getChain('invitations');
+        mockResolve(invChain, { data: null, error: null });
+
+        const { result } = renderHook(() => useAuth(), { wrapper });
+        await act(async () => {});
+
+        expect(result.current.invitationStatus).toBe('rejected');
     });
 });
 

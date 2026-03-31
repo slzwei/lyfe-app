@@ -3,6 +3,7 @@ import type { OfflineQueue, QueueItem } from './queue';
 import { captureError } from '../sentry';
 
 const MAX_RETRIES = 3;
+const EXECUTE_TIMEOUT_MS = 10_000;
 
 /** Tables allowed for sync — must match ALLOWED_SYNC_TABLES in safeQuery.ts */
 const ALLOWED_SYNC_TABLES = new Set([
@@ -99,8 +100,13 @@ export class SyncManager {
                     return { error: `Unknown operation: ${operation}` };
             }
 
-            const { error } = await query;
-            return { error: error ? error.message : null };
+            const result = await Promise.race([
+                query,
+                new Promise<{ error: { message: string } }>((resolve) =>
+                    setTimeout(() => resolve({ error: { message: 'Sync query timed out' } }), EXECUTE_TIMEOUT_MS),
+                ),
+            ]);
+            return { error: result.error ? result.error.message : null };
         } catch (e: unknown) {
             const message = e instanceof Error ? e.message : 'Unknown error during sync';
             return { error: message };

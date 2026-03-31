@@ -17,29 +17,36 @@ export function useEventDetail(eventId: string | undefined, userId: string | und
 
     const todayStr = todayLocalStr();
 
+    const [error, setError] = useState<string | null>(null);
+
     const loadEvent = useCallback(
         async (isRefresh = false) => {
             if (isRefresh) setRefreshing(true);
+            setError(null);
 
             if (!eventId) return;
-            const { data } = await fetchEventById(eventId);
-            setEvent(data);
+            try {
+                const { data } = await fetchEventById(eventId);
+                setEvent(data);
 
-            if (data?.event_type === 'roadshow') {
-                const [configRes, activitiesRes] = await Promise.all([
-                    fetchRoadshowConfig(eventId),
-                    fetchRoadshowActivities(eventId),
-                ]);
-                const cfg = configRes.data;
-                setRoadshowConfig(cfg);
-                const attRes = await fetchRoadshowAttendance(eventId, cfg);
-                setAttendance(attRes.data);
-                setMyAttendance(attRes.data.find((a) => a.user_id === userId) ?? null);
-                setActivities(activitiesRes.data);
+                if (data?.event_type === 'roadshow') {
+                    const [configRes, activitiesRes] = await Promise.all([
+                        fetchRoadshowConfig(eventId),
+                        fetchRoadshowActivities(eventId),
+                    ]);
+                    const cfg = configRes.data;
+                    setRoadshowConfig(cfg);
+                    const attRes = await fetchRoadshowAttendance(eventId, cfg);
+                    setAttendance(attRes.data);
+                    setMyAttendance(attRes.data.find((a) => a.user_id === userId) ?? null);
+                    setActivities(activitiesRes.data);
+                }
+            } catch {
+                setError('Failed to load event details');
+            } finally {
+                setIsLoading(false);
+                setRefreshing(false);
             }
-
-            setIsLoading(false);
-            setRefreshing(false);
         },
         [eventId, userId],
     );
@@ -71,6 +78,7 @@ export function useEventDetail(eventId: string | undefined, userId: string | und
         event,
         isLoading,
         refreshing,
+        error,
         roadshowConfig,
         attendance,
         activities,
