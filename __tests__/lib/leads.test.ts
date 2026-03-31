@@ -83,10 +83,10 @@ describe('fetchLeads', () => {
 
     it('returns error on failure', async () => {
         const chain = mockSupa.__getChain('leads');
-        mockResolve(chain, { data: null, error: { message: 'DB error' } });
+        mockResolve(chain, { data: null, error: { message: 'DB error', code: 'PGRST000' } });
 
         const result = await fetchLeads('agent-1', false);
-        expect(result.error).toBe('DB error');
+        expect(result.error).toBeTruthy();
         expect(result.data).toEqual([]);
     });
 
@@ -133,10 +133,10 @@ describe('fetchLead', () => {
 
     it('returns error when not found', async () => {
         const chain = mockSupa.__getChain('leads');
-        mockResolve(chain, { data: null, error: { message: 'Not found' } });
+        mockResolve(chain, { data: null, error: { message: 'Not found', code: 'PGRST116' } });
 
         const result = await fetchLead('bad-id');
-        expect(result.error).toBe('Not found');
+        expect(result.error).toBeTruthy();
     });
 });
 
@@ -525,10 +525,10 @@ describe('assignLead', () => {
 
     it('returns error when fetch fails', async () => {
         const chain = mockSupa.__getChain('leads');
-        mockResolve(chain, { data: null, error: { message: 'Not found' } });
+        mockResolve(chain, { data: null, error: { message: 'Not found', code: 'PGRST116' } });
 
         const result = await assignLead('bad-id', 'agent-1', 'mgr-1');
-        expect(result.error).toBe('Not found');
+        expect(result.error).toBeTruthy();
     });
 
     it('returns error when update fails', async () => {

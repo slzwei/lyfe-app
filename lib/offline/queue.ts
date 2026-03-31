@@ -7,6 +7,7 @@ export type OfflineOperation = 'insert' | 'update' | 'upsert' | 'delete';
 
 export interface QueueItem {
     id: string;
+    userId?: string;
     table: string;
     operation: OfflineOperation;
     payload: Record<string, unknown>;
@@ -50,7 +51,14 @@ export class OfflineQueue {
 
     private dedupKey(item: Pick<QueueItem, 'table' | 'operation' | 'filters'>): string | null {
         if (item.operation === 'insert' || !item.filters) return null;
-        return `${item.table}:${JSON.stringify(item.filters)}`;
+        // Sort keys for stable dedup (key order shouldn't affect identity)
+        const sorted = Object.keys(item.filters)
+            .sort()
+            .reduce<Record<string, unknown>>((acc, k) => {
+                acc[k] = item.filters![k];
+                return acc;
+            }, {});
+        return `${item.table}:${JSON.stringify(sorted)}`;
     }
 
     async enqueue(item: Omit<QueueItem, 'id' | 'createdAt' | 'retryCount'>): Promise<QueueItem | null> {

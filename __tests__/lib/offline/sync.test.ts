@@ -33,6 +33,11 @@ function createMockClient(options?: {
                 }),
             })),
         })),
+        auth: {
+            getSession: jest.fn().mockResolvedValue({
+                data: { session: { user: { id: 'test-user-id' } } },
+            }),
+        },
     } as any;
 }
 

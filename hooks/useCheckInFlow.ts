@@ -7,6 +7,7 @@ import {
     logRoadshowAttendanceWithPledge,
     type PledgeInput,
 } from '@/lib/roadshow';
+import { captureError } from '@/lib/sentry';
 import { supabase } from '@/lib/supabase';
 import type { RoadshowConfig } from '@/types/event';
 
@@ -72,8 +73,10 @@ export function useCheckInFlow({ eventId, userId, userFullName, roadshowConfig, 
             return;
         }
 
-        // Log check_in activity (fire-and-forget)
-        logRoadshowActivity(eventId!, userId!, 'check_in').catch(() => {});
+        // Log check_in activity (fire-and-forget, errors captured)
+        logRoadshowActivity(eventId!, userId!, 'check_in').catch((err) =>
+            captureError(err, { context: 'useCheckInFlow.logCheckIn', eventId }),
+        );
 
         // Fire-and-forget push notification
         const supabaseUrl = process.env.EXPO_PUBLIC_SUPABASE_URL ?? '';
@@ -94,7 +97,7 @@ export function useCheckInFlow({ eventId, userId, userFullName, roadshowConfig, 
                     pledgedClosed: pledges.closed,
                     pledgedAfyc: pledges.afyc,
                 }),
-            }).catch(() => {});
+            }).catch((err) => captureError(err, { context: 'useCheckInFlow.notifyPledge', eventId }));
         });
 
         setShowPledgeSheet(false);

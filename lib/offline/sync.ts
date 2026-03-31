@@ -114,10 +114,27 @@ export class SyncManager {
         await this.emitStatus();
 
         try {
+            // Resolve current user to discard items from a previous session
+            let currentUserId: string | undefined;
+            try {
+                const {
+                    data: { session },
+                } = await this.client.auth.getSession();
+                currentUserId = session?.user?.id;
+            } catch {
+                // Auth not available (e.g. in tests) — skip ownership check
+            }
+
             // Snapshot the queue to avoid peek/remove races
             const items = await this.queue.getAll();
 
             for (const item of items) {
+                // Discard items queued by a different user
+                if (item.userId && currentUserId && item.userId !== currentUserId) {
+                    await this.queue.removeById(item.id);
+                    await this.emitStatus();
+                    continue;
+                }
                 // Dead-letter items that exceeded max retries
                 if (item.retryCount >= MAX_RETRIES) {
                     captureError(new Error(`Offline sync item dead-lettered after ${MAX_RETRIES} retries`), {

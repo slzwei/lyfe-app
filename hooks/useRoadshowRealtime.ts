@@ -16,6 +16,7 @@ export function useRoadshowRealtime(
     onNewAttendance: (attendance: RoadshowAttendance) => void,
 ) {
     const retryCountRef = useRef(0);
+    const retryTimeoutRef = useRef<ReturnType<typeof setTimeout>>();
     const onNewActivityRef = useRef(onNewActivity);
     onNewActivityRef.current = onNewActivity;
     const onNewAttendanceRef = useRef(onNewAttendance);
@@ -69,7 +70,7 @@ export function useRoadshowRealtime(
                 retryCountRef.current++;
                 if (__DEV__) console.warn(`[useRoadshowRealtime] ${status}, reconnecting in ${delay}ms`);
                 const erroredChannel = channel;
-                setTimeout(() => {
+                retryTimeoutRef.current = setTimeout(() => {
                     supabase.removeChannel(erroredChannel);
                     channel = createChannel().subscribe();
                 }, delay);
@@ -77,6 +78,7 @@ export function useRoadshowRealtime(
         });
 
         return () => {
+            clearTimeout(retryTimeoutRef.current);
             supabase.removeChannel(channel);
         };
     }, [eventId, isLiveRoadshow]);

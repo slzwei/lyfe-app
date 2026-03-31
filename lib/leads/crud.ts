@@ -3,6 +3,7 @@
  */
 import type { Lead, LeadActivityType, LeadSource, LeadStatus, ProductInterest } from '@/types/lead';
 import { applyPageRange, resolvePage } from '../pagination';
+import { friendlyError } from '../errors';
 import { captureError } from '../sentry';
 import { supabase } from '../supabase';
 
@@ -35,7 +36,7 @@ export async function fetchLeads(
     query = applyPageRange(query, page, pageSize);
 
     const { data, error } = await query;
-    if (error) return { data: [], error: error.message, hasMore: false };
+    if (error) return { data: [], error: friendlyError(error.message, error.code), hasMore: false };
 
     const results = (data || []) as Lead[];
     const { data: paged, hasMore } = resolvePage(results, page, pageSize);
@@ -48,7 +49,7 @@ export async function fetchLeads(
 export async function fetchLead(leadId: string): Promise<{ data: Lead | null; error: string | null }> {
     const { data, error } = await supabase.from('leads').select('*').eq('id', leadId).single();
 
-    if (error) return { data: null, error: error.message };
+    if (error) return { data: null, error: friendlyError(error.message, error.code) };
     return { data: data as Lead, error: null };
 }
 
@@ -158,7 +159,7 @@ export async function fetchTeamAgents(
 
     const { data, error } = await query;
 
-    if (error) return { data: [], error: error.message };
+    if (error) return { data: [], error: friendlyError(error.message, error.code) };
     return { data: (data || []) as { id: string; full_name: string }[], error: null };
 }
 
