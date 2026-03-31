@@ -8,10 +8,15 @@
  */
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 
+const CORS_HEADERS = {
+    'Access-Control-Allow-Origin': Deno.env.get('ALLOWED_ORIGINS')?.split(',')[0] || '*',
+    'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
+};
+
 function jsonResponse(body: Record<string, unknown>, status = 200) {
     return new Response(JSON.stringify(body), {
         status,
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 'Content-Type': 'application/json', ...CORS_HEADERS },
     });
 }
 
@@ -97,15 +102,23 @@ async function sendViaSes(to: string, code: string): Promise<void> {
 
     const authorization = `AWS4-HMAC-SHA256 Credential=${accessKey}/${credentialScope}, SignedHeaders=${signedHeaders}, Signature=${signature}`;
 
-    const response = await fetch(url, {
-        method: 'POST',
-        headers: {
-            'Content-Type': 'application/x-www-form-urlencoded',
-            'X-Amz-Date': dateStamp,
-            Authorization: authorization,
-        },
-        body,
-    });
+    const abortCtl = new AbortController();
+    const fetchTimeout = setTimeout(() => abortCtl.abort(), 30000);
+    let response: Response;
+    try {
+        response = await fetch(url, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/x-www-form-urlencoded',
+                'X-Amz-Date': dateStamp,
+                Authorization: authorization,
+            },
+            body,
+            signal: abortCtl.signal,
+        });
+    } finally {
+        clearTimeout(fetchTimeout);
+    }
 
     if (!response.ok) {
         const text = await response.text();
@@ -116,7 +129,7 @@ async function sendViaSes(to: string, code: string): Promise<void> {
 
 Deno.serve(async (req) => {
     if (req.method === 'OPTIONS') {
-        return new Response(null, { status: 204 });
+        return new Response(null, { status: 204, headers: CORS_HEADERS });
     }
 
     try {

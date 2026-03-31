@@ -68,7 +68,16 @@ Deno.serve(async (req) => {
         const { record } = payload;
 
         // Service-role client for user lookup
-        const supabase = createClient(Deno.env.get('SUPABASE_URL')!, Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!);
+        const supabaseUrl = Deno.env.get('SUPABASE_URL');
+        const serviceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY');
+        if (!supabaseUrl || !serviceKey) {
+            console.error('[send-push-notification] Missing SUPABASE_URL or SUPABASE_SERVICE_ROLE_KEY');
+            return new Response(JSON.stringify({ error: 'Server misconfiguration' }), {
+                status: 500,
+                headers: { 'Content-Type': 'application/json' },
+            });
+        }
+        const supabase = createClient(supabaseUrl, serviceKey);
 
         // Fetch user's push token and notification preferences
         const { data: user } = await supabase
@@ -85,7 +94,8 @@ Deno.serve(async (req) => {
 
         // Validate Expo push token format
         if (!/^ExponentPushToken\[.+\]$/.test(user.push_token)) {
-            console.error('[send-push-notification] Invalid push token format:', user.push_token);
+            const masked = user.push_token ? user.push_token.slice(0, 15) + '...' : 'empty';
+            console.error('[send-push-notification] Invalid push token format:', masked);
             return new Response(JSON.stringify({ skipped: true, reason: 'invalid push token format' }), {
                 headers: { 'Content-Type': 'application/json' },
             });
@@ -108,11 +118,19 @@ Deno.serve(async (req) => {
             data: record.data || {},
         };
 
-        const pushResponse = await fetch('https://exp.host/--/api/v2/push/send', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(pushMessage),
-        });
+        const abortCtl = new AbortController();
+        const timeout = setTimeout(() => abortCtl.abort(), 30000);
+        let pushResponse: Response;
+        try {
+            pushResponse = await fetch('https://exp.host/--/api/v2/push/send', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(pushMessage),
+                signal: abortCtl.signal,
+            });
+        } finally {
+            clearTimeout(timeout);
+        }
 
         const pushResult = await pushResponse.json();
 

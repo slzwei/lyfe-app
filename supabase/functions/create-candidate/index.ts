@@ -122,6 +122,18 @@ Deno.serve(async (req) => {
             managerId = assigned_manager_id;
         }
 
+        // Dedup: check for existing candidate with same phone
+        const normalizedPhone = phone.trim().replace(/^\+/, '');
+        const { data: existingCandidate } = await admin
+            .from('candidates')
+            .select('id')
+            .eq('phone', normalizedPhone)
+            .maybeSingle();
+
+        if (existingCandidate) {
+            return jsonResponse({ error: 'A candidate with this phone number already exists' }, 409);
+        }
+
         // Generate invite token
         const inviteToken = generateToken();
 

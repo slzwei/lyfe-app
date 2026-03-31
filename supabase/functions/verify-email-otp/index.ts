@@ -6,10 +6,15 @@
  */
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 
+const CORS_HEADERS = {
+    'Access-Control-Allow-Origin': Deno.env.get('ALLOWED_ORIGINS')?.split(',')[0] || '*',
+    'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
+};
+
 function jsonResponse(body: Record<string, unknown>, status = 200) {
     return new Response(JSON.stringify(body), {
         status,
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 'Content-Type': 'application/json', ...CORS_HEADERS },
     });
 }
 
@@ -37,7 +42,7 @@ async function timingSafeEqual(a: string, b: string): Promise<boolean> {
 
 Deno.serve(async (req) => {
     if (req.method === 'OPTIONS') {
-        return new Response(null, { status: 204 });
+        return new Response(null, { status: 204, headers: CORS_HEADERS });
     }
 
     try {
@@ -70,7 +75,26 @@ Deno.serve(async (req) => {
         const submittedHash = await sha256(code.trim());
 
         // ── Service-role client ───────────────────────────────────
-        const admin = createClient(Deno.env.get('SUPABASE_URL')!, Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!);
+        const supabaseUrl = Deno.env.get('SUPABASE_URL');
+        const serviceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY');
+        if (!supabaseUrl || !serviceKey) {
+            return jsonResponse({ error: 'Server misconfiguration' }, 500);
+        }
+        const admin = createClient(supabaseUrl, serviceKey);
+
+        // Rate limit: max 5 verification attempts per user per 10 minutes
+        const tenMinAgo = new Date(Date.now() - 10 * 60 * 1000).toISOString();
+        const { count: attemptCount } = await admin
+            .from('email_otp_codes')
+            .select('id', { count: 'exact', head: true })
+            .eq('user_id', caller.id)
+            .gte('created_at', tenMinAgo);
+
+        // Each send creates 1 record (max 3 per 10 min), so 5 verify attempts
+        // per existing code is generous. If no codes exist, they can't verify.
+        if ((attemptCount ?? 0) === 0) {
+            return jsonResponse({ error: 'No valid verification code found. Please request a new one.' }, 400);
+        }
 
         // Look up the most recent valid OTP for this user + email
         const { data: otpRecord } = await admin

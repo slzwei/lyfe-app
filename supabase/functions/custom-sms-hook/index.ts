@@ -7,9 +7,15 @@ function maskPhone(phone: string): string {
     return phone.slice(0, 3) + '****' + phone.slice(-4);
 }
 
+function requireEnv(key: string): string {
+    const val = Deno.env.get(key);
+    if (!val) throw new Error(`Missing required env var: ${key}`);
+    return val;
+}
+
 const aws = new AwsClient({
-    accessKeyId: Deno.env.get('AWS_ACCESS_KEY_ID')!,
-    secretAccessKey: Deno.env.get('AWS_SECRET_ACCESS_KEY')!,
+    accessKeyId: requireEnv('AWS_ACCESS_KEY_ID'),
+    secretAccessKey: requireEnv('AWS_SECRET_ACCESS_KEY'),
     region: 'ap-southeast-1',
     service: 'sns',
 });
@@ -87,11 +93,19 @@ serve(async (req) => {
     });
 
     try {
-        const response = await aws.fetch('https://sns.ap-southeast-1.amazonaws.com/', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-            body: body.toString(),
-        });
+        const abortCtl = new AbortController();
+        const fetchTimeout = setTimeout(() => abortCtl.abort(), 30000);
+        let response: Response;
+        try {
+            response = await aws.fetch('https://sns.ap-southeast-1.amazonaws.com/', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+                body: body.toString(),
+                signal: abortCtl.signal,
+            });
+        } finally {
+            clearTimeout(fetchTimeout);
+        }
 
         if (!response.ok) {
             const error = await response.text();

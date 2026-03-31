@@ -7,9 +7,14 @@
  */
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 
+const CORS_HEADERS = {
+    'Access-Control-Allow-Origin': Deno.env.get('ALLOWED_ORIGINS')?.split(',')[0] || '*',
+    'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
+};
+
 Deno.serve(async (req) => {
     if (req.method === 'OPTIONS') {
-        return new Response(null, { status: 204 });
+        return new Response(null, { status: 204, headers: CORS_HEADERS });
     }
 
     try {
@@ -18,7 +23,7 @@ Deno.serve(async (req) => {
         if (!authHeader?.startsWith('Bearer ')) {
             return new Response(JSON.stringify({ error: 'Missing Authorization header' }), {
                 status: 401,
-                headers: { 'Content-Type': 'application/json' },
+                headers: { 'Content-Type': 'application/json', ...CORS_HEADERS },
             });
         }
 
@@ -34,7 +39,7 @@ Deno.serve(async (req) => {
         if (authError || !caller) {
             return new Response(JSON.stringify({ error: 'Unauthorized' }), {
                 status: 401,
-                headers: { 'Content-Type': 'application/json' },
+                headers: { 'Content-Type': 'application/json', ...CORS_HEADERS },
             });
         }
 
@@ -46,7 +51,7 @@ Deno.serve(async (req) => {
         if (callerRole !== 'admin') {
             return new Response(JSON.stringify({ error: 'Only admins can send announcements' }), {
                 status: 403,
-                headers: { 'Content-Type': 'application/json' },
+                headers: { 'Content-Type': 'application/json', ...CORS_HEADERS },
             });
         }
 
@@ -55,13 +60,13 @@ Deno.serve(async (req) => {
         if (!title || typeof title !== 'string' || title.trim().length === 0) {
             return new Response(JSON.stringify({ error: 'title is required' }), {
                 status: 400,
-                headers: { 'Content-Type': 'application/json' },
+                headers: { 'Content-Type': 'application/json', ...CORS_HEADERS },
             });
         }
         if (body !== undefined && typeof body !== 'string') {
             return new Response(JSON.stringify({ error: 'body must be a string' }), {
                 status: 400,
-                headers: { 'Content-Type': 'application/json' },
+                headers: { 'Content-Type': 'application/json', ...CORS_HEADERS },
             });
         }
 
@@ -70,7 +75,7 @@ Deno.serve(async (req) => {
 
         if (!users || users.length === 0) {
             return new Response(JSON.stringify({ sent: 0 }), {
-                headers: { 'Content-Type': 'application/json' },
+                headers: { 'Content-Type': 'application/json', ...CORS_HEADERS },
             });
         }
 
@@ -106,13 +111,13 @@ Deno.serve(async (req) => {
 
         return new Response(JSON.stringify(result), {
             status: errors.length > 0 && totalSent === 0 ? 500 : 200,
-            headers: { 'Content-Type': 'application/json' },
+            headers: { 'Content-Type': 'application/json', ...CORS_HEADERS },
         });
     } catch (err) {
         console.error('[send-announcement]', err);
         return new Response(JSON.stringify({ error: 'Internal server error' }), {
             status: 500,
-            headers: { 'Content-Type': 'application/json' },
+            headers: { 'Content-Type': 'application/json', ...CORS_HEADERS },
         });
     }
 });

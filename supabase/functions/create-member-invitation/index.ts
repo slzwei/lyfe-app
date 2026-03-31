@@ -36,10 +36,15 @@ function generateToken(): string {
         .replace(/=+$/, '');
 }
 
+const CORS_HEADERS = {
+    'Access-Control-Allow-Origin': Deno.env.get('ALLOWED_ORIGINS')?.split(',')[0] || '*',
+    'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
+};
+
 function jsonResponse(body: Record<string, unknown>, status = 200) {
     return new Response(JSON.stringify(body), {
         status,
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 'Content-Type': 'application/json', ...CORS_HEADERS },
     });
 }
 
@@ -57,7 +62,7 @@ function normalizePhone(raw: string): string | null {
 
 Deno.serve(async (req) => {
     if (req.method === 'OPTIONS') {
-        return new Response(null, { status: 204 });
+        return new Response(null, { status: 204, headers: CORS_HEADERS });
     }
 
     try {
