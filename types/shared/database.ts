@@ -9,7 +9,6 @@ import type { Tables, Enums } from './database.types';
 
 export type User = Tables<'users'> & {
     onboarding_complete?: boolean;
-    email_verified?: boolean;
 };
 export type PaManagerAssignment = Tables<'pa_manager_assignments'>;
 export type Notification = Tables<'notifications'>;

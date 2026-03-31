@@ -35,6 +35,9 @@ export const ROLE_CAPABILITIES: Record<UserRole, Capability[]> = {
         'create_candidates',
         'schedule_interviews',
         'view_admin',
+        'view_team',
+        'view_leads',
+        'view_candidates',
     ],
     director: [
         'hold_agents',
