@@ -35,6 +35,9 @@ CREATE POLICY invitations_select_own ON public.invitations
 -- candidate_profiles bridge.
 -- ============================================================================
 
+-- Drop first: parameter name changed from p_candidate_user_id to p_candidate_id
+-- CASCADE drops dependent RLS policies — they're recreated below
+DROP FUNCTION IF EXISTS public.can_access_candidate_user(uuid) CASCADE;
 CREATE OR REPLACE FUNCTION public.can_access_candidate_user(p_candidate_id uuid)
 RETURNS boolean
 LANGUAGE sql
@@ -68,6 +71,31 @@ AS $$
     -- Admin or director sees all
     OR (auth.jwt() -> 'app_metadata' ->> 'role') IN ('admin', 'director');
 $$;
+
+-- Recreate RLS policies dropped by CASCADE above
+CREATE POLICY progress_select ON candidate_module_progress
+    FOR SELECT TO authenticated
+    USING (can_access_candidate_user(candidate_id));
+
+CREATE POLICY progress_upsert ON candidate_module_progress
+    FOR INSERT TO authenticated
+    WITH CHECK (can_access_candidate_user(candidate_id));
+
+CREATE POLICY progress_update ON candidate_module_progress
+    FOR UPDATE TO authenticated
+    USING (can_access_candidate_user(candidate_id));
+
+CREATE POLICY item_progress_select ON candidate_module_item_progress
+    FOR SELECT TO authenticated
+    USING (can_access_candidate_user(candidate_id));
+
+CREATE POLICY item_progress_insert ON candidate_module_item_progress
+    FOR INSERT TO authenticated
+    WITH CHECK (can_access_candidate_user(candidate_id));
+
+CREATE POLICY item_progress_update ON candidate_module_item_progress
+    FOR UPDATE TO authenticated
+    USING (can_access_candidate_user(candidate_id));
 
 -- Fix the misleading comments from the previous migration
 COMMENT ON COLUMN candidate_module_progress.candidate_id IS

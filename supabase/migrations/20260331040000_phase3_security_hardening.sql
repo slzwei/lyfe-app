@@ -15,12 +15,13 @@ CREATE POLICY exam_papers_admin ON public.exam_papers
     (auth.jwt() -> 'app_metadata' ->> 'role') = 'admin'
   );
 
--- exam_questions: admin ALL policy
+-- exam_questions: admin ALL policy (also clean up orphaned policy from 20260317000002)
 DROP POLICY IF EXISTS exam_questions_admin ON public.exam_questions;
+DROP POLICY IF EXISTS exam_questions_admin_select ON public.exam_questions;
 CREATE POLICY exam_questions_admin ON public.exam_questions
   FOR ALL TO authenticated
   USING (
-    (auth.jwt() -> 'app_metadata' ->> 'role') = 'admin'
+    (auth.jwt() -> 'app_metadata' ->> 'role') IN ('admin', 'director')
   );
 
 -- exam_attempts: admin ALL policy (if exists)
@@ -45,6 +46,7 @@ CREATE POLICY exam_answers_admin ON public.exam_answers
 -- access uses service-role. Add explicit deny for extra safety.
 -- ═══════════════════════════════════════════════════════════════════
 
+DROP POLICY IF EXISTS email_otp_codes_deny_all ON public.email_otp_codes;
 CREATE POLICY email_otp_codes_deny_all ON public.email_otp_codes
   FOR ALL TO authenticated
   USING (false);

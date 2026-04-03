@@ -110,24 +110,26 @@ export async function fetchTeamMember(
     memberId: string,
 ): Promise<{ member: TeamMember | null; leads: Lead[]; error: string | null }> {
     try {
-        // Fetch user
-        const { data: user, error: userError } = await supabase
-            .from('users')
-            .select('id, full_name, role, phone, email, avatar_url, is_active, created_at')
-            .eq('id', memberId)
-            .single();
+        // Fetch user and their leads in parallel (independent queries)
+        const [userResult, leadsResult] = await Promise.all([
+            supabase
+                .from('users')
+                .select('id, full_name, role, phone, email, avatar_url, is_active, created_at')
+                .eq('id', memberId)
+                .single(),
+            supabase
+                .from('leads')
+                .select(
+                    'id, assigned_to, created_by, full_name, phone, email, source, source_name, external_id, status, product_interest, notes, updated_at, created_at',
+                )
+                .eq('assigned_to', memberId)
+                .order('updated_at', { ascending: false }),
+        ]);
+
+        const { data: user, error: userError } = userResult;
+        const { data: memberLeads, error: leadsError } = leadsResult;
 
         if (userError) return { member: null, leads: [], error: userError.message };
-
-        // Fetch their leads
-        const { data: memberLeads, error: leadsError } = await supabase
-            .from('leads')
-            .select(
-                'id, assigned_to, created_by, full_name, phone, email, source, source_name, external_id, status, product_interest, notes, updated_at, created_at',
-            )
-            .eq('assigned_to', memberId)
-            .order('updated_at', { ascending: false });
-
         if (leadsError) return { member: null, leads: [], error: leadsError.message };
 
         const leadsList = (memberLeads || []) as Lead[];
@@ -204,25 +206,27 @@ export async function getTeamPerformance(
 
         const agentIds = agentList.map((a) => a.id);
 
-        // Fetch leads closed in the date range
-        const { data: leads, error: leadsError } = await supabase
-            .from('leads')
-            .select('assigned_to, status')
-            .in('assigned_to', agentIds)
-            .in('status', ['won', 'lost'])
-            .gte('updated_at', dateRange.start)
-            .lte('updated_at', dateRange.end);
+        // Fetch leads and activities in parallel (independent queries)
+        const [leadsResult, activitiesResult] = await Promise.all([
+            supabase
+                .from('leads')
+                .select('assigned_to, status')
+                .in('assigned_to', agentIds)
+                .in('status', ['won', 'lost'])
+                .gte('updated_at', dateRange.start)
+                .lte('updated_at', dateRange.end),
+            supabase
+                .from('lead_activities')
+                .select('user_id')
+                .in('user_id', agentIds)
+                .gte('created_at', dateRange.start)
+                .lte('created_at', dateRange.end),
+        ]);
+
+        const { data: leads, error: leadsError } = leadsResult;
+        const { data: activities, error: activitiesError } = activitiesResult;
 
         if (leadsError) return { data: emptyResult, error: leadsError.message };
-
-        // Fetch activities in the date range
-        const { data: activities, error: activitiesError } = await supabase
-            .from('lead_activities')
-            .select('user_id')
-            .in('user_id', agentIds)
-            .gte('created_at', dateRange.start)
-            .lte('created_at', dateRange.end);
-
         if (activitiesError) return { data: emptyResult, error: activitiesError.message };
 
         const leadsList = (leads || []) as { assigned_to: string; status: string }[];

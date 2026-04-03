@@ -320,6 +320,10 @@ export default function TeamScreen() {
                 refreshControl={
                     <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={colors.accent} />
                 }
+                removeClippedSubviews={true}
+                maxToRenderPerBatch={10}
+                windowSize={5}
+                initialNumToRender={10}
                 ListHeaderComponent={
                     <View>
                         {/* Hero Stats */}

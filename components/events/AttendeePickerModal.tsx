@@ -189,6 +189,10 @@ function TeamTab({
                     data={filteredUsers}
                     keyExtractor={(u) => u.id}
                     contentContainerStyle={{ padding: 16 }}
+                    removeClippedSubviews={true}
+                    maxToRenderPerBatch={10}
+                    windowSize={5}
+                    initialNumToRender={10}
                     renderItem={({ item }) => {
                         const isSelected = selectedAttendees.some((a) => a.user_id === item.id);
                         const avatarColor = getAvatarColor(item.full_name);

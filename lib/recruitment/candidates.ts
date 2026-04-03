@@ -49,33 +49,36 @@ export async function fetchCandidates(
         updated_at: string;
     }[];
 
-    // Fetch manager names for display
+    // Fetch manager names and interviews in parallel (independent lookups)
     const managerIds = [...new Set(typedRows.map((r) => r.assigned_manager_id))];
+    const candidateIds = typedRows.map((r) => r.id);
+
+    const [managersResult, interviewsResult] = await Promise.all([
+        managerIds.length > 0
+            ? supabase.from('users').select('id, full_name').in('id', managerIds)
+            : Promise.resolve({ data: null }),
+        candidateIds.length > 0
+            ? supabase
+                  .from('interviews')
+                  .select('*')
+                  .in('candidate_id', candidateIds)
+                  .order('datetime', { ascending: false })
+            : Promise.resolve({ data: null }),
+    ]);
+
     let managerMap: Record<string, string> = {};
-    if (managerIds.length > 0) {
-        const { data: managers } = await supabase.from('users').select('id, full_name').in('id', managerIds);
-        if (managers) {
-            (managers as { id: string; full_name: string }[]).forEach((m) => {
-                managerMap[m.id] = m.full_name;
-            });
-        }
+    if (managersResult.data) {
+        (managersResult.data as { id: string; full_name: string }[]).forEach((m) => {
+            managerMap[m.id] = m.full_name;
+        });
     }
 
-    // Fetch interviews for all candidates in one query
-    const candidateIds = typedRows.map((r) => r.id);
     let interviewMap: Record<string, Interview[]> = {};
-    if (candidateIds.length > 0) {
-        const { data: interviews } = await supabase
-            .from('interviews')
-            .select('*')
-            .in('candidate_id', candidateIds)
-            .order('datetime', { ascending: false });
-        if (interviews) {
-            (interviews as Interview[]).forEach((iv) => {
-                if (!interviewMap[iv.candidate_id]) interviewMap[iv.candidate_id] = [];
-                interviewMap[iv.candidate_id].push(iv);
-            });
-        }
+    if (interviewsResult.data) {
+        (interviewsResult.data as Interview[]).forEach((iv) => {
+            if (!interviewMap[iv.candidate_id]) interviewMap[iv.candidate_id] = [];
+            interviewMap[iv.candidate_id].push(iv);
+        });
     }
 
     // Map to RecruitmentCandidate shape
@@ -114,25 +117,19 @@ export async function fetchCandidate(
 
     if (error) return { data: null, error: error.message };
 
-    // Manager name
-    let managerName = 'Unknown';
-    if (row.assigned_manager_id) {
-        const { data: mgr } = await supabase
-            .from('users')
-            .select('full_name')
-            .eq('id', row.assigned_manager_id)
-            .single();
-        if (mgr) managerName = mgr.full_name;
-    }
-
-    // Fetch candidate profile (application details + user_id for DISC lookup)
+    // Fetch manager name and profile in parallel (independent queries)
     const profileFields =
         'user_id, completed, onboarding_step, full_name, chinese_name, alias, date_of_birth, nationality, race, gender, marital_status, address_block, address_street, address_unit, address_postal, position_applied, expected_salary, salary_period, date_available, emergency_name, emergency_relationship, emergency_contact, education, employment_history, languages, software_competencies, shorthand_wpm, typing_wpm';
-    const { data: profile } = await supabase
-        .from('candidate_profiles')
-        .select(profileFields)
-        .eq('candidate_id', candidateId)
-        .single();
+
+    const [mgrResult, profileResult] = await Promise.all([
+        row.assigned_manager_id
+            ? supabase.from('users').select('full_name').eq('id', row.assigned_manager_id).single()
+            : Promise.resolve({ data: null }),
+        supabase.from('candidate_profiles').select(profileFields).eq('candidate_id', candidateId).single(),
+    ]);
+
+    const managerName = mgrResult.data?.full_name || 'Unknown';
+    const profile = profileResult.data;
 
     // Interviews + invitation PDFs + DISC results (parallel)
     const discPromise = profile?.user_id

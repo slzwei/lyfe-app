@@ -8,23 +8,31 @@
             "developmentClient": true,
             "distribution": "internal",
             "env": {
-                "SENTRY_DISABLE_AUTO_UPLOAD": "true"
+                "SENTRY_DISABLE_AUTO_UPLOAD": "true",
+                "APP_VARIANT": "development"
             }
         },
         "preview": {
             "distribution": "internal",
             "env": {
-                "SENTRY_DISABLE_AUTO_UPLOAD": "true"
+                "SENTRY_DISABLE_AUTO_UPLOAD": "true",
+                "APP_VARIANT": "preview"
             }
         },
         "testflight": {
             "distribution": "store",
             "channel": "testflight",
-            "autoIncrement": true
+            "autoIncrement": true,
+            "env": {
+                "APP_VARIANT": "testflight"
+            }
         },
         "production": {
             "channel": "production",
-            "autoIncrement": true
+            "autoIncrement": true,
+            "env": {
+                "APP_VARIANT": "production"
+            }
         }
     },
     "submit": {

@@ -2,10 +2,33 @@
  * Auto-mock for lib/supabase.ts
  * Jest automatically uses this when tests call jest.mock('@/lib/supabase')
  * or jest.mock('./supabase') from within lib/
+ *
+ * Query tracking: every chained method call (.select, .eq, .in, .order, etc.)
+ * is recorded in __calls so tests can assert the actual query shape.
+ *
+ * Usage:
+ *   const chain = mockSupa.__getChain('leads');
+ *   chain.__resolveWith({ data: [...], error: null });
+ *   await fetchLeads(userId);
+ *   expect(chain.__calls).toContainEqual({ method: 'eq', args: ['assigned_to', userId] });
+ *   expect(chain.__calls).toContainEqual({ method: 'select', args: ['*'] });
  */
 
-function createChainMock(resolveValue: any = { data: null, error: null }) {
+interface ChainCall {
+    method: string;
+    args: any[];
+}
+
+interface ChainMock {
+    __resolveWith: (val: any) => void;
+    __calls: ChainCall[];
+    __resetCalls: () => void;
+    [key: string]: any;
+}
+
+function createChainMock(resolveValue: any = { data: null, error: null }): ChainMock {
     let _resolve = resolveValue;
+    const _calls: ChainCall[] = [];
 
     const handler: ProxyHandler<Record<string, any>> = {
         get(target, prop: string) {
@@ -14,11 +37,22 @@ function createChainMock(resolveValue: any = { data: null, error: null }) {
                     _resolve = val;
                 };
             }
+            if (prop === '__calls') {
+                return _calls;
+            }
+            if (prop === '__resetCalls') {
+                return () => {
+                    _calls.length = 0;
+                };
+            }
             if (prop === 'then') {
                 return (onFulfilled: any) => Promise.resolve(_resolve).then(onFulfilled);
             }
             if (!target[`_fn_${prop}`]) {
-                target[`_fn_${prop}`] = jest.fn(() => new Proxy({}, handler));
+                target[`_fn_${prop}`] = jest.fn((...args: any[]) => {
+                    _calls.push({ method: prop, args });
+                    return new Proxy({}, handler);
+                });
             }
             return target[`_fn_${prop}`];
         },
@@ -31,10 +65,10 @@ function createChainMock(resolveValue: any = { data: null, error: null }) {
             },
         },
         handler,
-    );
+    ) as ChainMock;
 }
 
-const chains: Record<string, any> = {};
+const chains: Record<string, ChainMock> = {};
 
 export const supabase: any = {
     from: jest.fn((table: string) => {
