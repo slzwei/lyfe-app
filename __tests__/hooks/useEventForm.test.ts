@@ -536,6 +536,154 @@ describe('useEventForm', () => {
         expect(result.current.errors.rsSlots).toBe('Slots must be at least 1');
     });
 
+    it('handleSubmit saves roadshow config when editing a roadshow event', async () => {
+        (useLocalSearchParams as jest.Mock).mockReturnValue({ eventId: 'ev-rs' });
+        mockFetchEventById.mockResolvedValue({
+            data: {
+                id: 'ev-rs',
+                title: 'Roadshow',
+                event_type: 'roadshow',
+                event_date: '2026-03-10',
+                start_time: '09:00',
+                end_time: '17:00',
+                location: 'Mall',
+                description: null,
+                attendees: [],
+                external_attendees: [],
+            },
+        });
+        mockFetchRoadshowConfig.mockResolvedValue({
+            data: {
+                weekly_cost: 100,
+                slots_per_day: 5,
+                expected_start_time: '09:00',
+                late_grace_minutes: 15,
+                suggested_sitdowns: 3,
+                suggested_pitches: 2,
+                suggested_closed: 1,
+            },
+        });
+        mockSaveRoadshowConfig.mockResolvedValue({ error: null });
+
+        // Need to mock supabase for roadshow_attendance check
+        const mockSupa = require('@/lib/supabase').supabase;
+        mockSupa.__resetChains();
+        const attChain = mockSupa.__getChain('roadshow_attendance');
+        attChain.__resolveWith({ data: [], error: null });
+
+        const { result } = renderHook(() => useEventForm());
+
+        await act(async () => {
+            await new Promise((r) => setTimeout(r, 50));
+        });
+
+        expect(result.current.isEditing).toBe(true);
+
+        await act(async () => {
+            await result.current.handleSubmit();
+        });
+
+        expect(mockUpdateEvent).toHaveBeenCalledWith('ev-rs', expect.objectContaining({ title: 'Roadshow' }));
+        expect(mockSaveRoadshowConfig).toHaveBeenCalledWith(
+            'ev-rs',
+            expect.objectContaining({
+                weekly_cost: 100,
+                slots_per_day: 5,
+            }),
+        );
+    });
+
+    it('handleSubmit shows partial save alert when roadshow config save fails', async () => {
+        const alertSpy = jest.spyOn(Alert, 'alert');
+        (useLocalSearchParams as jest.Mock).mockReturnValue({ eventId: 'ev-rs' });
+        mockFetchEventById.mockResolvedValue({
+            data: {
+                id: 'ev-rs',
+                title: 'Roadshow',
+                event_type: 'roadshow',
+                event_date: '2026-03-10',
+                start_time: '09:00',
+                end_time: '17:00',
+                location: 'Mall',
+                description: null,
+                attendees: [],
+                external_attendees: [],
+            },
+        });
+        mockFetchRoadshowConfig.mockResolvedValue({
+            data: {
+                weekly_cost: 100,
+                slots_per_day: 5,
+                expected_start_time: '09:00',
+                late_grace_minutes: 15,
+                suggested_sitdowns: 3,
+                suggested_pitches: 2,
+                suggested_closed: 1,
+            },
+        });
+        mockSaveRoadshowConfig.mockResolvedValue({ error: 'Config save failed' });
+
+        const mockSupa = require('@/lib/supabase').supabase;
+        mockSupa.__resetChains();
+        const attChain = mockSupa.__getChain('roadshow_attendance');
+        attChain.__resolveWith({ data: [], error: null });
+
+        const { result } = renderHook(() => useEventForm());
+
+        await act(async () => {
+            await new Promise((r) => setTimeout(r, 50));
+        });
+
+        await act(async () => {
+            await result.current.handleSubmit();
+        });
+
+        expect(alertSpy).toHaveBeenCalledWith('Partial Save', expect.any(String));
+    });
+
+    it('loads roadshow config and detects locked state when attendance exists', async () => {
+        (useLocalSearchParams as jest.Mock).mockReturnValue({ eventId: 'ev-locked' });
+        mockFetchEventById.mockResolvedValue({
+            data: {
+                id: 'ev-locked',
+                title: 'Locked Roadshow',
+                event_type: 'roadshow',
+                event_date: '2026-03-10',
+                start_time: '09:00',
+                end_time: '17:00',
+                location: 'Mall',
+                description: null,
+                attendees: [],
+                external_attendees: [],
+            },
+        });
+        mockFetchRoadshowConfig.mockResolvedValue({
+            data: {
+                weekly_cost: 100,
+                slots_per_day: 5,
+                expected_start_time: '09:00',
+                late_grace_minutes: 15,
+                suggested_sitdowns: 3,
+                suggested_pitches: 2,
+                suggested_closed: 1,
+            },
+        });
+
+        const mockSupa = require('@/lib/supabase').supabase;
+        mockSupa.__resetChains();
+        const attChain = mockSupa.__getChain('roadshow_attendance');
+        attChain.__resolveWith({ data: [{ id: 'att-1' }], error: null }); // has attendance → locked
+
+        const { result } = renderHook(() => useEventForm());
+
+        await act(async () => {
+            await new Promise((r) => setTimeout(r, 50));
+        });
+
+        expect(result.current.isEditing).toBe(true);
+        expect(result.current.roadshowCfg.rsConfigLocked).toBe(true);
+    });
+
     it('handleSubmit with empty description passes null', async () => {
         const { result } = renderHook(() => useEventForm());
 

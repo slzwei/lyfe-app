@@ -524,6 +524,182 @@ describe('AuthContext — checkInvitationStatus', () => {
     });
 });
 
+// ── onAuthStateChange ──
+
+describe('AuthContext — onAuthStateChange', () => {
+    it('handles SIGNED_IN event with valid profile', async () => {
+        const { result } = renderHook(() => useAuth(), { wrapper });
+        await act(async () => {});
+
+        // Capture the auth state change callback
+        const authCallback = mockSupa.auth.onAuthStateChange.mock.calls[0][0];
+
+        // Set up profile fetch for the SIGNED_IN event
+        mockSupa.__resetChains();
+        const usersChain = mockSupa.__getChain('users');
+        mockResolve(usersChain, { data: MOCK_PROFILE, error: null });
+
+        await act(async () => {
+            await authCallback('SIGNED_IN', MOCK_SESSION);
+        });
+
+        expect(result.current.isAuthenticated).toBe(true);
+        expect(result.current.user?.full_name).toBe('Test User');
+    });
+
+    it('handles SIGNED_IN event when profile not found', async () => {
+        const { result } = renderHook(() => useAuth(), { wrapper });
+        await act(async () => {});
+
+        const authCallback = mockSupa.auth.onAuthStateChange.mock.calls[0][0];
+
+        mockSupa.__resetChains();
+        const usersChain = mockSupa.__getChain('users');
+        mockResolve(usersChain, { data: null, error: { code: 'PGRST116', message: 'Not found' } });
+
+        const consoleSpy = jest.spyOn(console, 'error').mockImplementation();
+        await act(async () => {
+            await authCallback('SIGNED_IN', MOCK_SESSION);
+        });
+        consoleSpy.mockRestore();
+
+        expect(result.current.isAuthenticated).toBe(false);
+        expect(result.current.user).toBeNull();
+    });
+
+    it('handles SIGNED_OUT event', async () => {
+        // Start authenticated
+        mockSupa.auth.getSession.mockResolvedValue({ data: { session: MOCK_SESSION } });
+        const usersChain = mockSupa.__getChain('users');
+        mockResolve(usersChain, { data: MOCK_PROFILE, error: null });
+
+        const { result } = renderHook(() => useAuth(), { wrapper });
+        await act(async () => {});
+        expect(result.current.isAuthenticated).toBe(true);
+
+        const authCallback = mockSupa.auth.onAuthStateChange.mock.calls[0][0];
+
+        await act(async () => {
+            await authCallback('SIGNED_OUT', null);
+        });
+
+        expect(result.current.isAuthenticated).toBe(false);
+        expect(result.current.user).toBeNull();
+        expect(result.current.session).toBeNull();
+    });
+
+    it('ignores INITIAL_SESSION and TOKEN_REFRESHED events', async () => {
+        const { result } = renderHook(() => useAuth(), { wrapper });
+        await act(async () => {});
+
+        const authCallback = mockSupa.auth.onAuthStateChange.mock.calls[0][0];
+
+        await act(async () => {
+            await authCallback('INITIAL_SESSION', MOCK_SESSION);
+            await authCallback('TOKEN_REFRESHED', MOCK_SESSION);
+        });
+
+        // Should still be not authenticated (no session was loaded in init)
+        expect(result.current.isAuthenticated).toBe(false);
+    });
+});
+
+// ── Biometrics with stored refresh token ──
+
+describe('BiometricsContext — refresh token flow', () => {
+    it('authenticateWithBiometrics uses stored refresh token', async () => {
+        mockBio.authenticate.mockResolvedValue(true);
+        mockBio.getBiometricRefreshToken.mockResolvedValue('stored-refresh-tok');
+        mockSupa.auth.refreshSession.mockResolvedValue({
+            data: { session: MOCK_SESSION },
+            error: null,
+        });
+
+        // Profile fetch after biometric auth
+        const usersChain = mockSupa.__getChain('users');
+        mockResolve(usersChain, { data: MOCK_PROFILE, error: null });
+
+        const { result } = renderHook(() => useAuth(), { wrapper });
+        await act(async () => {});
+
+        await act(async () => {
+            const res = await result.current.authenticateWithBiometrics();
+            expect(res.success).toBe(true);
+        });
+
+        expect(mockSupa.auth.refreshSession).toHaveBeenCalledWith({
+            refresh_token: 'stored-refresh-tok',
+        });
+        expect(mockBio.clearBiometricRefreshToken).toHaveBeenCalled();
+        expect(result.current.isAuthenticated).toBe(true);
+    });
+
+    it('returns error when stored refresh token is expired', async () => {
+        mockBio.authenticate.mockResolvedValue(true);
+        mockBio.getBiometricRefreshToken.mockResolvedValue('expired-tok');
+        mockSupa.auth.refreshSession.mockResolvedValue({
+            data: { session: null },
+            error: { message: 'Token expired' },
+        });
+
+        const { result } = renderHook(() => useBiometrics(), { wrapper });
+        await act(async () => {});
+
+        await act(async () => {
+            const res = await result.current.authenticateWithBiometrics();
+            expect(res.success).toBe(false);
+            expect(res.error).toMatch(/session expired/i);
+        });
+
+        expect(mockBio.clearBiometricRefreshToken).toHaveBeenCalled();
+    });
+});
+
+// ── signOut with biometrics ──
+
+describe('AuthContext — signOut stores refresh token when biometrics enabled', () => {
+    it('stores refresh token before revoking session', async () => {
+        // Start with active session
+        mockSupa.auth.getSession.mockResolvedValue({ data: { session: MOCK_SESSION } });
+        const usersChain = mockSupa.__getChain('users');
+        mockResolve(usersChain, { data: MOCK_PROFILE, error: null });
+
+        const { result } = renderHook(() => useAuth(), { wrapper });
+        await act(async () => {});
+        expect(result.current.isAuthenticated).toBe(true);
+
+        // Enable biometrics for signOut
+        mockBio.isBiometricsEnabled.mockResolvedValue(true);
+        // getSession will be called again during signOut to get the refresh token
+        mockSupa.auth.getSession.mockResolvedValue({ data: { session: MOCK_SESSION } });
+
+        await act(async () => {
+            await result.current.signOut();
+        });
+
+        expect(mockBio.storeBiometricRefreshToken).toHaveBeenCalledWith('refresh-tok');
+        expect(mockSupa.auth.signOut).toHaveBeenCalled();
+        expect(result.current.pendingBiometricSession).toBe(true);
+    });
+});
+
+// ── Biometric gate with stored token ──
+
+describe('AuthContext — biometric gate with stored token', () => {
+    it('shows biometric gate when no session but stored refresh token exists', async () => {
+        mockSupa.auth.getSession.mockResolvedValue({ data: { session: null } });
+        mockBio.isBiometricsEnabled.mockResolvedValue(true);
+        mockBio.isBiometricsAvailable.mockResolvedValue(true);
+        mockBio.getBiometricRefreshToken.mockResolvedValue('stored-tok');
+
+        const { result } = renderHook(() => useAuth(), { wrapper });
+        await act(async () => {});
+
+        expect(result.current.pendingBiometricSession).toBe(true);
+        expect(result.current.isAuthenticated).toBe(false);
+    });
+});
+
 // ── Hook isolation ──
 
 describe('Hook isolation', () => {

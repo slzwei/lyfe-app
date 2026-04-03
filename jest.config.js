@@ -20,15 +20,16 @@ module.exports = {
         'constants/**/*.ts',
         'app/**/*.tsx',
         '!**/*.d.ts',
+        '!lib/supabase.ts', // Module-level createClient() — mocked globally, tested via __tests__/lib/supabase.test.ts
     ],
     coverageThreshold: {
-        // Current: stmts 63.2%, branches 55.6%, funcs 58.3%, lines 64.2%
+        // Current: stmts 82.2%, branches 72.8%, funcs 73.4%, lines 84.0%
         // Set ~2% below current to catch regressions
         global: {
-            statements: 61,
-            branches: 53,
-            functions: 56,
-            lines: 62,
+            statements: 80,
+            branches: 70,
+            functions: 71,
+            lines: 82,
         },
     },
 };

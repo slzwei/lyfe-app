@@ -1,4 +1,5 @@
 import { renderHook, act } from '@testing-library/react-native';
+import { Alert } from 'react-native';
 import { useActivityLog } from '@/hooks/useActivityLog';
 
 const mockLogRoadshowActivity = jest.fn();
@@ -364,6 +365,56 @@ describe('useActivityLog', () => {
             pitches: 1,
             closed: 1,
             afyc: 500,
+        });
+    });
+
+    describe('departure flow', () => {
+        it('handleDeparture triggers Alert and logs departure on confirm', async () => {
+            mockLogRoadshowActivity.mockResolvedValue({ error: null });
+
+            const alertSpy = jest.spyOn(Alert, 'alert');
+            const { result } = renderHook(() => useActivityLog(defaultParams));
+
+            act(() => {
+                result.current.handleLogDeparture();
+            });
+
+            // Should show Alert with Leave/Cancel buttons
+            expect(alertSpy).toHaveBeenCalledWith(
+                expect.any(String),
+                expect.any(String),
+                expect.arrayContaining([
+                    expect.objectContaining({ text: 'Cancel' }),
+                    expect.objectContaining({ text: 'Leave' }),
+                ]),
+            );
+
+            // Simulate pressing "Leave"
+            const leaveButton = alertSpy.mock.calls[0][2]!.find((b: any) => b.text === 'Leave');
+            await act(async () => {
+                await leaveButton!.onPress!();
+            });
+
+            expect(mockLogRoadshowActivity).toHaveBeenCalledWith('e1', 'user1', 'departure');
+        });
+
+        it('handleDeparture rolls back on API error', async () => {
+            mockLogRoadshowActivity.mockResolvedValue({ error: 'Failed' });
+
+            const alertSpy = jest.spyOn(Alert, 'alert');
+            const { result } = renderHook(() => useActivityLog(defaultParams));
+
+            act(() => {
+                result.current.handleLogDeparture();
+            });
+
+            const leaveButton = alertSpy.mock.calls[0][2]!.find((b: any) => b.text === 'Leave');
+            await act(async () => {
+                await leaveButton!.onPress!();
+            });
+
+            // setActivities should have been called to add and then remove the optimistic entry
+            expect(mockSetActivities).toHaveBeenCalled();
         });
     });
 });

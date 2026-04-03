@@ -26,17 +26,44 @@ jest.mock('expo-local-authentication', () => ({
     },
 }));
 
-// Mock expo-router
-jest.mock('expo-router', () => ({
-    useRouter: jest.fn(() => ({
-        push: jest.fn(),
-        replace: jest.fn(),
-        back: jest.fn(),
-    })),
-    useLocalSearchParams: jest.fn(() => ({})),
-    useFocusEffect: jest.fn((cb) => cb()),
-    Link: 'Link',
-    Tabs: { Screen: 'Screen' },
+// Mock expo-router — functional Stack/Tabs components for layout testing
+jest.mock('expo-router', () => {
+    const React = require('react');
+    const { View } = require('react-native');
+
+    const Stack = (props) => React.createElement(View, { testID: 'mock-stack' }, props.children);
+    Stack.Screen = () => null;
+
+    const Tabs = (props) => React.createElement(View, { testID: 'mock-tabs' }, props.children);
+    Tabs.Screen = () => null;
+
+    const routerObj = { push: jest.fn(), replace: jest.fn(), back: jest.fn(), canGoBack: () => false };
+
+    return {
+        Stack,
+        Tabs,
+        Redirect: ({ href }) => React.createElement(View, { testID: `redirect-${href}` }),
+        Link: ({ children }) => React.createElement(View, null, children),
+        router: routerObj,
+        useRouter: jest.fn(() => routerObj),
+        useLocalSearchParams: jest.fn(() => ({})),
+        useSegments: jest.fn(() => []),
+        useNavigationContainerRef: jest.fn(() => ({ current: null })),
+        useFocusEffect: jest.fn((cb) => cb()),
+        usePathname: jest.fn(() => '/'),
+    };
+});
+
+// Mock expo-splash-screen (needed by root layout)
+jest.mock('expo-splash-screen', () => ({
+    preventAutoHideAsync: jest.fn(),
+    hideAsync: jest.fn(),
+}));
+
+// Mock expo-font (needed by root layout)
+jest.mock('expo-font', () => ({
+    useFonts: jest.fn(() => [true, null]),
+    isLoaded: jest.fn(() => true),
 }));
 
 // Mock @sentry/react-native

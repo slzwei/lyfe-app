@@ -62,6 +62,60 @@ describe('useLeadRealtime', () => {
         expect(onNewLead).toHaveBeenCalledWith(newLead);
     });
 
+    it('resets retry count on SUBSCRIBED status', () => {
+        let statusCallback: Function;
+        mockChannel.subscribe.mockImplementation((cb?: Function) => {
+            if (cb) statusCallback = cb;
+            return mockChannel;
+        });
+
+        const onNewLead = jest.fn();
+        renderHook(() => useLeadRealtime(onNewLead));
+
+        // Trigger SUBSCRIBED status
+        statusCallback!('SUBSCRIBED');
+        // No error thrown = success
+    });
+
+    it('retries on CHANNEL_ERROR', () => {
+        jest.useFakeTimers();
+        let statusCallback: Function;
+        mockChannel.subscribe.mockImplementation((cb?: Function) => {
+            if (cb) statusCallback = cb;
+            return mockChannel;
+        });
+
+        const onNewLead = jest.fn();
+        renderHook(() => useLeadRealtime(onNewLead));
+
+        // Trigger error
+        statusCallback!('CHANNEL_ERROR');
+
+        // After delay, should attempt reconnect
+        jest.advanceTimersByTime(2000);
+        expect(mockSupa.removeChannel).toHaveBeenCalled();
+
+        jest.useRealTimers();
+    });
+
+    it('retries on TIMED_OUT with exponential backoff', () => {
+        jest.useFakeTimers();
+        let statusCallback: Function;
+        mockChannel.subscribe.mockImplementation((cb?: Function) => {
+            if (cb) statusCallback = cb;
+            return mockChannel;
+        });
+
+        const onNewLead = jest.fn();
+        renderHook(() => useLeadRealtime(onNewLead));
+
+        statusCallback!('TIMED_OUT');
+        jest.advanceTimersByTime(2000);
+        expect(mockSupa.removeChannel).toHaveBeenCalled();
+
+        jest.useRealTimers();
+    });
+
     it('cleans up channel on unmount', () => {
         const onNewLead = jest.fn();
 

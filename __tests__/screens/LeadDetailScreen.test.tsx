@@ -313,8 +313,97 @@ describe('LeadDetailScreen', () => {
         const { getByTestId } = render(<LeadDetailScreen />);
 
         await waitFor(() => {
-            // When coming from team tab, header title shows lead name
             expect(getByTestId('screen-header')).toBeTruthy();
+        });
+    });
+
+    it('renders recording card when recording_url exists', async () => {
+        (fetchLead as jest.Mock).mockResolvedValue({
+            data: { ...MOCK_LEAD, recording_url: 'https://example.com/call.mp3' },
+            error: null,
+        });
+
+        const { getByText } = render(<LeadDetailScreen />);
+
+        await waitFor(() => {
+            expect(getByText('Call Recording')).toBeTruthy();
+        });
+    });
+
+    it('renders transcript card when transcript exists', async () => {
+        (fetchLead as jest.Mock).mockResolvedValue({
+            data: { ...MOCK_LEAD, transcript: 'Hello, I am interested in insurance.' },
+            error: null,
+        });
+
+        const { getByText } = render(<LeadDetailScreen />);
+
+        await waitFor(() => {
+            expect(getByText('Call Transcript')).toBeTruthy();
+        });
+    });
+
+    it('renders lead with contacted status', async () => {
+        (fetchLead as jest.Mock).mockResolvedValue({
+            data: { ...MOCK_LEAD, status: 'contacted' },
+            error: null,
+        });
+
+        const { getByTestId } = render(<LeadDetailScreen />);
+
+        await waitFor(() => {
+            expect(getByTestId('status-badge')).toBeTruthy();
+        });
+    });
+
+    it('renders lead without email', async () => {
+        (fetchLead as jest.Mock).mockResolvedValue({
+            data: { ...MOCK_LEAD, email: null },
+            error: null,
+        });
+
+        const { queryByText } = render(<LeadDetailScreen />);
+
+        await waitFor(() => {
+            expect(queryByText('john@example.com')).toBeNull();
+        });
+    });
+
+    it('renders lead from MKTR source', async () => {
+        (fetchLead as jest.Mock).mockResolvedValue({
+            data: { ...MOCK_LEAD, source: 'mktr', source_name: 'mktr' },
+            error: null,
+        });
+
+        const { getByTestId } = render(<LeadDetailScreen />);
+
+        await waitFor(() => {
+            expect(getByTestId('status-badge')).toBeTruthy();
+        });
+    });
+
+    it('renders multiple activities', async () => {
+        (fetchLeadActivities as jest.Mock).mockResolvedValue({
+            data: [
+                ...MOCK_ACTIVITIES,
+                {
+                    id: 'act-2',
+                    lead_id: 'lead-1',
+                    user_id: 'user-1',
+                    type: 'call',
+                    description: 'Follow up call',
+                    metadata: {},
+                    created_at: '2026-03-06T10:00:00Z',
+                    actor_name: 'Test User',
+                },
+            ],
+            error: null,
+        });
+
+        const { getByText } = render(<LeadDetailScreen />);
+
+        await waitFor(() => {
+            expect(getByText('2')).toBeTruthy(); // activity count
         });
     });
 });

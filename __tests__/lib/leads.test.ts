@@ -168,6 +168,66 @@ describe('createLead', () => {
         expect(mockSupa.from).toHaveBeenCalledWith('lead_activities');
     });
 
+    it('returns error when full_name is empty', async () => {
+        const result = await createLead(
+            {
+                full_name: '  ',
+                phone: '+65123',
+                email: null,
+                source: 'referral',
+                product_interest: 'life' as const,
+                notes: null,
+            },
+            'agent-1',
+        );
+        expect(result.error).toBe('full_name is required');
+    });
+
+    it('returns error when source is empty', async () => {
+        const result = await createLead(
+            {
+                full_name: 'John',
+                phone: '+65123',
+                email: null,
+                source: '' as any,
+                product_interest: 'life' as const,
+                notes: null,
+            },
+            'agent-1',
+        );
+        expect(result.error).toBe('source is required');
+    });
+
+    it('returns error for invalid phone format', async () => {
+        const result = await createLead(
+            {
+                full_name: 'John',
+                phone: 'abc',
+                email: null,
+                source: 'referral',
+                product_interest: 'life' as const,
+                notes: null,
+            },
+            'agent-1',
+        );
+        expect(result.error).toBe('Invalid phone format');
+    });
+
+    it('returns error for invalid email format', async () => {
+        const result = await createLead(
+            {
+                full_name: 'John',
+                phone: '+65123456',
+                email: 'bad-email',
+                source: 'referral',
+                product_interest: 'life' as const,
+                notes: null,
+            },
+            'agent-1',
+        );
+        expect(result.error).toBe('Invalid email format');
+    });
+
     it('returns error when insert fails', async () => {
         const chain = mockSupa.__getChain('leads');
         mockResolve(chain, { data: null, error: { message: 'Duplicate phone' } });

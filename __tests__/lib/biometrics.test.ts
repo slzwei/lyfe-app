@@ -13,6 +13,9 @@ import {
     hasShownBiometricsPrompt,
     markBiometricsPromptShown,
     authenticate,
+    storeBiometricRefreshToken,
+    getBiometricRefreshToken,
+    clearBiometricRefreshToken,
 } from '@/lib/biometrics';
 
 const mockLA = LocalAuthentication as jest.Mocked<typeof LocalAuthentication>;
@@ -229,5 +232,84 @@ describe('authenticate', () => {
         mockLA.authenticateAsync.mockRejectedValue(new Error('Sensor error'));
 
         expect(await authenticate('Sign in')).toBe(false);
+    });
+});
+
+// ── storeBiometricRefreshToken ──
+
+describe('storeBiometricRefreshToken', () => {
+    it('stores token with timestamp', async () => {
+        jest.useFakeTimers();
+        jest.setSystemTime(new Date('2026-04-01T00:00:00Z'));
+
+        await storeBiometricRefreshToken('refresh-tok-123');
+
+        expect(mockSS.setItemAsync).toHaveBeenCalledWith(
+            'lyfe_biometric_refresh_token',
+            expect.stringContaining('refresh-tok-123'),
+        );
+        const storedPayload = JSON.parse(mockSS.setItemAsync.mock.calls[0][1]);
+        expect(storedPayload.token).toBe('refresh-tok-123');
+        expect(storedPayload.storedAt).toBeDefined();
+
+        jest.useRealTimers();
+    });
+});
+
+// ── getBiometricRefreshToken ──
+
+describe('getBiometricRefreshToken', () => {
+    it('returns null when no stored token', async () => {
+        mockSS.getItemAsync.mockResolvedValue(null);
+
+        expect(await getBiometricRefreshToken()).toBeNull();
+    });
+
+    it('returns token from new format when not expired', async () => {
+        jest.useFakeTimers();
+        jest.setSystemTime(new Date('2026-04-01T00:00:00Z'));
+
+        const payload = JSON.stringify({ token: 'refresh-tok', storedAt: Date.now() - 1000 });
+        mockSS.getItemAsync.mockResolvedValue(payload);
+
+        expect(await getBiometricRefreshToken()).toBe('refresh-tok');
+
+        jest.useRealTimers();
+    });
+
+    it('returns null and clears expired token', async () => {
+        jest.useFakeTimers();
+        jest.setSystemTime(new Date('2026-04-01T00:00:00Z'));
+
+        // Token stored 8 days ago (past 7-day max age)
+        const payload = JSON.stringify({ token: 'old-tok', storedAt: Date.now() - 8 * 24 * 60 * 60 * 1000 });
+        mockSS.getItemAsync.mockResolvedValue(payload);
+
+        expect(await getBiometricRefreshToken()).toBeNull();
+        expect(mockSS.deleteItemAsync).toHaveBeenCalledWith('lyfe_biometric_refresh_token');
+
+        jest.useRealTimers();
+    });
+
+    it('returns legacy plain-string token', async () => {
+        mockSS.getItemAsync.mockResolvedValue('plain-legacy-token');
+
+        expect(await getBiometricRefreshToken()).toBe('plain-legacy-token');
+    });
+
+    it('returns null on SecureStore error', async () => {
+        mockSS.getItemAsync.mockRejectedValue(new Error('Keychain error'));
+
+        expect(await getBiometricRefreshToken()).toBeNull();
+    });
+});
+
+// ── clearBiometricRefreshToken ──
+
+describe('clearBiometricRefreshToken', () => {
+    it('deletes the stored token', async () => {
+        await clearBiometricRefreshToken();
+
+        expect(mockSS.deleteItemAsync).toHaveBeenCalledWith('lyfe_biometric_refresh_token');
     });
 });

@@ -22,6 +22,7 @@ import {
     fetchModuleItemsWithProgress,
     updateModuleItemProgress,
     fetchModuleItemSummaries,
+    getCandidateIdForUser,
 } from '@/lib/roadmap';
 import type {
     RoadmapProgramme,
@@ -1234,5 +1235,85 @@ describe('fetchModuleItemSummaries', () => {
 
         expect(result.error).toBe('Query failed');
         expect(result.data.size).toBe(0);
+    });
+});
+
+// ── getCandidateIdForUser ──
+
+describe('getCandidateIdForUser', () => {
+    it('returns candidate_id when found', async () => {
+        mockSupa.__getChain('candidate_profiles').__resolveWith({
+            data: { candidate_id: 'cand-1' },
+            error: null,
+        });
+
+        const result = await getCandidateIdForUser('user-1');
+        expect(result).toBe('cand-1');
+    });
+
+    it('returns null when not found', async () => {
+        mockSupa.__getChain('candidate_profiles').__resolveWith({ data: null, error: null });
+
+        const result = await getCandidateIdForUser('user-1');
+        expect(result).toBeNull();
+    });
+
+    it('returns null on error', async () => {
+        mockSupa.__getChain('candidate_profiles').__resolveWith({
+            data: null,
+            error: { message: 'DB error' },
+        });
+
+        const result = await getCandidateIdForUser('user-1');
+        expect(result).toBeNull();
+    });
+});
+
+// ── fetchModuleItemsWithProgress ──
+
+describe('fetchModuleItemsWithProgress', () => {
+    it('returns items with progress merged', async () => {
+        mockSupa.__getChain('roadmap_module_items').__resolveWith({
+            data: [
+                { id: 'item-1', module_id: 'm1', title: 'Attend session', item_type: 'attendance', sort_order: 1 },
+                { id: 'item-2', module_id: 'm1', title: 'Read material', item_type: 'material', sort_order: 2 },
+            ],
+            error: null,
+        });
+        mockSupa.__getChain('candidate_module_item_progress').__resolveWith({
+            data: [{ module_item_id: 'item-1', completed: true, completed_at: '2026-03-10' }],
+            error: null,
+        });
+
+        const result = await fetchModuleItemsWithProgress('m1', 'cand-1');
+        expect(result.error).toBeNull();
+        expect(result.data).toHaveLength(2);
+        expect(result.data![0].progress).toBeTruthy();
+        expect(result.data![0].progress!.completed).toBe(true);
+        expect(result.data![1].progress).toBeNull();
+    });
+
+    it('returns error when items fetch fails', async () => {
+        mockSupa.__getChain('roadmap_module_items').__resolveWith({
+            data: null,
+            error: { message: 'Items query failed' },
+        });
+        mockSupa.__getChain('candidate_module_item_progress').__resolveWith({ data: [], error: null });
+
+        const result = await fetchModuleItemsWithProgress('m1', 'cand-1');
+        expect(result.error).toBe('Items query failed');
+        expect(result.data).toBeNull();
+    });
+
+    it('returns items with empty progress when no progress records exist', async () => {
+        mockSupa.__getChain('roadmap_module_items').__resolveWith({
+            data: [{ id: 'item-1', module_id: 'm1', title: 'Task', item_type: 'material', sort_order: 1 }],
+            error: null,
+        });
+        mockSupa.__getChain('candidate_module_item_progress').__resolveWith({ data: [], error: null });
+
+        const result = await fetchModuleItemsWithProgress('m1', 'cand-1');
+        expect(result.data).toHaveLength(1);
+        expect(result.data![0].progress).toBeNull();
     });
 });

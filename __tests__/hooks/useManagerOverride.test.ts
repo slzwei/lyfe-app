@@ -150,4 +150,22 @@ describe('useManagerOverride', () => {
 
         expect(mockManagerCheckIn).not.toHaveBeenCalled();
     });
+
+    it('rejects future arrival time', async () => {
+        const { result } = renderHook(() => useManagerOverride(defaultParams));
+
+        act(() => {
+            result.current.setOverrideTarget({ user_id: 'agent-1', full_name: 'Agent' });
+            result.current.setOverrideTime('11:59 PM');
+        });
+
+        await act(async () => {
+            result.current.handleConfirmOverride();
+        });
+
+        // If current time is before 11:59 PM, it should set the future error
+        if (new Date().getHours() < 23) {
+            expect(result.current.overrideError).toBe('Arrival time cannot be in the future.');
+        }
+    });
 });

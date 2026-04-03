@@ -3,7 +3,14 @@
  */
 import { supabase } from '@/lib/supabase';
 
-import { submitExamAttempt, submitVarkAttempt, fetchExamResult } from '@/lib/exams';
+import {
+    submitExamAttempt,
+    submitVarkAttempt,
+    submitEnneagramAttempt,
+    submitDiscAttempt,
+    fetchExamPapersWithAttempts,
+    fetchExamResult,
+} from '@/lib/exams';
 import type { ExamQuestion } from '@/types/exam';
 
 jest.mock('@/lib/supabase');
@@ -524,5 +531,184 @@ describe('submitVarkAttempt', () => {
 
         expect(result.data).toBeNull();
         expect(result.error).toBe('Failed to save your answers. Please try again.');
+    });
+});
+
+// ── fetchExamPapersWithAttempts ──
+
+describe('fetchExamPapersWithAttempts', () => {
+    it('returns papers and stats on success', async () => {
+        const papersChain = mockSupa.__getChain('exam_papers');
+        mockResolve(papersChain, {
+            data: [
+                { id: 'p1', code: 'M5', display_order: 1, is_active: true },
+                { id: 'p2', code: 'M9', display_order: 2, is_active: true },
+            ],
+            error: null,
+        });
+
+        const attemptsChain = mockSupa.__getChain('exam_attempts');
+        mockResolve(attemptsChain, {
+            data: [
+                { paper_id: 'p1', score: 4, percentage: 80, passed: true, submitted_at: '2026-03-05T00:00:00Z' },
+                { paper_id: 'p1', score: 5, percentage: 100, passed: true, submitted_at: '2026-03-06T00:00:00Z' },
+                { paper_id: 'p2', score: 2, percentage: 40, passed: false, submitted_at: '2026-03-04T00:00:00Z' },
+            ],
+            error: null,
+        });
+
+        const result = await fetchExamPapersWithAttempts('u1');
+        expect(result.error).toBeNull();
+        expect(result.papers).toHaveLength(2);
+        expect(result.stats['p1']).toEqual({
+            attemptCount: 2,
+            bestScore: 100,
+            lastAttemptDate: '2026-03-06T00:00:00Z',
+            bestPassed: true,
+        });
+        expect(result.stats['p2']).toEqual({
+            attemptCount: 1,
+            bestScore: 40,
+            lastAttemptDate: '2026-03-04T00:00:00Z',
+            bestPassed: false,
+        });
+    });
+
+    it('returns error when papers query fails', async () => {
+        const papersChain = mockSupa.__getChain('exam_papers');
+        mockResolve(papersChain, { data: null, error: { message: 'Query failed' } });
+
+        const result = await fetchExamPapersWithAttempts('u1');
+        expect(result.error).toBe('Query failed');
+        expect(result.papers).toEqual([]);
+        expect(result.stats).toEqual({});
+    });
+
+    it('handles no attempts gracefully', async () => {
+        const papersChain = mockSupa.__getChain('exam_papers');
+        mockResolve(papersChain, { data: [{ id: 'p1', code: 'M5' }], error: null });
+
+        const attemptsChain = mockSupa.__getChain('exam_attempts');
+        mockResolve(attemptsChain, { data: null, error: null });
+
+        const result = await fetchExamPapersWithAttempts('u1');
+        expect(result.papers).toHaveLength(1);
+        expect(result.stats).toEqual({});
+    });
+});
+
+// ── submitEnneagramAttempt ──
+
+const ENNEAGRAM_QUESTIONS: ExamQuestion[] = [
+    {
+        id: 'eq1',
+        paper_id: 'p-enn',
+        question_number: 1,
+        question_text: 'I tend to be...',
+        options: { A: 'Principled', B: 'Caring' },
+        correct_answer: 'A:1,B:2',
+        has_latex: false,
+        explanation: '{"quiz_type":"enneagram","types":{"A":"1","B":"2"}}',
+        explanation_has_latex: false,
+    },
+    {
+        id: 'eq2',
+        paper_id: 'p-enn',
+        question_number: 2,
+        question_text: 'I usually...',
+        options: { A: 'Achieve', B: 'Reflect' },
+        correct_answer: 'A:3,B:4',
+        has_latex: false,
+        explanation: '{"quiz_type":"enneagram","types":{"A":"3","B":"4"}}',
+        explanation_has_latex: false,
+    },
+];
+
+describe('submitEnneagramAttempt', () => {
+    it('submits personality quiz with Enneagram scores', async () => {
+        mockSupa.rpc.mockResolvedValueOnce({ data: { attempt_id: 'enn-attempt-1' }, error: null });
+
+        const result = await submitEnneagramAttempt(
+            {
+                userId: 'u1',
+                paperId: 'p-enn',
+                questions: ENNEAGRAM_QUESTIONS,
+                answers: { eq1: 'A', eq2: 'B' },
+                status: 'submitted',
+                startedAt: new Date('2026-03-08T11:55:00Z').getTime(),
+            },
+            'ENNEAGRAM',
+        );
+
+        expect(result.error).toBeNull();
+        expect(result.data?.score).toBe(0);
+        expect(result.data?.passed).toBe(false);
+        expect(result.data?.paperCode).toBe('ENNEAGRAM');
+        expect(result.data?.personalityResults).toBeDefined();
+        expect(result.data?.answers).toHaveLength(2);
+    });
+
+    it('returns error on RPC failure', async () => {
+        mockSupa.rpc.mockResolvedValueOnce({ data: null, error: { message: 'DB error' } });
+
+        const result = await submitEnneagramAttempt(
+            {
+                userId: 'u1',
+                paperId: 'p-enn',
+                questions: ENNEAGRAM_QUESTIONS,
+                answers: { eq1: 'A' },
+                status: 'submitted',
+                startedAt: Date.now(),
+            },
+            'ENNEAGRAM',
+        );
+
+        expect(result.data).toBeNull();
+        expect(result.error).toBe('DB error');
+    });
+});
+
+// ── submitDiscAttempt ──
+
+describe('submitDiscAttempt', () => {
+    const DISC_RESULTS = {
+        scores: { D: 25, I: 30, S: 20, C: 25 },
+        percentages: { D: 25, I: 30, S: 20, C: 25 },
+        discType: 'Influencer' as const,
+        totalQuestions: 38,
+        angle: 72,
+    };
+
+    it('submits DISC quiz with precomputed results', async () => {
+        mockSupa.rpc.mockResolvedValueOnce({ data: { attempt_id: 'disc-attempt-1' }, error: null });
+
+        const result = await submitDiscAttempt(
+            {
+                userId: 'u1',
+                paperId: 'p-disc',
+                answers: { 1: 'A', 2: 'B' },
+                startedAt: new Date('2026-03-08T11:50:00Z').getTime(),
+            },
+            DISC_RESULTS as any,
+        );
+
+        expect(result.error).toBeNull();
+        expect(result.data?.score).toBe(0);
+        expect(result.data?.paperCode).toBe('DISC');
+        expect(result.data?.personalityResults).toBeDefined();
+        expect(result.data?.answers).toEqual([]);
+        expect(result.data?.questions).toEqual([]);
+    });
+
+    it('returns error on RPC failure', async () => {
+        mockSupa.rpc.mockResolvedValueOnce({ data: null, error: { message: 'RPC failed' } });
+
+        const result = await submitDiscAttempt(
+            { userId: 'u1', paperId: 'p-disc', answers: {}, startedAt: Date.now() },
+            DISC_RESULTS as any,
+        );
+
+        expect(result.data).toBeNull();
+        expect(result.error).toBe('RPC failed');
     });
 });

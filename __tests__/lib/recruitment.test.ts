@@ -9,6 +9,8 @@ import {
     createCandidate,
     updateCandidateStatus,
     addCandidateActivity,
+    fetchAssignableManagers,
+    reassignCandidate,
     scheduleInterview,
     updateInterview,
     deleteInterview,
@@ -21,6 +23,7 @@ import {
     fetchPACandidateCount,
     fetchPAInterviewCount,
 } from '@/lib/recruitment';
+import { uploadCandidateResume, fetchCandidateStatusCounts } from '@/lib/recruitment/candidates';
 
 jest.mock('@/lib/supabase');
 
@@ -500,5 +503,232 @@ describe('fetchPAInterviewCount', () => {
     it('returns 0 for empty manager list', async () => {
         const result = await fetchPAInterviewCount([]);
         expect(result).toBe(0);
+    });
+});
+
+// ── fetchAssignableManagers ──
+
+describe('fetchAssignableManagers', () => {
+    it('returns managers for PA via pa_manager_assignments', async () => {
+        const assignmentsChain = mockSupa.__getChain('pa_manager_assignments');
+        mockResolve(assignmentsChain, { data: [{ manager_id: 'mgr-1' }, { manager_id: 'mgr-2' }], error: null });
+
+        const usersChain = mockSupa.__getChain('users');
+        mockResolve(usersChain, {
+            data: [
+                { id: 'mgr-1', full_name: 'Alice', role: 'manager' },
+                { id: 'mgr-2', full_name: 'Bob', role: 'director' },
+            ],
+            error: null,
+        });
+
+        const result = await fetchAssignableManagers('pa-1', 'pa');
+        expect(result.error).toBeNull();
+        expect(result.data).toHaveLength(2);
+        expect(result.data[0].full_name).toBe('Alice');
+    });
+
+    it('returns empty for PA with no assignments', async () => {
+        const chain = mockSupa.__getChain('pa_manager_assignments');
+        mockResolve(chain, { data: [], error: null });
+
+        const result = await fetchAssignableManagers('pa-1', 'pa');
+        expect(result.data).toEqual([]);
+    });
+
+    it('returns error on PA assignment query failure', async () => {
+        const chain = mockSupa.__getChain('pa_manager_assignments');
+        mockResolve(chain, { data: null, error: { message: 'Query failed' } });
+
+        const result = await fetchAssignableManagers('pa-1', 'pa');
+        expect(result.data).toEqual([]);
+        expect(result.error).toBe('Query failed');
+    });
+
+    it('returns all active managers for manager+ roles', async () => {
+        const usersChain = mockSupa.__getChain('users');
+        mockResolve(usersChain, {
+            data: [{ id: 'mgr-1', full_name: 'Alice', role: 'manager' }],
+            error: null,
+        });
+
+        const result = await fetchAssignableManagers('mgr-1', 'manager');
+        expect(result.error).toBeNull();
+        expect(result.data).toHaveLength(1);
+    });
+
+    it('returns error on manager query failure', async () => {
+        const usersChain = mockSupa.__getChain('users');
+        mockResolve(usersChain, { data: null, error: { message: 'DB error' } });
+
+        const result = await fetchAssignableManagers('mgr-1', 'admin');
+        expect(result.error).toBe('DB error');
+    });
+});
+
+// ── reassignCandidate ──
+
+describe('reassignCandidate', () => {
+    it('reassigns candidate and logs activity', async () => {
+        // First call: fetch old candidate
+        const candidatesChain1 = mockSupa.__getChain('candidates');
+        mockResolve(candidatesChain1, { data: { assigned_manager_id: 'mgr-1' }, error: null });
+
+        // Second call: update candidate
+        const candidatesChain2 = mockSupa.__getChain('candidates');
+        mockResolve(candidatesChain2, { error: null });
+
+        // Third call: fetch names for activity log
+        const usersChain = mockSupa.__getChain('users');
+        mockResolve(usersChain, {
+            data: [
+                { id: 'mgr-1', full_name: 'Old Manager' },
+                { id: 'mgr-2', full_name: 'New Manager' },
+            ],
+            error: null,
+        });
+
+        // Fourth call: insert activity
+        const activitiesChain = mockSupa.__getChain('candidate_activities');
+        mockResolve(activitiesChain, { error: null });
+
+        const result = await reassignCandidate('cand-1', 'mgr-2', 'admin-1');
+        expect(result.error).toBeNull();
+    });
+
+    it('returns error on update failure', async () => {
+        const candidatesChain1 = mockSupa.__getChain('candidates');
+        mockResolve(candidatesChain1, { data: { assigned_manager_id: 'mgr-1' }, error: null });
+
+        const candidatesChain2 = mockSupa.__getChain('candidates');
+        mockResolve(candidatesChain2, { error: { message: 'Update failed' } });
+
+        const result = await reassignCandidate('cand-1', 'mgr-2', 'admin-1');
+        expect(result.error).toBe('Update failed');
+    });
+});
+
+// ── uploadCandidateResume ──
+
+describe('uploadCandidateResume', () => {
+    it('rejects non-PDF files', async () => {
+        const result = await uploadCandidateResume('cand-1', 'file:///doc.docx', 'doc.docx');
+        expect(result.error).toBe('Only PDF files are allowed.');
+        expect(result.url).toBeNull();
+    });
+
+    it('rejects files over 10 MB', async () => {
+        const bigBuffer = new ArrayBuffer(11 * 1024 * 1024);
+        mockFetch.mockResolvedValueOnce({
+            arrayBuffer: () => Promise.resolve(bigBuffer),
+        });
+
+        const result = await uploadCandidateResume('cand-1', 'file:///big.pdf', 'big.pdf');
+        expect(result.error).toBe('File must be under 10 MB.');
+    });
+
+    it('uploads PDF and returns signed URL', async () => {
+        const smallBuffer = new ArrayBuffer(1024);
+        mockFetch.mockResolvedValueOnce({
+            arrayBuffer: () => Promise.resolve(smallBuffer),
+        });
+
+        mockSupa.storage = {
+            from: jest.fn().mockReturnValue({
+                upload: jest.fn().mockResolvedValue({ error: null }),
+                createSignedUrl: jest.fn().mockResolvedValue({
+                    data: { signedUrl: 'https://signed-url.com/resume.pdf' },
+                    error: null,
+                }),
+            }),
+        };
+
+        const candidatesChain = mockSupa.__getChain('candidates');
+        mockResolve(candidatesChain, { data: [{ id: 'cand-1' }], error: null });
+
+        const result = await uploadCandidateResume('cand-1', 'file:///resume.pdf', 'resume.pdf');
+        expect(result.error).toBeNull();
+        expect(result.url).toBe('https://signed-url.com/resume.pdf');
+    });
+
+    it('returns error on upload failure', async () => {
+        const smallBuffer = new ArrayBuffer(1024);
+        mockFetch.mockResolvedValueOnce({
+            arrayBuffer: () => Promise.resolve(smallBuffer),
+        });
+
+        mockSupa.storage = {
+            from: jest.fn().mockReturnValue({
+                upload: jest.fn().mockResolvedValue({ error: { message: 'Storage error' } }),
+            }),
+        };
+
+        const result = await uploadCandidateResume('cand-1', 'file:///resume.pdf', 'resume.pdf');
+        expect(result.error).toBe('Storage error');
+    });
+
+    it('returns error when signed URL generation fails', async () => {
+        const smallBuffer = new ArrayBuffer(1024);
+        mockFetch.mockResolvedValueOnce({
+            arrayBuffer: () => Promise.resolve(smallBuffer),
+        });
+
+        mockSupa.storage = {
+            from: jest.fn().mockReturnValue({
+                upload: jest.fn().mockResolvedValue({ error: null }),
+                createSignedUrl: jest.fn().mockResolvedValue({ data: null, error: { message: 'Sign error' } }),
+            }),
+        };
+
+        const result = await uploadCandidateResume('cand-1', 'file:///resume.pdf', 'resume.pdf');
+        expect(result.error).toBe('Sign error');
+    });
+
+    it('returns error when DB update is denied', async () => {
+        const smallBuffer = new ArrayBuffer(1024);
+        mockFetch.mockResolvedValueOnce({
+            arrayBuffer: () => Promise.resolve(smallBuffer),
+        });
+
+        mockSupa.storage = {
+            from: jest.fn().mockReturnValue({
+                upload: jest.fn().mockResolvedValue({ error: null }),
+                createSignedUrl: jest.fn().mockResolvedValue({
+                    data: { signedUrl: 'https://signed-url.com/resume.pdf' },
+                    error: null,
+                }),
+            }),
+        };
+
+        const candidatesChain = mockSupa.__getChain('candidates');
+        mockResolve(candidatesChain, { data: [], error: null });
+
+        const result = await uploadCandidateResume('cand-1', 'file:///resume.pdf', 'resume.pdf');
+        expect(result.error).toBe('Permission denied: could not save resume URL');
+    });
+});
+
+// ── fetchCandidateStatusCounts ──
+
+describe('fetchCandidateStatusCounts', () => {
+    it('returns status counts for manager', async () => {
+        const chain = mockSupa.__getChain('candidates');
+        mockResolve(chain, {
+            data: [{ status: 'applied' }, { status: 'applied' }, { status: 'active_agent' }],
+            error: null,
+        });
+
+        const result = await fetchCandidateStatusCounts('mgr-1');
+        expect(result.error).toBeNull();
+        expect(result.data).toHaveLength(3);
+    });
+
+    it('returns error on failure', async () => {
+        const chain = mockSupa.__getChain('candidates');
+        mockResolve(chain, { data: null, error: { message: 'DB error' } });
+
+        const result = await fetchCandidateStatusCounts('mgr-1');
+        expect(result.error).toBe('DB error');
+        expect(result.data).toEqual([]);
     });
 });
