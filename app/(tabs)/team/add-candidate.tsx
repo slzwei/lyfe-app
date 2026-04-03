@@ -143,6 +143,7 @@ export default function AddCandidateScreen() {
                         {/* Form Card */}
                         <View style={[styles.formCard, { backgroundColor: colors.cardBackground }]}>
                             <FormField
+                                testID="add-candidate-name"
                                 label="Full Name"
                                 value={name}
                                 onChangeText={setName}
@@ -154,6 +155,7 @@ export default function AddCandidateScreen() {
                             />
                             <View style={[styles.fieldDivider, { backgroundColor: colors.border }]} />
                             <FormField
+                                testID="add-candidate-phone"
                                 label="Phone Number"
                                 value={phone}
                                 onChangeText={setPhone}
@@ -288,6 +290,7 @@ export default function AddCandidateScreen() {
                 {/* Submit Button */}
                 <View style={styles.submitContainer}>
                     <TouchableOpacity
+                        testID="add-candidate-submit"
                         style={[styles.submitButton, { backgroundColor: colors.accent, opacity: isSaving ? 0.5 : 1 }]}
                         onPress={handleSubmit}
                         activeOpacity={0.8}

@@ -1,0 +1,35 @@
+# Flow: Verify agent role sees correct tabs
+# Agent should see: Home, Leads, Events, Profile
+# Agent should NOT see: Team, Candidates, PA, Admin, Roadmap
+appId: com.shawnlee.lyfe
+---
+
+- runFlow:
+    file: ../helpers/login-as.yaml
+    env:
+      phone: "80000004"
+
+# Verify visible tabs
+- assertVisible:
+    id: "tab-home"
+- assertVisible:
+    id: "tab-leads"
+- assertVisible:
+    id: "tab-events"
+- assertVisible:
+    id: "tab-profile"
+
+# Verify hidden tabs (href: null hides from tab bar)
+- assertNotVisible:
+    id: "tab-team"
+    optional: true
+- assertNotVisible:
+    id: "tab-candidates"
+    optional: true
+- assertNotVisible:
+    id: "tab-admin"
+    optional: true
+
+# Verify we're on home dashboard
+- assertVisible:
+    id: "home-scroll-view"

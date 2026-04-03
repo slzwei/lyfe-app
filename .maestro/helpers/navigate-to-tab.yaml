@@ -1,0 +1,11 @@
+# Helper: Navigate to a specific tab using testIDs
+# Usage: runFlow with env: { tab: "leads" }
+# Supported: home, leads, events, team, candidates, pa, profile
+appId: com.shawnlee.lyfe
+input:
+  tab: "home"
+---
+
+- tapOn:
+    id: "tab-${tab}"
+- waitForAnimationToEnd

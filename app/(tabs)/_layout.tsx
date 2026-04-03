@@ -89,6 +89,7 @@ export default function TabLayout() {
                     options={{
                         title: TAB_LABELS.home,
                         href: visibleTabs.includes('home') ? undefined : null,
+                        tabBarTestID: 'tab-home',
                         tabBarIcon: ({ focused, color, size }) => (
                             <Ionicons
                                 name={focused ? TAB_ICONS_FOCUSED.home : TAB_ICONS.home}
@@ -103,6 +104,7 @@ export default function TabLayout() {
                     options={{
                         title: TAB_LABELS.leads,
                         href: visibleTabs.includes('leads') ? undefined : null,
+                        tabBarTestID: 'tab-leads',
                         tabBarIcon: ({ focused, color, size }) => (
                             <Ionicons
                                 name={focused ? TAB_ICONS_FOCUSED.leads : TAB_ICONS.leads}
@@ -117,6 +119,7 @@ export default function TabLayout() {
                     options={{
                         title: TAB_LABELS.roadmap,
                         href: visibleTabs.includes('roadmap') ? undefined : null,
+                        tabBarTestID: 'tab-roadmap',
                         tabBarIcon: ({ focused, color, size }) => (
                             <Ionicons
                                 name={focused ? TAB_ICONS_FOCUSED.roadmap : TAB_ICONS.roadmap}
@@ -131,6 +134,7 @@ export default function TabLayout() {
                     options={{
                         title: TAB_LABELS.candidates,
                         href: visibleTabs.includes('candidates') ? undefined : null,
+                        tabBarTestID: 'tab-candidates',
                         tabBarIcon: ({ focused, color, size }) => (
                             <Ionicons
                                 name={focused ? TAB_ICONS_FOCUSED.candidates : TAB_ICONS.candidates}
@@ -145,6 +149,7 @@ export default function TabLayout() {
                     options={{
                         title: TAB_LABELS.team,
                         href: visibleTabs.includes('team') ? undefined : null,
+                        tabBarTestID: 'tab-team',
                         tabBarIcon: ({ focused, color, size }) => (
                             <Ionicons
                                 name={focused ? TAB_ICONS_FOCUSED.team : TAB_ICONS.team}
@@ -159,6 +164,7 @@ export default function TabLayout() {
                     options={{
                         title: TAB_LABELS.events,
                         href: visibleTabs.includes('events') ? undefined : null,
+                        tabBarTestID: 'tab-events',
                         tabBarIcon: ({ focused, color, size }) => (
                             <Ionicons
                                 name={focused ? TAB_ICONS_FOCUSED.events : TAB_ICONS.events}
@@ -173,6 +179,7 @@ export default function TabLayout() {
                     options={{
                         title: TAB_LABELS.pa,
                         href: visibleTabs.includes('pa') ? undefined : null,
+                        tabBarTestID: 'tab-pa',
                         tabBarIcon: ({ focused, color, size }) => (
                             <Ionicons name={focused ? TAB_ICONS_FOCUSED.pa : TAB_ICONS.pa} size={size} color={color} />
                         ),
@@ -183,6 +190,7 @@ export default function TabLayout() {
                     options={{
                         title: TAB_LABELS.admin,
                         href: visibleTabs.includes('admin') ? undefined : null,
+                        tabBarTestID: 'tab-admin',
                         tabBarIcon: ({ focused, color, size }) => (
                             <Ionicons
                                 name={focused ? TAB_ICONS_FOCUSED.admin : TAB_ICONS.admin}
@@ -199,6 +207,7 @@ export default function TabLayout() {
                     options={{
                         title: TAB_LABELS.profile,
                         href: visibleTabs.includes('profile') ? undefined : null,
+                        tabBarTestID: 'tab-profile',
                         tabBarIcon: ({ focused, color, size }) => (
                             <Ionicons
                                 name={focused ? TAB_ICONS_FOCUSED.profile : TAB_ICONS.profile}

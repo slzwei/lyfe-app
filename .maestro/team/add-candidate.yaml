@@ -1,0 +1,50 @@
+# Flow: Add a new recruitment candidate
+# Prereq: Manager logged in
+appId: com.shawnlee.lyfe
+---
+
+- runFlow:
+    file: ../helpers/login-as.yaml
+    env:
+      phone: "80000003"
+
+# Navigate to Team tab
+- runFlow:
+    file: ../helpers/navigate-to-tab.yaml
+    env:
+      tab: "team"
+- waitForAnimationToEnd
+
+# Tap Add Candidate button
+- tapOn:
+    text: "Add Candidate"
+    optional: true
+- waitForAnimationToEnd
+
+# Fill in candidate name
+- tapOn:
+    id: "add-candidate-name"
+    optional: true
+- tapOn:
+    text: "Enter full name"
+    optional: true
+- inputText: "E2E Test Candidate"
+
+# Fill in phone
+- tapOn:
+    id: "add-candidate-phone"
+    optional: true
+- tapOn:
+    text: "+65 9XXX XXXX"
+    optional: true
+- inputText: "+6599998888"
+
+# Submit
+- tapOn:
+    id: "add-candidate-submit"
+- waitForAnimationToEnd
+
+# Verify success modal with invite link
+- extendedWaitUntil:
+    visible: "Candidate Created"
+    timeout: 10000

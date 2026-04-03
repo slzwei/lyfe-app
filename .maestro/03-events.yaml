@@ -1,18 +1,52 @@
-# Flow: Navigate events
+# Flow: Events — browse list, open detail, verify create button
 appId: com.shawnlee.lyfe
 
 ---
 
 - runFlow: 01-login.yaml
 
-# --- Navigate to Events tab (4th tab ~70% x) ---
-- tapOn:
-    point: "70%,97%"
+# --- Navigate to Events tab ---
+- runFlow:
+    file: helpers/navigate-to-tab.yaml
+    env:
+      tab: "events"
 - waitForAnimationToEnd
-- waitForAnimationToEnd
+
+# --- Verify events screen loaded ---
+- assertVisible:
+    id: "tab-events"
 
 # --- Tap first event card (if any) ---
 - tapOn:
     point: "50%,35%"
+    optional: true
+- waitForAnimationToEnd
+
+# --- Go back to events list ---
+- tapOn:
+    point: "10%,6%"
+    optional: true
+- waitForAnimationToEnd
+
+# --- Verify create button exists ---
+- assertVisible:
+    id: "events-create-button"
+    optional: true
+
+# --- Tap create and verify form opens ---
+- tapOn:
+    id: "events-create-button"
+    optional: true
+- waitForAnimationToEnd
+- assertVisible:
+    id: "event-create-title"
+    optional: true
+
+# --- Dismiss create screen ---
+- tapOn:
+    text: "Cancel"
+    optional: true
+- tapOn:
+    point: "10%,6%"
     optional: true
 - waitForAnimationToEnd

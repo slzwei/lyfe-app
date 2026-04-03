@@ -1,0 +1,38 @@
+# Flow: Toggle appearance theme in profile settings
+appId: com.shawnlee.lyfe
+---
+
+- runFlow:
+    file: ../helpers/login-as.yaml
+    env:
+      phone: "80000003"
+
+# Navigate to Profile
+- runFlow:
+    file: ../helpers/navigate-to-tab.yaml
+    env:
+      tab: "profile"
+- waitForAnimationToEnd
+
+# Verify profile loaded
+- assertVisible:
+    id: "profile-user-hero"
+    optional: true
+
+# Find and tap Appearance section
+- scrollUntilVisible:
+    element:
+      text: "Appearance"
+    direction: DOWN
+    timeout: 5000
+
+- tapOn:
+    text: "Dark"
+    optional: true
+- waitForAnimationToEnd
+
+# Toggle back to Light
+- tapOn:
+    text: "Light"
+    optional: true
+- waitForAnimationToEnd

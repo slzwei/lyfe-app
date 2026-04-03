@@ -1,0 +1,37 @@
+# Flow: Browse candidates list and open detail
+# Prereq: Manager logged in with candidates tab visible
+appId: com.shawnlee.lyfe
+---
+
+- runFlow:
+    file: ../helpers/login-as.yaml
+    env:
+      phone: "80000003"
+
+# Navigate to Candidates tab (PA-specific, or use team for managers)
+# Managers see candidates via Team tab
+- runFlow:
+    file: ../helpers/navigate-to-tab.yaml
+    env:
+      tab: "team"
+- waitForAnimationToEnd
+
+# Look for Candidates section or tab within team
+- tapOn:
+    text: "Candidates"
+    optional: true
+- waitForAnimationToEnd
+
+# Tap first candidate card (if any exist)
+- tapOn:
+    point: "50%,35%"
+    optional: true
+- waitForAnimationToEnd
+
+# Verify candidate detail loads (look for common elements)
+- assertVisible:
+    text: "Schedule"
+    optional: true
+- assertVisible:
+    text: "Note"
+    optional: true

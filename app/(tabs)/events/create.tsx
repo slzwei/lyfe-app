@@ -149,6 +149,7 @@ export default function CreateEventScreen() {
                 onBack={() => router.back()}
                 rightAction={
                     <TouchableOpacity
+                        testID="event-create-save"
                         onPress={() => guard(handleSubmit)}
                         disabled={submitting || isGuardSubmitting}
                         style={[
@@ -186,6 +187,7 @@ export default function CreateEventScreen() {
                         <View style={styles.field}>
                             <Text style={labelStyle}>Title *</Text>
                             <TextInput
+                                testID="event-create-title"
                                 style={[
                                     inputStyle,
                                     isEditingRoadshow && { opacity: 0.5 },

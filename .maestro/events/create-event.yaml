@@ -1,0 +1,37 @@
+# Flow: Create a new event (team meeting)
+# Prereq: Manager logged in
+appId: com.shawnlee.lyfe
+---
+
+- runFlow:
+    file: ../helpers/login-as.yaml
+    env:
+      phone: "80000003"
+
+# Navigate to Events tab
+- runFlow:
+    file: ../helpers/navigate-to-tab.yaml
+    env:
+      tab: "events"
+- waitForAnimationToEnd
+
+# Tap Create button
+- tapOn:
+    id: "events-create-button"
+- waitForAnimationToEnd
+
+# Fill in event title
+- tapOn:
+    id: "event-create-title"
+- inputText: "E2E Test Meeting"
+
+# Save the event
+- tapOn:
+    id: "event-create-save"
+- waitForAnimationToEnd
+
+# Verify we return to events list (or success feedback)
+- extendedWaitUntil:
+    visible:
+      id: "tab-events"
+    timeout: 10000

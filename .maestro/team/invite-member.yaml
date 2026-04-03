@@ -1,0 +1,53 @@
+# Flow: Invite a new team member
+# Prereq: Manager logged in
+appId: com.shawnlee.lyfe
+---
+
+- runFlow:
+    file: ../helpers/login-as.yaml
+    env:
+      phone: "80000003"
+
+# Navigate to Team tab
+- runFlow:
+    file: ../helpers/navigate-to-tab.yaml
+    env:
+      tab: "team"
+- waitForAnimationToEnd
+
+# Tap Invite button (look for add/invite button)
+- tapOn:
+    text: "Invite"
+    optional: true
+- tapOn:
+    id: "team-invite-button"
+    optional: true
+- waitForAnimationToEnd
+
+# Fill in name
+- tapOn:
+    id: "invite-name-input"
+- inputText: "E2E Test Agent"
+
+# Fill in phone
+- tapOn:
+    id: "invite-phone-input"
+- inputText: "99999999"
+
+# Select role (Agent)
+- tapOn:
+    id: "invite-role-picker"
+- waitForAnimationToEnd
+- tapOn:
+    text: "Agent"
+- waitForAnimationToEnd
+
+# Submit
+- tapOn:
+    id: "invite-submit-button"
+- waitForAnimationToEnd
+
+# Verify success modal
+- extendedWaitUntil:
+    visible: "Invitation Sent"
+    timeout: 10000
