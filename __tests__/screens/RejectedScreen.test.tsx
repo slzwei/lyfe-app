@@ -13,7 +13,7 @@ jest.mock('@/contexts/AuthContext');
 jest.mock('@/contexts/ThemeContext');
 
 const mockSignOut = jest.fn().mockResolvedValue(undefined);
-const mockRefreshUser = jest.fn().mockResolvedValue(undefined);
+const mockRecheckInvitation = jest.fn().mockResolvedValue(undefined);
 
 beforeEach(() => {
     jest.clearAllMocks();
@@ -26,7 +26,7 @@ beforeEach(() => {
     });
     (useAuth as jest.Mock).mockReturnValue({
         signOut: mockSignOut,
-        refreshUser: mockRefreshUser,
+        recheckInvitation: mockRecheckInvitation,
     });
 });
 
@@ -51,11 +51,11 @@ describe('RejectedScreen', () => {
         });
     });
 
-    it('calls refreshUser on try again press', async () => {
+    it('calls recheckInvitation on try again press', async () => {
         const { getByText } = render(<RejectedScreen />);
         fireEvent.press(getByText('Try Again'));
         await waitFor(() => {
-            expect(mockRefreshUser).toHaveBeenCalled();
+            expect(mockRecheckInvitation).toHaveBeenCalled();
         });
     });
 });

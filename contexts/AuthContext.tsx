@@ -25,9 +25,16 @@ interface AuthState {
     invitationStatus: InvitationStatus;
 }
 
+type PhoneEligibility = {
+    eligible: boolean;
+    reason: 'existing_user' | 'pending_invitation' | 'invitation_expired' | 'not_found' | 'invalid_phone';
+};
+
 interface AuthContextType extends AuthState {
+    checkPhoneEligible: (phone: string) => Promise<PhoneEligibility>;
     signInWithOtp: (phone: string) => Promise<{ error: Error | null }>;
     verifyOtp: (phone: string, token: string) => Promise<{ error: Error | null }>;
+    recheckInvitation: () => Promise<void>;
     signOut: () => Promise<void>;
 }
 
@@ -453,6 +460,23 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         return () => subscription.unsubscribe();
     }, []);
 
+    const checkPhoneEligible = useCallback(async (phone: string): Promise<PhoneEligibility> => {
+        try {
+            const { data, error } = await supabase.rpc('check_phone_eligible', {
+                phone_input: phone,
+            });
+            if (error) {
+                if (__DEV__) console.error('[AuthContext] checkPhoneEligible RPC error:', error.message);
+                // Fail open — if RPC fails, allow OTP to proceed (don't block login)
+                return { eligible: true, reason: 'existing_user' };
+            }
+            return data as PhoneEligibility;
+        } catch {
+            // Network error or unexpected failure — fail open
+            return { eligible: true, reason: 'existing_user' };
+        }
+    }, []);
+
     const signInWithOtp = useCallback(async (phone: string) => {
         const { error } = await supabase.auth.signInWithOtp({ phone });
         return { error: error ? new Error(error.message) : null };
@@ -462,6 +486,13 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         const { error } = await supabase.auth.verifyOtp({ phone, token, type: 'sms' });
         return { error: error ? new Error(error.message) : null };
     }, []);
+
+    const recheckInvitation = useCallback(async () => {
+        const profile = user;
+        if (!profile) return;
+        const invStatus = await checkInvitationStatus(profile.id, profile.created_at);
+        setAuthState((prev) => ({ ...prev, invitationStatus: invStatus }));
+    }, [user]);
 
     const signOut = useCallback(async () => {
         await AsyncStorage.removeItem('lyfe_view_mode');
@@ -501,11 +532,13 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     const authValue = useMemo(
         () => ({
             ...authState,
+            checkPhoneEligible,
             signInWithOtp,
             verifyOtp,
+            recheckInvitation,
             signOut,
         }),
-        [authState, signInWithOtp, verifyOtp, signOut],
+        [authState, checkPhoneEligible, signInWithOtp, verifyOtp, recheckInvitation, signOut],
     );
 
     return (

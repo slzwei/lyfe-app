@@ -39,7 +39,7 @@ const PAGE_SPRING = { damping: 22, stiffness: 250, useNativeDriver: true } as co
 
 export default function LoginScreen() {
     const { colors } = useTheme();
-    const { signInWithOtp, verifyOtp, authenticateWithBiometrics, biometricsEnabled } = useAuth();
+    const { checkPhoneEligible, signInWithOtp, verifyOtp, authenticateWithBiometrics, biometricsEnabled } = useAuth();
 
     const [step, setStep] = useState<'phone' | 'otp'>('phone');
     const [phoneRevealed, setPhoneRevealed] = useState(false);
@@ -145,7 +145,21 @@ export default function LoginScreen() {
         }
         setError(null);
         setIsLoading(true);
-        const { error: otpError } = await signInWithOtp(`+65${cleanedPhone}`);
+
+        // Check eligibility before sending OTP
+        const fullPhone = `+65${cleanedPhone}`;
+        const eligibility = await checkPhoneEligible(fullPhone);
+        if (!eligibility.eligible) {
+            setIsLoading(false);
+            if (eligibility.reason === 'invitation_expired') {
+                setError('Your invitation has expired. Please ask your manager for a new invite.');
+            } else {
+                setError('No account found for this number. Please ask your manager for an invite.');
+            }
+            return;
+        }
+
+        const { error: otpError } = await signInWithOtp(fullPhone);
         setIsLoading(false);
         if (otpError) {
             setError(otpError.message);

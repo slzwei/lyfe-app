@@ -15,6 +15,7 @@ jest.mock('@/components/LyfeLogo', () => {
     return () => <View testID="lyfe-logo" />;
 });
 
+const mockCheckPhoneEligible = jest.fn().mockResolvedValue({ eligible: true, reason: 'existing_user' });
 const mockSignInWithOtp = jest.fn().mockResolvedValue({ error: null });
 const mockVerifyOtp = jest.fn().mockResolvedValue({ error: null });
 const mockAuthenticateWithBiometrics = jest.fn().mockResolvedValue(true);
@@ -29,6 +30,7 @@ beforeEach(() => {
         setMode: jest.fn(),
     });
     (useAuth as jest.Mock).mockReturnValue({
+        checkPhoneEligible: mockCheckPhoneEligible,
         signInWithOtp: mockSignInWithOtp,
         verifyOtp: mockVerifyOtp,
         authenticateWithBiometrics: mockAuthenticateWithBiometrics,
@@ -99,6 +101,7 @@ describe('LoginScreen', () => {
 
     it('renders biometric button when enabled with face type', async () => {
         (useAuth as jest.Mock).mockReturnValue({
+            checkPhoneEligible: mockCheckPhoneEligible,
             signInWithOtp: mockSignInWithOtp,
             verifyOtp: mockVerifyOtp,
             authenticateWithBiometrics: mockAuthenticateWithBiometrics,
@@ -158,6 +161,7 @@ describe('LoginScreen', () => {
 
     it('calls authenticateWithBiometrics on biometric press', async () => {
         (useAuth as jest.Mock).mockReturnValue({
+            checkPhoneEligible: mockCheckPhoneEligible,
             signInWithOtp: mockSignInWithOtp,
             verifyOtp: mockVerifyOtp,
             authenticateWithBiometrics: mockAuthenticateWithBiometrics,

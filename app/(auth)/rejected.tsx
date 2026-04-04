@@ -7,7 +7,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 
 export default function RejectedScreen() {
     const { colors } = useTheme();
-    const { signOut, refreshUser } = useAuth();
+    const { signOut, recheckInvitation } = useAuth();
     const [isSigningOut, setIsSigningOut] = useState(false);
     const [isRetrying, setIsRetrying] = useState(false);
 
@@ -18,7 +18,7 @@ export default function RejectedScreen() {
 
     const handleRetry = async () => {
         setIsRetrying(true);
-        await refreshUser();
+        await recheckInvitation();
         setIsRetrying(false);
     };
 
