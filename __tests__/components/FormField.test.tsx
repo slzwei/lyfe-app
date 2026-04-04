@@ -2,6 +2,19 @@ import FormField from '@/components/FormField';
 import { fireEvent, render } from '@testing-library/react-native';
 import React from 'react';
 
+jest.mock('@/contexts/ThemeContext', () => ({
+    useTheme: () => ({
+        colors: {
+            textSecondary: '#666',
+            textTertiary: '#999',
+            textPrimary: '#000',
+            surfacePrimary: '#F5F5F5',
+            borderLight: '#E0E0E0',
+            danger: '#EF4444',
+        },
+    }),
+}));
+
 const COLORS: any = {
     textSecondary: '#666',
     textTertiary: '#999',

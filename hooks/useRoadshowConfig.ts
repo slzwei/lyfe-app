@@ -2,7 +2,7 @@
  * Hook encapsulating roadshow configuration state for event creation.
  * Manages date range, cost, slots, grace period, and suggested targets.
  */
-import React, { useCallback, useState } from 'react';
+import { type Dispatch, type SetStateAction, useCallback, useState } from 'react';
 import { todayStr } from '@/lib/dateTime';
 import type { RoadshowConfig } from '@/types/event';
 
@@ -14,15 +14,15 @@ interface RoadshowConfigState {
     rsWeeklyCost: string;
     setRsWeeklyCost: (v: string) => void;
     rsSlots: number;
-    setRsSlots: React.Dispatch<React.SetStateAction<number>>;
+    setRsSlots: Dispatch<SetStateAction<number>>;
     rsGrace: number;
-    setRsGrace: React.Dispatch<React.SetStateAction<number>>;
+    setRsGrace: Dispatch<SetStateAction<number>>;
     rsSitdowns: number;
-    setRsSitdowns: React.Dispatch<React.SetStateAction<number>>;
+    setRsSitdowns: Dispatch<SetStateAction<number>>;
     rsPitches: number;
-    setRsPitches: React.Dispatch<React.SetStateAction<number>>;
+    setRsPitches: Dispatch<SetStateAction<number>>;
     rsClosed: number;
-    setRsClosed: React.Dispatch<React.SetStateAction<number>>;
+    setRsClosed: Dispatch<SetStateAction<number>>;
     rsConfigLocked: boolean;
     setRsConfigLocked: (v: boolean) => void;
     populateFromExisting: (config: RoadshowConfig, eventDate: string) => void;

@@ -70,6 +70,7 @@ Deno.serve(async (req) => {
                 headers: { 'Content-Type': 'application/json', ...CORS_HEADERS },
             });
         }
+        const trimmedAgentName = agentName.trim().slice(0, 100);
         if (typeof pledgedSitdowns !== 'number' || pledgedSitdowns < 0) {
             return new Response(JSON.stringify({ error: 'pledgedSitdowns must be a non-negative number' }), {
                 status: 400,
@@ -169,7 +170,7 @@ Deno.serve(async (req) => {
         const notificationRows = recipientIds.map((id) => ({
             user_id: id,
             type: 'roadshow_pledge',
-            title: `${agentName} pledged for ${event.title}`,
+            title: `${trimmedAgentName} pledged for ${event.title}`,
             body: `S${pledgedSitdowns} P${pledgedPitches} C${pledgedClosed} AFYC $${pledgedAfyc.toLocaleString()}`,
             data: { route: `/(tabs)/events/${eventId}`, eventId, agentId },
         }));

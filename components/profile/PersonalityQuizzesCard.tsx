@@ -1,7 +1,8 @@
 import React, { useCallback, useState } from 'react';
 import { ActivityIndicator, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { useRouter, useFocusEffect } from 'expo-router';
+import { useFocusEffect } from 'expo-router';
+import { useTypedRouter } from '@/hooks/useTypedRouter';
 import { supabase } from '@/lib/supabase';
 import { VARK_TYPE_INFO, type VarkResults } from '@/constants/vark';
 import { ENNEAGRAM_TYPE_INFO, type EnneagramResults, type EnneagramType } from '@/constants/enneagram';
@@ -25,8 +26,8 @@ interface Props {
 
 const TYPE_LABELS: Record<string, string> = { V: 'Visual', A: 'Aural', R: 'Read/Write', K: 'Kinesthetic' };
 
-export default function PersonalityQuizzesCard({ colors, userId }: Props) {
-    const router = useRouter();
+function PersonalityQuizzesCard({ colors, userId }: Props) {
+    const router = useTypedRouter();
     const [varkResult, setVarkResult] = useState<QuizResult | null>(null);
     const [enneagramResult, setEnneagramResult] = useState<QuizResult | null>(null);
     const [discResult, setDiscResult] = useState<QuizResult | null>(null);
@@ -121,25 +122,25 @@ export default function PersonalityQuizzesCard({ colors, userId }: Props) {
 
     const handleDisc = () => {
         if (discResult) {
-            router.push(`/(tabs)/profile/results/disc/${discResult.attemptId}` as any);
+            router.push(`/(tabs)/profile/results/disc/${discResult.attemptId}`);
         } else if (discPaperId) {
-            router.push({ pathname: '/(tabs)/exams/disc' as any, params: { paperId: discPaperId } });
+            router.push(`/(tabs)/exams/disc?paperId=${discPaperId}`);
         }
     };
 
     const handleVark = () => {
         if (varkResult) {
-            router.push(`/(tabs)/profile/results/vark/${varkResult.attemptId}` as any);
+            router.push(`/(tabs)/profile/results/vark/${varkResult.attemptId}`);
         } else if (varkPaperId) {
-            router.push(`/(tabs)/profile/take/${varkPaperId}` as any);
+            router.push(`/(tabs)/profile/take/${varkPaperId}`);
         }
     };
 
     const handleEnneagram = () => {
         if (enneagramResult) {
-            router.push(`/(tabs)/profile/results/enneagram/${enneagramResult.attemptId}` as any);
+            router.push(`/(tabs)/profile/results/enneagram/${enneagramResult.attemptId}`);
         } else if (enneagramPaperId) {
-            router.push(`/(tabs)/profile/take/${enneagramPaperId}` as any);
+            router.push(`/(tabs)/profile/take/${enneagramPaperId}`);
         }
     };
 
@@ -184,7 +185,7 @@ export default function PersonalityQuizzesCard({ colors, userId }: Props) {
                         ]}
                     >
                         <Ionicons
-                            name={varkTopIcon ? (varkTopIcon.icon as any) : 'school-outline'}
+                            name={varkTopIcon ? varkTopIcon.icon : 'school-outline'}
                             size={20}
                             color={varkResult ? colors.success : colors.accent}
                         />
@@ -226,7 +227,7 @@ export default function PersonalityQuizzesCard({ colors, userId }: Props) {
                         ]}
                     >
                         <Ionicons
-                            name={enneaType ? (enneaType.icon as any) : 'finger-print-outline'}
+                            name={enneaType ? enneaType.icon : 'finger-print-outline'}
                             size={20}
                             color={enneaType ? enneaType.color : colors.accent}
                         />
@@ -272,7 +273,7 @@ export default function PersonalityQuizzesCard({ colors, userId }: Props) {
                         ]}
                     >
                         <Ionicons
-                            name={discPrimaryInfo ? (discPrimaryInfo.icon as any) : 'compass-outline'}
+                            name={discPrimaryInfo ? discPrimaryInfo.icon : 'compass-outline'}
                             size={20}
                             color={discPrimaryInfo ? discPrimaryInfo.color : colors.accent}
                         />
@@ -364,3 +365,5 @@ const styles = StyleSheet.create({
         marginLeft: 52,
     },
 });
+
+export default React.memo(PersonalityQuizzesCard);

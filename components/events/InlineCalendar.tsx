@@ -249,8 +249,16 @@ export default function InlineCalendar({
 
     // ── Expand / collapse (week <-> month) ──
     const expandAnim = useRef(new Animated.Value(0)).current;
+    const expandAnimValue = useRef(0);
     const isExpandedRef = useRef(false);
     const [isExpanded, setIsExpanded] = useState(false);
+
+    useEffect(() => {
+        const id = expandAnim.addListener(({ value }) => {
+            expandAnimValue.current = value;
+        });
+        return () => expandAnim.removeListener(id);
+    }, [expandAnim]);
 
     // ── Month pages (paging FlatList data) ──
     const { pages: monthPages, todayPageIdx } = useMemo(() => buildMonthPages(today), [today]);
@@ -388,7 +396,7 @@ export default function InlineCalendar({
                 expandAnim.setValue(next);
             },
             onPanResponderRelease: (_, gs) => {
-                const current = (expandAnim as unknown as { _value: number })._value;
+                const current = expandAnimValue.current;
                 const shouldExpand = Math.abs(gs.vy) > 0.3 ? gs.vy > 0 : current > 0.5;
                 animateToRef.current(shouldExpand ? 1 : 0);
             },

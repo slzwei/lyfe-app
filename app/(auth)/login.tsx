@@ -1,7 +1,7 @@
 import LyfeLogo from '@/components/LyfeLogo';
 import { useAuth } from '@/contexts/AuthContext';
 import { useTheme } from '@/contexts/ThemeContext';
-import { biometricMeta, getBiometryType, type BiometryType } from '@/lib/biometrics';
+import { biometricMeta, getBiometricRefreshToken, getBiometryType, type BiometryType } from '@/lib/biometrics';
 import { Ionicons } from '@expo/vector-icons';
 import { Colors } from '@/constants/Colors';
 import { letterSpacing } from '@/constants/platform';
@@ -52,6 +52,7 @@ export default function LoginScreen() {
 
     const [biometryType, setBiometryType] = useState<BiometryType>('none');
     const [isBiometricLoading, setIsBiometricLoading] = useState(false);
+    const [hasStoredToken, setHasStoredToken] = useState(false);
 
     const hiddenOtpRef = useRef<TextInput | null>(null);
     const phoneInputRef = useRef<TextInput | null>(null);
@@ -63,6 +64,7 @@ export default function LoginScreen() {
 
     useEffect(() => {
         getBiometryType().then(setBiometryType);
+        getBiometricRefreshToken().then((token) => setHasStoredToken(!!token));
     }, []);
 
     useEffect(() => {
@@ -86,7 +88,7 @@ export default function LoginScreen() {
         }, 1000);
     };
 
-    const showBiometricButton = biometricsEnabled && biometryType !== 'none';
+    const showBiometricButton = biometricsEnabled && biometryType !== 'none' && hasStoredToken;
     const { label: biometricLabel, icon: biometricIcon } = biometricMeta(biometryType);
 
     /* ── Accordion: ghost button → phone input ── */

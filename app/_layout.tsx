@@ -31,8 +31,8 @@ function AuthGate({ children }: { children: React.ReactNode }) {
         const inAuthGroup = segments[0] === '(auth)';
         const inOnboarding = segments[0] === 'onboarding';
 
-        if (!isAuthenticated && !inAuthGroup) {
-            // Not authenticated → redirect to login
+        if (!isAuthenticated && segments[1] !== 'login') {
+            // Not authenticated → redirect to login (from any screen, including rejected)
             router.replace('/(auth)/login');
         } else if (isAuthenticated && invitationStatus === 'rejected') {
             // Authenticated but no invitation → rejection screen

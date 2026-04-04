@@ -22,6 +22,8 @@ function hasLatex(text: string): boolean {
     return /\$[^$]+\$/.test(text) || /\\frac|\\text|\\times|\\div/.test(text);
 }
 
+// SECURITY NOTE: KaTeX loaded from cdn.jsdelivr.net. Consider bundling locally
+// via expo-asset to eliminate CDN dependency. SRI hashes not supported in RN WebView.
 function buildKatexHtml(content: string, bgColor: string, textColor: string, fontSize: number): string {
     return `<!DOCTYPE html>
 <html>

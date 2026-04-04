@@ -1,36 +1,63 @@
+import { useTheme } from '@/contexts/ThemeContext';
 import type { ThemeColors } from '@/types/theme';
 import type { IconName } from '@/types/ui';
 import { Ionicons } from '@expo/vector-icons';
 import React from 'react';
 import { Platform, StyleSheet, Text, TextInput, View, type ViewStyle } from 'react-native';
 
-interface FormFieldProps {
+interface FormFieldBaseProps {
     label: string;
-    value: string;
-    onChangeText: (v: string) => void;
-    placeholder: string;
     error?: string;
-    colors: ThemeColors;
-    icon?: IconName;
     required?: boolean;
-    keyboardType?: 'default' | 'phone-pad' | 'email-address';
-    autoCapitalize?: 'none' | 'sentences' | 'words';
     containerStyle?: ViewStyle;
 }
 
-export default function FormField({
-    label,
-    value,
-    onChangeText,
-    placeholder,
-    error,
-    colors,
-    icon,
-    required,
-    keyboardType,
-    autoCapitalize,
-    containerStyle,
-}: FormFieldProps) {
+interface FormFieldInputProps extends FormFieldBaseProps {
+    value: string;
+    onChangeText: (v: string) => void;
+    placeholder: string;
+    colors: ThemeColors;
+    icon?: IconName;
+    keyboardType?: 'default' | 'phone-pad' | 'email-address';
+    autoCapitalize?: 'none' | 'sentences' | 'words';
+    children?: never;
+}
+
+interface FormFieldWrapperProps extends FormFieldBaseProps {
+    children: React.ReactNode;
+    value?: never;
+    onChangeText?: never;
+    placeholder?: never;
+    colors?: ThemeColors;
+    icon?: never;
+    keyboardType?: never;
+    autoCapitalize?: never;
+}
+
+type FormFieldProps = FormFieldInputProps | FormFieldWrapperProps;
+
+export default function FormField(props: FormFieldProps) {
+    const { label, error, required, containerStyle } = props;
+    const { colors: contextColors } = useTheme();
+
+    // Wrapper mode: children provided, use theme from context as fallback
+    if ('children' in props && props.children !== undefined) {
+        const colors = props.colors ?? contextColors;
+        return (
+            <View style={[styles.container, containerStyle]}>
+                <Text style={[styles.label, { color: colors.textSecondary }]}>
+                    {label}
+                    {required && <Text style={{ color: colors.danger }}> *</Text>}
+                </Text>
+                {props.children}
+                {error && <Text style={[styles.error, { color: colors.danger }]}>{error}</Text>}
+            </View>
+        );
+    }
+
+    // Input mode: render built-in TextInput
+    const { value, onChangeText, placeholder, colors, icon, keyboardType, autoCapitalize } =
+        props as FormFieldInputProps;
     return (
         <View style={[styles.container, containerStyle]}>
             <Text style={[styles.label, { color: colors.textSecondary }]}>

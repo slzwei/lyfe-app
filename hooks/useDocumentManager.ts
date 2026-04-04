@@ -64,10 +64,16 @@ export function useDocumentManager({ candidateId }: UseDocumentManagerParams): D
         setShowPdf(true);
     }, []);
 
-    const handleDeleteDocument = useCallback((doc: CandidateDocument) => {
-        setDocuments((prev) => prev.filter((d) => d.id !== doc.id));
-        deleteCandidateDocument(doc.id);
-    }, []);
+    const handleDeleteDocument = useCallback(
+        (doc: CandidateDocument) => {
+            const snapshot = [...documents];
+            setDocuments((p) => p.filter((d) => d.id !== doc.id));
+            deleteCandidateDocument(doc.id).catch(() => {
+                setDocuments(snapshot);
+            });
+        },
+        [documents],
+    );
 
     const pickAndUploadDocument = useCallback(
         async (label: string) => {

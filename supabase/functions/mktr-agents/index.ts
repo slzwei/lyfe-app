@@ -19,19 +19,23 @@ function maskEmail(email: string): string {
 
 /**
  * Timing-safe comparison of two strings.
+ * Uses a fresh random HMAC key each call — makes offline precomputation impossible.
  */
 async function timingSafeEqual(a: string, b: string): Promise<boolean> {
     const enc = new TextEncoder();
-    const keyData = enc.encode('comparison-key');
-    const key = await crypto.subtle.importKey('raw', keyData, { name: 'HMAC', hash: 'SHA-256' }, false, ['sign']);
-    const sigA = await crypto.subtle.sign('HMAC', key, enc.encode(a));
-    const sigB = await crypto.subtle.sign('HMAC', key, enc.encode(b));
-    const arrA = new Uint8Array(sigA);
-    const arrB = new Uint8Array(sigB);
-    if (arrA.length !== arrB.length) return false;
+    const aBuf = enc.encode(a);
+    const bBuf = enc.encode(b);
+    if (aBuf.length !== bBuf.length) return false;
+    const key = await crypto.subtle.generateKey({ name: 'HMAC', hash: 'SHA-256' }, false, ['sign']);
+    const [sigA, sigB] = await Promise.all([
+        crypto.subtle.sign('HMAC', key, aBuf),
+        crypto.subtle.sign('HMAC', key, bBuf),
+    ]);
+    const viewA = new Uint8Array(sigA);
+    const viewB = new Uint8Array(sigB);
     let result = 0;
-    for (let i = 0; i < arrA.length; i++) {
-        result |= arrA[i] ^ arrB[i];
+    for (let i = 0; i < viewA.length; i++) {
+        result |= viewA[i] ^ viewB[i];
     }
     return result === 0;
 }

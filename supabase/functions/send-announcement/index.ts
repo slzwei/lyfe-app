@@ -63,8 +63,20 @@ Deno.serve(async (req) => {
                 headers: { 'Content-Type': 'application/json', ...CORS_HEADERS },
             });
         }
+        if (title.trim().length > 200) {
+            return new Response(JSON.stringify({ error: 'Title too long (max 200 chars)' }), {
+                status: 400,
+                headers: { 'Content-Type': 'application/json', ...CORS_HEADERS },
+            });
+        }
         if (body !== undefined && typeof body !== 'string') {
             return new Response(JSON.stringify({ error: 'body must be a string' }), {
+                status: 400,
+                headers: { 'Content-Type': 'application/json', ...CORS_HEADERS },
+            });
+        }
+        if (body && body.trim().length > 2000) {
+            return new Response(JSON.stringify({ error: 'Body too long (max 2000 chars)' }), {
                 status: 400,
                 headers: { 'Content-Type': 'application/json', ...CORS_HEADERS },
             });

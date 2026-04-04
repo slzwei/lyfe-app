@@ -208,8 +208,9 @@ describe('AuthContext — signOut', () => {
             await result.current.signOut();
         });
 
-        // Server session is always revoked to prevent session leaks (Phase 1 security fix)
-        expect(mockSupa.auth.signOut).toHaveBeenCalled();
+        // When biometrics are enabled, session is kept alive for Face ID re-auth
+        expect(mockSupa.auth.signOut).not.toHaveBeenCalled();
+        expect(mockBio.storeBiometricRefreshToken).toHaveBeenCalled();
         expect(result.current.isAuthenticated).toBe(false);
     });
 });
@@ -678,7 +679,8 @@ describe('AuthContext — signOut stores refresh token when biometrics enabled',
         });
 
         expect(mockBio.storeBiometricRefreshToken).toHaveBeenCalledWith('refresh-tok');
-        expect(mockSupa.auth.signOut).toHaveBeenCalled();
+        // Session kept alive for biometric re-auth — signOut not called
+        expect(mockSupa.auth.signOut).not.toHaveBeenCalled();
         expect(result.current.pendingBiometricSession).toBe(true);
     });
 });

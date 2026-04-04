@@ -130,7 +130,7 @@ export function useDashboard({ userId, role, isManagerView, isAdminRole }: UseDa
 
     const displayActivities = useMemo(
         () => (recentActivities.length > 0 ? formatActivities(recentActivities) : []),
-        [recentActivities, isManagerView],
+        [recentActivities],
     );
 
     return {

@@ -21,15 +21,18 @@ module.exports = {
         'app/**/*.tsx',
         '!**/*.d.ts',
         '!lib/supabase.ts', // Module-level createClient() — mocked globally, tested via __tests__/lib/supabase.test.ts
+        '!lib/leads/index.ts', // Barrel re-export — no logic
+        '!lib/recruitment/index.ts', // Barrel re-export — no logic
+        '!lib/offline/index.ts', // Barrel re-export — no logic
     ],
     coverageThreshold: {
-        // Current: stmts 82.2%, branches 72.8%, funcs 73.4%, lines 84.0%
-        // Set ~2% below current to catch regressions
+        // Current: stmts 82.24%, branches 72.84%, funcs 73.4%, lines 83.99%
+        // Set within 0.5% of current to catch regressions promptly
         global: {
-            statements: 80,
-            branches: 70,
-            functions: 71,
-            lines: 82,
+            statements: 82,
+            branches: 72,
+            functions: 73,
+            lines: 83.5,
         },
     },
 };

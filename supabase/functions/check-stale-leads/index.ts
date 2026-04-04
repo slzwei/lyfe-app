@@ -12,15 +12,19 @@ const DEDUP_DAYS = 7;
 
 async function timingSafeEqual(a: string, b: string): Promise<boolean> {
     const enc = new TextEncoder();
-    const keyData = enc.encode('comparison-key');
-    const key = await crypto.subtle.importKey('raw', keyData, { name: 'HMAC', hash: 'SHA-256' }, false, ['sign']);
-    const sigA = await crypto.subtle.sign('HMAC', key, enc.encode(a));
-    const sigB = await crypto.subtle.sign('HMAC', key, enc.encode(b));
-    const arrA = new Uint8Array(sigA);
-    const arrB = new Uint8Array(sigB);
-    if (arrA.length !== arrB.length) return false;
+    const aBuf = enc.encode(a);
+    const bBuf = enc.encode(b);
+    if (aBuf.length !== bBuf.length) return false;
+    // Use a fresh random key each call — makes offline precomputation impossible
+    const key = await crypto.subtle.generateKey({ name: 'HMAC', hash: 'SHA-256' }, false, ['sign']);
+    const [sigA, sigB] = await Promise.all([
+        crypto.subtle.sign('HMAC', key, aBuf),
+        crypto.subtle.sign('HMAC', key, bBuf),
+    ]);
+    const viewA = new Uint8Array(sigA);
+    const viewB = new Uint8Array(sigB);
     let result = 0;
-    for (let i = 0; i < arrA.length; i++) result |= arrA[i] ^ arrB[i];
+    for (let i = 0; i < viewA.length; i++) result |= viewA[i] ^ viewB[i];
     return result === 0;
 }
 
@@ -29,15 +33,18 @@ Deno.serve(async (req) => {
         return new Response(null, { status: 204 });
     }
 
-    // ── Cron authentication (timing-safe) — accept CRON_SECRET or service role key ──
+    // ── Cron authentication (timing-safe) ────────────────────────
     const cronSecret = Deno.env.get('CRON_SECRET');
-    const serviceRoleKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY');
+    if (!cronSecret) {
+        console.error('[check-stale-leads] CRON_SECRET not configured');
+        return new Response(JSON.stringify({ error: 'Server misconfiguration' }), {
+            status: 500,
+            headers: { 'Content-Type': 'application/json' },
+        });
+    }
     const authHeader = req.headers.get('Authorization');
     const token = authHeader?.startsWith('Bearer ') ? authHeader.slice(7) : null;
-    const authorized =
-        token &&
-        ((cronSecret && (await timingSafeEqual(token, cronSecret))) ||
-            (serviceRoleKey && (await timingSafeEqual(token, serviceRoleKey))));
+    const authorized = token && (await timingSafeEqual(token, cronSecret));
     if (!authorized) {
         return new Response(JSON.stringify({ error: 'Unauthorized' }), {
             status: 401,

@@ -1,3 +1,12 @@
+/**
+ * SECURITY NOTE (M3): This function is invoked by Supabase Auth as a hook, not
+ * by public callers. Supabase does not yet support SUPABASE_AUTH_HOOK_SECRET for
+ * custom SMS hooks (only for Postgres hooks). The effective mitigations in place are:
+ *  1. The function is only reachable within the Supabase project network context.
+ *  2. An invitation gate blocks OTP dispatch for unknown numbers.
+ *  3. Country-code allowlist restricts to Singapore (+65) numbers.
+ * If Supabase adds hook-secret support, validate Authorization here at that time.
+ */
 import { serve } from 'https://deno.land/std@0.177.0/http/server.ts';
 import { AwsClient } from 'https://esm.sh/aws4fetch@1.0.19';
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';

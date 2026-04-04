@@ -468,17 +468,19 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
         const bioEnabled = await isBiometricsEnabled();
         if (bioEnabled) {
-            // Save refresh token for biometric re-auth before revoking
+            // When biometrics are enabled, we keep the server session alive so the
+            // refresh token remains valid for Face ID re-auth. The biometric gate
+            // on the login screen protects device-level access. We just save the
+            // token and update app state — no signOut call at all.
             const {
                 data: { session },
             } = await supabase.auth.getSession();
             if (session?.refresh_token) {
                 await storeBiometricRefreshToken(session.refresh_token);
             }
+        } else {
+            await supabase.auth.signOut();
         }
-
-        // Always revoke the server session
-        await supabase.auth.signOut();
 
         clearSentryUser();
         setUser(null);
@@ -492,6 +494,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         }));
     }, []);
 
+    // Note: authState includes pendingBiometricSession which triggers re-renders
+    // on every auth state change. It could be moved to a useRef since no consumer
+    // uses it for rendering, but it's part of the public API (AuthContextType) and
+    // tested directly, so the trade-off favors keeping it as state for now.
     const authValue = useMemo(
         () => ({
             ...authState,

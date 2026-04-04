@@ -1,5 +1,7 @@
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 
+// NOTE: CORS headers retained for admin dashboard compatibility. This endpoint
+// primarily serves as a machine-to-machine webhook (HMAC-authenticated).
 const allowedOrigin = Deno.env.get('ADMIN_ORIGIN') || 'https://admin.lyfe.app';
 
 const corsHeaders = {
@@ -27,19 +29,23 @@ function jsonResponse(body: Record<string, unknown>, status = 200) {
 
 /**
  * Timing-safe comparison of two strings.
+ * Uses a fresh random HMAC key each call — makes offline precomputation impossible.
  */
 async function timingSafeEqual(a: string, b: string): Promise<boolean> {
     const enc = new TextEncoder();
-    const keyData = enc.encode('comparison-key');
-    const key = await crypto.subtle.importKey('raw', keyData, { name: 'HMAC', hash: 'SHA-256' }, false, ['sign']);
-    const sigA = await crypto.subtle.sign('HMAC', key, enc.encode(a));
-    const sigB = await crypto.subtle.sign('HMAC', key, enc.encode(b));
-    const arrA = new Uint8Array(sigA);
-    const arrB = new Uint8Array(sigB);
-    if (arrA.length !== arrB.length) return false;
+    const aBuf = enc.encode(a);
+    const bBuf = enc.encode(b);
+    if (aBuf.length !== bBuf.length) return false;
+    const key = await crypto.subtle.generateKey({ name: 'HMAC', hash: 'SHA-256' }, false, ['sign']);
+    const [sigA, sigB] = await Promise.all([
+        crypto.subtle.sign('HMAC', key, aBuf),
+        crypto.subtle.sign('HMAC', key, bBuf),
+    ]);
+    const viewA = new Uint8Array(sigA);
+    const viewB = new Uint8Array(sigB);
     let result = 0;
-    for (let i = 0; i < arrA.length; i++) {
-        result |= arrA[i] ^ arrB[i];
+    for (let i = 0; i < viewA.length; i++) {
+        result |= viewA[i] ^ viewB[i];
     }
     return result === 0;
 }
@@ -241,7 +247,7 @@ Deno.serve(async (req) => {
                     .update({
                         assigned_to: agentId,
                         recording_url: lead.recordingUrl || null,
-                        transcript: lead.transcript || null,
+                        transcript: lead.transcript ? String(lead.transcript).slice(0, 50000) : null,
                     })
                     .eq('id', existing.id);
 
@@ -307,7 +313,7 @@ Deno.serve(async (req) => {
                 product_interest: 'general',
                 notes,
                 recording_url: lead.recordingUrl || null,
-                transcript: lead.transcript || null,
+                transcript: lead.transcript ? String(lead.transcript).slice(0, 50000) : null,
                 assigned_to: agentId,
                 created_by: agentId,
             })

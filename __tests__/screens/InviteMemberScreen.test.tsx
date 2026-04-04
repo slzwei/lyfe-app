@@ -71,7 +71,7 @@ describe('InviteMemberScreen', () => {
         expect(getByText('Invite Member')).toBeTruthy();
         expect(getByPlaceholderText('e.g. John Tan')).toBeTruthy();
         expect(getByPlaceholderText('9123 4567')).toBeTruthy();
-        expect(getByText('Send Invitation')).toBeTruthy();
+        expect(getByText('Create Invitation')).toBeTruthy();
     });
 
     it('shows validation errors for empty fields', async () => {
@@ -122,7 +122,7 @@ describe('InviteMemberScreen', () => {
         fireEvent.press(getByTestId('invite-submit-button'));
 
         await waitFor(() => {
-            expect(getByText('Invitation Sent')).toBeTruthy();
+            expect(getByText('Invitation Created')).toBeTruthy();
         });
     });
 

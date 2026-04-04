@@ -4,7 +4,7 @@ import LoginScreen from '@/app/(auth)/login';
 import { useAuth } from '@/contexts/AuthContext';
 import { useTheme } from '@/contexts/ThemeContext';
 import { Colors } from '@/constants/Colors';
-import { getBiometryType, biometricMeta } from '@/lib/biometrics';
+import { getBiometryType, getBiometricRefreshToken, biometricMeta } from '@/lib/biometrics';
 
 jest.mock('@/lib/supabase');
 jest.mock('@/contexts/AuthContext');
@@ -35,6 +35,7 @@ beforeEach(() => {
         biometricsEnabled: false,
     });
     (getBiometryType as jest.Mock).mockResolvedValue('none');
+    (getBiometricRefreshToken as jest.Mock).mockResolvedValue(null);
     (biometricMeta as jest.Mock).mockReturnValue({ label: 'Face ID', icon: 'scan-outline' });
 });
 
@@ -104,6 +105,7 @@ describe('LoginScreen', () => {
             biometricsEnabled: true,
         });
         (getBiometryType as jest.Mock).mockResolvedValue('face');
+        (getBiometricRefreshToken as jest.Mock).mockResolvedValue('mock-token');
 
         const { getByTestId } = render(<LoginScreen />);
 
@@ -162,6 +164,7 @@ describe('LoginScreen', () => {
             biometricsEnabled: true,
         });
         (getBiometryType as jest.Mock).mockResolvedValue('face');
+        (getBiometricRefreshToken as jest.Mock).mockResolvedValue('mock-token');
 
         const { getByTestId } = render(<LoginScreen />);
 

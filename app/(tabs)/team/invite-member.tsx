@@ -10,6 +10,7 @@ import { useRouter } from 'expo-router';
 import React, { useEffect, useMemo, useState } from 'react';
 import {
     ActivityIndicator,
+    FlatList,
     Keyboard,
     KeyboardAvoidingView,
     Modal,
@@ -52,6 +53,7 @@ export default function InviteMemberScreen() {
 
     const [showRolePicker, setShowRolePicker] = useState(false);
     const [showManagerPicker, setShowManagerPicker] = useState(false);
+    const [managerSearch, setManagerSearch] = useState('');
     const [managers, setManagers] = useState<AssignableManager[]>([]);
     const [loadingManagers, setLoadingManagers] = useState(false);
 
@@ -77,6 +79,11 @@ export default function InviteMemberScreen() {
     }, [needsManager, user?.id, callerRole]);
 
     const selectedManager = managers.find((m) => m.id === assignedManagerId);
+    const filteredManagers = useMemo(() => {
+        if (!managerSearch.trim()) return managers;
+        const q = managerSearch.toLowerCase();
+        return managers.filter((m) => m.full_name?.toLowerCase().includes(q));
+    }, [managers, managerSearch]);
 
     const validate = (): boolean => {
         const e: Record<string, string> = {};
@@ -146,7 +153,7 @@ export default function InviteMemberScreen() {
                     {saveError && <ErrorBanner message={saveError} />}
 
                     {/* Name */}
-                    <FormField label="Full Name" error={errors.name}>
+                    <FormField label="Full Name" error={errors.name} required>
                         <TextInput
                             style={[
                                 styles.input,
@@ -170,7 +177,7 @@ export default function InviteMemberScreen() {
                     </FormField>
 
                     {/* Phone */}
-                    <FormField label="Phone Number" error={errors.phone}>
+                    <FormField label="Phone Number" error={errors.phone} required>
                         <View
                             style={[
                                 styles.phoneRow,
@@ -184,7 +191,7 @@ export default function InviteMemberScreen() {
                             <View style={[styles.phoneDivider, { backgroundColor: colors.border }]} />
                             <TextInput
                                 style={[styles.phoneInput, { color: colors.textPrimary }]}
-                                value={phone}
+                                value={phone.length > 4 ? `${phone.slice(0, 4)} ${phone.slice(4)}` : phone}
                                 onChangeText={(t) => {
                                     setPhone(t.replace(/\D/g, '').slice(0, 8));
                                     setErrors((e) => ({ ...e, phone: '' }));
@@ -192,7 +199,7 @@ export default function InviteMemberScreen() {
                                 placeholder="9123 4567"
                                 placeholderTextColor={colors.textTertiary}
                                 keyboardType="phone-pad"
-                                maxLength={8}
+                                maxLength={9}
                                 testID="invite-phone-input"
                             />
                         </View>
@@ -200,7 +207,7 @@ export default function InviteMemberScreen() {
 
                     {/* Role Picker */}
                     {invitableRoles.length > 1 && (
-                        <FormField label="Role" error={errors.role}>
+                        <FormField label="Role" error={errors.role} required>
                             <TouchableOpacity
                                 style={[
                                     styles.pickerButton,
@@ -287,7 +294,7 @@ export default function InviteMemberScreen() {
                             placeholder="Any notes about this person"
                             placeholderTextColor={colors.textTertiary}
                             multiline
-                            numberOfLines={3}
+                            numberOfLines={2}
                             textAlignVertical="top"
                             testID="invite-notes-input"
                         />
@@ -303,103 +310,184 @@ export default function InviteMemberScreen() {
                         {isSubmitting ? (
                             <ActivityIndicator color="#fff" size="small" />
                         ) : (
-                            <Text style={styles.submitText}>Send Invitation</Text>
+                            <Text style={styles.submitText}>Create Invitation</Text>
                         )}
                     </TouchableOpacity>
                 </ScrollView>
             </KeyboardAvoidingView>
 
             {/* Role Picker Modal */}
-            <Modal visible={showRolePicker} transparent animationType="fade">
-                <Pressable style={styles.overlay} onPress={() => setShowRolePicker(false)}>
-                    <View style={[styles.modal, { backgroundColor: colors.background }]}>
-                        <Text style={[styles.modalTitle, { color: colors.textPrimary }]}>Select Role</Text>
-                        {invitableRoles.map((role) => (
-                            <TouchableOpacity
-                                key={role}
-                                style={[
-                                    styles.modalOption,
-                                    selectedRole === role && { backgroundColor: colors.accentLight },
-                                ]}
-                                onPress={() => {
-                                    setSelectedRole(role);
-                                    setErrors((e) => ({ ...e, role: '' }));
-                                    setShowRolePicker(false);
-                                }}
-                            >
-                                <Text style={[styles.modalOptionText, { color: colors.textPrimary }]}>
-                                    {ROLE_LABELS[role]}
-                                </Text>
-                                {selectedRole === role && <Ionicons name="checkmark" size={20} color={colors.accent} />}
+            <Modal visible={showRolePicker} transparent animationType="slide">
+                <View style={styles.sheetOverlay}>
+                    <Pressable style={styles.sheetBackdrop} onPress={() => setShowRolePicker(false)} />
+                    <View style={[styles.sheet, { backgroundColor: colors.background }]}>
+                        <View style={styles.sheetHandle}>
+                            <View style={[styles.handleBar, { backgroundColor: colors.border }]} />
+                        </View>
+                        <View style={[styles.sheetHeader, { borderBottomColor: colors.border }]}>
+                            <Text style={[styles.sheetTitle, { color: colors.textPrimary }]}>Select Role</Text>
+                            <TouchableOpacity onPress={() => setShowRolePicker(false)} hitSlop={12}>
+                                <Ionicons name="close-circle" size={28} color={colors.textTertiary} />
                             </TouchableOpacity>
-                        ))}
+                        </View>
+                        <View style={styles.sheetBody}>
+                            {invitableRoles.map((role, i) => (
+                                <TouchableOpacity
+                                    key={role}
+                                    style={[
+                                        styles.sheetOption,
+                                        i < invitableRoles.length - 1 && {
+                                            borderBottomWidth: StyleSheet.hairlineWidth,
+                                            borderBottomColor: colors.border,
+                                        },
+                                        selectedRole === role && { backgroundColor: colors.accentLight },
+                                    ]}
+                                    onPress={() => {
+                                        setSelectedRole(role);
+                                        setErrors((e) => ({ ...e, role: '' }));
+                                        setShowRolePicker(false);
+                                    }}
+                                >
+                                    <Text style={[styles.sheetOptionText, { color: colors.textPrimary }]}>
+                                        {ROLE_LABELS[role]}
+                                    </Text>
+                                    {selectedRole === role && (
+                                        <Ionicons name="checkmark" size={22} color={colors.accent} />
+                                    )}
+                                </TouchableOpacity>
+                            ))}
+                        </View>
                     </View>
-                </Pressable>
+                </View>
             </Modal>
 
             {/* Manager Picker Modal */}
-            <Modal visible={showManagerPicker} transparent animationType="fade">
-                <Pressable style={styles.overlay} onPress={() => setShowManagerPicker(false)}>
-                    <View style={[styles.modal, { backgroundColor: colors.background }]}>
-                        <Text style={[styles.modalTitle, { color: colors.textPrimary }]}>Assign to Manager</Text>
-                        <TouchableOpacity
-                            style={[styles.modalOption, !assignedManagerId && { backgroundColor: colors.accentLight }]}
-                            onPress={() => {
-                                setAssignedManagerId(null);
-                                setShowManagerPicker(false);
-                            }}
-                        >
-                            <Text style={[styles.modalOptionText, { color: colors.textSecondary }]}>
-                                None (assign to me)
-                            </Text>
-                        </TouchableOpacity>
-                        {managers.map((m) => (
+            <Modal visible={showManagerPicker} transparent animationType="slide" onShow={() => setManagerSearch('')}>
+                <View style={styles.sheetOverlay}>
+                    <Pressable style={styles.sheetBackdrop} onPress={() => setShowManagerPicker(false)} />
+                    <View style={[styles.sheet, styles.sheetTall, { backgroundColor: colors.background }]}>
+                        <View style={styles.sheetHandle}>
+                            <View style={[styles.handleBar, { backgroundColor: colors.border }]} />
+                        </View>
+                        <View style={[styles.sheetHeader, { borderBottomColor: colors.border }]}>
+                            <Text style={[styles.sheetTitle, { color: colors.textPrimary }]}>Assign to Manager</Text>
+                            <TouchableOpacity onPress={() => setShowManagerPicker(false)} hitSlop={12}>
+                                <Ionicons name="close-circle" size={28} color={colors.textTertiary} />
+                            </TouchableOpacity>
+                        </View>
+                        {managers.length > 5 && (
+                            <View style={[styles.searchRow, { borderBottomColor: colors.border }]}>
+                                <Ionicons name="search" size={18} color={colors.textTertiary} />
+                                <TextInput
+                                    style={[styles.searchInput, { color: colors.textPrimary }]}
+                                    placeholder="Search managers..."
+                                    placeholderTextColor={colors.textTertiary}
+                                    value={managerSearch}
+                                    onChangeText={setManagerSearch}
+                                    autoCorrect={false}
+                                />
+                                {managerSearch.length > 0 && (
+                                    <TouchableOpacity onPress={() => setManagerSearch('')} hitSlop={8}>
+                                        <Ionicons name="close-circle" size={18} color={colors.textTertiary} />
+                                    </TouchableOpacity>
+                                )}
+                            </View>
+                        )}
+                        {/* Assign to me option */}
+                        {!managerSearch && (
                             <TouchableOpacity
-                                key={m.id}
                                 style={[
-                                    styles.modalOption,
-                                    assignedManagerId === m.id && { backgroundColor: colors.accentLight },
+                                    styles.selfAssignOption,
+                                    { borderBottomColor: colors.border },
+                                    !assignedManagerId && { backgroundColor: colors.accentLight },
                                 ]}
                                 onPress={() => {
-                                    setAssignedManagerId(m.id);
+                                    setAssignedManagerId(null);
                                     setShowManagerPicker(false);
                                 }}
                             >
-                                <Text style={[styles.modalOptionText, { color: colors.textPrimary }]}>
-                                    {m.full_name}
-                                </Text>
-                                {assignedManagerId === m.id && (
-                                    <Ionicons name="checkmark" size={20} color={colors.accent} />
-                                )}
+                                <View style={styles.selfAssignRow}>
+                                    <View style={[styles.selfAssignIcon, { backgroundColor: colors.surfaceSecondary }]}>
+                                        <Ionicons name="person" size={16} color={colors.accent} />
+                                    </View>
+                                    <Text style={[styles.sheetOptionText, { color: colors.textPrimary }]}>
+                                        Assign to myself
+                                    </Text>
+                                </View>
+                                {!assignedManagerId && <Ionicons name="checkmark" size={22} color={colors.accent} />}
                             </TouchableOpacity>
-                        ))}
+                        )}
+                        <FlatList
+                            data={filteredManagers}
+                            keyExtractor={(m) => m.id}
+                            keyboardShouldPersistTaps="handled"
+                            renderItem={({ item: m, index }) => (
+                                <TouchableOpacity
+                                    style={[
+                                        styles.sheetOption,
+                                        index < filteredManagers.length - 1 && {
+                                            borderBottomWidth: StyleSheet.hairlineWidth,
+                                            borderBottomColor: colors.border,
+                                        },
+                                        assignedManagerId === m.id && { backgroundColor: colors.accentLight },
+                                    ]}
+                                    onPress={() => {
+                                        setAssignedManagerId(m.id);
+                                        setShowManagerPicker(false);
+                                    }}
+                                >
+                                    <View style={styles.managerInfo}>
+                                        <View style={[styles.avatar, { backgroundColor: colors.surfaceSecondary }]}>
+                                            <Text style={[styles.avatarText, { color: colors.textSecondary }]}>
+                                                {(m.full_name ?? '?').charAt(0).toUpperCase()}
+                                            </Text>
+                                        </View>
+                                        <Text style={[styles.sheetOptionText, { color: colors.textPrimary }]}>
+                                            {m.full_name}
+                                        </Text>
+                                    </View>
+                                    {assignedManagerId === m.id && (
+                                        <Ionicons name="checkmark" size={22} color={colors.accent} />
+                                    )}
+                                </TouchableOpacity>
+                            )}
+                            ListEmptyComponent={
+                                <View style={styles.emptyList}>
+                                    <Text style={[styles.emptyText, { color: colors.textTertiary }]}>
+                                        {managerSearch ? 'No managers found' : 'No managers available'}
+                                    </Text>
+                                </View>
+                            }
+                        />
                     </View>
-                </Pressable>
+                </View>
             </Modal>
 
             {/* Success Modal */}
             <Modal visible={showSuccess} transparent animationType="fade">
-                <View style={styles.overlay}>
+                <View style={styles.successOverlay}>
                     <View style={[styles.successModal, { backgroundColor: colors.background }]}>
                         <View style={[styles.successIcon, { backgroundColor: colors.accentLight }]}>
                             <Ionicons name="checkmark-circle" size={48} color={colors.accent} />
                         </View>
-                        <Text style={[styles.successTitle, { color: colors.textPrimary }]}>Invitation Sent</Text>
+                        <Text style={[styles.successTitle, { color: colors.textPrimary }]}>Invitation Created</Text>
                         <Text style={[styles.successSubtitle, { color: colors.textSecondary }]}>
                             Tell {successName} to download Lyfe and sign in with their phone number.
                         </Text>
-                        <TouchableOpacity
-                            style={[styles.submitButton, { backgroundColor: colors.accent }]}
-                            onPress={handleDone}
-                        >
-                            <Text style={styles.submitText}>Done</Text>
-                        </TouchableOpacity>
-                        <TouchableOpacity
-                            style={[styles.outlineButton, { borderColor: colors.border }]}
-                            onPress={handleAddAnother}
-                        >
-                            <Text style={[styles.outlineButtonText, { color: colors.accent }]}>Invite Another</Text>
-                        </TouchableOpacity>
+                        <View style={styles.successButtons}>
+                            <TouchableOpacity
+                                style={[styles.submitButton, { backgroundColor: colors.accent }]}
+                                onPress={handleDone}
+                            >
+                                <Text style={styles.submitText}>Done</Text>
+                            </TouchableOpacity>
+                            <TouchableOpacity
+                                style={[styles.outlineButton, { borderColor: colors.border }]}
+                                onPress={handleAddAnother}
+                            >
+                                <Text style={[styles.outlineButtonText, { color: colors.accent }]}>Invite Another</Text>
+                            </TouchableOpacity>
+                        </View>
                     </View>
                 </View>
             </Modal>
@@ -419,7 +507,7 @@ const styles = StyleSheet.create({
         borderBottomWidth: StyleSheet.hairlineWidth,
     },
     headerTitle: { fontSize: 17, fontWeight: '600' },
-    form: { padding: 16, gap: 16, paddingBottom: 40 },
+    form: { padding: 16, paddingBottom: 40 },
     input: {
         height: 48,
         borderRadius: 10,
@@ -427,7 +515,7 @@ const styles = StyleSheet.create({
         paddingHorizontal: 14,
         fontSize: 16,
     },
-    multiline: { height: 80, paddingTop: 12 },
+    multiline: { height: 64, paddingTop: 12 },
     phoneRow: {
         flexDirection: 'row',
         alignItems: 'center',
@@ -470,26 +558,119 @@ const styles = StyleSheet.create({
         justifyContent: 'center',
         alignItems: 'center',
     },
-    modal: {
-        width: '85%',
-        borderRadius: 16,
-        padding: 20,
+    sheetOverlay: {
+        flex: 1,
+        justifyContent: 'flex-end',
     },
-    modalTitle: { fontSize: 18, fontWeight: '600', marginBottom: 16 },
-    modalOption: {
+    sheetBackdrop: {
+        ...StyleSheet.absoluteFillObject,
+        backgroundColor: 'rgba(0,0,0,0.4)',
+    },
+    sheet: {
+        borderTopLeftRadius: 20,
+        borderTopRightRadius: 20,
+        maxHeight: '50%',
+        paddingBottom: 34,
+    },
+    sheetTall: {
+        maxHeight: '70%',
+    },
+    sheetHandle: {
+        alignItems: 'center',
+        paddingTop: 10,
+        paddingBottom: 4,
+    },
+    handleBar: {
+        width: 36,
+        height: 4,
+        borderRadius: 2,
+    },
+    sheetHeader: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'space-between',
+        paddingHorizontal: 20,
+        paddingVertical: 14,
+        borderBottomWidth: StyleSheet.hairlineWidth,
+    },
+    sheetTitle: { fontSize: 18, fontWeight: '600' },
+    sheetBody: { paddingHorizontal: 8 },
+    sheetOption: {
         flexDirection: 'row',
         alignItems: 'center',
         justifyContent: 'space-between',
         paddingVertical: 14,
-        paddingHorizontal: 12,
+        paddingHorizontal: 16,
         borderRadius: 10,
+        marginHorizontal: 8,
     },
-    modalOptionText: { fontSize: 16 },
+    sheetOptionText: { fontSize: 16, fontWeight: '400' },
+    searchRow: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        paddingHorizontal: 16,
+        paddingVertical: 10,
+        gap: 10,
+        borderBottomWidth: StyleSheet.hairlineWidth,
+    },
+    searchInput: {
+        flex: 1,
+        fontSize: 16,
+        paddingVertical: 4,
+    },
+    selfAssignOption: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'space-between',
+        paddingVertical: 14,
+        paddingHorizontal: 20,
+        borderBottomWidth: StyleSheet.hairlineWidth,
+    },
+    selfAssignRow: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 12,
+    },
+    selfAssignIcon: {
+        width: 32,
+        height: 32,
+        borderRadius: 16,
+        justifyContent: 'center',
+        alignItems: 'center',
+    },
+    managerInfo: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 12,
+    },
+    avatar: {
+        width: 32,
+        height: 32,
+        borderRadius: 16,
+        justifyContent: 'center',
+        alignItems: 'center',
+    },
+    avatarText: { fontSize: 14, fontWeight: '600' },
+    emptyList: {
+        paddingVertical: 32,
+        alignItems: 'center',
+    },
+    emptyText: { fontSize: 15 },
+    successOverlay: {
+        flex: 1,
+        backgroundColor: 'rgba(0,0,0,0.85)',
+        justifyContent: 'center',
+        alignItems: 'center',
+    },
     successModal: {
         width: '85%',
         borderRadius: 20,
         padding: 28,
         alignItems: 'center',
+    },
+    successButtons: {
+        width: '100%',
+        gap: 10,
     },
     successIcon: {
         width: 80,

@@ -1,4 +1,4 @@
-import { useCallback, useState } from 'react';
+import { useCallback, useMemo, useState } from 'react';
 import { Alert } from 'react-native';
 import { logRoadshowActivity } from '@/lib/roadshow';
 import { PICKER_MINUTES } from '@/constants/ui';
@@ -32,8 +32,7 @@ export function useActivityLog({
     const [logMinuteIdx, setLogMinuteIdx] = useState(0);
     const [logAmPm, setLogAmPm] = useState(0);
 
-    // Compute myCounts internally
-    const myCounts = (() => {
+    const myCounts = useMemo(() => {
         if (!myAttendance) return { sitdowns: 0, pitches: 0, closed: 0, afyc: 0 };
         const mine = activities.filter((a) => a.user_id === myAttendance.user_id);
         return {
@@ -42,9 +41,9 @@ export function useActivityLog({
             closed: mine.filter((a) => a.type === 'case_closed').length,
             afyc: mine.filter((a) => a.type === 'case_closed').reduce((s, a) => s + (a.afyc_amount ?? 0), 0),
         };
-    })();
+    }, [activities, myAttendance]);
 
-    const initLogTime = () => {
+    const initLogTime = useCallback(() => {
         const now = new Date();
         let h = now.getHours();
         const mins = now.getMinutes();
@@ -56,9 +55,9 @@ export function useActivityLog({
         setLogHour(h - 1);
         setLogMinuteIdx(minIdx);
         setLogAmPm(ampm);
-    };
+    }, []);
 
-    const logTimeToISO = (): string => {
+    const logTimeToISO = useCallback((): string => {
         let h = logHour + 1; // 1-12
         if (logAmPm === 1 && h !== 12) h += 12;
         if (logAmPm === 0 && h === 12) h = 0;
@@ -66,7 +65,7 @@ export function useActivityLog({
         const d = new Date();
         d.setHours(h, mins, 0, 0);
         return d.toISOString();
-    };
+    }, [logHour, logMinuteIdx, logAmPm]);
 
     const handleLogActivity = useCallback(
         async (type: 'sitdown' | 'pitch', afycAmount?: number) => {
@@ -103,7 +102,7 @@ export function useActivityLog({
 
             setTimeout(() => setLogDebounce((prev) => ({ ...prev, [type]: false })), 400);
         },
-        [logDebounce, myCounts, myAttendance, eventId, userId, userFullName, setActivities, onMilestone],
+        [logDebounce, myCounts, myAttendance, eventId, userId, userFullName, setActivities, onMilestone, logTimeToISO],
     );
 
     const handleLogCaseClosed = useCallback(async () => {
@@ -146,7 +145,7 @@ export function useActivityLog({
             Alert.alert('Failed', 'Could not log case closed.');
         }
         setLoggingActivity(false);
-    }, [loggingActivity, afycInput, eventId, userId, userFullName, setActivities, onMilestone]);
+    }, [loggingActivity, afycInput, eventId, userId, userFullName, setActivities, onMilestone, logTimeToISO]);
 
     const handleLogDeparture = () => {
         Alert.alert('Leave Roadshow?', 'This will log your departure from the booth.', [

@@ -27,7 +27,11 @@ function PdfViewerModal({ visible, pdfUrl, pdfTitle, colors, onClose }: Props) {
                     <View style={{ width: 32 }} />
                 </View>
                 {pdfUrl && (
-                    <WebView source={{ uri: pdfUrl }} style={{ flex: 1 }} originWhitelist={['https://*.supabase.co']} />
+                    <WebView
+                        source={{ uri: pdfUrl }}
+                        style={{ flex: 1 }}
+                        originWhitelist={['https://nvtedkyjwulkzjeoqjgx.supabase.co']}
+                    />
                 )}
             </SafeAreaView>
         </Modal>

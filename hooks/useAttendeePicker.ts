@@ -2,7 +2,7 @@
  * Hook encapsulating attendee selection state for event creation.
  * Manages team member list, search, external attendees, and role assignment.
  */
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { fetchAllUsers, type SimpleUser } from '@/lib/events';
 import type { AttendeeRole, ExternalAttendee } from '@/types/event';
 
@@ -65,10 +65,14 @@ export function useAttendeePicker(): AttendeePickerState {
         loadUsers();
     }, [loadUsers]);
 
-    const filteredUsers = allUsers.filter(
-        (u) =>
-            u.full_name.toLowerCase().includes(userSearch.toLowerCase()) ||
-            u.role.toLowerCase().includes(userSearch.toLowerCase()),
+    const filteredUsers = useMemo(
+        () =>
+            allUsers.filter(
+                (u) =>
+                    u.full_name.toLowerCase().includes(userSearch.toLowerCase()) ||
+                    u.role.toLowerCase().includes(userSearch.toLowerCase()),
+            ),
+        [allUsers, userSearch],
     );
 
     const toggleAttendee = useCallback((u: SimpleUser) => {
