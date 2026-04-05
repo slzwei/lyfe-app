@@ -545,10 +545,10 @@ describe('fetchAssignableManagers', () => {
         expect(result.error).toBe('Query failed');
     });
 
-    it('returns all active managers for manager+ roles', async () => {
+    it('returns all active managers/directors (excluding self) for manager+ roles', async () => {
         const usersChain = mockSupa.__getChain('users');
         mockResolve(usersChain, {
-            data: [{ id: 'mgr-1', full_name: 'Alice', role: 'manager' }],
+            data: [{ id: 'mgr-2', full_name: 'Alice', role: 'manager' }],
             error: null,
         });
 

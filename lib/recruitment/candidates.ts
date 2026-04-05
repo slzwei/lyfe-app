@@ -308,7 +308,7 @@ export interface AssignableManager {
 
 /**
  * Fetch managers/directors that the current user can assign candidates to.
- * PAs: only their assigned managers. Manager+: all active managers/directors/admins.
+ * PAs: only their assigned managers. Manager+: all active managers/directors (excluding self).
  */
 export async function fetchAssignableManagers(
     userId: string,
@@ -337,8 +337,9 @@ export async function fetchAssignableManagers(
         const { data: managers, error } = await supabase
             .from('users')
             .select('id, full_name, role')
-            .in('role', ['manager', 'director', 'admin'])
+            .in('role', ['manager', 'director'])
             .eq('is_active', true)
+            .neq('id', userId)
             .order('full_name');
 
         return { data: (managers || []) as AssignableManager[], error: error?.message || null };

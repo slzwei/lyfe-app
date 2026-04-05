@@ -22,6 +22,8 @@ DROP TABLE IF EXISTS public.staff_sessions CASCADE;
 -- =====================================================================
 
 DROP POLICY IF EXISTS exam_questions_admin ON public.exam_questions;
+DROP POLICY IF EXISTS exam_questions_select ON public.exam_questions;
+DROP POLICY IF EXISTS exam_questions_write ON public.exam_questions;
 
 -- Directors + admin can read questions
 CREATE POLICY exam_questions_select ON public.exam_questions

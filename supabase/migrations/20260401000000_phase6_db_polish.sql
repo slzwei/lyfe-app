@@ -13,6 +13,8 @@
 -- (used in seed data for backward compat)
 -- =====================================================================
 
+ALTER TABLE public.notifications DROP CONSTRAINT IF EXISTS chk_notification_type;
+
 ALTER TABLE public.notifications
   ADD CONSTRAINT chk_notification_type CHECK (type IN (
     'roadshow_pledge',
@@ -35,7 +37,7 @@ ALTER TABLE public.notifications
     'roadshow_summary',
     'system_alert',
     'lead_assigned'
-  ));
+  )) NOT VALID;
 
 
 -- =====================================================================

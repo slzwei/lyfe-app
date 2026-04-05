@@ -22,6 +22,8 @@ export interface MemberInvitation {
     accepted_at: string | null;
     expires_at: string;
     created_at: string;
+    inviter?: { full_name: string } | null;
+    manager?: { full_name: string } | null;
 }
 
 /** Permission matrix: who can invite which roles */
@@ -58,7 +60,7 @@ export async function fetchMyInvitations(): Promise<{
 }> {
     const { data, error } = await supabase
         .from('member_invitations')
-        .select('*')
+        .select('*, inviter:users!invited_by_id(full_name), manager:users!assigned_manager_id(full_name)')
         .order('created_at', { ascending: false });
 
     if (error) return { data: [], error: error.message };
@@ -66,12 +68,14 @@ export async function fetchMyInvitations(): Promise<{
 }
 
 export async function revokeInvitation(invitationId: string): Promise<{ error: string | null }> {
-    const { error } = await supabase
+    const { data, error } = await supabase
         .from('member_invitations')
         .update({ status: 'revoked' })
         .eq('id', invitationId)
-        .eq('status', 'pending');
+        .eq('status', 'pending')
+        .select('id');
 
     if (error) return { error: error.message };
+    if (!data || data.length === 0) return { error: 'Unable to revoke — you may not have permission' };
     return { error: null };
 }

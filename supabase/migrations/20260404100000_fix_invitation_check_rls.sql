@@ -9,6 +9,8 @@
 -- Add a self-read policy so authenticated users can see their own
 -- accepted invitation.
 
+DROP POLICY IF EXISTS member_invitations_self_select ON public.member_invitations;
+
 CREATE POLICY member_invitations_self_select
   ON public.member_invitations FOR SELECT
   USING (accepted_by_id = auth.uid());

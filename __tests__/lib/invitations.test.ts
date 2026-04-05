@@ -129,7 +129,9 @@ describe('revokeInvitation', () => {
         mockSupabase.from.mockReturnValue({
             update: jest.fn().mockReturnValue({
                 eq: jest.fn().mockReturnValue({
-                    eq: jest.fn().mockResolvedValue({ error: null }),
+                    eq: jest.fn().mockReturnValue({
+                        select: jest.fn().mockResolvedValue({ data: [{ id: 'inv_1' }], error: null }),
+                    }),
                 }),
             }),
         });
@@ -142,12 +144,29 @@ describe('revokeInvitation', () => {
         mockSupabase.from.mockReturnValue({
             update: jest.fn().mockReturnValue({
                 eq: jest.fn().mockReturnValue({
-                    eq: jest.fn().mockResolvedValue({ error: { message: 'Update failed' } }),
+                    eq: jest.fn().mockReturnValue({
+                        select: jest.fn().mockResolvedValue({ data: null, error: { message: 'Update failed' } }),
+                    }),
                 }),
             }),
         });
 
         const result = await revokeInvitation('inv_1');
         expect(result.error).toBe('Update failed');
+    });
+
+    it('returns error when no rows updated (permission denied)', async () => {
+        mockSupabase.from.mockReturnValue({
+            update: jest.fn().mockReturnValue({
+                eq: jest.fn().mockReturnValue({
+                    eq: jest.fn().mockReturnValue({
+                        select: jest.fn().mockResolvedValue({ data: [], error: null }),
+                    }),
+                }),
+            }),
+        });
+
+        const result = await revokeInvitation('inv_1');
+        expect(result.error).toBe('Unable to revoke — you may not have permission');
     });
 });

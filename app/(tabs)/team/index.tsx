@@ -245,10 +245,22 @@ export default function TeamScreen() {
         [colors, router, getAvatarColor],
     );
 
+    const canRevoke = useCallback(
+        (inv: MemberInvitation) =>
+            user?.role === 'admin' ||
+            inv.invited_by_id === user?.id ||
+            (['manager', 'director'].includes(user?.role ?? '') && inv.assigned_manager_id === user?.id),
+        [user?.id, user?.role],
+    );
+
     const renderInvitation = useCallback(
         ({ item }: { item: MemberInvitation }) => {
             const avatarColor = getAvatarColor(item.full_name);
             const daysLeft = Math.max(0, Math.ceil((new Date(item.expires_at).getTime() - Date.now()) / 86400000));
+            const showRevoke = canRevoke(item);
+            const inviterName = item.inviter?.full_name;
+            const managerName = item.manager?.full_name;
+            const isInviterSameAsManager = item.invited_by_id === item.assigned_manager_id;
 
             return (
                 <View
@@ -288,22 +300,57 @@ export default function TeamScreen() {
                         </View>
                     </View>
 
+                    {(inviterName || managerName) && (
+                        <View style={[styles.inviteMeta, { borderTopColor: colors.border }]}>
+                            {inviterName && (
+                                <View style={styles.inviteMetaItem}>
+                                    <Ionicons name="person-outline" size={13} color={colors.textTertiary} />
+                                    <Text style={[styles.inviteMetaLabel, { color: colors.textTertiary }]}>
+                                        Invited by
+                                    </Text>
+                                    <Text
+                                        style={[styles.inviteMetaValue, { color: colors.textSecondary }]}
+                                        numberOfLines={1}
+                                    >
+                                        {inviterName}
+                                    </Text>
+                                </View>
+                            )}
+                            {managerName && !isInviterSameAsManager && (
+                                <View style={styles.inviteMetaItem}>
+                                    <Ionicons name="shield-outline" size={13} color={colors.textTertiary} />
+                                    <Text style={[styles.inviteMetaLabel, { color: colors.textTertiary }]}>
+                                        Assigned to
+                                    </Text>
+                                    <Text
+                                        style={[styles.inviteMetaValue, { color: colors.textSecondary }]}
+                                        numberOfLines={1}
+                                    >
+                                        {managerName}
+                                    </Text>
+                                </View>
+                            )}
+                        </View>
+                    )}
+
                     <View style={[styles.pendingFooter, { borderTopColor: colors.border }]}>
                         <Text style={[styles.pendingMeta, { color: colors.textTertiary }]}>
                             Expires in {daysLeft} day{daysLeft !== 1 ? 's' : ''}
                         </Text>
-                        <TouchableOpacity
-                            onPress={() => handleRevoke(item)}
-                            hitSlop={8}
-                            style={[styles.revokeButton, { borderColor: colors.danger + '40' }]}
-                        >
-                            <Text style={[styles.revokeText, { color: colors.danger }]}>Revoke</Text>
-                        </TouchableOpacity>
+                        {showRevoke && (
+                            <TouchableOpacity
+                                onPress={() => handleRevoke(item)}
+                                hitSlop={8}
+                                style={[styles.revokeButton, { borderColor: colors.danger + '40' }]}
+                            >
+                                <Text style={[styles.revokeText, { color: colors.danger }]}>Revoke</Text>
+                            </TouchableOpacity>
+                        )}
                     </View>
                 </View>
             );
         },
-        [colors, getAvatarColor, handleRevoke],
+        [colors, getAvatarColor, handleRevoke, canRevoke],
     );
 
     const isPending = filter === 'pending';
@@ -690,6 +737,26 @@ const styles = StyleSheet.create({
     pendingCard: {
         borderWidth: 1,
         borderStyle: 'dashed',
+    },
+    inviteMeta: {
+        marginTop: 12,
+        paddingTop: 12,
+        borderTopWidth: StyleSheet.hairlineWidth,
+        gap: 6,
+    },
+    inviteMetaItem: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 6,
+    },
+    inviteMetaLabel: {
+        fontSize: 12,
+        fontWeight: '400',
+    },
+    inviteMetaValue: {
+        fontSize: 12,
+        fontWeight: '600',
+        flexShrink: 1,
     },
     pendingFooter: {
         flexDirection: 'row',

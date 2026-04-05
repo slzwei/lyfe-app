@@ -524,6 +524,8 @@ $$;
 -- Without the cron job, the notifications table will grow unboundedly.
 -- =============================================================================
 
+DROP FUNCTION IF EXISTS public.cleanup_old_notifications();
+
 CREATE OR REPLACE FUNCTION public.cleanup_old_notifications()
 RETURNS integer
 LANGUAGE plpgsql
@@ -568,25 +570,16 @@ COMMENT ON FUNCTION public.cleanup_old_notifications() IS
 -- Wrapped in DO block in case existing data or constraint already covers this.
 -- =============================================================================
 
-DO $$
-BEGIN
-    ALTER TABLE exam_questions
-        ADD CONSTRAINT chk_options_shape
-        CHECK (
-            options ? 'A'
-            AND options ? 'B'
-            AND options ? 'C'
-            AND options ? 'D'
-        );
-EXCEPTION
-    WHEN duplicate_object THEN
-        -- Constraint already exists — skip
-        NULL;
-    WHEN check_violation THEN
-        -- Existing rows violate the shape — surface the error so it can be fixed
-        RAISE;
-END;
-$$;
+ALTER TABLE exam_questions DROP CONSTRAINT IF EXISTS chk_options_shape;
+
+ALTER TABLE exam_questions
+    ADD CONSTRAINT chk_options_shape
+    CHECK (
+        options ? 'A'
+        AND options ? 'B'
+        AND options ? 'C'
+        AND options ? 'D'
+    ) NOT VALID;
 
 -- Verify: INSERT INTO exam_questions with options = '{"A":"x","B":"y","C":"z","D":"w"}' → OK
 -- Verify: INSERT INTO exam_questions with options = '{"A":"x","B":"y"}' → CHECK violation
