@@ -270,7 +270,7 @@ export type Database = {
                     address_street: string | null;
                     address_unit: string | null;
                     alias: string | null;
-                    candidate_id: string | null;
+                    candidate_id: string;
                     chinese_name: string | null;
                     completed: boolean;
                     contact_number: string | null;
@@ -327,7 +327,7 @@ export type Database = {
                     address_street?: string | null;
                     address_unit?: string | null;
                     alias?: string | null;
-                    candidate_id?: string | null;
+                    candidate_id: string;
                     chinese_name?: string | null;
                     completed?: boolean;
                     contact_number?: string | null;
@@ -384,7 +384,7 @@ export type Database = {
                     address_street?: string | null;
                     address_unit?: string | null;
                     alias?: string | null;
-                    candidate_id?: string | null;
+                    candidate_id?: string;
                     chinese_name?: string | null;
                     completed?: boolean;
                     contact_number?: string | null;
@@ -513,7 +513,7 @@ export type Database = {
                     job_id: string | null;
                     name: string;
                     notes: string | null;
-                    phone: string;
+                    phone: string | null;
                     resume_url: string | null;
                     stage_entered_at: string | null;
                     status: Database['public']['Enums']['candidate_status'];
@@ -530,7 +530,7 @@ export type Database = {
                     job_id?: string | null;
                     name: string;
                     notes?: string | null;
-                    phone: string;
+                    phone?: string | null;
                     resume_url?: string | null;
                     stage_entered_at?: string | null;
                     status?: Database['public']['Enums']['candidate_status'];
@@ -547,7 +547,7 @@ export type Database = {
                     job_id?: string | null;
                     name?: string;
                     notes?: string | null;
-                    phone?: string;
+                    phone?: string | null;
                     resume_url?: string | null;
                     stage_entered_at?: string | null;
                     status?: Database['public']['Enums']['candidate_status'];
@@ -984,6 +984,7 @@ export type Database = {
             interviews: {
                 Row: {
                     candidate_id: string;
+                    confirmed_at: string | null;
                     created_at: string | null;
                     datetime: string;
                     google_calendar_event_id: string | null;
@@ -1001,6 +1002,7 @@ export type Database = {
                 };
                 Insert: {
                     candidate_id: string;
+                    confirmed_at?: string | null;
                     created_at?: string | null;
                     datetime: string;
                     google_calendar_event_id?: string | null;
@@ -1018,6 +1020,7 @@ export type Database = {
                 };
                 Update: {
                     candidate_id?: string;
+                    confirmed_at?: string | null;
                     created_at?: string | null;
                     datetime?: string;
                     google_calendar_event_id?: string | null;
@@ -1216,7 +1219,7 @@ export type Database = {
                     lead_id: string;
                     metadata: Json | null;
                     type: Database['public']['Enums']['lead_activity_type'];
-                    user_id: string;
+                    user_id: string | null;
                 };
                 Insert: {
                     created_at?: string | null;
@@ -1225,7 +1228,7 @@ export type Database = {
                     lead_id: string;
                     metadata?: Json | null;
                     type: Database['public']['Enums']['lead_activity_type'];
-                    user_id: string;
+                    user_id?: string | null;
                 };
                 Update: {
                     created_at?: string | null;
@@ -1234,7 +1237,7 @@ export type Database = {
                     lead_id?: string;
                     metadata?: Json | null;
                     type?: Database['public']['Enums']['lead_activity_type'];
-                    user_id?: string;
+                    user_id?: string | null;
                 };
                 Relationships: [
                     {
@@ -1974,27 +1977,6 @@ export type Database = {
                     },
                 ];
             };
-            staff_sessions: {
-                Row: {
-                    created_at: string;
-                    expires_at: string;
-                    id: string;
-                    token_hash: string;
-                };
-                Insert: {
-                    created_at?: string;
-                    expires_at?: string;
-                    id?: string;
-                    token_hash: string;
-                };
-                Update: {
-                    created_at?: string;
-                    expires_at?: string;
-                    id?: string;
-                    token_hash?: string;
-                };
-                Relationships: [];
-            };
             stage_transitions: {
                 Row: {
                     candidate_id: string;
@@ -2169,7 +2151,8 @@ export type Database = {
                 Returns: boolean;
             };
             can_manage_event: { Args: { p_created_by: string }; Returns: boolean };
-            cleanup_old_notifications: { Args: never; Returns: undefined };
+            check_phone_eligible: { Args: { phone_input: string }; Returns: Json };
+            cleanup_old_notifications: { Args: never; Returns: number };
             cleanup_orphaned_users: { Args: never; Returns: number };
             create_default_pipeline: {
                 Args: { p_job_id: string };
@@ -2221,11 +2204,17 @@ export type Database = {
                     isSetofReturn: true;
                 };
             };
-            get_lead_pipeline_stats: {
-                Args: { p_is_manager: boolean; p_user_id: string };
-                Returns: Json;
-            };
+            get_lead_pipeline_stats:
+                | {
+                      Args: { p_user_id: string };
+                      Returns: {
+                          count: number;
+                          status: string;
+                      }[];
+                  }
+                | { Args: { p_is_manager: boolean; p_user_id: string }; Returns: Json };
             get_team_member_ids: { Args: { superior_id: string }; Returns: string[] };
+            normalize_sg_phone: { Args: { raw_phone: string }; Returns: string };
             notify_insert: {
                 Args: {
                     p_body: string;
@@ -2236,25 +2225,44 @@ export type Database = {
                 };
                 Returns: undefined;
             };
-            show_limit: { Args: never; Returns: number };
-            show_trgm: { Args: { '': string }; Returns: string[] };
-            submit_exam_attempt: {
-                Args: {
-                    p_answers?: Json;
-                    p_duration_seconds: number;
-                    p_paper_id: string;
-                    p_passed: boolean;
-                    p_percentage: number;
-                    p_personality_results?: Json;
-                    p_score: number;
-                    p_started_at: string;
-                    p_status: string;
-                    p_submitted_at: string;
-                    p_total_questions: number;
-                    p_user_id: string;
-                };
+            redact_audit_data: {
+                Args: { p_data: Json; p_table: string };
                 Returns: Json;
             };
+            show_limit: { Args: never; Returns: number };
+            show_trgm: { Args: { '': string }; Returns: string[] };
+            submit_exam_attempt:
+                | {
+                      Args: {
+                          p_answers?: Json;
+                          p_duration_seconds: number;
+                          p_paper_id: string;
+                          p_passed: boolean;
+                          p_percentage: number;
+                          p_personality_results?: Json;
+                          p_score: number;
+                          p_started_at: string;
+                          p_status: string;
+                          p_submitted_at: string;
+                          p_total_questions: number;
+                          p_user_id: string;
+                      };
+                      Returns: Json;
+                  }
+                | {
+                      Args: {
+                          p_answers?: Json;
+                          p_duration_seconds: number;
+                          p_paper_id: string;
+                          p_personality_results?: Json;
+                          p_started_at: string;
+                          p_status: string;
+                          p_submitted_at: string;
+                          p_total_questions: number;
+                          p_user_id: string;
+                      };
+                      Returns: Json;
+                  };
             sync_auth_metadata: { Args: never; Returns: undefined };
             update_lead_status_with_activity: {
                 Args: {

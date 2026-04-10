@@ -8,24 +8,13 @@ import RoadshowSettingsForm from '@/components/events/RoadshowSettingsForm';
 import TimePickerModal from '@/components/events/TimePickerModal';
 import TimeRowCard from '@/components/events/TimeRowCard';
 import { ERROR_BG, ERROR_TEXT } from '@/constants/ui';
-import { KAV_BEHAVIOR } from '@/constants/platform';
 import { useTheme } from '@/contexts/ThemeContext';
 import { useEventForm } from '@/hooks/useEventForm';
 import { useSubmitGuard } from '@/hooks/useSubmitGuard';
 import { dateDiffDays, isValidDate } from '@/lib/dateTime';
 import React from 'react';
-import {
-    ActivityIndicator,
-    Keyboard,
-    KeyboardAvoidingView,
-    Pressable,
-    ScrollView,
-    StyleSheet,
-    Text,
-    TextInput,
-    TouchableOpacity,
-    View,
-} from 'react-native';
+import { ActivityIndicator, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
+import { KeyboardAwareScrollView } from 'react-native-keyboard-controller';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 export default function CreateEventScreen() {
@@ -180,123 +169,124 @@ export default function CreateEventScreen() {
                 }
             />
 
-            <KeyboardAvoidingView style={{ flex: 1 }} behavior={KAV_BEHAVIOR}>
-                <Pressable style={{ flex: 1 }} onPress={Keyboard.dismiss}>
-                    <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
-                        {/* Title */}
-                        <View style={styles.field}>
-                            <Text style={labelStyle}>Title *</Text>
-                            <TextInput
-                                testID="event-create-title"
-                                style={[
-                                    inputStyle,
-                                    isEditingRoadshow && { opacity: 0.5 },
-                                    errors.title && { borderColor: colors.danger },
-                                ]}
-                                placeholder="Event title"
-                                placeholderTextColor={colors.textTertiary}
-                                value={title}
-                                onChangeText={(t) => {
-                                    setTitle(t);
-                                    handleClearError('title');
-                                }}
-                                editable={!isEditingRoadshow}
-                            />
-                            {errors.title ? (
-                                <Text style={[styles.errorText, { color: colors.danger }]}>{errors.title}</Text>
-                            ) : null}
-                        </View>
+            <KeyboardAwareScrollView
+                style={{ flex: 1 }}
+                contentContainerStyle={styles.scrollContent}
+                showsVerticalScrollIndicator={false}
+                keyboardShouldPersistTaps="handled"
+            >
+                {/* Title */}
+                <View style={styles.field}>
+                    <Text style={labelStyle}>Title *</Text>
+                    <TextInput
+                        testID="event-create-title"
+                        style={[
+                            inputStyle,
+                            isEditingRoadshow && { opacity: 0.5 },
+                            errors.title && { borderColor: colors.danger },
+                        ]}
+                        placeholder="Event title"
+                        placeholderTextColor={colors.textTertiary}
+                        value={title}
+                        onChangeText={(t) => {
+                            setTitle(t);
+                            handleClearError('title');
+                        }}
+                        editable={!isEditingRoadshow}
+                    />
+                    {errors.title ? (
+                        <Text style={[styles.errorText, { color: colors.danger }]}>{errors.title}</Text>
+                    ) : null}
+                </View>
 
-                        <EventTypeSelector eventType={eventType} onSelect={setEventType} disabled={isEditingRoadshow} />
+                <EventTypeSelector eventType={eventType} onSelect={setEventType} disabled={isEditingRoadshow} />
 
-                        <EventDateSection
-                            isRoadshow={eventType === 'roadshow'}
-                            isEditing={isEditing}
-                            isEditingRoadshow={isEditingRoadshow}
-                            eventDate={eventDate}
-                            rsStartDate={rsStartDate}
-                            rsEndDate={rsEndDate}
-                            errors={errors}
-                            onOpenDatePicker={setShowDatePicker}
-                        />
+                <EventDateSection
+                    isRoadshow={eventType === 'roadshow'}
+                    isEditing={isEditing}
+                    isEditingRoadshow={isEditingRoadshow}
+                    eventDate={eventDate}
+                    rsStartDate={rsStartDate}
+                    rsEndDate={rsEndDate}
+                    errors={errors}
+                    onOpenDatePicker={setShowDatePicker}
+                />
 
-                        {eventType === 'roadshow' && (
-                            <RoadshowSettingsForm
-                                rsWeeklyCost={rsWeeklyCost}
-                                onWeeklyCostChange={setRsWeeklyCost}
-                                rsSlots={rsSlots}
-                                onSlotsChange={setRsSlots}
-                                rsGrace={rsGrace}
-                                onGraceChange={setRsGrace}
-                                rsSitdowns={rsSitdowns}
-                                onSitdownsChange={setRsSitdowns}
-                                rsPitches={rsPitches}
-                                onPitchesChange={setRsPitches}
-                                rsClosed={rsClosed}
-                                onClosedChange={setRsClosed}
-                                rsConfigLocked={rsConfigLocked}
-                                errors={errors}
-                                onClearError={handleClearError}
-                            />
-                        )}
+                {eventType === 'roadshow' && (
+                    <RoadshowSettingsForm
+                        rsWeeklyCost={rsWeeklyCost}
+                        onWeeklyCostChange={setRsWeeklyCost}
+                        rsSlots={rsSlots}
+                        onSlotsChange={setRsSlots}
+                        rsGrace={rsGrace}
+                        onGraceChange={setRsGrace}
+                        rsSitdowns={rsSitdowns}
+                        onSitdownsChange={setRsSitdowns}
+                        rsPitches={rsPitches}
+                        onPitchesChange={setRsPitches}
+                        rsClosed={rsClosed}
+                        onClosedChange={setRsClosed}
+                        rsConfigLocked={rsConfigLocked}
+                        errors={errors}
+                        onClearError={handleClearError}
+                    />
+                )}
 
-                        {errors._submit ? (
-                            <View style={[styles.submitError, { backgroundColor: ERROR_BG }]}>
-                                <Text style={{ color: ERROR_TEXT, fontSize: 13 }}>{errors._submit}</Text>
-                            </View>
-                        ) : null}
+                {errors._submit ? (
+                    <View style={[styles.submitError, { backgroundColor: ERROR_BG }]}>
+                        <Text style={{ color: ERROR_TEXT, fontSize: 13 }}>{errors._submit}</Text>
+                    </View>
+                ) : null}
 
-                        <TimeRowCard
-                            hasEndTime={hasEndTime}
-                            formatStart={formatStart}
-                            formatEnd={formatEnd}
-                            onStartPress={() => setShowTimePicker('start')}
-                            onEndPress={() => {
-                                if (!hasEndTime) setHasEndTime(true);
-                                setShowTimePicker('end');
-                            }}
-                            endTimeError={errors.endTime}
-                        />
+                <TimeRowCard
+                    hasEndTime={hasEndTime}
+                    formatStart={formatStart}
+                    formatEnd={formatEnd}
+                    onStartPress={() => setShowTimePicker('start')}
+                    onEndPress={() => {
+                        if (!hasEndTime) setHasEndTime(true);
+                        setShowTimePicker('end');
+                    }}
+                    endTimeError={errors.endTime}
+                />
 
-                        {/* Location */}
-                        <View style={styles.field}>
-                            <Text style={labelStyle}>Location</Text>
-                            <TextInput
-                                style={inputStyle}
-                                placeholder="e.g. Zoom, Marina Bay Sands"
-                                placeholderTextColor={colors.textTertiary}
-                                value={location}
-                                onChangeText={setLocation}
-                            />
-                        </View>
+                {/* Location */}
+                <View style={styles.field}>
+                    <Text style={labelStyle}>Location</Text>
+                    <TextInput
+                        style={inputStyle}
+                        placeholder="e.g. Zoom, Marina Bay Sands"
+                        placeholderTextColor={colors.textTertiary}
+                        value={location}
+                        onChangeText={setLocation}
+                    />
+                </View>
 
-                        {/* Description */}
-                        <View style={styles.field}>
-                            <Text style={labelStyle}>Description</Text>
-                            <TextInput
-                                style={[inputStyle, styles.textArea]}
-                                placeholder="Optional details..."
-                                placeholderTextColor={colors.textTertiary}
-                                value={description}
-                                onChangeText={setDescription}
-                                multiline
-                                numberOfLines={4}
-                                textAlignVertical="top"
-                            />
-                        </View>
+                {/* Description */}
+                <View style={styles.field}>
+                    <Text style={labelStyle}>Description</Text>
+                    <TextInput
+                        style={[inputStyle, styles.textArea]}
+                        placeholder="Optional details..."
+                        placeholderTextColor={colors.textTertiary}
+                        value={description}
+                        onChangeText={setDescription}
+                        multiline
+                        numberOfLines={4}
+                        textAlignVertical="top"
+                    />
+                </View>
 
-                        <AttendeeList
-                            selectedAttendees={selectedAttendees}
-                            externalAttendees={externalAttendees}
-                            onOpenPicker={() => setShowAttendeePicker(true)}
-                            onUpdateRole={updateAttendeeRole}
-                            onRemoveAttendee={handleRemoveAttendee}
-                            onUpdateExternalRole={handleUpdateExternalRole}
-                            onRemoveExternal={handleRemoveExternal}
-                        />
-                    </ScrollView>
-                </Pressable>
-            </KeyboardAvoidingView>
+                <AttendeeList
+                    selectedAttendees={selectedAttendees}
+                    externalAttendees={externalAttendees}
+                    onOpenPicker={() => setShowAttendeePicker(true)}
+                    onUpdateRole={updateAttendeeRole}
+                    onRemoveAttendee={handleRemoveAttendee}
+                    onUpdateExternalRole={handleUpdateExternalRole}
+                    onRemoveExternal={handleRemoveExternal}
+                />
+            </KeyboardAwareScrollView>
 
             <TimePickerModal
                 visible={showTimePicker !== null}

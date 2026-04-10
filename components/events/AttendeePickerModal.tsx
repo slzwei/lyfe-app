@@ -1,5 +1,5 @@
 import Avatar from '@/components/Avatar';
-import { KAV_BEHAVIOR, MODAL_ANIM_SHEET, MODAL_STATUS_BAR_TRANSLUCENT } from '@/constants/platform';
+import { MODAL_ANIM_SHEET, MODAL_STATUS_BAR_TRANSLUCENT } from '@/constants/platform';
 import { ATTENDEE_ROLES, getAvatarColor } from '@/constants/ui';
 import { useTheme } from '@/contexts/ThemeContext';
 import type { SelectedAttendee } from '@/hooks/useAttendeePicker';
@@ -10,16 +10,15 @@ import React from 'react';
 import {
     ActivityIndicator,
     FlatList,
-    KeyboardAvoidingView,
     Modal,
     SafeAreaView,
-    ScrollView,
     StyleSheet,
     Text,
     TextInput,
     TouchableOpacity,
     View,
 } from 'react-native';
+import { KeyboardAwareScrollView } from 'react-native-keyboard-controller';
 
 export interface AttendeePickerModalProps {
     visible: boolean;
@@ -257,107 +256,106 @@ function ExternalTab({
     onRemoveExternal,
 }: ExternalTabProps) {
     return (
-        <KeyboardAvoidingView style={{ flex: 1 }} behavior={KAV_BEHAVIOR}>
-            <ScrollView contentContainerStyle={styles.externalTab}>
-                <Text style={[styles.externalHint, { color: colors.textTertiary }]}>
-                    Add guests not in the system — clients, prospects, or external partners.
-                </Text>
+        <KeyboardAwareScrollView
+            style={{ flex: 1 }}
+            contentContainerStyle={styles.externalTab}
+            keyboardShouldPersistTaps="handled"
+        >
+            <Text style={[styles.externalHint, { color: colors.textTertiary }]}>
+                Add guests not in the system — clients, prospects, or external partners.
+            </Text>
 
-                <View style={[styles.externalForm, { backgroundColor: colors.cardBackground }]}>
-                    <TextInput
-                        style={[
-                            styles.input,
-                            {
-                                backgroundColor: colors.inputBackground,
-                                borderColor: colors.inputBorder,
-                                color: colors.textPrimary,
-                            },
-                        ]}
-                        placeholder="Full name"
-                        placeholderTextColor={colors.textTertiary}
-                        value={externalName}
-                        onChangeText={onExternalNameChange}
-                        returnKeyType="done"
-                    />
-                    <View style={styles.roleRow}>
-                        {ATTENDEE_ROLES.map((r) => {
-                            const active = externalRole === r.key;
-                            return (
-                                <TouchableOpacity
-                                    key={r.key}
-                                    style={[
-                                        styles.roleChip,
-                                        {
-                                            backgroundColor: active ? colors.accent : colors.surfaceSecondary,
-                                        },
-                                    ]}
-                                    onPress={() => onExternalRoleChange(r.key)}
+            <View style={[styles.externalForm, { backgroundColor: colors.cardBackground }]}>
+                <TextInput
+                    style={[
+                        styles.input,
+                        {
+                            backgroundColor: colors.inputBackground,
+                            borderColor: colors.inputBorder,
+                            color: colors.textPrimary,
+                        },
+                    ]}
+                    placeholder="Full name"
+                    placeholderTextColor={colors.textTertiary}
+                    value={externalName}
+                    onChangeText={onExternalNameChange}
+                    returnKeyType="done"
+                />
+                <View style={styles.roleRow}>
+                    {ATTENDEE_ROLES.map((r) => {
+                        const active = externalRole === r.key;
+                        return (
+                            <TouchableOpacity
+                                key={r.key}
+                                style={[
+                                    styles.roleChip,
+                                    {
+                                        backgroundColor: active ? colors.accent : colors.surfaceSecondary,
+                                    },
+                                ]}
+                                onPress={() => onExternalRoleChange(r.key)}
+                            >
+                                <Text
+                                    style={[styles.roleChipText, { color: active ? '#FFFFFF' : colors.textTertiary }]}
                                 >
-                                    <Text
-                                        style={[
-                                            styles.roleChipText,
-                                            { color: active ? '#FFFFFF' : colors.textTertiary },
-                                        ]}
-                                    >
-                                        {r.label}
-                                    </Text>
-                                </TouchableOpacity>
-                            );
-                        })}
-                    </View>
-                    <TouchableOpacity
-                        style={[
-                            styles.externalAddBtn,
-                            { backgroundColor: externalName.trim() ? colors.accent : colors.border },
-                        ]}
-                        disabled={!externalName.trim()}
-                        onPress={onAddExternal}
-                    >
-                        <Ionicons name="person-add-outline" size={16} color="#FFFFFF" />
-                        <Text style={styles.externalAddBtnText}>Add Guest</Text>
-                    </TouchableOpacity>
+                                    {r.label}
+                                </Text>
+                            </TouchableOpacity>
+                        );
+                    })}
                 </View>
+                <TouchableOpacity
+                    style={[
+                        styles.externalAddBtn,
+                        { backgroundColor: externalName.trim() ? colors.accent : colors.border },
+                    ]}
+                    disabled={!externalName.trim()}
+                    onPress={onAddExternal}
+                >
+                    <Ionicons name="person-add-outline" size={16} color="#FFFFFF" />
+                    <Text style={styles.externalAddBtnText}>Add Guest</Text>
+                </TouchableOpacity>
+            </View>
 
-                {externalAttendees.length > 0 && (
-                    <View style={{ gap: 8, marginTop: 4 }}>
-                        <Text style={[styles.label, { color: colors.textSecondary }]}>Added guests</Text>
-                        {externalAttendees.map((a) => {
-                            const aColor = getAvatarColor(a.name);
-                            return (
-                                <View
-                                    key={a._key}
-                                    style={[
-                                        styles.userRow,
-                                        { backgroundColor: colors.cardBackground, borderColor: 'transparent' },
-                                    ]}
-                                >
-                                    <Avatar
-                                        name={a.name}
-                                        avatarUrl={null}
-                                        size={36}
-                                        backgroundColor={aColor + '18'}
-                                        textColor={aColor}
-                                    />
-                                    <View style={styles.userInfo}>
-                                        <Text style={[styles.userName, { color: colors.textPrimary }]}>{a.name}</Text>
-                                        <Text style={[styles.userRole, { color: colors.textTertiary }]}>
-                                            {ATTENDEE_ROLES.find((r) => r.key === a.attendee_role)?.label ??
-                                                a.attendee_role}
-                                        </Text>
-                                    </View>
-                                    <TouchableOpacity
-                                        onPress={() => onRemoveExternal(a._key)}
-                                        hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-                                    >
-                                        <Ionicons name="close-circle" size={22} color={colors.textTertiary} />
-                                    </TouchableOpacity>
+            {externalAttendees.length > 0 && (
+                <View style={{ gap: 8, marginTop: 4 }}>
+                    <Text style={[styles.label, { color: colors.textSecondary }]}>Added guests</Text>
+                    {externalAttendees.map((a) => {
+                        const aColor = getAvatarColor(a.name);
+                        return (
+                            <View
+                                key={a._key}
+                                style={[
+                                    styles.userRow,
+                                    { backgroundColor: colors.cardBackground, borderColor: 'transparent' },
+                                ]}
+                            >
+                                <Avatar
+                                    name={a.name}
+                                    avatarUrl={null}
+                                    size={36}
+                                    backgroundColor={aColor + '18'}
+                                    textColor={aColor}
+                                />
+                                <View style={styles.userInfo}>
+                                    <Text style={[styles.userName, { color: colors.textPrimary }]}>{a.name}</Text>
+                                    <Text style={[styles.userRole, { color: colors.textTertiary }]}>
+                                        {ATTENDEE_ROLES.find((r) => r.key === a.attendee_role)?.label ??
+                                            a.attendee_role}
+                                    </Text>
                                 </View>
-                            );
-                        })}
-                    </View>
-                )}
-            </ScrollView>
-        </KeyboardAvoidingView>
+                                <TouchableOpacity
+                                    onPress={() => onRemoveExternal(a._key)}
+                                    hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                                >
+                                    <Ionicons name="close-circle" size={22} color={colors.textTertiary} />
+                                </TouchableOpacity>
+                            </View>
+                        );
+                    })}
+                </View>
+            )}
+        </KeyboardAwareScrollView>
     );
 }
 

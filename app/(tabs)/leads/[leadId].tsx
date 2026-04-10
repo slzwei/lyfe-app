@@ -10,7 +10,8 @@ import StatusPicker from '@/components/leads/StatusPicker';
 import LoadingState from '@/components/LoadingState';
 import ScreenHeader from '@/components/ScreenHeader';
 import StatusBadge from '@/components/StatusBadge';
-import { KAV_BEHAVIOR, letterSpacing, shadow } from '@/constants/platform';
+import { letterSpacing, shadow } from '@/constants/platform';
+import { KeyboardAwareScrollView } from 'react-native-keyboard-controller';
 import { useAuth } from '@/contexts/AuthContext';
 import { useTheme } from '@/contexts/ThemeContext';
 import { useViewMode } from '@/contexts/ViewModeContext';
@@ -22,16 +23,7 @@ import type { IconName } from '@/types/ui';
 import { Ionicons } from '@expo/vector-icons';
 import { useLocalSearchParams, useRouter, useSegments } from 'expo-router';
 import React, { useEffect, useRef, useState } from 'react';
-import {
-    AppState,
-    KeyboardAvoidingView,
-    Linking,
-    ScrollView,
-    StyleSheet,
-    Text,
-    TouchableOpacity,
-    View,
-} from 'react-native';
+import { AppState, Linking, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 // ── Local helper: premium info row with right-aligned value ──
@@ -232,201 +224,201 @@ export default function LeadDetailScreen() {
 
             {error && <ErrorBanner message={error} onRetry={loadData} onDismiss={() => setError(null)} />}
 
-            <KeyboardAvoidingView style={{ flex: 1 }} behavior={KAV_BEHAVIOR} keyboardVerticalOffset={100}>
-                <ScrollView
-                    style={styles.scrollView}
-                    contentContainerStyle={styles.scrollContent}
-                    showsVerticalScrollIndicator={false}
-                >
-                    {/* ─── Hero Card ─── */}
-                    <View style={[styles.hero, { backgroundColor: colors.cardBackground }, shadow('md')]}>
-                        {/* Avatar */}
-                        <View style={styles.avatarSection}>
-                            <View style={[styles.avatarRing, { borderColor: colors.accent + '28' }]}>
-                                <View style={[styles.avatar, { backgroundColor: colors.accentLight }]}>
-                                    <Text style={[styles.avatarText, { color: colors.accent }]}>{initials}</Text>
+            <KeyboardAwareScrollView
+                style={styles.scrollView}
+                contentContainerStyle={styles.scrollContent}
+                showsVerticalScrollIndicator={false}
+                keyboardShouldPersistTaps="handled"
+                bottomOffset={20}
+            >
+                {/* ─── Hero Card ─── */}
+                <View style={[styles.hero, { backgroundColor: colors.cardBackground }, shadow('md')]}>
+                    {/* Avatar */}
+                    <View style={styles.avatarSection}>
+                        <View style={[styles.avatarRing, { borderColor: colors.accent + '28' }]}>
+                            <View style={[styles.avatar, { backgroundColor: colors.accentLight }]}>
+                                <Text style={[styles.avatarText, { color: colors.accent }]}>{initials}</Text>
+                            </View>
+                        </View>
+                    </View>
+
+                    {/* Identity */}
+                    <Text style={[styles.heroName, { color: colors.textPrimary }]}>{lead.full_name}</Text>
+
+                    <View testID="lead-status-badge" style={styles.heroStatusRow}>
+                        <StatusBadge status={currentStatus} size="medium" />
+                    </View>
+
+                    {/* Contact info */}
+                    {(lead.phone || lead.email) && (
+                        <View style={styles.contactInfo}>
+                            {lead.phone && (
+                                <View style={styles.contactLine}>
+                                    <Ionicons name="call-outline" size={13} color={colors.textTertiary} />
+                                    <Text style={[styles.heroContact, { color: colors.textSecondary }]}>
+                                        {lead.phone}
+                                    </Text>
                                 </View>
-                            </View>
-                        </View>
-
-                        {/* Identity */}
-                        <Text style={[styles.heroName, { color: colors.textPrimary }]}>{lead.full_name}</Text>
-
-                        <View testID="lead-status-badge" style={styles.heroStatusRow}>
-                            <StatusBadge status={currentStatus} size="medium" />
-                        </View>
-
-                        {/* Contact info */}
-                        {(lead.phone || lead.email) && (
-                            <View style={styles.contactInfo}>
-                                {lead.phone && (
-                                    <View style={styles.contactLine}>
-                                        <Ionicons name="call-outline" size={13} color={colors.textTertiary} />
-                                        <Text style={[styles.heroContact, { color: colors.textSecondary }]}>
-                                            {lead.phone}
-                                        </Text>
-                                    </View>
-                                )}
-                                {lead.email && (
-                                    <View style={styles.contactLine}>
-                                        <Ionicons name="mail-outline" size={13} color={colors.textTertiary} />
-                                        <Text style={[styles.heroContactSub, { color: colors.textTertiary }]}>
-                                            {lead.email}
-                                        </Text>
-                                    </View>
-                                )}
-                            </View>
-                        )}
-
-                        {/* Divider */}
-                        <View style={[styles.heroDivider, { backgroundColor: colors.border }]} />
-
-                        {/* Quick Actions */}
-                        <View style={styles.actionsRow}>
-                            <QuickAction
-                                icon="call"
-                                label="Call"
-                                color={colors.success}
-                                bgColor={colors.successLight}
-                                onPress={handleCall}
-                                disabled={!lead.phone}
-                            />
-                            <View style={[styles.actionDivider, { backgroundColor: colors.border }]} />
-                            <QuickAction
-                                icon="logo-whatsapp"
-                                label="WhatsApp"
-                                color="#25D366"
-                                bgColor={colors.successLight}
-                                onPress={handleWhatsApp}
-                                disabled={!lead.phone}
-                            />
-                            {isManagerView ? (
-                                <>
-                                    <View style={[styles.actionDivider, { backgroundColor: colors.border }]} />
-                                    <QuickAction
-                                        testID="lead-reassign-action"
-                                        icon="git-compare-outline"
-                                        label="Reassign"
-                                        color={colors.statusProposed}
-                                        bgColor={colors.surfaceSecondary}
-                                        onPress={handleOpenReassign}
-                                        disabled={isReassigning}
-                                    />
-                                </>
-                            ) : (
-                                <>
-                                    <View style={[styles.actionDivider, { backgroundColor: colors.border }]} />
-                                    <QuickAction
-                                        testID="lead-status-action"
-                                        icon="swap-horizontal"
-                                        label="Status"
-                                        color={colors.warning}
-                                        bgColor={colors.warningLight}
-                                        onPress={() => setShowStatusPicker(!showStatusPicker)}
-                                    />
-                                    <View style={[styles.actionDivider, { backgroundColor: colors.border }]} />
-                                    <QuickAction
-                                        testID="lead-note-action"
-                                        icon="create-outline"
-                                        label="Note"
-                                        color={colors.accent}
-                                        bgColor={colors.accentLight}
-                                        onPress={() => setShowNoteInput(!showNoteInput)}
-                                    />
-                                </>
+                            )}
+                            {lead.email && (
+                                <View style={styles.contactLine}>
+                                    <Ionicons name="mail-outline" size={13} color={colors.textTertiary} />
+                                    <Text style={[styles.heroContactSub, { color: colors.textTertiary }]}>
+                                        {lead.email}
+                                    </Text>
+                                </View>
                             )}
                         </View>
+                    )}
+
+                    {/* Divider */}
+                    <View style={[styles.heroDivider, { backgroundColor: colors.border }]} />
+
+                    {/* Quick Actions */}
+                    <View style={styles.actionsRow}>
+                        <QuickAction
+                            icon="call"
+                            label="Call"
+                            color={colors.success}
+                            bgColor={colors.successLight}
+                            onPress={handleCall}
+                            disabled={!lead.phone}
+                        />
+                        <View style={[styles.actionDivider, { backgroundColor: colors.border }]} />
+                        <QuickAction
+                            icon="logo-whatsapp"
+                            label="WhatsApp"
+                            color="#25D366"
+                            bgColor={colors.successLight}
+                            onPress={handleWhatsApp}
+                            disabled={!lead.phone}
+                        />
+                        {isManagerView ? (
+                            <>
+                                <View style={[styles.actionDivider, { backgroundColor: colors.border }]} />
+                                <QuickAction
+                                    testID="lead-reassign-action"
+                                    icon="git-compare-outline"
+                                    label="Reassign"
+                                    color={colors.statusProposed}
+                                    bgColor={colors.surfaceSecondary}
+                                    onPress={handleOpenReassign}
+                                    disabled={isReassigning}
+                                />
+                            </>
+                        ) : (
+                            <>
+                                <View style={[styles.actionDivider, { backgroundColor: colors.border }]} />
+                                <QuickAction
+                                    testID="lead-status-action"
+                                    icon="swap-horizontal"
+                                    label="Status"
+                                    color={colors.warning}
+                                    bgColor={colors.warningLight}
+                                    onPress={() => setShowStatusPicker(!showStatusPicker)}
+                                />
+                                <View style={[styles.actionDivider, { backgroundColor: colors.border }]} />
+                                <QuickAction
+                                    testID="lead-note-action"
+                                    icon="create-outline"
+                                    label="Note"
+                                    color={colors.accent}
+                                    bgColor={colors.accentLight}
+                                    onPress={() => setShowNoteInput(!showNoteInput)}
+                                />
+                            </>
+                        )}
                     </View>
+                </View>
 
-                    {/* ─── Inline panels (status picker / note) ─── */}
-                    {!isManagerView && showStatusPicker && (
-                        <StatusPicker
-                            currentStatus={currentStatus}
-                            isUpdating={isUpdatingStatus}
+                {/* ─── Inline panels (status picker / note) ─── */}
+                {!isManagerView && showStatusPicker && (
+                    <StatusPicker
+                        currentStatus={currentStatus}
+                        isUpdating={isUpdatingStatus}
+                        colors={colors}
+                        onChangeStatus={handleChangeStatus}
+                    />
+                )}
+
+                {!isManagerView && showNoteInput && (
+                    <NoteInput
+                        testID="lead-note-input"
+                        noteText={noteText}
+                        onChangeText={setNoteText}
+                        isSaving={isSavingNote}
+                        colors={colors}
+                        onSave={handleAddNote}
+                        onCancel={() => {
+                            setShowNoteInput(false);
+                            setNoteText('');
+                        }}
+                    />
+                )}
+
+                {/* ─── Details Card ─── */}
+                <View style={[styles.card, { backgroundColor: colors.cardBackground }, shadow('sm')]}>
+                    <SectionHeader title="Details" colors={colors} />
+                    <InfoRow
+                        icon="shield-outline"
+                        label="Product"
+                        value={PRODUCT_LABELS[lead.product_interest]}
+                        colors={colors}
+                    />
+                    <InfoRow
+                        icon="location-outline"
+                        label="Source"
+                        value={lead.source_name === 'mktr' ? 'MKTR' : SOURCE_LABELS[lead.source]}
+                        colors={colors}
+                    />
+                    {lead.source_name === 'mktr' && (
+                        <InfoRow
+                            icon="megaphone-outline"
+                            label="Campaign"
+                            value={mktrInfo?.campaign || 'Unknown'}
                             colors={colors}
-                            onChangeStatus={handleChangeStatus}
                         />
                     )}
-
-                    {!isManagerView && showNoteInput && (
-                        <NoteInput
-                            testID="lead-note-input"
-                            noteText={noteText}
-                            onChangeText={setNoteText}
-                            isSaving={isSavingNote}
-                            colors={colors}
-                            onSave={handleAddNote}
-                            onCancel={() => {
-                                setShowNoteInput(false);
-                                setNoteText('');
-                            }}
-                        />
+                    {mktrInfo?.qr && (
+                        <InfoRow icon="qr-code-outline" label="QR Code" value={mktrInfo.qr} colors={colors} />
                     )}
+                    <InfoRow
+                        icon="time-outline"
+                        label="Added"
+                        value={timeAgo(lead.created_at)}
+                        colors={colors}
+                        isLast
+                    />
+                </View>
 
-                    {/* ─── Details Card ─── */}
-                    <View style={[styles.card, { backgroundColor: colors.cardBackground }, shadow('sm')]}>
-                        <SectionHeader title="Details" colors={colors} />
-                        <InfoRow
-                            icon="shield-outline"
-                            label="Product"
-                            value={PRODUCT_LABELS[lead.product_interest]}
-                            colors={colors}
-                        />
-                        <InfoRow
-                            icon="location-outline"
-                            label="Source"
-                            value={lead.source_name === 'mktr' ? 'MKTR' : SOURCE_LABELS[lead.source]}
-                            colors={colors}
-                        />
-                        {lead.source_name === 'mktr' && (
-                            <InfoRow
-                                icon="megaphone-outline"
-                                label="Campaign"
-                                value={mktrInfo?.campaign || 'Unknown'}
-                                colors={colors}
-                            />
-                        )}
-                        {mktrInfo?.qr && (
-                            <InfoRow icon="qr-code-outline" label="QR Code" value={mktrInfo.qr} colors={colors} />
-                        )}
-                        <InfoRow
+                {/* ─── Call Recording & Transcript ─── */}
+                {(lead.recording_url || lead.transcript) && (
+                    <RecordingCard recordingUrl={lead.recording_url} transcript={lead.transcript} />
+                )}
+
+                {/* ─── Activity Timeline ─── */}
+                <View
+                    testID="lead-activity-list"
+                    style={[styles.card, { backgroundColor: colors.cardBackground }, shadow('sm')]}
+                >
+                    <SectionHeader title="Activity" count={activities.length} colors={colors} />
+                    {activities.map((act, idx) => (
+                        <LeadActivityItem key={act.id} activity={act} isLast={idx === activities.length - 1} />
+                    ))}
+                    {activities.length === 0 && (
+                        <EmptyState
                             icon="time-outline"
-                            label="Added"
-                            value={timeAgo(lead.created_at)}
-                            colors={colors}
-                            isLast
+                            title="No activity yet"
+                            subtitle="Activity will appear here as you work this lead"
                         />
-                    </View>
-
-                    {/* ─── Call Recording & Transcript ─── */}
-                    {(lead.recording_url || lead.transcript) && (
-                        <RecordingCard recordingUrl={lead.recording_url} transcript={lead.transcript} />
                     )}
+                </View>
 
-                    {/* ─── Activity Timeline ─── */}
-                    <View
-                        testID="lead-activity-list"
-                        style={[styles.card, { backgroundColor: colors.cardBackground }, shadow('sm')]}
-                    >
-                        <SectionHeader title="Activity" count={activities.length} colors={colors} />
-                        {activities.map((act, idx) => (
-                            <LeadActivityItem key={act.id} activity={act} isLast={idx === activities.length - 1} />
-                        ))}
-                        {activities.length === 0 && (
-                            <EmptyState
-                                icon="time-outline"
-                                title="No activity yet"
-                                subtitle="Activity will appear here as you work this lead"
-                            />
-                        )}
-                    </View>
-
-                    {/* Metadata footer */}
-                    <Text style={[styles.metaFooter, { color: colors.textTertiary }]}>
-                        Lead created {timeAgo(lead.created_at)}
-                    </Text>
-                </ScrollView>
-            </KeyboardAvoidingView>
+                {/* Metadata footer */}
+                <Text style={[styles.metaFooter, { color: colors.textTertiary }]}>
+                    Lead created {timeAgo(lead.created_at)}
+                </Text>
+            </KeyboardAwareScrollView>
 
             {/* Contact Confirm Modal */}
             <ContactConfirmModal

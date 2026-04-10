@@ -4,19 +4,10 @@ import { RECOMMENDATION_CONFIG } from '@/types/recruitment';
 import WheelPicker from '@/components/WheelPicker';
 import { Ionicons } from '@expo/vector-icons';
 import React from 'react';
-import {
-    KeyboardAvoidingView,
-    Modal,
-    Pressable,
-    ScrollView,
-    StyleSheet,
-    Text,
-    TextInput,
-    TouchableOpacity,
-    View,
-} from 'react-native';
+import { Modal, Pressable, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
+import { KeyboardAwareScrollView } from 'react-native-keyboard-controller';
 import Animated from 'react-native-reanimated';
-import { KAV_BEHAVIOR, letterSpacing } from '@/constants/platform';
+import { letterSpacing } from '@/constants/platform';
 import { ERROR_BG, ERROR_TEXT } from '@/constants/ui';
 import type { AnimatedStyle } from 'react-native-reanimated';
 import type { ViewStyle } from 'react-native';
@@ -105,351 +96,331 @@ export default function InterviewSchedulerSheet({
 }: InterviewSchedulerSheetProps) {
     return (
         <Modal visible={visible} transparent animationType="none" onRequestClose={onDismiss}>
-            <KeyboardAvoidingView style={{ flex: 1 }} behavior={KAV_BEHAVIOR}>
-                <View style={sheetStyles.overlay}>
-                    {/* Backdrop */}
-                    <Pressable style={StyleSheet.absoluteFill} onPress={onDismiss} />
+            <View style={sheetStyles.overlay}>
+                {/* Backdrop */}
+                <Pressable style={StyleSheet.absoluteFill} onPress={onDismiss} />
 
-                    {/* Sheet content */}
-                    <Animated.View
-                        style={[schedStyles.sheet, { backgroundColor: colors.cardBackground }, animatedStyle]}
+                {/* Sheet content */}
+                <Animated.View style={[schedStyles.sheet, { backgroundColor: colors.cardBackground }, animatedStyle]}>
+                    <View style={[sheetStyles.handle, { backgroundColor: colors.border }]} />
+                    <Text style={[sheetStyles.sheetTitle, { color: colors.textPrimary }]}>
+                        {editingInterview
+                            ? `Edit Interview · Round ${editingInterview.round_number}`
+                            : `Schedule Interview · Round ${candidateInterviewCount + 1}`}
+                    </Text>
+
+                    <KeyboardAwareScrollView
+                        style={{ width: '100%' }}
+                        keyboardShouldPersistTaps="handled"
+                        showsVerticalScrollIndicator={false}
                     >
-                        <View style={[sheetStyles.handle, { backgroundColor: colors.border }]} />
-                        <Text style={[sheetStyles.sheetTitle, { color: colors.textPrimary }]}>
-                            {editingInterview
-                                ? `Edit Interview · Round ${editingInterview.round_number}`
-                                : `Schedule Interview · Round ${candidateInterviewCount + 1}`}
-                        </Text>
+                        {scheduleError && (
+                            <View style={[schedStyles.errorRow, { backgroundColor: ERROR_BG }]}>
+                                <Ionicons name="alert-circle" size={14} color={ERROR_TEXT} />
+                                <Text style={schedStyles.errorText}>{scheduleError}</Text>
+                            </View>
+                        )}
 
-                        <ScrollView
-                            style={{ width: '100%' }}
-                            keyboardShouldPersistTaps="handled"
-                            showsVerticalScrollIndicator={false}
-                        >
-                            {scheduleError && (
-                                <View style={[schedStyles.errorRow, { backgroundColor: ERROR_BG }]}>
-                                    <Ionicons name="alert-circle" size={14} color={ERROR_TEXT} />
-                                    <Text style={schedStyles.errorText}>{scheduleError}</Text>
-                                </View>
-                            )}
+                        {/* Date row */}
+                        <Text style={[schedStyles.fieldLabel, { color: colors.textTertiary }]}>Date</Text>
+                        <View style={[schedStyles.row, { backgroundColor: colors.surfacePrimary }]}>
+                            <TouchableOpacity
+                                onPress={() => onDateChange((d) => addDays(d, -1))}
+                                hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
+                                accessibilityRole="button"
+                                accessibilityLabel="Previous day"
+                            >
+                                <Ionicons name="chevron-back" size={22} color={colors.textSecondary} />
+                            </TouchableOpacity>
+                            <Text
+                                style={[
+                                    schedStyles.rowValue,
+                                    { color: colors.textPrimary, flex: 1, textAlign: 'center' },
+                                ]}
+                            >
+                                {formatScheduleDate(scheduleDate)}
+                            </Text>
+                            <TouchableOpacity
+                                onPress={() => onDateChange((d) => addDays(d, 1))}
+                                hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
+                                accessibilityRole="button"
+                                accessibilityLabel="Next day"
+                            >
+                                <Ionicons name="chevron-forward" size={22} color={colors.textSecondary} />
+                            </TouchableOpacity>
+                        </View>
+                        {!isToday(scheduleDate) && (
+                            <TouchableOpacity
+                                onPress={() => onDateChange(new Date())}
+                                style={schedStyles.todayBtn}
+                                accessibilityRole="button"
+                                accessibilityLabel="Jump to today"
+                            >
+                                <Text style={[schedStyles.todayBtnText, { color: colors.accent }]}>Jump to today</Text>
+                            </TouchableOpacity>
+                        )}
 
-                            {/* Date row */}
-                            <Text style={[schedStyles.fieldLabel, { color: colors.textTertiary }]}>Date</Text>
-                            <View style={[schedStyles.row, { backgroundColor: colors.surfacePrimary }]}>
-                                <TouchableOpacity
-                                    onPress={() => onDateChange((d) => addDays(d, -1))}
-                                    hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
-                                    accessibilityRole="button"
-                                    accessibilityLabel="Previous day"
-                                >
-                                    <Ionicons name="chevron-back" size={22} color={colors.textSecondary} />
-                                </TouchableOpacity>
+                        {/* Time wheel picker */}
+                        <Text style={[schedStyles.fieldLabel, { color: colors.textTertiary }]}>Time</Text>
+                        <View style={[schedStyles.wheelContainer, { backgroundColor: colors.surfacePrimary }]}>
+                            <WheelPicker
+                                key={`hour-${editingInterview?.id ?? 'new'}`}
+                                items={HOURS}
+                                selectedIndex={Math.max(0, HOURS.indexOf(scheduleHour.toString()))}
+                                onChange={(idx) => onHourChange(parseInt(HOURS[idx]))}
+                                colors={colors}
+                                width={80}
+                            />
+                            <Text style={[schedStyles.wheelColon, { color: colors.textPrimary }]}>:</Text>
+                            <WheelPicker
+                                key={`min-${editingInterview?.id ?? 'new'}`}
+                                items={MINUTES}
+                                selectedIndex={Math.max(0, MINUTES.indexOf(scheduleMinute.toString().padStart(2, '0')))}
+                                onChange={(idx) => onMinuteChange(parseInt(MINUTES[idx]))}
+                                colors={colors}
+                                width={72}
+                            />
+                            <View style={[schedStyles.wheelVertDivider, { backgroundColor: colors.border }]} />
+                            <WheelPicker
+                                key={`ampm-${editingInterview?.id ?? 'new'}`}
+                                items={AMPM}
+                                selectedIndex={scheduleAmPm === 'AM' ? 0 : 1}
+                                onChange={(idx) => onAmPmChange(AMPM[idx] as 'AM' | 'PM')}
+                                colors={colors}
+                                width={64}
+                            />
+                        </View>
+
+                        {/* Type toggle */}
+                        <Text style={[schedStyles.fieldLabel, { color: colors.textTertiary }]}>Format</Text>
+                        <View style={schedStyles.typeToggle}>
+                            <TouchableOpacity
+                                style={[
+                                    schedStyles.typeBtn,
+                                    {
+                                        backgroundColor:
+                                            scheduleType === 'zoom' ? colors.accent : colors.surfacePrimary,
+                                    },
+                                ]}
+                                onPress={() => onTypeChange('zoom')}
+                                accessibilityRole="radio"
+                                accessibilityState={{ checked: scheduleType === 'zoom' }}
+                                accessibilityLabel="Zoom"
+                            >
+                                <Ionicons
+                                    name="videocam-outline"
+                                    size={16}
+                                    color={scheduleType === 'zoom' ? colors.textInverse : colors.textSecondary}
+                                />
                                 <Text
                                     style={[
-                                        schedStyles.rowValue,
-                                        { color: colors.textPrimary, flex: 1, textAlign: 'center' },
+                                        schedStyles.typeBtnText,
+                                        {
+                                            color: scheduleType === 'zoom' ? colors.textInverse : colors.textSecondary,
+                                        },
                                     ]}
                                 >
-                                    {formatScheduleDate(scheduleDate)}
+                                    Zoom
                                 </Text>
-                                <TouchableOpacity
-                                    onPress={() => onDateChange((d) => addDays(d, 1))}
-                                    hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
-                                    accessibilityRole="button"
-                                    accessibilityLabel="Next day"
-                                >
-                                    <Ionicons name="chevron-forward" size={22} color={colors.textSecondary} />
-                                </TouchableOpacity>
-                            </View>
-                            {!isToday(scheduleDate) && (
-                                <TouchableOpacity
-                                    onPress={() => onDateChange(new Date())}
-                                    style={schedStyles.todayBtn}
-                                    accessibilityRole="button"
-                                    accessibilityLabel="Jump to today"
-                                >
-                                    <Text style={[schedStyles.todayBtnText, { color: colors.accent }]}>
-                                        Jump to today
-                                    </Text>
-                                </TouchableOpacity>
-                            )}
-
-                            {/* Time wheel picker */}
-                            <Text style={[schedStyles.fieldLabel, { color: colors.textTertiary }]}>Time</Text>
-                            <View style={[schedStyles.wheelContainer, { backgroundColor: colors.surfacePrimary }]}>
-                                <WheelPicker
-                                    key={`hour-${editingInterview?.id ?? 'new'}`}
-                                    items={HOURS}
-                                    selectedIndex={Math.max(0, HOURS.indexOf(scheduleHour.toString()))}
-                                    onChange={(idx) => onHourChange(parseInt(HOURS[idx]))}
-                                    colors={colors}
-                                    width={80}
+                            </TouchableOpacity>
+                            <TouchableOpacity
+                                style={[
+                                    schedStyles.typeBtn,
+                                    {
+                                        backgroundColor:
+                                            scheduleType === 'in_person' ? colors.accent : colors.surfacePrimary,
+                                    },
+                                ]}
+                                onPress={() => onTypeChange('in_person')}
+                                accessibilityRole="radio"
+                                accessibilityState={{ checked: scheduleType === 'in_person' }}
+                                accessibilityLabel="In-person"
+                            >
+                                <Ionicons
+                                    name="business-outline"
+                                    size={16}
+                                    color={scheduleType === 'in_person' ? colors.textInverse : colors.textSecondary}
                                 />
-                                <Text style={[schedStyles.wheelColon, { color: colors.textPrimary }]}>:</Text>
-                                <WheelPicker
-                                    key={`min-${editingInterview?.id ?? 'new'}`}
-                                    items={MINUTES}
-                                    selectedIndex={Math.max(
-                                        0,
-                                        MINUTES.indexOf(scheduleMinute.toString().padStart(2, '0')),
-                                    )}
-                                    onChange={(idx) => onMinuteChange(parseInt(MINUTES[idx]))}
-                                    colors={colors}
-                                    width={72}
-                                />
-                                <View style={[schedStyles.wheelVertDivider, { backgroundColor: colors.border }]} />
-                                <WheelPicker
-                                    key={`ampm-${editingInterview?.id ?? 'new'}`}
-                                    items={AMPM}
-                                    selectedIndex={scheduleAmPm === 'AM' ? 0 : 1}
-                                    onChange={(idx) => onAmPmChange(AMPM[idx] as 'AM' | 'PM')}
-                                    colors={colors}
-                                    width={64}
-                                />
-                            </View>
-
-                            {/* Type toggle */}
-                            <Text style={[schedStyles.fieldLabel, { color: colors.textTertiary }]}>Format</Text>
-                            <View style={schedStyles.typeToggle}>
-                                <TouchableOpacity
+                                <Text
                                     style={[
-                                        schedStyles.typeBtn,
+                                        schedStyles.typeBtnText,
                                         {
-                                            backgroundColor:
-                                                scheduleType === 'zoom' ? colors.accent : colors.surfacePrimary,
+                                            color:
+                                                scheduleType === 'in_person'
+                                                    ? colors.textInverse
+                                                    : colors.textSecondary,
                                         },
                                     ]}
-                                    onPress={() => onTypeChange('zoom')}
-                                    accessibilityRole="radio"
-                                    accessibilityState={{ checked: scheduleType === 'zoom' }}
-                                    accessibilityLabel="Zoom"
                                 >
-                                    <Ionicons
-                                        name="videocam-outline"
-                                        size={16}
-                                        color={scheduleType === 'zoom' ? colors.textInverse : colors.textSecondary}
-                                    />
-                                    <Text
-                                        style={[
-                                            schedStyles.typeBtnText,
-                                            {
-                                                color:
-                                                    scheduleType === 'zoom' ? colors.textInverse : colors.textSecondary,
-                                            },
-                                        ]}
-                                    >
-                                        Zoom
-                                    </Text>
-                                </TouchableOpacity>
-                                <TouchableOpacity
-                                    style={[
-                                        schedStyles.typeBtn,
-                                        {
-                                            backgroundColor:
-                                                scheduleType === 'in_person' ? colors.accent : colors.surfacePrimary,
-                                        },
-                                    ]}
-                                    onPress={() => onTypeChange('in_person')}
-                                    accessibilityRole="radio"
-                                    accessibilityState={{ checked: scheduleType === 'in_person' }}
-                                    accessibilityLabel="In-person"
-                                >
-                                    <Ionicons
-                                        name="business-outline"
-                                        size={16}
-                                        color={scheduleType === 'in_person' ? colors.textInverse : colors.textSecondary}
-                                    />
-                                    <Text
-                                        style={[
-                                            schedStyles.typeBtnText,
-                                            {
-                                                color:
-                                                    scheduleType === 'in_person'
-                                                        ? colors.textInverse
-                                                        : colors.textSecondary,
-                                            },
-                                        ]}
-                                    >
-                                        In-person
-                                    </Text>
-                                </TouchableOpacity>
-                            </View>
+                                    In-person
+                                </Text>
+                            </TouchableOpacity>
+                        </View>
 
-                            {/* Link or location */}
-                            {scheduleType === 'zoom' ? (
-                                <TextInput
-                                    style={[
-                                        schedStyles.input,
-                                        {
-                                            color: colors.textPrimary,
-                                            backgroundColor: colors.surfacePrimary,
-                                        },
-                                    ]}
-                                    placeholder="Zoom link (optional)"
-                                    placeholderTextColor={colors.textTertiary}
-                                    value={scheduleLink}
-                                    onChangeText={onLinkChange}
-                                    autoCapitalize="none"
-                                    keyboardType="url"
-                                />
-                            ) : (
-                                <TextInput
-                                    style={[
-                                        schedStyles.input,
-                                        {
-                                            color: colors.textPrimary,
-                                            backgroundColor: colors.surfacePrimary,
-                                        },
-                                    ]}
-                                    placeholder="Location (optional)"
-                                    placeholderTextColor={colors.textTertiary}
-                                    value={scheduleLocation}
-                                    onChangeText={onLocationChange}
-                                />
-                            )}
-
-                            {/* Notes */}
+                        {/* Link or location */}
+                        {scheduleType === 'zoom' ? (
                             <TextInput
                                 style={[
                                     schedStyles.input,
                                     {
                                         color: colors.textPrimary,
                                         backgroundColor: colors.surfacePrimary,
-                                        minHeight: 56,
                                     },
                                 ]}
-                                placeholder="Notes (optional)"
+                                placeholder="Zoom link (optional)"
                                 placeholderTextColor={colors.textTertiary}
-                                value={scheduleNotes}
-                                onChangeText={onNotesChange}
-                                multiline
-                                textAlignVertical="top"
+                                value={scheduleLink}
+                                onChangeText={onLinkChange}
+                                autoCapitalize="none"
+                                keyboardType="url"
                             />
+                        ) : (
+                            <TextInput
+                                style={[
+                                    schedStyles.input,
+                                    {
+                                        color: colors.textPrimary,
+                                        backgroundColor: colors.surfacePrimary,
+                                    },
+                                ]}
+                                placeholder="Location (optional)"
+                                placeholderTextColor={colors.textTertiary}
+                                value={scheduleLocation}
+                                onChangeText={onLocationChange}
+                            />
+                        )}
 
-                            {/* Status — edit mode only */}
-                            {editingInterview && (
-                                <>
-                                    <Text style={[schedStyles.fieldLabel, { color: colors.textTertiary }]}>Status</Text>
-                                    <View style={[schedStyles.typeToggle, { flexWrap: 'wrap' }]}>
-                                        {(['scheduled', 'completed', 'rescheduled', 'cancelled'] as const).map((s) => (
+                        {/* Notes */}
+                        <TextInput
+                            style={[
+                                schedStyles.input,
+                                {
+                                    color: colors.textPrimary,
+                                    backgroundColor: colors.surfacePrimary,
+                                    minHeight: 56,
+                                },
+                            ]}
+                            placeholder="Notes (optional)"
+                            placeholderTextColor={colors.textTertiary}
+                            value={scheduleNotes}
+                            onChangeText={onNotesChange}
+                            multiline
+                            textAlignVertical="top"
+                        />
+
+                        {/* Status — edit mode only */}
+                        {editingInterview && (
+                            <>
+                                <Text style={[schedStyles.fieldLabel, { color: colors.textTertiary }]}>Status</Text>
+                                <View style={[schedStyles.typeToggle, { flexWrap: 'wrap' }]}>
+                                    {(['scheduled', 'completed', 'rescheduled', 'cancelled'] as const).map((s) => (
+                                        <TouchableOpacity
+                                            key={s}
+                                            style={[
+                                                schedStyles.typeBtn,
+                                                {
+                                                    backgroundColor:
+                                                        scheduleStatus === s ? colors.accent : colors.surfacePrimary,
+                                                    flex: undefined,
+                                                    paddingHorizontal: 14,
+                                                },
+                                            ]}
+                                            onPress={() => onStatusChange(s)}
+                                            accessibilityRole="radio"
+                                            accessibilityState={{ checked: scheduleStatus === s }}
+                                            accessibilityLabel={s.charAt(0).toUpperCase() + s.slice(1)}
+                                        >
+                                            <Text
+                                                style={[
+                                                    schedStyles.typeBtnText,
+                                                    {
+                                                        color:
+                                                            scheduleStatus === s
+                                                                ? colors.textInverse
+                                                                : colors.textSecondary,
+                                                        fontSize: 13,
+                                                    },
+                                                ]}
+                                            >
+                                                {s.charAt(0).toUpperCase() + s.slice(1)}
+                                            </Text>
+                                        </TouchableOpacity>
+                                    ))}
+                                </View>
+
+                                <Text style={[schedStyles.fieldLabel, { color: colors.textTertiary }]}>
+                                    Recommendation
+                                </Text>
+                                <View style={[schedStyles.typeToggle, { flexWrap: 'wrap' }]}>
+                                    {(['second_interview', 'on_hold', 'pass'] as InterviewRecommendation[]).map((r) => {
+                                        const cfg = RECOMMENDATION_CONFIG[r];
+                                        const isSelected = scheduleRecommendation === r;
+                                        return (
                                             <TouchableOpacity
-                                                key={s}
+                                                key={r}
                                                 style={[
                                                     schedStyles.typeBtn,
                                                     {
-                                                        backgroundColor:
-                                                            scheduleStatus === s
-                                                                ? colors.accent
-                                                                : colors.surfacePrimary,
+                                                        backgroundColor: isSelected
+                                                            ? cfg.color + '20'
+                                                            : colors.surfacePrimary,
+                                                        borderWidth: isSelected ? 1.5 : 0,
+                                                        borderColor: isSelected ? cfg.color : 'transparent',
                                                         flex: undefined,
                                                         paddingHorizontal: 14,
                                                     },
                                                 ]}
-                                                onPress={() => onStatusChange(s)}
+                                                onPress={() => onRecommendationChange(isSelected ? null : r)}
                                                 accessibilityRole="radio"
-                                                accessibilityState={{ checked: scheduleStatus === s }}
-                                                accessibilityLabel={s.charAt(0).toUpperCase() + s.slice(1)}
+                                                accessibilityState={{ checked: isSelected }}
+                                                accessibilityLabel={cfg.label}
                                             >
+                                                <Ionicons
+                                                    name={cfg.icon as 'refresh-outline'}
+                                                    size={14}
+                                                    color={isSelected ? cfg.color : colors.textSecondary}
+                                                />
                                                 <Text
                                                     style={[
                                                         schedStyles.typeBtnText,
                                                         {
-                                                            color:
-                                                                scheduleStatus === s
-                                                                    ? colors.textInverse
-                                                                    : colors.textSecondary,
+                                                            color: isSelected ? cfg.color : colors.textSecondary,
                                                             fontSize: 13,
                                                         },
                                                     ]}
                                                 >
-                                                    {s.charAt(0).toUpperCase() + s.slice(1)}
+                                                    {cfg.label}
                                                 </Text>
                                             </TouchableOpacity>
-                                        ))}
-                                    </View>
+                                        );
+                                    })}
+                                </View>
+                            </>
+                        )}
 
-                                    <Text style={[schedStyles.fieldLabel, { color: colors.textTertiary }]}>
-                                        Recommendation
-                                    </Text>
-                                    <View style={[schedStyles.typeToggle, { flexWrap: 'wrap' }]}>
-                                        {(['second_interview', 'on_hold', 'pass'] as InterviewRecommendation[]).map(
-                                            (r) => {
-                                                const cfg = RECOMMENDATION_CONFIG[r];
-                                                const isSelected = scheduleRecommendation === r;
-                                                return (
-                                                    <TouchableOpacity
-                                                        key={r}
-                                                        style={[
-                                                            schedStyles.typeBtn,
-                                                            {
-                                                                backgroundColor: isSelected
-                                                                    ? cfg.color + '20'
-                                                                    : colors.surfacePrimary,
-                                                                borderWidth: isSelected ? 1.5 : 0,
-                                                                borderColor: isSelected ? cfg.color : 'transparent',
-                                                                flex: undefined,
-                                                                paddingHorizontal: 14,
-                                                            },
-                                                        ]}
-                                                        onPress={() => onRecommendationChange(isSelected ? null : r)}
-                                                        accessibilityRole="radio"
-                                                        accessibilityState={{ checked: isSelected }}
-                                                        accessibilityLabel={cfg.label}
-                                                    >
-                                                        <Ionicons
-                                                            name={cfg.icon as 'refresh-outline'}
-                                                            size={14}
-                                                            color={isSelected ? cfg.color : colors.textSecondary}
-                                                        />
-                                                        <Text
-                                                            style={[
-                                                                schedStyles.typeBtnText,
-                                                                {
-                                                                    color: isSelected
-                                                                        ? cfg.color
-                                                                        : colors.textSecondary,
-                                                                    fontSize: 13,
-                                                                },
-                                                            ]}
-                                                        >
-                                                            {cfg.label}
-                                                        </Text>
-                                                    </TouchableOpacity>
-                                                );
-                                            },
-                                        )}
-                                    </View>
-                                </>
-                            )}
+                        <TouchableOpacity
+                            style={[
+                                sheetStyles.primaryBtn,
+                                { backgroundColor: colors.warning, opacity: isScheduling ? 0.5 : 1 },
+                            ]}
+                            onPress={onSubmit}
+                            activeOpacity={0.85}
+                            disabled={isScheduling}
+                            accessibilityRole="button"
+                            accessibilityLabel={
+                                isScheduling ? 'Saving' : editingInterview ? 'Save changes' : 'Confirm schedule'
+                            }
+                        >
+                            <Ionicons name="calendar-outline" size={18} color={colors.textInverse} />
+                            <Text style={[sheetStyles.primaryBtnText, { color: colors.textInverse }]}>
+                                {isScheduling ? 'Saving...' : editingInterview ? 'Save Changes' : 'Confirm Schedule'}
+                            </Text>
+                        </TouchableOpacity>
 
-                            <TouchableOpacity
-                                style={[
-                                    sheetStyles.primaryBtn,
-                                    { backgroundColor: colors.warning, opacity: isScheduling ? 0.5 : 1 },
-                                ]}
-                                onPress={onSubmit}
-                                activeOpacity={0.85}
-                                disabled={isScheduling}
-                                accessibilityRole="button"
-                                accessibilityLabel={
-                                    isScheduling ? 'Saving' : editingInterview ? 'Save changes' : 'Confirm schedule'
-                                }
-                            >
-                                <Ionicons name="calendar-outline" size={18} color={colors.textInverse} />
-                                <Text style={[sheetStyles.primaryBtnText, { color: colors.textInverse }]}>
-                                    {isScheduling
-                                        ? 'Saving...'
-                                        : editingInterview
-                                          ? 'Save Changes'
-                                          : 'Confirm Schedule'}
-                                </Text>
-                            </TouchableOpacity>
-
-                            <View style={{ height: 8 }} />
-                        </ScrollView>
-                    </Animated.View>
-                </View>
-            </KeyboardAvoidingView>
+                        <View style={{ height: 8 }} />
+                    </KeyboardAwareScrollView>
+                </Animated.View>
+            </View>
         </Modal>
     );
 }

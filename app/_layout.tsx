@@ -3,6 +3,7 @@ import { Stack, useNavigationContainerRef, useRouter, useSegments } from 'expo-r
 import * as SplashScreen from 'expo-splash-screen';
 import { StatusBar } from 'expo-status-bar';
 import { useEffect } from 'react';
+import { LogBox } from 'react-native';
 import 'react-native-reanimated';
 
 import AppErrorBoundary from '@/components/AppErrorBoundary';
@@ -12,6 +13,13 @@ import { ThemeProvider, useTheme } from '@/contexts/ThemeContext';
 import { NotificationProvider } from '@/contexts/NotificationContext';
 import { ViewModeProvider } from '@/contexts/ViewModeContext';
 import { initSentry, navigationIntegration, Sentry } from '@/lib/sentry';
+import { KeyboardProvider } from 'react-native-keyboard-controller';
+
+// Supabase's internal auto-refresh fires a fetch at module-load time (before
+// React error boundaries exist). On flaky networks the first request can fail,
+// surfacing a harmless unhandled rejection in the dev overlay. Suppress it —
+// initAuth's try/catch already handles the session-restore failure gracefully.
+LogBox.ignoreLogs(['Network request failed']);
 
 export { ErrorBoundary } from 'expo-router';
 
@@ -111,19 +119,21 @@ function RootLayout() {
     if (!fontsLoaded) return null;
 
     return (
-        <ThemeProvider>
-            <AppErrorBoundary>
-                <NetworkProvider>
-                    <AuthProvider>
-                        <ViewModeProvider>
-                            <NotificationProvider>
-                                <RootLayoutContent />
-                            </NotificationProvider>
-                        </ViewModeProvider>
-                    </AuthProvider>
-                </NetworkProvider>
-            </AppErrorBoundary>
-        </ThemeProvider>
+        <KeyboardProvider>
+            <ThemeProvider>
+                <AppErrorBoundary>
+                    <NetworkProvider>
+                        <AuthProvider>
+                            <ViewModeProvider>
+                                <NotificationProvider>
+                                    <RootLayoutContent />
+                                </NotificationProvider>
+                            </ViewModeProvider>
+                        </AuthProvider>
+                    </NetworkProvider>
+                </AppErrorBoundary>
+            </ThemeProvider>
+        </KeyboardProvider>
     );
 }
 

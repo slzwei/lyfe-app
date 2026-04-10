@@ -12,17 +12,15 @@ import {
     ActivityIndicator,
     FlatList,
     Keyboard,
-    KeyboardAvoidingView,
     Modal,
-    Platform,
     Pressable,
-    ScrollView,
     StyleSheet,
     Text,
     TextInput,
     TouchableOpacity,
     View,
 } from 'react-native';
+import { KeyboardAwareScrollView } from 'react-native-keyboard-controller';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import type { UserRole } from '@/types/shared/roles';
 
@@ -139,182 +137,184 @@ export default function InviteMemberScreen() {
 
     return (
         <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]} edges={['top']}>
-            <KeyboardAvoidingView style={styles.flex} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
-                {/* Header */}
-                <View style={[styles.header, { borderBottomColor: colors.border }]}>
-                    <TouchableOpacity onPress={() => router.back()} hitSlop={12}>
-                        <Ionicons name="close" size={24} color={colors.textPrimary} />
-                    </TouchableOpacity>
-                    <Text style={[styles.headerTitle, { color: colors.textPrimary }]}>Invite Member</Text>
-                    <View style={{ width: 24 }} />
-                </View>
+            {/* Header */}
+            <View style={[styles.header, { borderBottomColor: colors.border }]}>
+                <TouchableOpacity onPress={() => router.back()} hitSlop={12}>
+                    <Ionicons name="close" size={24} color={colors.textPrimary} />
+                </TouchableOpacity>
+                <Text style={[styles.headerTitle, { color: colors.textPrimary }]}>Invite Member</Text>
+                <View style={{ width: 24 }} />
+            </View>
 
-                <ScrollView style={styles.flex} contentContainerStyle={styles.form} keyboardShouldPersistTaps="handled">
-                    {saveError && <ErrorBanner message={saveError} />}
+            <KeyboardAwareScrollView
+                style={styles.flex}
+                contentContainerStyle={styles.form}
+                keyboardShouldPersistTaps="handled"
+            >
+                {saveError && <ErrorBanner message={saveError} />}
 
-                    {/* Name */}
-                    <FormField label="Full Name" error={errors.name} required>
+                {/* Name */}
+                <FormField label="Full Name" error={errors.name} required>
+                    <TextInput
+                        style={[
+                            styles.input,
+                            {
+                                color: colors.textPrimary,
+                                backgroundColor: colors.surfacePrimary,
+                                borderColor: errors.name ? colors.danger : colors.border,
+                            },
+                        ]}
+                        value={name}
+                        onChangeText={(t) => {
+                            setName(t);
+                            setErrors((e) => ({ ...e, name: '' }));
+                        }}
+                        placeholder="e.g. John Tan"
+                        placeholderTextColor={colors.textTertiary}
+                        autoCapitalize="words"
+                        autoFocus
+                        testID="invite-name-input"
+                    />
+                </FormField>
+
+                {/* Phone */}
+                <FormField label="Phone Number" error={errors.phone} required>
+                    <View
+                        style={[
+                            styles.phoneRow,
+                            {
+                                backgroundColor: colors.surfacePrimary,
+                                borderColor: errors.phone ? colors.danger : colors.border,
+                            },
+                        ]}
+                    >
+                        <Text style={[styles.prefix, { color: colors.textSecondary }]}>+65</Text>
+                        <View style={[styles.phoneDivider, { backgroundColor: colors.border }]} />
                         <TextInput
+                            style={[styles.phoneInput, { color: colors.textPrimary }]}
+                            value={phone.length > 4 ? `${phone.slice(0, 4)} ${phone.slice(4)}` : phone}
+                            onChangeText={(t) => {
+                                setPhone(t.replace(/\D/g, '').slice(0, 8));
+                                setErrors((e) => ({ ...e, phone: '' }));
+                            }}
+                            placeholder="9123 4567"
+                            placeholderTextColor={colors.textTertiary}
+                            keyboardType="phone-pad"
+                            maxLength={9}
+                            testID="invite-phone-input"
+                        />
+                    </View>
+                </FormField>
+
+                {/* Role Picker */}
+                {invitableRoles.length > 1 && (
+                    <FormField label="Role" error={errors.role} required>
+                        <TouchableOpacity
                             style={[
-                                styles.input,
+                                styles.pickerButton,
                                 {
-                                    color: colors.textPrimary,
                                     backgroundColor: colors.surfacePrimary,
-                                    borderColor: errors.name ? colors.danger : colors.border,
+                                    borderColor: errors.role ? colors.danger : colors.border,
                                 },
                             ]}
-                            value={name}
-                            onChangeText={(t) => {
-                                setName(t);
-                                setErrors((e) => ({ ...e, name: '' }));
-                            }}
-                            placeholder="e.g. John Tan"
-                            placeholderTextColor={colors.textTertiary}
-                            autoCapitalize="words"
-                            autoFocus
-                            testID="invite-name-input"
-                        />
+                            onPress={() => setShowRolePicker(true)}
+                            testID="invite-role-picker"
+                        >
+                            <Text
+                                style={[
+                                    styles.pickerText,
+                                    { color: selectedRole ? colors.textPrimary : colors.textTertiary },
+                                ]}
+                            >
+                                {selectedRole ? ROLE_LABELS[selectedRole] : 'Select a role'}
+                            </Text>
+                            <Ionicons name="chevron-down" size={18} color={colors.textSecondary} />
+                        </TouchableOpacity>
                     </FormField>
+                )}
 
-                    {/* Phone */}
-                    <FormField label="Phone Number" error={errors.phone} required>
+                {/* Single-option role display for PA */}
+                {invitableRoles.length === 1 && (
+                    <FormField label="Role">
                         <View
                             style={[
-                                styles.phoneRow,
-                                {
-                                    backgroundColor: colors.surfacePrimary,
-                                    borderColor: errors.phone ? colors.danger : colors.border,
-                                },
+                                styles.pickerButton,
+                                { backgroundColor: colors.surfaceSecondary, borderColor: colors.border },
                             ]}
                         >
-                            <Text style={[styles.prefix, { color: colors.textSecondary }]}>+65</Text>
-                            <View style={[styles.phoneDivider, { backgroundColor: colors.border }]} />
-                            <TextInput
-                                style={[styles.phoneInput, { color: colors.textPrimary }]}
-                                value={phone.length > 4 ? `${phone.slice(0, 4)} ${phone.slice(4)}` : phone}
-                                onChangeText={(t) => {
-                                    setPhone(t.replace(/\D/g, '').slice(0, 8));
-                                    setErrors((e) => ({ ...e, phone: '' }));
-                                }}
-                                placeholder="9123 4567"
-                                placeholderTextColor={colors.textTertiary}
-                                keyboardType="phone-pad"
-                                maxLength={9}
-                                testID="invite-phone-input"
-                            />
+                            <Text style={[styles.pickerText, { color: colors.textPrimary }]}>
+                                {ROLE_LABELS[invitableRoles[0]]}
+                            </Text>
                         </View>
                     </FormField>
+                )}
 
-                    {/* Role Picker */}
-                    {invitableRoles.length > 1 && (
-                        <FormField label="Role" error={errors.role} required>
-                            <TouchableOpacity
-                                style={[
-                                    styles.pickerButton,
-                                    {
-                                        backgroundColor: colors.surfacePrimary,
-                                        borderColor: errors.role ? colors.danger : colors.border,
-                                    },
-                                ]}
-                                onPress={() => setShowRolePicker(true)}
-                                testID="invite-role-picker"
-                            >
+                {/* Manager Picker (conditional) */}
+                {needsManager && (
+                    <FormField label="Assign to Manager">
+                        <TouchableOpacity
+                            style={[
+                                styles.pickerButton,
+                                { backgroundColor: colors.surfacePrimary, borderColor: colors.border },
+                            ]}
+                            onPress={() => setShowManagerPicker(true)}
+                            disabled={loadingManagers}
+                            testID="invite-manager-picker"
+                        >
+                            {loadingManagers ? (
+                                <ActivityIndicator size="small" color={colors.textSecondary} />
+                            ) : (
                                 <Text
                                     style={[
                                         styles.pickerText,
-                                        { color: selectedRole ? colors.textPrimary : colors.textTertiary },
+                                        { color: selectedManager ? colors.textPrimary : colors.textTertiary },
                                     ]}
                                 >
-                                    {selectedRole ? ROLE_LABELS[selectedRole] : 'Select a role'}
+                                    {selectedManager?.full_name ?? 'Select a manager (optional)'}
                                 </Text>
-                                <Ionicons name="chevron-down" size={18} color={colors.textSecondary} />
-                            </TouchableOpacity>
-                        </FormField>
-                    )}
-
-                    {/* Single-option role display for PA */}
-                    {invitableRoles.length === 1 && (
-                        <FormField label="Role">
-                            <View
-                                style={[
-                                    styles.pickerButton,
-                                    { backgroundColor: colors.surfaceSecondary, borderColor: colors.border },
-                                ]}
-                            >
-                                <Text style={[styles.pickerText, { color: colors.textPrimary }]}>
-                                    {ROLE_LABELS[invitableRoles[0]]}
-                                </Text>
-                            </View>
-                        </FormField>
-                    )}
-
-                    {/* Manager Picker (conditional) */}
-                    {needsManager && (
-                        <FormField label="Assign to Manager">
-                            <TouchableOpacity
-                                style={[
-                                    styles.pickerButton,
-                                    { backgroundColor: colors.surfacePrimary, borderColor: colors.border },
-                                ]}
-                                onPress={() => setShowManagerPicker(true)}
-                                disabled={loadingManagers}
-                                testID="invite-manager-picker"
-                            >
-                                {loadingManagers ? (
-                                    <ActivityIndicator size="small" color={colors.textSecondary} />
-                                ) : (
-                                    <Text
-                                        style={[
-                                            styles.pickerText,
-                                            { color: selectedManager ? colors.textPrimary : colors.textTertiary },
-                                        ]}
-                                    >
-                                        {selectedManager?.full_name ?? 'Select a manager (optional)'}
-                                    </Text>
-                                )}
-                                <Ionicons name="chevron-down" size={18} color={colors.textSecondary} />
-                            </TouchableOpacity>
-                        </FormField>
-                    )}
-
-                    {/* Notes */}
-                    <FormField label="Notes (optional)">
-                        <TextInput
-                            style={[
-                                styles.input,
-                                styles.multiline,
-                                {
-                                    color: colors.textPrimary,
-                                    backgroundColor: colors.surfacePrimary,
-                                    borderColor: colors.border,
-                                },
-                            ]}
-                            value={notes}
-                            onChangeText={setNotes}
-                            placeholder="Any notes about this person"
-                            placeholderTextColor={colors.textTertiary}
-                            multiline
-                            numberOfLines={2}
-                            textAlignVertical="top"
-                            testID="invite-notes-input"
-                        />
+                            )}
+                            <Ionicons name="chevron-down" size={18} color={colors.textSecondary} />
+                        </TouchableOpacity>
                     </FormField>
+                )}
 
-                    {/* Submit */}
-                    <TouchableOpacity
-                        style={[styles.submitButton, { backgroundColor: colors.accent }]}
-                        onPress={handleSubmit}
-                        disabled={isSubmitting}
-                        testID="invite-submit-button"
-                    >
-                        {isSubmitting ? (
-                            <ActivityIndicator color="#fff" size="small" />
-                        ) : (
-                            <Text style={styles.submitText}>Create Invitation</Text>
-                        )}
-                    </TouchableOpacity>
-                </ScrollView>
-            </KeyboardAvoidingView>
+                {/* Notes */}
+                <FormField label="Notes (optional)">
+                    <TextInput
+                        style={[
+                            styles.input,
+                            styles.multiline,
+                            {
+                                color: colors.textPrimary,
+                                backgroundColor: colors.surfacePrimary,
+                                borderColor: colors.border,
+                            },
+                        ]}
+                        value={notes}
+                        onChangeText={setNotes}
+                        placeholder="Any notes about this person"
+                        placeholderTextColor={colors.textTertiary}
+                        multiline
+                        numberOfLines={2}
+                        textAlignVertical="top"
+                        testID="invite-notes-input"
+                    />
+                </FormField>
+
+                {/* Submit */}
+                <TouchableOpacity
+                    style={[styles.submitButton, { backgroundColor: colors.accent }]}
+                    onPress={handleSubmit}
+                    disabled={isSubmitting}
+                    testID="invite-submit-button"
+                >
+                    {isSubmitting ? (
+                        <ActivityIndicator color="#fff" size="small" />
+                    ) : (
+                        <Text style={styles.submitText}>Create Invitation</Text>
+                    )}
+                </TouchableOpacity>
+            </KeyboardAwareScrollView>
 
             {/* Role Picker Modal */}
             <Modal visible={showRolePicker} transparent animationType="slide">

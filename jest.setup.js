@@ -88,6 +88,20 @@ jest.mock('expo-constants', () => ({
     expoConfig: { version: '1.0.0', extra: { eas: { projectId: 'test' } } },
 }));
 
+// Mock react-native-keyboard-controller (native module not available in test env)
+jest.mock('react-native-keyboard-controller', () => {
+    const { ScrollView, View } = require('react-native');
+    return {
+        KeyboardAwareScrollView: ScrollView,
+        KeyboardProvider: View,
+        KeyboardAvoidingView: View,
+        KeyboardStickyView: View,
+        KeyboardToolbar: View,
+        useKeyboardHandler: jest.fn(),
+        useKeyboardAnimation: jest.fn(() => ({ height: { value: 0 }, progress: { value: 0 } })),
+    };
+});
+
 // Mock react-native-safe-area-context
 jest.mock('react-native-safe-area-context', () => {
     const { View } = require('react-native');

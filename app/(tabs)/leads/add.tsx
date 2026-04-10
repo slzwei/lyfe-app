@@ -1,6 +1,6 @@
 import ErrorBanner from '@/components/ErrorBanner';
 import FormField from '@/components/FormField';
-import { KAV_BEHAVIOR } from '@/constants/platform';
+import { KeyboardAwareScrollView } from 'react-native-keyboard-controller';
 import { useAuth } from '@/contexts/AuthContext';
 import { useTheme } from '@/contexts/ThemeContext';
 import { createLead, type CreateLeadInput } from '@/lib/leads';
@@ -9,19 +9,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import { useSubmitGuard } from '@/hooks/useSubmitGuard';
 import React, { useState } from 'react';
-import {
-    ActivityIndicator,
-    Keyboard,
-    KeyboardAvoidingView,
-    Modal,
-    Pressable,
-    ScrollView,
-    StyleSheet,
-    Text,
-    TextInput,
-    TouchableOpacity,
-    View,
-} from 'react-native';
+import { ActivityIndicator, Modal, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 const SOURCES: LeadSource[] = ['referral', 'walk_in', 'online', 'event', 'cold_call', 'other'];
 const PRODUCTS: ProductInterest[] = ['life', 'health', 'ilp', 'general'];
@@ -147,170 +135,144 @@ export default function AddLeadScreen() {
                 </TouchableOpacity>
             </View>
 
-            <KeyboardAvoidingView style={{ flex: 1 }} behavior={KAV_BEHAVIOR} keyboardVerticalOffset={100}>
-                <Pressable style={{ flex: 1 }} onPress={Keyboard.dismiss}>
-                    <ScrollView
-                        style={styles.scrollView}
-                        contentContainerStyle={styles.scrollContent}
-                        showsVerticalScrollIndicator={false}
-                    >
-                        {/* Save Error */}
-                        {saveError && <ErrorBanner message={saveError} />}
+            <KeyboardAwareScrollView
+                style={styles.scrollView}
+                contentContainerStyle={styles.scrollContent}
+                showsVerticalScrollIndicator={false}
+                keyboardShouldPersistTaps="handled"
+                bottomOffset={20}
+            >
+                {/* Save Error */}
+                {saveError && <ErrorBanner message={saveError} />}
 
-                        {/* Contact Info */}
-                        <View
-                            style={[
-                                styles.card,
-                                { backgroundColor: colors.cardBackground, borderColor: colors.cardBorder },
-                            ]}
-                        >
-                            <Text style={[styles.sectionTitle, { color: colors.textPrimary }]}>
-                                Contact Information
-                            </Text>
+                {/* Contact Info */}
+                <View style={[styles.card, { backgroundColor: colors.cardBackground, borderColor: colors.cardBorder }]}>
+                    <Text style={[styles.sectionTitle, { color: colors.textPrimary }]}>Contact Information</Text>
 
-                            <FormField
-                                testID="add-lead-name"
-                                label="Full Name *"
-                                value={name}
-                                onChangeText={setName}
-                                placeholder="e.g. Sarah Tan"
-                                error={errors.name}
-                                colors={colors}
-                                icon="person-outline"
-                            />
-                            <FormField
-                                testID="add-lead-phone"
-                                label="Phone *"
-                                value={phone}
-                                onChangeText={setPhone}
-                                placeholder="+65 9123 4567"
-                                error={errors.phone}
-                                colors={colors}
-                                icon="call-outline"
-                                keyboardType="phone-pad"
-                            />
-                            <FormField
-                                testID="add-lead-email"
-                                label="Email"
-                                value={email}
-                                onChangeText={setEmail}
-                                placeholder="sarah@email.com"
-                                error={errors.email}
-                                colors={colors}
-                                icon="mail-outline"
-                                keyboardType="email-address"
-                                autoCapitalize="none"
-                            />
-                        </View>
+                    <FormField
+                        testID="add-lead-name"
+                        label="Full Name *"
+                        value={name}
+                        onChangeText={setName}
+                        placeholder="e.g. Sarah Tan"
+                        error={errors.name}
+                        colors={colors}
+                        icon="person-outline"
+                    />
+                    <FormField
+                        testID="add-lead-phone"
+                        label="Phone *"
+                        value={phone}
+                        onChangeText={setPhone}
+                        placeholder="+65 9123 4567"
+                        error={errors.phone}
+                        colors={colors}
+                        icon="call-outline"
+                        keyboardType="phone-pad"
+                    />
+                    <FormField
+                        testID="add-lead-email"
+                        label="Email"
+                        value={email}
+                        onChangeText={setEmail}
+                        placeholder="sarah@email.com"
+                        error={errors.email}
+                        colors={colors}
+                        icon="mail-outline"
+                        keyboardType="email-address"
+                        autoCapitalize="none"
+                    />
+                </View>
 
-                        {/* Source */}
-                        <View
-                            style={[
-                                styles.card,
-                                { backgroundColor: colors.cardBackground, borderColor: colors.cardBorder },
-                            ]}
-                        >
-                            <Text style={[styles.sectionTitle, { color: colors.textPrimary }]}>Source</Text>
-                            <View style={styles.chipGroup}>
-                                {SOURCES.map((s) => (
-                                    <TouchableOpacity
-                                        key={s}
-                                        style={[
-                                            styles.chip,
-                                            {
-                                                backgroundColor:
-                                                    source === s ? colors.accentLight : colors.surfacePrimary,
-                                                borderColor: source === s ? colors.accent : colors.borderLight,
-                                                borderWidth: source === s ? 1.5 : 0.5,
-                                            },
-                                        ]}
-                                        onPress={() => setSource(s)}
-                                        accessibilityRole="button"
-                                        accessibilityLabel={`Source: ${SOURCE_LABELS[s]}`}
-                                        accessibilityState={{ selected: source === s }}
-                                    >
-                                        <Text
-                                            style={[
-                                                styles.chipText,
-                                                { color: source === s ? colors.accent : colors.textSecondary },
-                                            ]}
-                                        >
-                                            {SOURCE_LABELS[s]}
-                                        </Text>
-                                    </TouchableOpacity>
-                                ))}
-                            </View>
-                        </View>
-
-                        {/* Product Interest */}
-                        <View
-                            style={[
-                                styles.card,
-                                { backgroundColor: colors.cardBackground, borderColor: colors.cardBorder },
-                            ]}
-                        >
-                            <Text style={[styles.sectionTitle, { color: colors.textPrimary }]}>Product Interest</Text>
-                            <View style={styles.chipGroup}>
-                                {PRODUCTS.map((p) => (
-                                    <TouchableOpacity
-                                        key={p}
-                                        style={[
-                                            styles.chip,
-                                            {
-                                                backgroundColor:
-                                                    product === p ? colors.accentLight : colors.surfacePrimary,
-                                                borderColor: product === p ? colors.accent : colors.borderLight,
-                                                borderWidth: product === p ? 1.5 : 0.5,
-                                            },
-                                        ]}
-                                        onPress={() => setProduct(p)}
-                                        accessibilityRole="button"
-                                        accessibilityLabel={`Product: ${PRODUCT_LABELS[p]}`}
-                                        accessibilityState={{ selected: product === p }}
-                                    >
-                                        <Text
-                                            style={[
-                                                styles.chipText,
-                                                { color: product === p ? colors.accent : colors.textSecondary },
-                                            ]}
-                                        >
-                                            {PRODUCT_LABELS[p]}
-                                        </Text>
-                                    </TouchableOpacity>
-                                ))}
-                            </View>
-                        </View>
-
-                        {/* Notes */}
-                        <View
-                            style={[
-                                styles.card,
-                                { backgroundColor: colors.cardBackground, borderColor: colors.cardBorder },
-                            ]}
-                        >
-                            <Text style={[styles.sectionTitle, { color: colors.textPrimary }]}>Notes</Text>
-                            <TextInput
+                {/* Source */}
+                <View style={[styles.card, { backgroundColor: colors.cardBackground, borderColor: colors.cardBorder }]}>
+                    <Text style={[styles.sectionTitle, { color: colors.textPrimary }]}>Source</Text>
+                    <View style={styles.chipGroup}>
+                        {SOURCES.map((s) => (
+                            <TouchableOpacity
+                                key={s}
                                 style={[
-                                    styles.notesInput,
+                                    styles.chip,
                                     {
-                                        color: colors.textPrimary,
-                                        borderColor: colors.borderLight,
-                                        backgroundColor: colors.surfacePrimary,
+                                        backgroundColor: source === s ? colors.accentLight : colors.surfacePrimary,
+                                        borderColor: source === s ? colors.accent : colors.borderLight,
+                                        borderWidth: source === s ? 1.5 : 0.5,
                                     },
                                 ]}
-                                placeholder="Any initial notes about this lead..."
-                                placeholderTextColor={colors.textTertiary}
-                                value={notes}
-                                onChangeText={setNotes}
-                                multiline
-                                numberOfLines={4}
-                                textAlignVertical="top"
-                                accessibilityLabel="Notes"
-                            />
-                        </View>
-                    </ScrollView>
-                </Pressable>
-            </KeyboardAvoidingView>
+                                onPress={() => setSource(s)}
+                                accessibilityRole="button"
+                                accessibilityLabel={`Source: ${SOURCE_LABELS[s]}`}
+                                accessibilityState={{ selected: source === s }}
+                            >
+                                <Text
+                                    style={[
+                                        styles.chipText,
+                                        { color: source === s ? colors.accent : colors.textSecondary },
+                                    ]}
+                                >
+                                    {SOURCE_LABELS[s]}
+                                </Text>
+                            </TouchableOpacity>
+                        ))}
+                    </View>
+                </View>
+
+                {/* Product Interest */}
+                <View style={[styles.card, { backgroundColor: colors.cardBackground, borderColor: colors.cardBorder }]}>
+                    <Text style={[styles.sectionTitle, { color: colors.textPrimary }]}>Product Interest</Text>
+                    <View style={styles.chipGroup}>
+                        {PRODUCTS.map((p) => (
+                            <TouchableOpacity
+                                key={p}
+                                style={[
+                                    styles.chip,
+                                    {
+                                        backgroundColor: product === p ? colors.accentLight : colors.surfacePrimary,
+                                        borderColor: product === p ? colors.accent : colors.borderLight,
+                                        borderWidth: product === p ? 1.5 : 0.5,
+                                    },
+                                ]}
+                                onPress={() => setProduct(p)}
+                                accessibilityRole="button"
+                                accessibilityLabel={`Product: ${PRODUCT_LABELS[p]}`}
+                                accessibilityState={{ selected: product === p }}
+                            >
+                                <Text
+                                    style={[
+                                        styles.chipText,
+                                        { color: product === p ? colors.accent : colors.textSecondary },
+                                    ]}
+                                >
+                                    {PRODUCT_LABELS[p]}
+                                </Text>
+                            </TouchableOpacity>
+                        ))}
+                    </View>
+                </View>
+
+                {/* Notes */}
+                <View style={[styles.card, { backgroundColor: colors.cardBackground, borderColor: colors.cardBorder }]}>
+                    <Text style={[styles.sectionTitle, { color: colors.textPrimary }]}>Notes</Text>
+                    <TextInput
+                        style={[
+                            styles.notesInput,
+                            {
+                                color: colors.textPrimary,
+                                borderColor: colors.borderLight,
+                                backgroundColor: colors.surfacePrimary,
+                            },
+                        ]}
+                        placeholder="Any initial notes about this lead..."
+                        placeholderTextColor={colors.textTertiary}
+                        value={notes}
+                        onChangeText={setNotes}
+                        multiline
+                        numberOfLines={4}
+                        textAlignVertical="top"
+                        accessibilityLabel="Notes"
+                    />
+                </View>
+            </KeyboardAwareScrollView>
 
             {/* Success Modal */}
             <Modal visible={showSuccessModal} transparent animationType="fade" onRequestClose={handleSuccessDismiss}>

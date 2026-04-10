@@ -17,10 +17,7 @@ import React, { useState } from 'react';
 import {
     ActivityIndicator,
     Alert,
-    Keyboard,
-    KeyboardAvoidingView,
     Modal,
-    Platform,
     Pressable,
     ScrollView,
     Share,
@@ -30,6 +27,7 @@ import {
     TouchableOpacity,
     View,
 } from 'react-native';
+import { KeyboardAwareScrollView } from 'react-native-keyboard-controller';
 import { SafeAreaView } from 'react-native-safe-area-context';
 let Clipboard: typeof import('expo-clipboard') | null = null;
 try {
@@ -134,158 +132,156 @@ export default function AddCandidateScreen() {
                 <View style={{ width: 32 }} />
             </View>
 
-            <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : 'height'}>
-                <Pressable style={{ flex: 1 }} onPress={Keyboard.dismiss}>
-                    <ScrollView contentContainerStyle={styles.scrollContent}>
-                        {/* Save Error */}
-                        {saveError && <ErrorBanner message={saveError} />}
+            <View style={{ flex: 1 }}>
+                <KeyboardAwareScrollView
+                    contentContainerStyle={styles.scrollContent}
+                    keyboardShouldPersistTaps="handled"
+                >
+                    {/* Save Error */}
+                    {saveError && <ErrorBanner message={saveError} />}
 
-                        {/* Form Card */}
-                        <View style={[styles.formCard, { backgroundColor: colors.cardBackground }]}>
-                            <FormField
-                                testID="add-candidate-name"
-                                label="Full Name"
-                                value={name}
-                                onChangeText={setName}
-                                placeholder="Enter full name"
-                                error={errors.name}
-                                colors={colors}
-                                required
-                                containerStyle={candidateFieldStyle}
+                    {/* Form Card */}
+                    <View style={[styles.formCard, { backgroundColor: colors.cardBackground }]}>
+                        <FormField
+                            testID="add-candidate-name"
+                            label="Full Name"
+                            value={name}
+                            onChangeText={setName}
+                            placeholder="Enter full name"
+                            error={errors.name}
+                            colors={colors}
+                            required
+                            containerStyle={candidateFieldStyle}
+                        />
+                        <View style={[styles.fieldDivider, { backgroundColor: colors.border }]} />
+                        <FormField
+                            testID="add-candidate-phone"
+                            label="Phone Number"
+                            value={phone}
+                            onChangeText={setPhone}
+                            placeholder="+65 9XXX XXXX"
+                            keyboardType="phone-pad"
+                            error={errors.phone}
+                            colors={colors}
+                            required
+                            containerStyle={candidateFieldStyle}
+                        />
+                        <View style={[styles.fieldDivider, { backgroundColor: colors.border }]} />
+                        <FormField
+                            label="Email"
+                            value={email}
+                            onChangeText={setEmail}
+                            placeholder="email@example.com"
+                            keyboardType="email-address"
+                            colors={colors}
+                            containerStyle={candidateFieldStyle}
+                        />
+                        <View style={[styles.fieldDivider, { backgroundColor: colors.border }]} />
+                        <View style={styles.fieldContainer}>
+                            <Text style={[styles.fieldLabel, { color: colors.textSecondary }]}>Notes</Text>
+                            <TextInput
+                                style={[styles.textArea, { color: colors.textPrimary }]}
+                                value={notes}
+                                onChangeText={setNotes}
+                                placeholder="How did you meet this candidate?"
+                                placeholderTextColor={colors.textTertiary}
+                                multiline
+                                numberOfLines={3}
                             />
-                            <View style={[styles.fieldDivider, { backgroundColor: colors.border }]} />
-                            <FormField
-                                testID="add-candidate-phone"
-                                label="Phone Number"
-                                value={phone}
-                                onChangeText={setPhone}
-                                placeholder="+65 9XXX XXXX"
-                                keyboardType="phone-pad"
-                                error={errors.phone}
-                                colors={colors}
-                                required
-                                containerStyle={candidateFieldStyle}
-                            />
-                            <View style={[styles.fieldDivider, { backgroundColor: colors.border }]} />
-                            <FormField
-                                label="Email"
-                                value={email}
-                                onChangeText={setEmail}
-                                placeholder="email@example.com"
-                                keyboardType="email-address"
-                                colors={colors}
-                                containerStyle={candidateFieldStyle}
-                            />
-                            <View style={[styles.fieldDivider, { backgroundColor: colors.border }]} />
-                            <View style={styles.fieldContainer}>
-                                <Text style={[styles.fieldLabel, { color: colors.textSecondary }]}>Notes</Text>
-                                <TextInput
-                                    style={[styles.textArea, { color: colors.textPrimary }]}
-                                    value={notes}
-                                    onChangeText={setNotes}
-                                    placeholder="How did you meet this candidate?"
-                                    placeholderTextColor={colors.textTertiary}
-                                    multiline
-                                    numberOfLines={3}
-                                />
-                            </View>
-                            <View style={[styles.fieldDivider, { backgroundColor: colors.border }]} />
+                        </View>
+                        <View style={[styles.fieldDivider, { backgroundColor: colors.border }]} />
+                        <View style={styles.fieldContainer}>
+                            <Text style={[styles.fieldLabel, { color: colors.textSecondary }]}>
+                                Resume <Text style={{ color: colors.textTertiary, fontWeight: '400' }}>(optional)</Text>
+                            </Text>
+                            {resumeFile ? (
+                                <View style={[styles.resumeAttached, { backgroundColor: colors.background }]}>
+                                    <Ionicons name="document-text" size={20} color={colors.accent} />
+                                    <Text
+                                        style={[styles.resumeName, { color: colors.textPrimary, flex: 1 }]}
+                                        numberOfLines={1}
+                                    >
+                                        {resumeFile.name}
+                                    </Text>
+                                    <TouchableOpacity
+                                        onPress={() => setResumeFile(null)}
+                                        hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                                    >
+                                        <Ionicons name="close-circle" size={20} color={colors.textTertiary} />
+                                    </TouchableOpacity>
+                                </View>
+                            ) : (
+                                <TouchableOpacity
+                                    style={[
+                                        styles.resumePickerBtn,
+                                        { borderColor: colors.border, opacity: DocumentPicker ? 1 : 0.4 },
+                                    ]}
+                                    onPress={async () => {
+                                        if (!DocumentPicker) return;
+                                        const r = await DocumentPicker.getDocumentAsync({
+                                            type: 'application/pdf',
+                                            copyToCacheDirectory: true,
+                                        });
+                                        if (!r.canceled && r.assets[0])
+                                            setResumeFile({ uri: r.assets[0].uri, name: r.assets[0].name });
+                                    }}
+                                    activeOpacity={0.7}
+                                    disabled={!DocumentPicker}
+                                >
+                                    <Ionicons name="cloud-upload-outline" size={18} color={colors.accent} />
+                                    <Text style={[styles.resumePickerText, { color: colors.accent }]}>Attach PDF</Text>
+                                    <Text style={[styles.resumePickerHint, { color: colors.textTertiary }]}>
+                                        Up to 10 MB
+                                    </Text>
+                                </TouchableOpacity>
+                            )}
+                        </View>
+                    </View>
+
+                    {/* Manager Assignment Picker — shown when managers are available */}
+                    {managers.length > 0 && (
+                        <View style={[styles.formCard, { backgroundColor: colors.cardBackground, marginTop: 16 }]}>
                             <View style={styles.fieldContainer}>
                                 <Text style={[styles.fieldLabel, { color: colors.textSecondary }]}>
-                                    Resume{' '}
-                                    <Text style={{ color: colors.textTertiary, fontWeight: '400' }}>(optional)</Text>
+                                    Assign to Manager{isPA ? ' *' : ''}
                                 </Text>
-                                {resumeFile ? (
-                                    <View style={[styles.resumeAttached, { backgroundColor: colors.background }]}>
-                                        <Ionicons name="document-text" size={20} color={colors.accent} />
-                                        <Text
-                                            style={[styles.resumeName, { color: colors.textPrimary, flex: 1 }]}
-                                            numberOfLines={1}
-                                        >
-                                            {resumeFile.name}
-                                        </Text>
-                                        <TouchableOpacity
-                                            onPress={() => setResumeFile(null)}
-                                            hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-                                        >
-                                            <Ionicons name="close-circle" size={20} color={colors.textTertiary} />
-                                        </TouchableOpacity>
-                                    </View>
-                                ) : (
-                                    <TouchableOpacity
+                                <TouchableOpacity
+                                    style={[
+                                        styles.managerPickerBtn,
+                                        { borderColor: errors.manager ? '#ef4444' : colors.border },
+                                    ]}
+                                    onPress={() => setShowManagerPicker(true)}
+                                    activeOpacity={0.7}
+                                >
+                                    <Ionicons name="person-outline" size={18} color={colors.accent} />
+                                    <Text
                                         style={[
-                                            styles.resumePickerBtn,
-                                            { borderColor: colors.border, opacity: DocumentPicker ? 1 : 0.4 },
+                                            styles.managerPickerText,
+                                            { color: selectedManager ? colors.textPrimary : colors.textTertiary },
                                         ]}
-                                        onPress={async () => {
-                                            if (!DocumentPicker) return;
-                                            const r = await DocumentPicker.getDocumentAsync({
-                                                type: 'application/pdf',
-                                                copyToCacheDirectory: true,
-                                            });
-                                            if (!r.canceled && r.assets[0])
-                                                setResumeFile({ uri: r.assets[0].uri, name: r.assets[0].name });
-                                        }}
-                                        activeOpacity={0.7}
-                                        disabled={!DocumentPicker}
+                                        numberOfLines={1}
                                     >
-                                        <Ionicons name="cloud-upload-outline" size={18} color={colors.accent} />
-                                        <Text style={[styles.resumePickerText, { color: colors.accent }]}>
-                                            Attach PDF
-                                        </Text>
-                                        <Text style={[styles.resumePickerHint, { color: colors.textTertiary }]}>
-                                            Up to 10 MB
-                                        </Text>
-                                    </TouchableOpacity>
+                                        {selectedManager
+                                            ? `${selectedManager.full_name} (${selectedManager.role})`
+                                            : isPA
+                                              ? 'Select a manager...'
+                                              : 'Myself (default)'}
+                                    </Text>
+                                    <Ionicons name="chevron-down" size={16} color={colors.textTertiary} />
+                                </TouchableOpacity>
+                                {errors.manager && (
+                                    <Text style={{ color: '#ef4444', fontSize: 12, marginTop: 4 }}>
+                                        {errors.manager}
+                                    </Text>
                                 )}
                             </View>
                         </View>
+                    )}
 
-                        {/* Manager Assignment Picker — shown when managers are available */}
-                        {managers.length > 0 && (
-                            <View style={[styles.formCard, { backgroundColor: colors.cardBackground, marginTop: 16 }]}>
-                                <View style={styles.fieldContainer}>
-                                    <Text style={[styles.fieldLabel, { color: colors.textSecondary }]}>
-                                        Assign to Manager{isPA ? ' *' : ''}
-                                    </Text>
-                                    <TouchableOpacity
-                                        style={[
-                                            styles.managerPickerBtn,
-                                            { borderColor: errors.manager ? '#ef4444' : colors.border },
-                                        ]}
-                                        onPress={() => setShowManagerPicker(true)}
-                                        activeOpacity={0.7}
-                                    >
-                                        <Ionicons name="person-outline" size={18} color={colors.accent} />
-                                        <Text
-                                            style={[
-                                                styles.managerPickerText,
-                                                { color: selectedManager ? colors.textPrimary : colors.textTertiary },
-                                            ]}
-                                            numberOfLines={1}
-                                        >
-                                            {selectedManager
-                                                ? `${selectedManager.full_name} (${selectedManager.role})`
-                                                : isPA
-                                                  ? 'Select a manager...'
-                                                  : 'Myself (default)'}
-                                        </Text>
-                                        <Ionicons name="chevron-down" size={16} color={colors.textTertiary} />
-                                    </TouchableOpacity>
-                                    {errors.manager && (
-                                        <Text style={{ color: '#ef4444', fontSize: 12, marginTop: 4 }}>
-                                            {errors.manager}
-                                        </Text>
-                                    )}
-                                </View>
-                            </View>
-                        )}
-
-                        <Text style={[styles.infoText, { color: colors.textTertiary }]}>
-                            An invite link will be generated for the candidate to complete their registration.
-                        </Text>
-                    </ScrollView>
-                </Pressable>
+                    <Text style={[styles.infoText, { color: colors.textTertiary }]}>
+                        An invite link will be generated for the candidate to complete their registration.
+                    </Text>
+                </KeyboardAwareScrollView>
 
                 {/* Submit Button */}
                 <View style={styles.submitContainer}>
@@ -306,7 +302,7 @@ export default function AddCandidateScreen() {
                         )}
                     </TouchableOpacity>
                 </View>
-            </KeyboardAvoidingView>
+            </View>
 
             {/* Manager Picker Modal */}
             <Modal visible={showManagerPicker} transparent animationType="fade">
