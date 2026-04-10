@@ -18,6 +18,14 @@ if (!supabaseUrl || !supabaseAnonKey) {
 // session JWTs) are split into 2000-byte chunks stored in SecureStore.
 const CHUNK_SIZE = 2000;
 
+// Use AFTER_FIRST_UNLOCK so Supabase's autoRefreshToken timer can read the
+// session from the keychain even when the device is locked. The default
+// (WHEN_UNLOCKED) causes "User interaction is not allowed" errors on
+// background refresh ticks.
+const STORE_OPTS: SecureStore.SecureStoreOptions = {
+    keychainAccessible: SecureStore.AFTER_FIRST_UNLOCK,
+};
+
 /** Clean up legacy AsyncStorage fallback keys from the old implementation. */
 async function cleanupLegacyKeys(key: string): Promise<void> {
     await AsyncStorage.removeItem(`supabase_as_${key}`).catch(() => {});
@@ -40,12 +48,12 @@ const secureStoreAdapter = {
         }
 
         // Check for chunked storage
-        const countStr = await SecureStore.getItemAsync(`${key}_chunks`).catch(() => null);
+        const countStr = await SecureStore.getItemAsync(`${key}_chunks`, STORE_OPTS).catch(() => null);
         if (countStr !== null) {
             const count = parseInt(countStr, 10);
             const parts: string[] = [];
             for (let i = 0; i < count; i++) {
-                const chunk = await SecureStore.getItemAsync(`${key}_chunk_${i}`);
+                const chunk = await SecureStore.getItemAsync(`${key}_chunk_${i}`, STORE_OPTS).catch(() => null);
                 if (chunk === null) return null; // corrupted — treat as missing
                 parts.push(chunk);
             }
@@ -53,7 +61,7 @@ const secureStoreAdapter = {
         }
 
         // Single value
-        return SecureStore.getItemAsync(key);
+        return SecureStore.getItemAsync(key, STORE_OPTS).catch(() => null);
     },
 
     setItem: async (key: string, value: string): Promise<void> => {
@@ -68,14 +76,14 @@ const secureStoreAdapter = {
 
         if (value.length > CHUNK_SIZE) {
             // Remove any existing single value
-            await SecureStore.deleteItemAsync(key).catch(() => {});
+            await SecureStore.deleteItemAsync(key, STORE_OPTS).catch(() => {});
 
             // Remove old chunks if they exist
-            const oldCountStr = await SecureStore.getItemAsync(`${key}_chunks`).catch(() => null);
+            const oldCountStr = await SecureStore.getItemAsync(`${key}_chunks`, STORE_OPTS).catch(() => null);
             if (oldCountStr !== null) {
                 const oldCount = parseInt(oldCountStr, 10);
                 for (let i = 0; i < oldCount; i++) {
-                    await SecureStore.deleteItemAsync(`${key}_chunk_${i}`).catch(() => {});
+                    await SecureStore.deleteItemAsync(`${key}_chunk_${i}`, STORE_OPTS).catch(() => {});
                 }
             }
 
@@ -83,21 +91,21 @@ const secureStoreAdapter = {
             const chunkCount = Math.ceil(value.length / CHUNK_SIZE);
             for (let i = 0; i < chunkCount; i++) {
                 const chunk = value.slice(i * CHUNK_SIZE, (i + 1) * CHUNK_SIZE);
-                await SecureStore.setItemAsync(`${key}_chunk_${i}`, chunk);
+                await SecureStore.setItemAsync(`${key}_chunk_${i}`, chunk, STORE_OPTS).catch(() => {});
             }
-            await SecureStore.setItemAsync(`${key}_chunks`, String(chunkCount));
+            await SecureStore.setItemAsync(`${key}_chunks`, String(chunkCount), STORE_OPTS).catch(() => {});
         } else {
             // Remove any existing chunks
-            const oldCountStr = await SecureStore.getItemAsync(`${key}_chunks`).catch(() => null);
+            const oldCountStr = await SecureStore.getItemAsync(`${key}_chunks`, STORE_OPTS).catch(() => null);
             if (oldCountStr !== null) {
                 const oldCount = parseInt(oldCountStr, 10);
                 for (let i = 0; i < oldCount; i++) {
-                    await SecureStore.deleteItemAsync(`${key}_chunk_${i}`).catch(() => {});
+                    await SecureStore.deleteItemAsync(`${key}_chunk_${i}`, STORE_OPTS).catch(() => {});
                 }
-                await SecureStore.deleteItemAsync(`${key}_chunks`).catch(() => {});
+                await SecureStore.deleteItemAsync(`${key}_chunks`, STORE_OPTS).catch(() => {});
             }
 
-            await SecureStore.setItemAsync(key, value);
+            await SecureStore.setItemAsync(key, value, STORE_OPTS).catch(() => {});
         }
     },
 
@@ -109,16 +117,16 @@ const secureStoreAdapter = {
         }
 
         // Remove single value
-        await SecureStore.deleteItemAsync(key).catch(() => {});
+        await SecureStore.deleteItemAsync(key, STORE_OPTS).catch(() => {});
 
         // Remove chunks if they exist
-        const countStr = await SecureStore.getItemAsync(`${key}_chunks`).catch(() => null);
+        const countStr = await SecureStore.getItemAsync(`${key}_chunks`, STORE_OPTS).catch(() => null);
         if (countStr !== null) {
             const count = parseInt(countStr, 10);
             for (let i = 0; i < count; i++) {
-                await SecureStore.deleteItemAsync(`${key}_chunk_${i}`).catch(() => {});
+                await SecureStore.deleteItemAsync(`${key}_chunk_${i}`, STORE_OPTS).catch(() => {});
             }
-            await SecureStore.deleteItemAsync(`${key}_chunks`).catch(() => {});
+            await SecureStore.deleteItemAsync(`${key}_chunks`, STORE_OPTS).catch(() => {});
         }
 
         // Clean up legacy keys
