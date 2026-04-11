@@ -182,6 +182,23 @@ export async function extractEmbeddingFromPhoto(filePath: string): Promise<Float
     // The native module returns BGR CHW Float32 pixels ready for ONNX
     const modelInput = new Float32Array(result.pixels);
 
+    // Debug: check if pixels are valid (not all zeros/same value)
+    const sum = modelInput.reduce((a, b) => a + Math.abs(b), 0);
+    const min = Math.min(...modelInput.slice(0, 100));
+    const max = Math.max(...modelInput.slice(0, 100));
+    console.log(
+        '[FaceVerify] Pixels sum:',
+        sum.toFixed(0),
+        'min:',
+        min.toFixed(0),
+        'max:',
+        max.toFixed(0),
+        'aligned:',
+        result.aligned,
+        'len:',
+        modelInput.length,
+    );
+
     return extractEmbedding(modelInput);
 }
 
