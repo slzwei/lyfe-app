@@ -145,8 +145,9 @@ export default function FaceTestScreen() {
                 } else {
                     runOnJS(setFaceDetectedJS)(false);
                 }
-            } catch {
-                // Frame processor errors are noisy — suppress
+            } catch (e) {
+                // Log errors to Metro console for debugging
+                runOnJS(console.warn)('Frame processor error: ' + String(e));
             }
         },
         [detectFaces, updateEulerAngles, setFaceDetectedJS, handleFaceFrame],
@@ -310,7 +311,6 @@ export default function FaceTestScreen() {
                         isActive={cameraActive}
                         photo={true}
                         frameProcessor={frameProcessor}
-                        pixelFormat="yuv"
                     />
 
                     {/* Face frame guide */}
