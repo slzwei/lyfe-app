@@ -168,7 +168,7 @@ export default function FaceTestScreen() {
                     setDisplayFace(false);
                 }
             } catch (err) {
-                console.warn('Face scan error:', err instanceof Error ? err.message : String(err));
+                console.error('[FaceScan] ERROR:', err instanceof Error ? `${err.message}\n${err.stack}` : String(err));
             }
 
             scanningRef.current = false;
@@ -239,6 +239,10 @@ export default function FaceTestScreen() {
                 }
             }
         } catch (err) {
+            console.error(
+                '[FaceVerify] EMBEDDING ERROR:',
+                err instanceof Error ? `${err.message}\n${err.stack}` : String(err),
+            );
             Alert.alert('Error', err instanceof Error ? err.message : 'Processing failed');
         } finally {
             setPhase('idle');
