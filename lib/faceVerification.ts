@@ -12,10 +12,10 @@ import { loadImage, type Image, type PixelFormat } from 'react-native-nitro-imag
 // ── Constants ───────────────────────────────────────────────
 
 /** Cosine similarity threshold for a positive match.
- * Same person typically scores 0.95+, different person ~0.80-0.85.
- * Production threshold should be tuned with more test subjects.
+ * OpenCV recommends 0.363 for SFace. We use a slightly higher value
+ * since we don't have face alignment yet.
  */
-export const MATCH_THRESHOLD = 0.85;
+export const MATCH_THRESHOLD = 0.5;
 
 /** Input image size expected by the model. */
 const INPUT_SIZE = 112;
@@ -219,8 +219,6 @@ export async function extractEmbeddingFromPhoto(
         rawData.width,
         'x',
         rawData.height,
-        'rotated:',
-        isRotated,
         'face:',
         cropX,
         cropY,
@@ -308,9 +306,11 @@ function cropResizeConvert(
             const srcIdx = (srcY * rawBufWidth + srcX) * stride;
             const dstIdx = y * INPUT_SIZE + x;
 
-            output[0 * pixelCount + dstIdx] = pixels[srcIdx + rOff] / 127.5 - 1;
-            output[1 * pixelCount + dstIdx] = pixels[srcIdx + gOff] / 127.5 - 1;
-            output[2 * pixelCount + dstIdx] = pixels[srcIdx + bOff] / 127.5 - 1;
+            // SFace expects BGR channel order with raw 0-255 values (no normalization!)
+            // CHW layout: channel 0 = Blue, channel 1 = Green, channel 2 = Red
+            output[0 * pixelCount + dstIdx] = pixels[srcIdx + bOff]; // B
+            output[1 * pixelCount + dstIdx] = pixels[srcIdx + gOff]; // G
+            output[2 * pixelCount + dstIdx] = pixels[srcIdx + rOff]; // R
         }
     }
 
