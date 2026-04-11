@@ -1,14 +1,12 @@
 /**
  * DEV-ONLY: Face Verification Test Screen
  *
- * Smooth architecture: camera preview has ZERO face scanning.
- * A timer takes snapshots and feeds them to a native Swift module
- * (Apple Vision framework) for async face detection. Preview is
- * completely decoupled from detection — 100% smooth.
+ * Camera preview with liveness detection (look straight, turn left, turn right).
+ * After liveness passes, the "look straight" photo is sent to the verify-face
+ * edge function which uses AWS Rekognition for comparison.
  */
 import { useTheme } from '@/contexts/ThemeContext';
-import { deleteEmbedding, getEmbedding, hasEmbedding, saveEmbedding } from '@/lib/faceEmbeddingStore';
-import { compareEmbeddings, extractEmbeddingFromPhoto, loadModel, MATCH_THRESHOLD } from '@/lib/faceVerification';
+import { registerFace, verifyFace, MATCH_THRESHOLD } from '@/lib/faceVerification';
 import { detectFaces, setMaxBrightness, restoreBrightness } from '../../../modules/face-detection/src';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
@@ -26,7 +24,6 @@ import {
 
 type TestPhase = 'idle' | 'registering' | 'verifying';
 type LivenessStep = 'look_straight' | 'turn_left' | 'turn_right' | 'done';
-const TEST_USER_ID = '__face_test_user__';
 
 const YAW_STRAIGHT_MAX = 10;
 const YAW_LEFT_THRESHOLD = -20;
@@ -37,7 +34,7 @@ const STEP_PROMPTS: Record<LivenessStep, string> = {
     look_straight: 'Look straight at the camera',
     turn_left: 'Slowly turn your head left',
     turn_right: 'Now turn your head right',
-    done: 'Liveness check passed!',
+    done: 'Processing...',
 };
 
 // ── Component ───────────────────────────────────────────────
@@ -54,22 +51,22 @@ export default function FaceTestScreen() {
     // State
     const [phase, setPhase] = useState<TestPhase>('idle');
     const [step, setStep] = useState<LivenessStep>('look_straight');
-    const [modelReady, setModelReady] = useState(false);
-    const [modelError, setModelError] = useState<string | null>(null);
     const [hasRegistered, setHasRegistered] = useState(false);
-    const [cameraActive, setCameraActive] = useState(false);
+    const [cameraVisible, setCameraVisible] = useState(false);
+    const [cameraMounted, setCameraMounted] = useState(false);
+    const [scanning, setScanning] = useState(false);
     const [similarity, setSimilarity] = useState<number | null>(null);
     const [matchResult, setMatchResult] = useState<'pass' | 'fail' | null>(null);
     const [displayYaw, setDisplayYaw] = useState(0);
     const [displayFace, setDisplayFace] = useState(false);
     const [captureCount, setCaptureCount] = useState(0);
+    const [processing, setProcessing] = useState(false);
 
     // Refs for async detection loop
     const stepRef = useRef<LivenessStep>('look_straight');
     const phaseRef = useRef<TestPhase>('idle');
     const scanningRef = useRef(false);
     const captureCountRef = useRef(0);
-    // Store the "look straight" photo for embedding (best angle for face recognition)
     const straightPhotoRef = useRef<string | null>(null);
     stepRef.current = step;
     phaseRef.current = phase;
@@ -77,22 +74,13 @@ export default function FaceTestScreen() {
     // ── Init ────────────────────────────────────────────────
 
     useEffect(() => {
-        loadModel()
-            .then(() => setModelReady(true))
-            .catch((err) => setModelError(err.message));
-        hasEmbedding(TEST_USER_ID).then(setHasRegistered);
-    }, []);
-
-    useEffect(() => {
         if (!hasPermission) requestPermission();
     }, [hasPermission, requestPermission]);
 
     // ── Snapshot-based face detection loop ───────────────────
-    // Camera preview is UNTOUCHED. Snapshots are taken on a timer
-    // and analyzed by the native Vision module on a background thread.
 
     useEffect(() => {
-        if (!cameraActive || phaseRef.current === 'idle') return;
+        if (!scanning) return;
         let cancelled = false;
 
         const tick = async () => {
@@ -100,7 +88,10 @@ export default function FaceTestScreen() {
             scanningRef.current = true;
 
             try {
-                // Capture a photo to file (decoupled from preview pipeline)
+                if (cancelled) {
+                    scanningRef.current = false;
+                    return;
+                }
                 const photoFile = await photoOutput.capturePhotoToFile(
                     { flashMode: 'off', enableShutterSound: false },
                     {},
@@ -111,7 +102,6 @@ export default function FaceTestScreen() {
                     return;
                 }
 
-                // Run face detection on the static image (background thread)
                 const faces = await detectFaces(photoFile.filePath);
 
                 if (cancelled) {
@@ -121,17 +111,14 @@ export default function FaceTestScreen() {
 
                 if (faces.length > 0) {
                     const face = faces[0];
-                    // Negate yaw for front camera mirror
-                    const yaw = -face.yaw;
+                    const yaw = -face.yaw; // Negate for front camera mirror
                     setDisplayYaw(Math.round(yaw * 10) / 10);
                     setDisplayFace(true);
 
-                    // Save the "look straight" photo for embedding (best frontal angle)
                     if (stepRef.current === 'look_straight') {
                         straightPhotoRef.current = photoFile.filePath;
                     }
 
-                    // Auto-capture logic
                     const currentStep = stepRef.current;
                     if (currentStep !== 'done') {
                         let shouldAdvance = false;
@@ -157,7 +144,7 @@ export default function FaceTestScreen() {
                                 stepRef.current = 'done';
                                 setStep('done');
                                 scanningRef.current = false;
-                                processEmbedding();
+                                processPhoto();
                                 return;
                             }
                         }
@@ -166,71 +153,66 @@ export default function FaceTestScreen() {
                     setDisplayFace(false);
                 }
             } catch (err) {
-                console.error('[FaceScan] ERROR:', err instanceof Error ? `${err.message}\n${err.stack}` : String(err));
+                console.error('[FaceScan] ERROR:', err instanceof Error ? err.message : String(err));
             }
 
             scanningRef.current = false;
             if (!cancelled) setTimeout(tick, SCAN_INTERVAL_MS);
         };
 
-        // Start the detection loop
-        setTimeout(tick, 500); // Initial delay to let camera warm up
+        setTimeout(tick, 500);
         return () => {
             cancelled = true;
         };
-    }, [cameraActive]);
+    }, [scanning]);
 
-    // ── Process embedding ───────────────────────────────────
+    // ── Process photo via edge function ─────────────────────
 
-    const processEmbedding = useCallback(async () => {
-        setCameraActive(false);
+    const processPhoto = useCallback(async () => {
+        // Stop scanning first, but keep camera alive to avoid AVCaptureSession crash
+        setScanning(false);
+        // Wait for any in-flight capture to complete
+        let waitAttempts = 0;
+        while (scanningRef.current && waitAttempts < 20) {
+            await new Promise((r) => setTimeout(r, 100));
+            waitAttempts++;
+        }
+        setCameraVisible(false);
         restoreBrightness();
-        // Wait for scan loop to fully stop
-        await new Promise((r) => setTimeout(r, 500));
+        setProcessing(true);
 
         try {
             const photoPath = straightPhotoRef.current;
-
             if (!photoPath) {
                 Alert.alert('Error', 'No photo captured');
                 setPhase('idle');
                 return;
             }
 
-            // Extract face embedding — native module handles crop + resize + BGR
-            const embedding = await extractEmbeddingFromPhoto(photoPath);
-
             if (phaseRef.current === 'registering') {
-                await saveEmbedding(TEST_USER_ID, embedding);
+                await registerFace(photoPath);
                 setHasRegistered(true);
-                Alert.alert('Registered', `Face embedding saved (${embedding.length}-d)`);
+                Alert.alert('Registered', 'Face reference photo saved.');
             } else if (phaseRef.current === 'verifying') {
-                const stored = await getEmbedding(TEST_USER_ID);
-                if (!stored) {
-                    Alert.alert('Error', 'No registered face found.');
-                } else {
-                    const score = compareEmbeddings(embedding, stored);
-                    console.log(
-                        '[FaceVerify] SCORE:',
-                        score.toFixed(4),
-                        score >= MATCH_THRESHOLD ? 'MATCH' : 'REJECTED',
-                    );
-                    setSimilarity(Math.round(score * 1000) / 1000);
-                    setMatchResult(score >= MATCH_THRESHOLD ? 'pass' : 'fail');
-                    Alert.alert(
-                        score >= MATCH_THRESHOLD ? 'Match!' : 'No Match',
-                        `Cosine similarity: ${score.toFixed(3)} (threshold: ${MATCH_THRESHOLD})`,
-                    );
-                }
+                const result = await verifyFace(photoPath);
+                console.log(
+                    '[FaceVerify] Rekognition:',
+                    result.similarity.toFixed(1) + '%',
+                    result.match ? 'MATCH' : 'REJECTED',
+                );
+                setSimilarity(result.similarity);
+                setMatchResult(result.match ? 'pass' : 'fail');
+                Alert.alert(
+                    result.match ? 'Match!' : 'No Match',
+                    `Similarity: ${result.similarity.toFixed(1)}% (threshold: ${MATCH_THRESHOLD}%)`,
+                );
             }
         } catch (err) {
-            console.error(
-                '[FaceVerify] EMBEDDING ERROR:',
-                err instanceof Error ? `${err.message}\n${err.stack}` : String(err),
-            );
+            console.error('[FaceVerify] ERROR:', err instanceof Error ? err.message : String(err));
             Alert.alert('Error', err instanceof Error ? err.message : 'Processing failed');
         } finally {
             setPhase('idle');
+            setProcessing(false);
         }
     }, []);
 
@@ -252,23 +234,18 @@ export default function FaceTestScreen() {
             setSimilarity(null);
             setMatchResult(null);
             setMaxBrightness();
-            setCameraActive(true);
+            setCameraMounted(true);
+            setCameraVisible(true);
+            setScanning(true);
         },
         [hasRegistered],
     );
 
     const handleCancel = useCallback(() => {
-        setCameraActive(false);
+        setScanning(false);
+        setCameraVisible(false);
         setPhase('idle');
         restoreBrightness();
-    }, []);
-
-    const handleClearRegistration = useCallback(async () => {
-        await deleteEmbedding(TEST_USER_ID);
-        setHasRegistered(false);
-        setSimilarity(null);
-        setMatchResult(null);
-        Alert.alert('Cleared', 'Face registration deleted.');
     }, []);
 
     // ── Render ──────────────────────────────────────────────
@@ -293,18 +270,18 @@ export default function FaceTestScreen() {
                 <View style={{ width: 28 }} />
             </View>
 
-            {cameraActive && device ? (
-                <View style={styles.cameraContainer}>
-                    {/* Camera with ONLY photoOutput — zero scanning, 100% smooth */}
+            {/* Camera stays mounted once activated — never unmount mid-session
+                to avoid AVCaptureSession dealloc crash */}
+            {cameraMounted && device && (
+                <View style={[styles.cameraContainer, !cameraVisible && { position: 'absolute', opacity: 0 }]}>
                     <Camera
                         ref={cameraRef}
                         style={StyleSheet.absoluteFill}
                         device={device}
-                        isActive={cameraActive}
+                        isActive={cameraMounted}
                         outputs={[photoOutput]}
                     />
 
-                    {/* Face frame guide */}
                     <View style={styles.overlay}>
                         <View
                             style={[
@@ -316,19 +293,16 @@ export default function FaceTestScreen() {
                         />
                     </View>
 
-                    {/* Step dots */}
                     <View style={styles.stepIndicator}>
                         <View style={[styles.stepDot, captureCount >= 1 && styles.stepDotDone]} />
                         <View style={[styles.stepDot, captureCount >= 2 && styles.stepDotDone]} />
                         <View style={[styles.stepDot, captureCount >= 3 && styles.stepDotDone]} />
                     </View>
 
-                    {/* Prompt */}
                     <View style={styles.promptContainer}>
                         <Text style={styles.promptText}>{STEP_PROMPTS[step]}</Text>
                     </View>
 
-                    {/* Debug */}
                     <View style={styles.debugOverlay}>
                         <Text style={styles.debugText}>Yaw: {displayYaw}°</Text>
                         <Text style={styles.debugText}>Face: {displayFace ? 'YES' : 'NO'}</Text>
@@ -339,15 +313,25 @@ export default function FaceTestScreen() {
                         <Text style={styles.cancelText}>Cancel</Text>
                     </Pressable>
                 </View>
-            ) : (
+            )}
+
+            {!cameraVisible && (
                 <ScrollView contentContainerStyle={styles.content}>
                     <View style={[styles.card, { backgroundColor: colors.surfacePrimary }]}>
                         <Text style={[styles.cardTitle, { color: colors.textPrimary }]}>System Status</Text>
                         <StatusRow label="Camera Permission" ok={hasPermission} />
                         <StatusRow label="Camera Device" ok={!!device} />
-                        <StatusRow label="ONNX Model" ok={modelReady} error={modelError} />
                         <StatusRow label="Face Registered" ok={hasRegistered} />
                     </View>
+
+                    {processing && (
+                        <View style={[styles.card, { backgroundColor: colors.surfacePrimary }]}>
+                            <Text style={[styles.cardTitle, { color: colors.textPrimary }]}>Processing...</Text>
+                            <Text style={[styles.infoText, { color: colors.textSecondary }]}>
+                                Sending to AWS Rekognition...
+                            </Text>
+                        </View>
+                    )}
 
                     {similarity !== null && (
                         <View style={[styles.card, { backgroundColor: colors.surfacePrimary }]}>
@@ -358,10 +342,10 @@ export default function FaceTestScreen() {
                                     { color: matchResult === 'pass' ? '#34C759' : '#FF3B30' },
                                 ]}
                             >
-                                {similarity.toFixed(3)}
+                                {similarity.toFixed(1)}%
                             </Text>
                             <Text style={[styles.similarityLabel, { color: colors.textSecondary }]}>
-                                Cosine Similarity (threshold: {MATCH_THRESHOLD})
+                                AWS Rekognition Similarity (threshold: {MATCH_THRESHOLD}%)
                             </Text>
                             <Text
                                 style={[styles.matchBadge, { color: matchResult === 'pass' ? '#34C759' : '#FF3B30' }]}
@@ -380,7 +364,7 @@ export default function FaceTestScreen() {
                                 { backgroundColor: hasPermission ? colors.accent : colors.textTertiary },
                             ]}
                             onPress={() => startFlow('registering')}
-                            disabled={!hasPermission}
+                            disabled={!hasPermission || processing}
                         >
                             <Ionicons name="person-add" size={20} color="#FFFFFF" />
                             <Text style={styles.buttonText}>
@@ -394,33 +378,22 @@ export default function FaceTestScreen() {
                                 { backgroundColor: hasRegistered ? '#34C759' : colors.textTertiary, marginTop: 10 },
                             ]}
                             onPress={() => startFlow('verifying')}
-                            disabled={!hasPermission || !hasRegistered}
+                            disabled={!hasPermission || !hasRegistered || processing}
                         >
                             <Ionicons name="shield-checkmark" size={20} color="#FFFFFF" />
                             <Text style={styles.buttonText}>Verify Face</Text>
                         </Pressable>
-
-                        {hasRegistered && (
-                            <Pressable
-                                style={[styles.button, { backgroundColor: '#FF3B30', marginTop: 10 }]}
-                                onPress={handleClearRegistration}
-                            >
-                                <Ionicons name="trash" size={20} color="#FFFFFF" />
-                                <Text style={styles.buttonText}>Clear Registration</Text>
-                            </Pressable>
-                        )}
                     </View>
 
                     <View style={[styles.card, { backgroundColor: colors.surfacePrimary }]}>
                         <Text style={[styles.cardTitle, { color: colors.textPrimary }]}>How it works</Text>
                         <Text style={[styles.infoText, { color: colors.textSecondary }]}>
-                            1. Look straight → auto-detects centered face{'\n'}
-                            2. Turn left → auto-detects at -20° yaw{'\n'}
-                            3. Turn right → auto-detects at +20° yaw{'\n'}
-                            4. All 3 detected = liveness passed{'\n\n'}
-                            Detection: Apple Vision (native module, background thread){'\n'}
-                            Model: OpenCV SFace (MobileFaceNet, int8, 9.4 MB){'\n'}
-                            Embedding: 128-d vector{'\n'}
+                            1. Look straight → captures reference angle{'\n'}
+                            2. Turn left → liveness check{'\n'}
+                            3. Turn right → liveness check{'\n'}
+                            4. Photo sent to AWS Rekognition for comparison{'\n\n'}
+                            Liveness: Apple Vision (native module){'\n'}
+                            Matching: AWS Rekognition CompareFaces{'\n'}
                             Platform: {Platform.OS} ({Platform.Version})
                         </Text>
                     </View>

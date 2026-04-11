@@ -21,6 +21,16 @@ export interface DetectedFace {
 
 const NativeModule = requireNativeModule('FaceDetection');
 
+/**
+ * Convert any image (HEIC, PNG, etc.) to JPEG.
+ * @param imagePath - Local file path or file:// URI
+ * @param quality - JPEG compression quality 0.0-1.0
+ * @returns Path to the converted JPEG file
+ */
+export async function convertToJpeg(imagePath: string, quality: number = 0.8): Promise<string> {
+    return NativeModule.convertToJpeg(imagePath, quality);
+}
+
 /** Set screen brightness to max (fill light for face capture). */
 export function setMaxBrightness(): void {
     NativeModule.setMaxBrightness();

@@ -28,6 +28,21 @@ public class FaceDetectionModule: Module {
             }
         }
 
+        /// Convert any image (HEIC, PNG, etc.) to JPEG and return the file path.
+        AsyncFunction("convertToJpeg") { (imagePath: String, quality: Double) -> String in
+            guard let uiImage = Self.loadImage(from: imagePath) else {
+                throw FaceDetectionError.invalidImage
+            }
+            guard let jpegData = uiImage.jpegData(compressionQuality: quality) else {
+                throw FaceDetectionError.invalidImage
+            }
+            let tempDir = NSTemporaryDirectory()
+            let fileName = UUID().uuidString + ".jpg"
+            let outPath = (tempDir as NSString).appendingPathComponent(fileName)
+            try jpegData.write(to: URL(fileURLWithPath: outPath))
+            return outPath
+        }
+
         AsyncFunction("detectFaces") { (imagePath: String) -> [[String: Any]] in
             guard let uiImage = Self.loadImage(from: imagePath) else {
                 throw FaceDetectionError.invalidImage
@@ -89,21 +104,48 @@ public class FaceDetectionModule: Module {
                 return nil
             }
 
-            // Extract 5 alignment points in pixel coordinates
             let bbox = face.boundingBox
+
+            // Vision bbox is in normalised bottom-left coords.
+            // CIImage also uses bottom-left origin, so keep y as-is for CIImage warp.
             let bboxX = bbox.origin.x * CGFloat(imgW)
-            let bboxY = (1.0 - bbox.origin.y - bbox.size.height) * CGFloat(imgH)
+            let bboxY = bbox.origin.y * CGFloat(imgH)  // bottom-left origin (CIImage native)
             let bboxW = bbox.size.width * CGFloat(imgW)
             let bboxH = bbox.size.height * CGFloat(imgH)
 
-            let _ = Self.extract5Points(
+            guard let srcPoints = Self.extract5Points(
                 landmarks: landmarks, bboxX: bboxX, bboxY: bboxY,
-                bboxW: bboxW, bboxH: bboxH, imgH: CGFloat(imgH)
-            )
+                bboxW: bboxW, bboxH: bboxH
+            ) else {
+                return Self.simpleCrop(cgImage: cgImage, bbox: bbox, imgW: imgW, imgH: imgH)
+            }
 
-            // TODO: Re-enable alignment once warp is fixed
-            // For now, use simple crop to validate pipeline
-            return Self.simpleCrop(cgImage: cgImage, bbox: bbox, imgW: imgW, imgH: imgH)
+            // SFace reference landmarks (112x112, top-left origin) → flip to bottom-left for CIImage
+            let dstPoints: [(CGFloat, CGFloat)] = [
+                (38.29, 112.0 - 51.70),  // left eye
+                (73.53, 112.0 - 51.50),  // right eye
+                (56.03, 112.0 - 71.74),  // nose
+                (41.55, 112.0 - 92.37),  // left mouth
+                (70.73, 112.0 - 92.20),  // right mouth
+            ]
+
+            let transform = Self.computeSimilarityTransform(src: srcPoints, dst: dstPoints)
+
+            guard let aligned = Self.warpAffine(cgImage: cgImage, transform: transform, outputSize: 112) else {
+                return Self.simpleCrop(cgImage: cgImage, bbox: bbox, imgW: imgW, imgH: imgH)
+            }
+
+            let pixels = Self.extractBGRPixels(aligned, size: 112)
+
+            return [
+                "pixels": pixels,
+                "boundingBox": [
+                    "x": bbox.origin.x, "y": bbox.origin.y,
+                    "width": bbox.size.width, "height": bbox.size.height,
+                ],
+                "yaw": face.yaw?.doubleValue ?? 0.0,
+                "aligned": true,
+            ]
         }
     }
 
@@ -112,15 +154,14 @@ public class FaceDetectionModule: Module {
     private static func extract5Points(
         landmarks: VNFaceLandmarks2D,
         bboxX: CGFloat, bboxY: CGFloat,
-        bboxW: CGFloat, bboxH: CGFloat,
-        imgH: CGFloat
+        bboxW: CGFloat, bboxH: CGFloat
     ) -> [(CGFloat, CGFloat)]? {
         // Vision landmarks are normalised to the face bounding box (0-1),
-        // with origin at bottom-left. Convert to image pixel coordinates.
+        // with origin at bottom-left. Keep bottom-left origin to match CIImage.
         func toPixel(_ points: [CGPoint]) -> [(CGFloat, CGFloat)] {
             points.map { p in
                 let x = bboxX + p.x * bboxW
-                let y = bboxY + (1.0 - p.y) * bboxH
+                let y = bboxY + p.y * bboxH  // bottom-left origin preserved
                 return (x, y)
             }
         }
@@ -225,28 +266,22 @@ public class FaceDetectionModule: Module {
         return CGAffineTransform(a: a, b: -b, c: b, d: a, tx: tx, ty: ty)
     }
 
-    // MARK: - Affine Warp
+    // MARK: - Affine Warp (CIImage-based)
 
-    private static func warpAffine(cgImage: CGImage, transform: CGAffineTransform, outputSize: Int) -> CGImage {
+    private static func warpAffine(cgImage: CGImage, transform: CGAffineTransform, outputSize: Int) -> CGImage? {
+        let ciInput = CIImage(cgImage: cgImage)
         let size = CGFloat(outputSize)
 
-        // Use UIGraphicsImageRenderer which handles coordinate systems correctly
-        // (top-left origin, matching our landmark coordinates)
-        let renderer = UIGraphicsImageRenderer(size: CGSize(width: size, height: size))
-        let uiImage = renderer.image { ctx in
-            let cgCtx = ctx.cgContext
+        // The similarity transform maps source→dest. CIImage transform applies forward,
+        // but we need inverse mapping (for each dest pixel, find source pixel).
+        let inverse = transform.inverted()
 
-            // Apply the similarity transform
-            cgCtx.concatenate(transform)
+        let warped = ciInput
+            .transformed(by: inverse)
+            .cropped(to: CGRect(x: 0, y: 0, width: size, height: size))
 
-            // Draw the source image at its original pixel dimensions
-            // UIKit context has top-left origin, so we need to flip for CGImage drawing
-            cgCtx.translateBy(x: 0, y: CGFloat(cgImage.height))
-            cgCtx.scaleBy(x: 1, y: -1)
-            cgCtx.draw(cgImage, in: CGRect(x: 0, y: 0, width: cgImage.width, height: cgImage.height))
-        }
-
-        return uiImage.cgImage!
+        let ctx = CIContext(options: [.useSoftwareRenderer: false])
+        return ctx.createCGImage(warped, from: warped.extent)
     }
 
     // MARK: - Simple Crop Fallback
