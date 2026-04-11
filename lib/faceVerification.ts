@@ -170,8 +170,13 @@ export async function extractEmbeddingFromPhoto(
     filePath: string,
     boundingBox?: { x: number; y: number; width: number; height: number },
 ): Promise<Float32Array> {
+    // Strip file:// prefix if present — loadImage expects a plain path
+    const cleanPath = filePath.replace(/^file:\/\//, '');
+
     // Load the photo
-    const image: Image = await loadImage({ filePath });
+    console.log('[FaceVerify] Loading image:', cleanPath.slice(-40));
+    const image: Image = await loadImage({ filePath: cleanPath });
+    console.log('[FaceVerify] Image loaded:', image.width, 'x', image.height);
 
     // Crop to face if bounding box provided
     let faceImage: Image;
@@ -181,7 +186,9 @@ export async function extractEmbeddingFromPhoto(
         const startY = Math.max(0, Math.floor((1 - boundingBox.y - boundingBox.height) * image.height));
         const endX = Math.min(image.width, Math.floor((boundingBox.x + boundingBox.width) * image.width));
         const endY = Math.min(image.height, Math.floor((1 - boundingBox.y) * image.height));
+        console.log('[FaceVerify] Crop:', { startX, startY, endX, endY });
         faceImage = image.crop(startX, startY, endX, endY);
+        console.log('[FaceVerify] Cropped:', faceImage.width, 'x', faceImage.height);
     } else {
         faceImage = image;
     }
@@ -192,6 +199,14 @@ export async function extractEmbeddingFromPhoto(
     // Get raw pixel data
     const rawData = resized.toRawPixelData();
     const pixels = new Uint8Array(rawData.buffer);
+    console.log(
+        '[FaceVerify] Pixels:',
+        pixels.length,
+        'format:',
+        rawData.pixelFormat,
+        'sample[0..7]:',
+        Array.from(pixels.slice(0, 8)),
+    );
 
     // Convert to CHW float32 normalised to [-1, 1]
     const modelInput = pixelsToModelInput(pixels, rawData.pixelFormat);
