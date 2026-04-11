@@ -173,9 +173,12 @@ jest.mock('react-native-vision-camera', () => ({
     Camera: 'Camera',
     useCameraDevice: jest.fn(() => ({ id: 'mock' })),
     useCameraPermission: jest.fn(() => ({ hasPermission: true, requestPermission: jest.fn() })),
-    useObjectOutput: jest.fn(() => ({})),
-    usePhotoOutput: jest.fn(() => ({})),
-    isScannedFace: jest.fn(() => false),
+    usePhotoOutput: jest.fn(() => ({ capturePhotoToFile: jest.fn() })),
+}));
+
+// Mock native face detection module
+jest.mock('@/modules/face-detection/src', () => ({
+    detectFaces: jest.fn().mockResolvedValue([]),
 }));
 
 // Mock expo-asset

@@ -1,14 +1,15 @@
 /**
  * DEV-ONLY: Face Verification Test Screen
  *
- * Hybrid approach: camera preview runs with face scanning but all
- * scan data goes to refs only (zero re-renders). Auto-captures
- * exactly 3 photos when yaw thresholds are hit. UI updates via
- * a slow timer so the preview stays smooth.
+ * Smooth architecture: camera preview has ZERO face scanning.
+ * A timer takes snapshots and feeds them to a native Swift module
+ * (Apple Vision framework) for async face detection. Preview is
+ * completely decoupled from detection — 100% smooth.
  */
 import { useTheme } from '@/contexts/ThemeContext';
 import { deleteEmbedding, getEmbedding, hasEmbedding, saveEmbedding } from '@/lib/faceEmbeddingStore';
 import { compareEmbeddings, extractEmbedding, loadModel, MATCH_THRESHOLD } from '@/lib/faceVerification';
+import { detectFaces } from '@/modules/face-detection/src';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import React, { useCallback, useEffect, useRef, useState } from 'react';
@@ -16,11 +17,8 @@ import { Alert, Platform, Pressable, SafeAreaView, ScrollView, StyleSheet, Text,
 import {
     Camera,
     type CameraRef,
-    isScannedFace,
-    type ScannedObject,
     useCameraDevice,
     useCameraPermission,
-    useObjectOutput,
     usePhotoOutput,
 } from 'react-native-vision-camera';
 
@@ -33,6 +31,7 @@ const TEST_USER_ID = '__face_test_user__';
 const YAW_STRAIGHT_MAX = 10;
 const YAW_LEFT_THRESHOLD = -20;
 const YAW_RIGHT_THRESHOLD = 20;
+const SCAN_INTERVAL_MS = 300;
 
 const STEP_PROMPTS: Record<LivenessStep, string> = {
     look_straight: 'Look straight at the camera',
@@ -52,107 +51,26 @@ export default function FaceTestScreen() {
     const { hasPermission, requestPermission } = useCameraPermission();
     const photoOutput = usePhotoOutput();
 
-    // State (updated only by slow timer)
+    // State
     const [phase, setPhase] = useState<TestPhase>('idle');
+    const [step, setStep] = useState<LivenessStep>('look_straight');
     const [modelReady, setModelReady] = useState(false);
     const [modelError, setModelError] = useState<string | null>(null);
     const [hasRegistered, setHasRegistered] = useState(false);
     const [cameraActive, setCameraActive] = useState(false);
     const [similarity, setSimilarity] = useState<number | null>(null);
     const [matchResult, setMatchResult] = useState<'pass' | 'fail' | null>(null);
-
-    // Display state (updated by slow timer only)
-    const [displayStep, setDisplayStep] = useState<LivenessStep>('look_straight');
     const [displayYaw, setDisplayYaw] = useState(0);
     const [displayFace, setDisplayFace] = useState(false);
-    const [displayCaptures, setDisplayCaptures] = useState(0);
+    const [captureCount, setCaptureCount] = useState(0);
 
-    // Refs (written by scan callback — never triggers re-render)
-    const yawRef = useRef(0);
-    const faceRef = useRef(false);
+    // Refs for async detection loop
     const stepRef = useRef<LivenessStep>('look_straight');
-    const capturesRef = useRef(0);
-    const capturingRef = useRef(false);
     const phaseRef = useRef<TestPhase>('idle');
-
-    // Keep phase ref in sync
+    const scanningRef = useRef(false);
+    const captureCountRef = useRef(0);
+    stepRef.current = step;
     phaseRef.current = phase;
-
-    // ── Face scan callback: ONLY writes to refs ─────────────
-
-    const onObjectsScanned = useCallback((objects: ScannedObject[]) => {
-        const face = objects.find(isScannedFace);
-        if (!face) {
-            faceRef.current = false;
-            return;
-        }
-
-        faceRef.current = true;
-        let yaw = face.yawAngle > 180 ? face.yawAngle - 360 : face.yawAngle;
-        yaw = -yaw; // Front camera mirror
-        yawRef.current = Math.round(yaw * 10) / 10;
-
-        // Auto-capture logic (runs in ref-land, no state updates)
-        if (phaseRef.current === 'idle' || capturingRef.current) return;
-
-        const step = stepRef.current;
-        if (step === 'done') return;
-
-        let shouldCapture = false;
-        if (step === 'look_straight' && Math.abs(yaw) < YAW_STRAIGHT_MAX) {
-            shouldCapture = true;
-        } else if (step === 'turn_left' && yaw < YAW_LEFT_THRESHOLD) {
-            shouldCapture = true;
-        } else if (step === 'turn_right' && yaw > YAW_RIGHT_THRESHOLD) {
-            shouldCapture = true;
-        }
-
-        if (shouldCapture) {
-            capturingRef.current = true;
-            // Advance step immediately in ref (prevents double-capture)
-            if (step === 'look_straight') stepRef.current = 'turn_left';
-            else if (step === 'turn_left') stepRef.current = 'turn_right';
-            else if (step === 'turn_right') stepRef.current = 'done';
-            capturesRef.current += 1;
-
-            // Fire-and-forget the actual capture
-            triggerCapture();
-        }
-    }, []);
-
-    const objectOutput = useObjectOutput({
-        types: ['face'],
-        onObjectsScanned,
-    });
-
-    // ── Capture (called from scan callback) ─────────────────
-
-    const triggerCapture = useCallback(async () => {
-        try {
-            await photoOutput.capturePhotoToFile({ flashMode: 'off', enableShutterSound: false }, {});
-        } catch {
-            // Capture failed — not critical for POC
-        }
-        capturingRef.current = false;
-
-        // If all 3 done, process
-        if (stepRef.current === 'done') {
-            processEmbedding();
-        }
-    }, [photoOutput]);
-
-    // ── Slow UI timer: reads refs → updates display ─────────
-
-    useEffect(() => {
-        if (!cameraActive) return;
-        const interval = setInterval(() => {
-            setDisplayYaw(yawRef.current);
-            setDisplayFace(faceRef.current);
-            setDisplayStep(stepRef.current);
-            setDisplayCaptures(capturesRef.current);
-        }, 500);
-        return () => clearInterval(interval);
-    }, [cameraActive]);
 
     // ── Init ────────────────────────────────────────────────
 
@@ -166,6 +84,94 @@ export default function FaceTestScreen() {
     useEffect(() => {
         if (!hasPermission) requestPermission();
     }, [hasPermission, requestPermission]);
+
+    // ── Snapshot-based face detection loop ───────────────────
+    // Camera preview is UNTOUCHED. Snapshots are taken on a timer
+    // and analyzed by the native Vision module on a background thread.
+
+    useEffect(() => {
+        if (!cameraActive || phaseRef.current === 'idle') return;
+        let cancelled = false;
+
+        const tick = async () => {
+            if (cancelled || scanningRef.current) return;
+            scanningRef.current = true;
+
+            try {
+                // Take a snapshot from the preview buffer
+                const snapshot = await cameraRef.current?.preview?.takeSnapshot();
+                if (!snapshot || cancelled) {
+                    scanningRef.current = false;
+                    if (!cancelled) setTimeout(tick, SCAN_INTERVAL_MS);
+                    return;
+                }
+
+                // Save snapshot to a temp file for the native module
+                const filePath = await snapshot.toFile('jpeg', 50);
+
+                // Run face detection on the static image (background thread)
+                const faces = await detectFaces(filePath);
+
+                if (cancelled) {
+                    scanningRef.current = false;
+                    return;
+                }
+
+                if (faces.length > 0) {
+                    const face = faces[0];
+                    // Negate yaw for front camera mirror
+                    const yaw = -face.yaw;
+                    setDisplayYaw(Math.round(yaw * 10) / 10);
+                    setDisplayFace(true);
+
+                    // Auto-capture logic
+                    const currentStep = stepRef.current;
+                    if (currentStep !== 'done') {
+                        let shouldAdvance = false;
+                        if (currentStep === 'look_straight' && Math.abs(yaw) < YAW_STRAIGHT_MAX) {
+                            shouldAdvance = true;
+                        } else if (currentStep === 'turn_left' && yaw < YAW_LEFT_THRESHOLD) {
+                            shouldAdvance = true;
+                        } else if (currentStep === 'turn_right' && yaw > YAW_RIGHT_THRESHOLD) {
+                            shouldAdvance = true;
+                        }
+
+                        if (shouldAdvance) {
+                            captureCountRef.current += 1;
+                            setCaptureCount(captureCountRef.current);
+
+                            if (currentStep === 'look_straight') {
+                                stepRef.current = 'turn_left';
+                                setStep('turn_left');
+                            } else if (currentStep === 'turn_left') {
+                                stepRef.current = 'turn_right';
+                                setStep('turn_right');
+                            } else if (currentStep === 'turn_right') {
+                                stepRef.current = 'done';
+                                setStep('done');
+                                scanningRef.current = false;
+                                processEmbedding();
+                                return;
+                            }
+                        }
+                    }
+                } else {
+                    setDisplayFace(false);
+                }
+            } catch {
+                // Snapshot or detection error — skip this cycle
+            }
+
+            scanningRef.current = false;
+            if (!cancelled) setTimeout(tick, SCAN_INTERVAL_MS);
+        };
+
+        // Start the detection loop
+        setTimeout(tick, 500); // Initial delay to let camera warm up
+        return () => {
+            cancelled = true;
+        };
+    }, [cameraActive]);
 
     // ── Process embedding ───────────────────────────────────
 
@@ -218,11 +224,11 @@ export default function FaceTestScreen() {
                 return;
             }
             setPhase(flowPhase);
+            setStep('look_straight');
             stepRef.current = 'look_straight';
-            capturesRef.current = 0;
-            capturingRef.current = false;
-            setDisplayStep('look_straight');
-            setDisplayCaptures(0);
+            captureCountRef.current = 0;
+            setCaptureCount(0);
+            scanningRef.current = false;
             setSimilarity(null);
             setMatchResult(null);
             setCameraActive(true);
@@ -267,12 +273,13 @@ export default function FaceTestScreen() {
 
             {cameraActive && device ? (
                 <View style={styles.cameraContainer}>
+                    {/* Camera with ONLY photoOutput — zero scanning, 100% smooth */}
                     <Camera
                         ref={cameraRef}
                         style={StyleSheet.absoluteFill}
                         device={device}
                         isActive={cameraActive}
-                        outputs={[photoOutput, objectOutput]}
+                        outputs={[photoOutput]}
                     />
 
                     {/* Face frame guide */}
@@ -281,8 +288,7 @@ export default function FaceTestScreen() {
                             style={[
                                 styles.faceFrame,
                                 {
-                                    borderColor:
-                                        displayStep === 'done' ? '#34C759' : displayFace ? '#FF9500' : '#FF3B30',
+                                    borderColor: step === 'done' ? '#34C759' : displayFace ? '#FF9500' : '#FF3B30',
                                 },
                             ]}
                         />
@@ -290,21 +296,21 @@ export default function FaceTestScreen() {
 
                     {/* Step dots */}
                     <View style={styles.stepIndicator}>
-                        <View style={[styles.stepDot, displayCaptures >= 1 && styles.stepDotDone]} />
-                        <View style={[styles.stepDot, displayCaptures >= 2 && styles.stepDotDone]} />
-                        <View style={[styles.stepDot, displayCaptures >= 3 && styles.stepDotDone]} />
+                        <View style={[styles.stepDot, captureCount >= 1 && styles.stepDotDone]} />
+                        <View style={[styles.stepDot, captureCount >= 2 && styles.stepDotDone]} />
+                        <View style={[styles.stepDot, captureCount >= 3 && styles.stepDotDone]} />
                     </View>
 
                     {/* Prompt */}
                     <View style={styles.promptContainer}>
-                        <Text style={styles.promptText}>{STEP_PROMPTS[displayStep]}</Text>
+                        <Text style={styles.promptText}>{STEP_PROMPTS[step]}</Text>
                     </View>
 
                     {/* Debug */}
                     <View style={styles.debugOverlay}>
                         <Text style={styles.debugText}>Yaw: {displayYaw}°</Text>
                         <Text style={styles.debugText}>Face: {displayFace ? 'YES' : 'NO'}</Text>
-                        <Text style={styles.debugText}>Step: {displayStep}</Text>
+                        <Text style={styles.debugText}>Step: {step}</Text>
                     </View>
 
                     <Pressable style={styles.cancelButton} onPress={handleCancel}>
@@ -386,10 +392,11 @@ export default function FaceTestScreen() {
                     <View style={[styles.card, { backgroundColor: colors.surfacePrimary }]}>
                         <Text style={[styles.cardTitle, { color: colors.textPrimary }]}>How it works</Text>
                         <Text style={[styles.infoText, { color: colors.textSecondary }]}>
-                            1. Look straight → auto-captures when face is centered{'\n'}
-                            2. Turn left → auto-captures at -20° yaw{'\n'}
-                            3. Turn right → auto-captures at +20° yaw{'\n'}
-                            4. All 3 auto-captured = liveness passed{'\n\n'}
+                            1. Look straight → auto-detects centered face{'\n'}
+                            2. Turn left → auto-detects at -20° yaw{'\n'}
+                            3. Turn right → auto-detects at +20° yaw{'\n'}
+                            4. All 3 detected = liveness passed{'\n\n'}
+                            Detection: Apple Vision (native module, background thread){'\n'}
                             Model: OpenCV SFace (MobileFaceNet, int8, 9.4 MB){'\n'}
                             Embedding: 128-d vector{'\n'}
                             Platform: {Platform.OS} ({Platform.Version})
