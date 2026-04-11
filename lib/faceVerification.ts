@@ -12,10 +12,9 @@ import { extractFaceChip } from '../modules/face-detection/src';
 // ── Constants ───────────────────────────────────────────────
 
 /** Cosine similarity threshold for a positive match.
- * OpenCV recommends 0.363 for SFace. We use a slightly higher value
- * since we don't have face alignment yet.
+ * Tuned from real testing: same person ~0.85+, different person ~0.16-0.73.
  */
-export const MATCH_THRESHOLD = 0.5;
+export const MATCH_THRESHOLD = 0.8;
 
 /** Input image size expected by the model. */
 const INPUT_SIZE = 112;
