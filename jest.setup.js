@@ -88,6 +88,38 @@ jest.mock('expo-constants', () => ({
     expoConfig: { version: '1.0.0', extra: { eas: { projectId: 'test' } } },
 }));
 
+// Mock react-native-worklets (native module not available in test env)
+jest.mock('react-native-worklets', () => ({
+    createWorkletRuntime: jest.fn(),
+    useWorklet: jest.fn(),
+    isWorklet: jest.fn(() => false),
+    isWorkletFunction: jest.fn(() => false),
+    createSerializable: jest.fn((v) => v),
+    createSharedValue: jest.fn((v) => ({ value: v })),
+    serializableMappingCache: new WeakMap(),
+    runOnUI: jest.fn((fn) => fn),
+    runOnJS: jest.fn((fn) => fn),
+    runOnRuntime: jest.fn((_, fn) => fn),
+    scheduleOnUI: jest.fn((fn) => fn()),
+    makeShareable: jest.fn((v) => v),
+    RuntimeKind: { UI: 'UI', MAIN_JS: 'MAIN_JS' },
+}));
+
+// Mock react-native-reanimated (animation runtime not available in test env)
+jest.mock('react-native-reanimated', () => {
+    const actual = jest.requireActual('react-native-reanimated/mock');
+    return {
+        ...actual,
+        useSharedValue: jest.fn((v) => ({ value: v })),
+        useAnimatedStyle: jest.fn(() => ({})),
+        withTiming: jest.fn((v) => v),
+        withSpring: jest.fn((v) => v),
+        withDelay: jest.fn((_, v) => v),
+        runOnJS: jest.fn((fn) => fn),
+        runOnUI: jest.fn((fn) => fn),
+    };
+});
+
 // Mock react-native-keyboard-controller (native module not available in test env)
 jest.mock('react-native-keyboard-controller', () => {
     const { ScrollView, View } = require('react-native');
