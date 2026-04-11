@@ -220,6 +220,11 @@ export default function FaceTestScreen() {
                     Alert.alert('Error', 'No registered face found.');
                 } else {
                     const score = compareEmbeddings(embedding, stored);
+                    console.log(
+                        '[FaceVerify] SCORE:',
+                        score.toFixed(4),
+                        score >= MATCH_THRESHOLD ? 'MATCH' : 'REJECTED',
+                    );
                     setSimilarity(Math.round(score * 1000) / 1000);
                     setMatchResult(score >= MATCH_THRESHOLD ? 'pass' : 'fail');
                     Alert.alert(
