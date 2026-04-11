@@ -1,11 +1,9 @@
 /**
  * DEV-ONLY: Face Verification Test Screen
  *
- * Tests the full pipeline using VisionCamera v5:
- * 1. Camera + built-in face scanning (yaw/roll angles)
- * 2. Liveness detection (head turn left → right)
- * 3. ONNX face embedding extraction
- * 4. Face registration + verification (cosine similarity)
+ * Snapshot-based approach: camera preview runs untouched,
+ * face detection data is buffered in refs and polled by a
+ * timer so React never re-renders during scanning.
  */
 import { useTheme } from '@/contexts/ThemeContext';
 import { useLivenessDetection } from '@/hooks/useLivenessDetection';
@@ -14,17 +12,7 @@ import { compareEmbeddings, extractEmbedding, loadModel, MATCH_THRESHOLD } from 
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import React, { useCallback, useEffect, useRef, useState } from 'react';
-import {
-    ActivityIndicator,
-    Alert,
-    Platform,
-    Pressable,
-    SafeAreaView,
-    ScrollView,
-    StyleSheet,
-    Text,
-    View,
-} from 'react-native';
+import { Alert, Platform, Pressable, SafeAreaView, ScrollView, StyleSheet, Text, View } from 'react-native';
 import {
     Camera,
     type CameraRef,
@@ -40,6 +28,9 @@ import {
 
 type TestPhase = 'idle' | 'registering' | 'verifying';
 const TEST_USER_ID = '__face_test_user__';
+
+/** Polling interval for reading face data from refs (ms). */
+const POLL_INTERVAL = 400;
 
 // ── Component ───────────────────────────────────────────────
 
@@ -61,7 +52,7 @@ export default function FaceTestScreen() {
         reset: resetLiveness,
     } = useLivenessDetection();
 
-    // State
+    // State (only updated by the polling timer, never by the scan callback)
     const [phase, setPhase] = useState<TestPhase>('idle');
     const [modelReady, setModelReady] = useState(false);
     const [modelError, setModelError] = useState<string | null>(null);
@@ -70,50 +61,86 @@ export default function FaceTestScreen() {
     const [processing, setProcessing] = useState(false);
     const [similarity, setSimilarity] = useState<number | null>(null);
     const [matchResult, setMatchResult] = useState<'pass' | 'fail' | null>(null);
-    const [lastYaw, setLastYaw] = useState(0);
-    const [hasYaw, setHasYaw] = useState(false);
-    const [faceDetected, setFaceDetected] = useState(false);
-    const lastScanRef = useRef(0);
+    const [displayYaw, setDisplayYaw] = useState(0);
+    const [displayFace, setDisplayFace] = useState(false);
+
+    // Refs for face data (written by scan callback, read by timer)
+    const faceDataRef = useRef<{
+        detected: boolean;
+        yaw: number;
+        hasYaw: boolean;
+        rawYaw: number;
+        rawRoll: number;
+        rawHasYaw: boolean;
+        rawHasRoll: boolean;
+        faceID: number;
+    }>({
+        detected: false,
+        yaw: 0,
+        hasYaw: false,
+        rawYaw: 0,
+        rawRoll: 0,
+        rawHasYaw: false,
+        rawHasRoll: false,
+        faceID: 0,
+    });
+
+    const phaseRef = useRef<TestPhase>('idle');
+    phaseRef.current = phase;
 
     // ── VisionCamera v5 outputs ─────────────────────────────
 
     const photoOutput = usePhotoOutput();
 
-    const onObjectsScanned = useCallback(
-        (objects: ScannedObject[]) => {
-            // Throttle to ~4fps to reduce preview stutter
-            const now = Date.now();
-            if (now - lastScanRef.current < 250) return;
-            lastScanRef.current = now;
-
-            const face = objects.find(isScannedFace);
-            if (face) {
-                setFaceDetected(true);
-                // Normalize 0°–360° to -180°–+180°, then negate for front camera mirror
-                let normalizedYaw = face.yawAngle > 180 ? face.yawAngle - 360 : face.yawAngle;
-                normalizedYaw = -normalizedYaw; // Front camera mirrors left/right
-                setLastYaw(Math.round(normalizedYaw * 10) / 10);
-                setHasYaw(face.hasYawAngle);
-                if (phase !== 'idle') {
-                    onFaceDetected({
-                        yawAngle: face.yawAngle,
-                        rollAngle: face.rollAngle,
-                        hasYawAngle: face.hasYawAngle,
-                        hasRollAngle: face.hasRollAngle,
-                        faceID: face.faceID,
-                    });
-                }
-            } else {
-                setFaceDetected(false);
-            }
-        },
-        [phase, onFaceDetected],
-    );
+    // Scan callback: ZERO state updates — only writes to refs
+    const onObjectsScanned = useCallback((objects: ScannedObject[]) => {
+        const face = objects.find(isScannedFace);
+        if (face) {
+            let yaw = face.yawAngle > 180 ? face.yawAngle - 360 : face.yawAngle;
+            yaw = -yaw; // Front camera mirror
+            faceDataRef.current = {
+                detected: true,
+                yaw: Math.round(yaw * 10) / 10,
+                hasYaw: face.hasYawAngle,
+                rawYaw: face.yawAngle,
+                rawRoll: face.rollAngle,
+                rawHasYaw: face.hasYawAngle,
+                rawHasRoll: face.hasRollAngle,
+                faceID: face.faceID,
+            };
+        } else {
+            faceDataRef.current = { ...faceDataRef.current, detected: false };
+        }
+    }, []);
 
     const objectOutput = useObjectOutput({
         types: ['face'],
         onObjectsScanned,
     });
+
+    // ── Polling timer: reads refs → updates state + liveness ──
+
+    useEffect(() => {
+        if (!cameraActive) return;
+
+        const interval = setInterval(() => {
+            const data = faceDataRef.current;
+            setDisplayYaw(data.yaw);
+            setDisplayFace(data.detected);
+
+            if (phaseRef.current !== 'idle' && data.detected) {
+                onFaceDetected({
+                    yawAngle: data.rawYaw,
+                    rollAngle: data.rawRoll,
+                    hasYawAngle: data.rawHasYaw,
+                    hasRollAngle: data.rawHasRoll,
+                    faceID: data.faceID,
+                });
+            }
+        }, POLL_INTERVAL);
+
+        return () => clearInterval(interval);
+    }, [cameraActive, onFaceDetected]);
 
     // ── Init ────────────────────────────────────────────────
 
@@ -132,7 +159,6 @@ export default function FaceTestScreen() {
 
     useEffect(() => {
         if (livenessState === 'passed' && (phase === 'registering' || phase === 'verifying') && !processing) {
-            // Stop camera immediately to prevent further scanning
             setCameraActive(false);
             handleProcess();
         }
@@ -144,8 +170,6 @@ export default function FaceTestScreen() {
         setProcessing(true);
 
         try {
-            // POC: test ONNX inference with deterministic input
-            // In production, this will use the captured photo's pixel data
             const embedding = await generateTestEmbedding();
 
             if (phase === 'registering') {
@@ -167,7 +191,7 @@ export default function FaceTestScreen() {
                 }
             }
         } catch (err) {
-            Alert.alert('Error', err instanceof Error ? err.message : 'Capture failed');
+            Alert.alert('Error', err instanceof Error ? err.message : 'Processing failed');
         } finally {
             setProcessing(false);
             setCameraActive(false);
@@ -234,7 +258,6 @@ export default function FaceTestScreen() {
 
     return (
         <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]}>
-            {/* Header */}
             <View style={styles.header}>
                 <Pressable onPress={() => router.back()} hitSlop={12}>
                     <Ionicons name="chevron-back" size={28} color={colors.textPrimary} />
@@ -259,7 +282,7 @@ export default function FaceTestScreen() {
                             style={[
                                 styles.faceFrame,
                                 {
-                                    borderColor: faceDetected
+                                    borderColor: displayFace
                                         ? livenessState === 'passed'
                                             ? '#34C759'
                                             : '#FF9500'
@@ -272,17 +295,13 @@ export default function FaceTestScreen() {
                     {/* Liveness prompt */}
                     <View style={styles.promptContainer}>
                         <Text style={styles.promptText}>{livenessPrompt}</Text>
-                        {processing && <ActivityIndicator color="#FFFFFF" style={{ marginTop: 8 }} />}
                     </View>
 
                     {/* Debug readout */}
                     <View style={styles.debugOverlay}>
-                        <Text style={styles.debugText}>
-                            Yaw: {lastYaw}° (has: {hasYaw ? 'Y' : 'N'})
-                        </Text>
+                        <Text style={styles.debugText}>Yaw: {displayYaw}°</Text>
                         <Text style={styles.debugText}>Liveness: {livenessState}</Text>
-                        <Text style={styles.debugText}>Need: &lt;-15° then &gt;+15°</Text>
-                        <Text style={styles.debugText}>Face: {faceDetected ? 'YES' : 'NO'}</Text>
+                        <Text style={styles.debugText}>Face: {displayFace ? 'YES' : 'NO'}</Text>
                     </View>
 
                     <Pressable style={styles.cancelButton} onPress={handleCancel}>
