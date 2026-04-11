@@ -72,8 +72,13 @@ export function useLivenessDetection() {
 
             if (current === 'passed' || current === 'timeout') return;
 
-            if (face.hasYawAngle) {
-                setYawAngle(Math.round(face.yawAngle * 10) / 10);
+            // Normalize yaw from 0°–360° to -180°–+180°
+            // VisionCamera v5 reports 325° for a left turn (= -35°)
+            let yaw = face.yawAngle;
+            if (yaw > 180) yaw -= 360;
+
+            if (face.hasYawAngle || yaw !== 0) {
+                setYawAngle(Math.round(yaw * 10) / 10);
             }
 
             // Check timeout
@@ -90,9 +95,8 @@ export function useLivenessDetection() {
 
             lastFaceTimeRef.current = now;
 
-            // Skip yaw check if angle is exactly 0 (no data)
-            // Note: hasYawAngle may be false on iOS even when yawAngle has data
-            if (face.yawAngle === 0 && !face.hasYawAngle) return;
+            // Skip if no yaw data at all
+            if (yaw === 0 && !face.hasYawAngle) return;
 
             switch (current) {
                 case 'waiting':
@@ -101,13 +105,13 @@ export function useLivenessDetection() {
                     break;
 
                 case 'face_detected':
-                    if (face.yawAngle < TURN_LEFT_THRESHOLD) {
+                    if (yaw < TURN_LEFT_THRESHOLD) {
                         transition('turn_left');
                     }
                     break;
 
                 case 'turn_left':
-                    if (face.yawAngle > TURN_RIGHT_THRESHOLD) {
+                    if (yaw > TURN_RIGHT_THRESHOLD) {
                         transition('turn_right');
                         setTimeout(() => {
                             if (stateRef.current === 'turn_right') {

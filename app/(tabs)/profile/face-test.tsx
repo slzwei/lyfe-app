@@ -89,7 +89,9 @@ export default function FaceTestScreen() {
             const face = objects.find(isScannedFace);
             if (face) {
                 setFaceDetected(true);
-                setLastYaw(Math.round(face.yawAngle * 10) / 10);
+                // Normalize 0°–360° to -180°–+180°
+                const normalizedYaw = face.yawAngle > 180 ? face.yawAngle - 360 : face.yawAngle;
+                setLastYaw(Math.round(normalizedYaw * 10) / 10);
                 setHasYaw(face.hasYawAngle);
                 if (phase !== 'idle') {
                     onFaceDetected({
