@@ -98,19 +98,19 @@ export default function FaceTestScreen() {
             scanningRef.current = true;
 
             try {
-                // Take a snapshot from the preview buffer
-                const snapshot = await cameraRef.current?.preview?.takeSnapshot();
-                if (!snapshot || cancelled) {
+                // Capture a photo to file (decoupled from preview pipeline)
+                const photoFile = await photoOutput.capturePhotoToFile(
+                    { flashMode: 'off', enableShutterSound: false },
+                    {},
+                );
+                if (!photoFile?.filePath || cancelled) {
                     scanningRef.current = false;
                     if (!cancelled) setTimeout(tick, SCAN_INTERVAL_MS);
                     return;
                 }
 
-                // Save snapshot to a temp file for the native module
-                const filePath = await snapshot.toFile('jpeg', 50);
-
                 // Run face detection on the static image (background thread)
-                const faces = await detectFaces(filePath);
+                const faces = await detectFaces(`file://${photoFile.filePath}`);
 
                 if (cancelled) {
                     scanningRef.current = false;
@@ -158,8 +158,8 @@ export default function FaceTestScreen() {
                 } else {
                     setDisplayFace(false);
                 }
-            } catch {
-                // Snapshot or detection error — skip this cycle
+            } catch (err) {
+                console.warn('Face scan error:', err instanceof Error ? err.message : String(err));
             }
 
             scanningRef.current = false;
