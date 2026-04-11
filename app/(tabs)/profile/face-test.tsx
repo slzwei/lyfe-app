@@ -49,7 +49,7 @@ export default function FaceTestScreen() {
 
     const device = useCameraDevice('front');
     const { hasPermission, requestPermission } = useCameraPermission();
-    const photoOutput = usePhotoOutput();
+    const photoOutput = usePhotoOutput({ quality: 0.3, qualityPrioritization: 'speed' });
 
     // State
     const [phase, setPhase] = useState<TestPhase>('idle');

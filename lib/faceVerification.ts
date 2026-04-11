@@ -173,10 +173,17 @@ export async function extractEmbeddingFromPhoto(
     // Strip file:// prefix if present — loadImage expects a plain path
     const cleanPath = filePath.replace(/^file:\/\//, '');
 
-    // Load the full photo
-    const image: Image = await loadImage({ filePath: cleanPath });
+    // Load the photo and downscale to reduce memory (we only need 112x112 output)
+    const fullImage: Image = await loadImage({ filePath: cleanPath });
 
-    // Get raw pixel data from the FULL image (NitroImage crop is unreliable)
+    // Downscale to max 1024px to reduce memory (36MB → ~4MB)
+    const scale = Math.min(1, 1024 / Math.max(fullImage.width, fullImage.height));
+    const image =
+        scale < 1
+            ? fullImage.resize(Math.round(fullImage.width * scale), Math.round(fullImage.height * scale))
+            : fullImage;
+
+    // Get raw pixel data from the downscaled image
     const rawData = image.toRawPixelData();
     const pixels = new Uint8Array(rawData.buffer);
 
