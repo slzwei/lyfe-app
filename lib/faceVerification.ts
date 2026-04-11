@@ -7,7 +7,7 @@
  */
 import { Asset } from 'expo-asset';
 import { InferenceSession, Tensor } from 'onnxruntime-react-native';
-import { loadImage, type Image, type PixelFormat } from 'react-native-nitro-image';
+import { extractFaceChip } from '../modules/face-detection/src';
 
 // ── Constants ───────────────────────────────────────────────
 
@@ -157,164 +157,33 @@ export function rgbaToModelInput(rgba: Uint8Array, width: number, height: number
 // ── Real face embedding from photo ─────────────────────────
 
 /**
- * Extract a face embedding from a photo file + bounding box.
+ * Extract a face embedding from a photo file.
  *
- * Pipeline: load image → crop to face → resize to 112x112 →
- * extract raw pixels → convert to CHW float32 → ONNX inference.
+ * The native module handles everything: EXIF rotation, face detection,
+ * square crop, resize to 112x112, BGR pixel extraction. Returns ~37KB
+ * instead of loading the full 36MB image in JS.
  *
- * @param filePath - Local file path to the photo (from capturePhotoToFile)
- * @param boundingBox - Face bounding box (normalised 0-1 coordinates from Vision)
+ * @param filePath - Local file path to the photo
  * @returns 128-d Float32Array embedding
  */
-export async function extractEmbeddingFromPhoto(
-    filePath: string,
-    boundingBox?: { x: number; y: number; width: number; height: number },
-): Promise<Float32Array> {
-    // Strip file:// prefix if present — loadImage expects a plain path
-    const cleanPath = filePath.replace(/^file:\/\//, '');
+export async function extractEmbeddingFromPhoto(filePath: string): Promise<Float32Array> {
+    const result = await extractFaceChip(filePath);
 
-    // Load the photo, save as JPEG to apply EXIF rotation, then reload.
-    // This guarantees the raw pixel buffer matches the logical orientation.
-    const origImage: Image = await loadImage({ filePath: cleanPath });
-    const jpegPath = await origImage.saveToTemporaryFileAsync('jpg', 85);
-    const image: Image = await loadImage({ filePath: jpegPath });
-
-    // Now raw pixels will be correctly oriented (no rotation needed)
-    const rawData = image.toRawPixelData();
-    const pixels = new Uint8Array(rawData.buffer);
-
-    const logicalW = rawData.width;
-    const logicalH = rawData.height;
-
-    // Calculate face region in LOGICAL coordinates — SQUARE crop centered on face
-    let cropX = 0,
-        cropY = 0,
-        cropW = logicalW,
-        cropH = logicalH;
-    if (boundingBox) {
-        // Vision framework: normalised coords (0-1), Y origin at bottom-left
-        const faceX = Math.floor(boundingBox.x * logicalW);
-        const faceY = Math.floor((1 - boundingBox.y - boundingBox.height) * logicalH);
-        const faceW = Math.floor(boundingBox.width * logicalW);
-        const faceH = Math.floor(boundingBox.height * logicalH);
-
-        // Make square crop based on face WIDTH (height includes neck/body)
-        // Add 40% padding for forehead/chin margin
-        const size = Math.floor(faceW * 1.4);
-        const centerX = faceX + Math.floor(faceW / 2);
-        const centerY = faceY + Math.floor(faceH / 2);
-
-        cropX = Math.max(0, centerX - Math.floor(size / 2));
-        cropY = Math.max(0, centerY - Math.floor(size / 2));
-        cropW = Math.min(size, logicalW - cropX);
-        cropH = Math.min(size, logicalH - cropY);
+    if (!result) {
+        throw new Error('No face detected in photo');
     }
 
     console.log(
-        '[FaceVerify] logical:',
-        logicalW,
-        'x',
-        logicalH,
-        'raw:',
-        rawData.width,
-        'x',
-        rawData.height,
-        'face:',
-        cropX,
-        cropY,
-        cropW,
-        cropH,
+        '[FaceVerify] Native face chip: yaw=',
+        result.yaw.toFixed(1),
+        'bbox=',
+        `${result.boundingBox.x.toFixed(2)},${result.boundingBox.y.toFixed(2)}`,
     );
 
-    // Crop + resize to 112x112 in one step (no rotation needed)
-    const modelInput = cropResizeConvert(pixels, rawData.width, rawData.pixelFormat, cropX, cropY, cropW, cropH);
+    // The native module returns BGR CHW Float32 pixels ready for ONNX
+    const modelInput = new Float32Array(result.pixels);
 
     return extractEmbedding(modelInput);
-}
-
-/**
- * Crop a region from raw pixels and resize to 112x112 CHW float32 in one pass.
- * Nearest-neighbour sampling directly from the source bounding box.
- */
-function cropResizeConvert(
-    pixels: Uint8Array,
-    rawBufWidth: number,
-    format: PixelFormat,
-    cropX: number,
-    cropY: number,
-    cropW: number,
-    cropH: number,
-): Float32Array {
-    const output = new Float32Array(3 * INPUT_SIZE * INPUT_SIZE);
-    const pixelCount = INPUT_SIZE * INPUT_SIZE;
-
-    // Determine channel offsets based on pixel format
-    let rOff: number, gOff: number, bOff: number, stride: number;
-    switch (format) {
-        case 'RGBA':
-        case 'RGBX':
-            rOff = 0;
-            gOff = 1;
-            bOff = 2;
-            stride = 4;
-            break;
-        case 'BGRA':
-        case 'BGRX':
-            rOff = 2;
-            gOff = 1;
-            bOff = 0;
-            stride = 4;
-            break;
-        case 'ARGB':
-        case 'XRGB':
-            rOff = 1;
-            gOff = 2;
-            bOff = 3;
-            stride = 4;
-            break;
-        case 'ABGR':
-        case 'XBGR':
-            rOff = 3;
-            gOff = 2;
-            bOff = 1;
-            stride = 4;
-            break;
-        case 'RGB':
-            rOff = 0;
-            gOff = 1;
-            bOff = 2;
-            stride = 3;
-            break;
-        case 'BGR':
-            rOff = 2;
-            gOff = 1;
-            bOff = 0;
-            stride = 3;
-            break;
-        default:
-            rOff = 0;
-            gOff = 1;
-            bOff = 2;
-            stride = 4;
-            break;
-    }
-
-    for (let y = 0; y < INPUT_SIZE; y++) {
-        for (let x = 0; x < INPUT_SIZE; x++) {
-            const srcX = cropX + Math.min(Math.floor((x * cropW) / INPUT_SIZE), cropW - 1);
-            const srcY = cropY + Math.min(Math.floor((y * cropH) / INPUT_SIZE), cropH - 1);
-            const srcIdx = (srcY * rawBufWidth + srcX) * stride;
-            const dstIdx = y * INPUT_SIZE + x;
-
-            // SFace expects BGR channel order with raw 0-255 values (no normalization!)
-            // CHW layout: channel 0 = Blue, channel 1 = Green, channel 2 = Red
-            output[0 * pixelCount + dstIdx] = pixels[srcIdx + bOff]; // B
-            output[1 * pixelCount + dstIdx] = pixels[srcIdx + gOff]; // G
-            output[2 * pixelCount + dstIdx] = pixels[srcIdx + rOff]; // R
-        }
-    }
-
-    return output;
 }
 
 // ── Serialisation ───────────────────────────────────────────
