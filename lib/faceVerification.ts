@@ -7,6 +7,7 @@
  */
 import { Asset } from 'expo-asset';
 import { InferenceSession, Tensor } from 'onnxruntime-react-native';
+import { loadImage, type Image, type PixelFormat } from 'react-native-nitro-image';
 
 // ── Constants ───────────────────────────────────────────────
 
@@ -145,6 +146,122 @@ export function rgbaToModelInput(rgba: Uint8Array, width: number, height: number
             output[1 * pixelCount + y * INPUT_SIZE + x] = g * 2 - 1; // G channel
             output[2 * pixelCount + y * INPUT_SIZE + x] = b * 2 - 1; // B channel
         }
+    }
+
+    return output;
+}
+
+// ── Real face embedding from photo ─────────────────────────
+
+/**
+ * Extract a face embedding from a photo file + bounding box.
+ *
+ * Pipeline: load image → crop to face → resize to 112x112 →
+ * extract raw pixels → convert to CHW float32 → ONNX inference.
+ *
+ * @param filePath - Local file path to the photo (from capturePhotoToFile)
+ * @param boundingBox - Face bounding box (normalised 0-1 coordinates from Vision)
+ * @returns 128-d Float32Array embedding
+ */
+export async function extractEmbeddingFromPhoto(
+    filePath: string,
+    boundingBox?: { x: number; y: number; width: number; height: number },
+): Promise<Float32Array> {
+    // Load the photo
+    const image: Image = await loadImage({ filePath });
+
+    // Crop to face if bounding box provided
+    let faceImage: Image;
+    if (boundingBox) {
+        // Vision framework returns normalised coords (0-1), Y is flipped (origin at bottom-left)
+        const startX = Math.max(0, Math.floor(boundingBox.x * image.width));
+        const startY = Math.max(0, Math.floor((1 - boundingBox.y - boundingBox.height) * image.height));
+        const endX = Math.min(image.width, Math.floor((boundingBox.x + boundingBox.width) * image.width));
+        const endY = Math.min(image.height, Math.floor((1 - boundingBox.y) * image.height));
+        faceImage = image.crop(startX, startY, endX, endY);
+    } else {
+        faceImage = image;
+    }
+
+    // Resize to 112x112
+    const resized = faceImage.resize(INPUT_SIZE, INPUT_SIZE);
+
+    // Get raw pixel data
+    const rawData = resized.toRawPixelData();
+    const pixels = new Uint8Array(rawData.buffer);
+
+    // Convert to CHW float32 normalised to [-1, 1]
+    const modelInput = pixelsToModelInput(pixels, rawData.pixelFormat);
+
+    return extractEmbedding(modelInput);
+}
+
+/**
+ * Convert raw pixel buffer to CHW float32 tensor for the model.
+ * Handles RGBA, BGRA, ARGB, and RGB pixel formats.
+ */
+function pixelsToModelInput(pixels: Uint8Array, format: PixelFormat): Float32Array {
+    const output = new Float32Array(3 * INPUT_SIZE * INPUT_SIZE);
+    const pixelCount = INPUT_SIZE * INPUT_SIZE;
+
+    // Determine channel offsets based on pixel format
+    let rOff: number, gOff: number, bOff: number, stride: number;
+    switch (format) {
+        case 'RGBA':
+        case 'RGBX':
+            rOff = 0;
+            gOff = 1;
+            bOff = 2;
+            stride = 4;
+            break;
+        case 'BGRA':
+        case 'BGRX':
+            rOff = 2;
+            gOff = 1;
+            bOff = 0;
+            stride = 4;
+            break;
+        case 'ARGB':
+        case 'XRGB':
+            rOff = 1;
+            gOff = 2;
+            bOff = 3;
+            stride = 4;
+            break;
+        case 'ABGR':
+        case 'XBGR':
+            rOff = 3;
+            gOff = 2;
+            bOff = 1;
+            stride = 4;
+            break;
+        case 'RGB':
+            rOff = 0;
+            gOff = 1;
+            bOff = 2;
+            stride = 3;
+            break;
+        case 'BGR':
+            rOff = 2;
+            gOff = 1;
+            bOff = 0;
+            stride = 3;
+            break;
+        default:
+            // Assume RGBA
+            rOff = 0;
+            gOff = 1;
+            bOff = 2;
+            stride = 4;
+            break;
+    }
+
+    for (let i = 0; i < pixelCount; i++) {
+        const srcIdx = i * stride;
+        // Normalise to [-1, 1]
+        output[0 * pixelCount + i] = pixels[srcIdx + rOff] / 127.5 - 1; // R
+        output[1 * pixelCount + i] = pixels[srcIdx + gOff] / 127.5 - 1; // G
+        output[2 * pixelCount + i] = pixels[srcIdx + bOff] / 127.5 - 1; // B
     }
 
     return output;

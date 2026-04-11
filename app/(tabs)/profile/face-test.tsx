@@ -8,7 +8,7 @@
  */
 import { useTheme } from '@/contexts/ThemeContext';
 import { deleteEmbedding, getEmbedding, hasEmbedding, saveEmbedding } from '@/lib/faceEmbeddingStore';
-import { compareEmbeddings, extractEmbedding, loadModel, MATCH_THRESHOLD } from '@/lib/faceVerification';
+import { compareEmbeddings, extractEmbeddingFromPhoto, loadModel, MATCH_THRESHOLD } from '@/lib/faceVerification';
 import { detectFaces } from '../../../modules/face-detection/src';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
@@ -69,6 +69,8 @@ export default function FaceTestScreen() {
     const phaseRef = useRef<TestPhase>('idle');
     const scanningRef = useRef(false);
     const captureCountRef = useRef(0);
+    const lastPhotoRef = useRef<string | null>(null);
+    const lastBBoxRef = useRef<{ x: number; y: number; width: number; height: number } | null>(null);
     stepRef.current = step;
     phaseRef.current = phase;
 
@@ -123,6 +125,10 @@ export default function FaceTestScreen() {
                     const yaw = -face.yaw;
                     setDisplayYaw(Math.round(yaw * 10) / 10);
                     setDisplayFace(true);
+
+                    // Store photo + bounding box for embedding extraction
+                    lastPhotoRef.current = `file://${photoFile.filePath}`;
+                    lastBBoxRef.current = face.boundingBox;
 
                     // Auto-capture logic
                     const currentStep = stepRef.current;
@@ -179,7 +185,17 @@ export default function FaceTestScreen() {
         setCameraActive(false);
 
         try {
-            const embedding = await generateTestEmbedding();
+            const photoPath = lastPhotoRef.current;
+            const bbox = lastBBoxRef.current;
+
+            if (!photoPath) {
+                Alert.alert('Error', 'No photo captured');
+                setPhase('idle');
+                return;
+            }
+
+            // Extract REAL face embedding from the captured photo
+            const embedding = await extractEmbeddingFromPhoto(photoPath, bbox ?? undefined);
 
             if (phaseRef.current === 'registering') {
                 await saveEmbedding(TEST_USER_ID, embedding);
@@ -205,15 +221,6 @@ export default function FaceTestScreen() {
             setPhase('idle');
         }
     }, []);
-
-    async function generateTestEmbedding(): Promise<Float32Array> {
-        const testInput = new Float32Array(3 * 112 * 112);
-        const seed = Date.now() % 10000;
-        for (let i = 0; i < testInput.length; i++) {
-            testInput[i] = Math.sin(seed + i * 0.01) * 0.5;
-        }
-        return extractEmbedding(testInput);
-    }
 
     // ── Actions ─────────────────────────────────────────────
 

@@ -191,6 +191,22 @@ jest.mock('expo-asset', () => ({
     },
 }));
 
+// Mock react-native-nitro-image
+jest.mock('react-native-nitro-image', () => ({
+    loadImage: jest.fn().mockResolvedValue({
+        width: 112,
+        height: 112,
+        crop: jest.fn().mockReturnThis(),
+        resize: jest.fn().mockReturnThis(),
+        toRawPixelData: jest.fn(() => ({
+            buffer: new ArrayBuffer(112 * 112 * 4),
+            width: 112,
+            height: 112,
+            pixelFormat: 'RGBA',
+        })),
+    }),
+}));
+
 // Mock onnxruntime-react-native
 jest.mock('onnxruntime-react-native', () => ({
     InferenceSession: { create: jest.fn() },
