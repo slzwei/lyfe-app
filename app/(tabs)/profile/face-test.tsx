@@ -81,9 +81,9 @@ export default function FaceTestScreen() {
 
     const onObjectsScanned = useCallback(
         (objects: ScannedObject[]) => {
-            // Throttle to ~10fps to reduce choppiness
+            // Throttle to ~4fps to reduce preview stutter
             const now = Date.now();
-            if (now - lastScanRef.current < 100) return;
+            if (now - lastScanRef.current < 250) return;
             lastScanRef.current = now;
 
             const face = objects.find(isScannedFace);
@@ -128,31 +128,24 @@ export default function FaceTestScreen() {
         if (!hasPermission) requestPermission();
     }, [hasPermission, requestPermission]);
 
-    // ── Liveness passed → capture + process ─────────────────
+    // ── Liveness passed → process embedding ───────────────
 
     useEffect(() => {
         if (livenessState === 'passed' && (phase === 'registering' || phase === 'verifying') && !processing) {
-            handleCapture();
+            // Stop camera immediately to prevent further scanning
+            setCameraActive(false);
+            handleProcess();
         }
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [livenessState, phase]);
 
-    const handleCapture = useCallback(async () => {
+    const handleProcess = useCallback(async () => {
         if (processing) return;
         setProcessing(true);
 
         try {
-            // VisionCamera v5: capture photo via the photoOutput hook
-            const photoFile = await photoOutput.capturePhotoToFile({ flashMode: 'off', enableShutterSound: false }, {});
-
-            if (!photoFile?.filePath) {
-                Alert.alert('Error', 'Failed to take photo');
-                setProcessing(false);
-                return;
-            }
-
-            // For POC: test ONNX inference with deterministic input
-            // photoFile.filePath available for real pixel extraction later
+            // POC: test ONNX inference with deterministic input
+            // In production, this will use the captured photo's pixel data
             const embedding = await generateTestEmbedding();
 
             if (phase === 'registering') {
