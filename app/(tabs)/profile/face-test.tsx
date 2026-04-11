@@ -112,7 +112,7 @@ export default function FaceTestScreen() {
                 }
 
                 // Run face detection on the static image (background thread)
-                const faces = await detectFaces(`file://${photoFile.filePath}`);
+                const faces = await detectFaces(photoFile.filePath);
 
                 if (cancelled) {
                     scanningRef.current = false;
@@ -127,7 +127,7 @@ export default function FaceTestScreen() {
                     setDisplayFace(true);
 
                     // Store photo + bounding box for embedding extraction
-                    lastPhotoRef.current = `file://${photoFile.filePath}`;
+                    lastPhotoRef.current = photoFile.filePath;
                     lastBBoxRef.current = face.boundingBox;
 
                     // Auto-capture logic
