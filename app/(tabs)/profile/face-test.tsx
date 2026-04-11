@@ -9,7 +9,7 @@
 import { useTheme } from '@/contexts/ThemeContext';
 import { deleteEmbedding, getEmbedding, hasEmbedding, saveEmbedding } from '@/lib/faceEmbeddingStore';
 import { compareEmbeddings, extractEmbedding, loadModel, MATCH_THRESHOLD } from '@/lib/faceVerification';
-import { detectFaces } from '@/modules/face-detection/src';
+import { detectFaces } from '../../../modules/face-detection/src';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import React, { useCallback, useEffect, useRef, useState } from 'react';

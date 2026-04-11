@@ -177,7 +177,7 @@ jest.mock('react-native-vision-camera', () => ({
 }));
 
 // Mock native face detection module
-jest.mock('@/modules/face-detection/src', () => ({
+jest.mock('./modules/face-detection/src', () => ({
     detectFaces: jest.fn().mockResolvedValue([]),
 }));
 
