@@ -173,17 +173,10 @@ export async function extractEmbeddingFromPhoto(
     // Strip file:// prefix if present — loadImage expects a plain path
     const cleanPath = filePath.replace(/^file:\/\//, '');
 
-    // Load the photo and downscale to reduce memory (we only need 112x112 output)
-    const fullImage: Image = await loadImage({ filePath: cleanPath });
+    // Load the photo
+    const image: Image = await loadImage({ filePath: cleanPath });
 
-    // Downscale to max 1024px to reduce memory (36MB → ~4MB)
-    const scale = Math.min(1, 1024 / Math.max(fullImage.width, fullImage.height));
-    const image =
-        scale < 1
-            ? fullImage.resize(Math.round(fullImage.width * scale), Math.round(fullImage.height * scale))
-            : fullImage;
-
-    // Get raw pixel data from the downscaled image
+    // Get raw pixel data
     const rawData = image.toRawPixelData();
     const pixels = new Uint8Array(rawData.buffer);
 
@@ -212,8 +205,9 @@ export async function extractEmbeddingFromPhoto(
         const faceW = Math.floor(boundingBox.width * logicalW);
         const faceH = Math.floor(boundingBox.height * logicalH);
 
-        // Make square crop (use the larger dimension) with 20% padding
-        const size = Math.floor(Math.max(faceW, faceH) * 1.2);
+        // Make square crop based on face WIDTH (height includes neck/body)
+        // Add 40% padding for forehead/chin margin
+        const size = Math.floor(faceW * 1.4);
         const centerX = faceX + Math.floor(faceW / 2);
         const centerY = faceY + Math.floor(faceH / 2);
 
