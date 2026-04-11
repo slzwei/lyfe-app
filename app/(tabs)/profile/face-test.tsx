@@ -1,12 +1,11 @@
 /**
  * DEV-ONLY: Face Verification Test Screen
  *
- * Snapshot-based approach: camera preview runs untouched,
- * face detection data is buffered in refs and polled by a
- * timer so React never re-renders during scanning.
+ * Tap-based approach: camera preview is 100% smooth (no face scanning).
+ * User taps "Capture" at each liveness step. Photos are taken and
+ * processed after each tap.
  */
 import { useTheme } from '@/contexts/ThemeContext';
-import { useLivenessDetection } from '@/hooks/useLivenessDetection';
 import { deleteEmbedding, getEmbedding, hasEmbedding, saveEmbedding } from '@/lib/faceEmbeddingStore';
 import { compareEmbeddings, extractEmbedding, loadModel, MATCH_THRESHOLD } from '@/lib/faceVerification';
 import { Ionicons } from '@expo/vector-icons';
@@ -16,21 +15,24 @@ import { Alert, Platform, Pressable, SafeAreaView, ScrollView, StyleSheet, Text,
 import {
     Camera,
     type CameraRef,
-    isScannedFace,
-    type ScannedObject,
     useCameraDevice,
     useCameraPermission,
-    useObjectOutput,
     usePhotoOutput,
 } from 'react-native-vision-camera';
 
 // ── Types ───────────────────────────────────────────────────
 
 type TestPhase = 'idle' | 'registering' | 'verifying';
+type LivenessStep = 'ready' | 'look_straight' | 'turn_left' | 'turn_right' | 'done';
 const TEST_USER_ID = '__face_test_user__';
 
-/** Polling interval for reading face data from refs (ms). */
-const POLL_INTERVAL = 400;
+const STEP_PROMPTS: Record<LivenessStep, string> = {
+    ready: 'Position your face in the frame',
+    look_straight: 'Look straight at the camera, then tap Capture',
+    turn_left: 'Turn your head LEFT, then tap Capture',
+    turn_right: 'Turn your head RIGHT, then tap Capture',
+    done: 'Liveness check passed!',
+};
 
 // ── Component ───────────────────────────────────────────────
 
@@ -39,108 +41,21 @@ export default function FaceTestScreen() {
     const router = useRouter();
     const cameraRef = useRef<CameraRef>(null);
 
-    // Camera
     const device = useCameraDevice('front');
     const { hasPermission, requestPermission } = useCameraPermission();
+    const photoOutput = usePhotoOutput();
 
-    // Liveness
-    const {
-        state: livenessState,
-        prompt: livenessPrompt,
-        yawAngle,
-        onFaceDetected,
-        reset: resetLiveness,
-    } = useLivenessDetection();
-
-    // State (only updated by the polling timer, never by the scan callback)
+    // State
     const [phase, setPhase] = useState<TestPhase>('idle');
+    const [step, setStep] = useState<LivenessStep>('ready');
     const [modelReady, setModelReady] = useState(false);
     const [modelError, setModelError] = useState<string | null>(null);
     const [hasRegistered, setHasRegistered] = useState(false);
     const [cameraActive, setCameraActive] = useState(false);
-    const [processing, setProcessing] = useState(false);
+    const [capturing, setCapturing] = useState(false);
     const [similarity, setSimilarity] = useState<number | null>(null);
     const [matchResult, setMatchResult] = useState<'pass' | 'fail' | null>(null);
-    const [displayYaw, setDisplayYaw] = useState(0);
-    const [displayFace, setDisplayFace] = useState(false);
-
-    // Refs for face data (written by scan callback, read by timer)
-    const faceDataRef = useRef<{
-        detected: boolean;
-        yaw: number;
-        hasYaw: boolean;
-        rawYaw: number;
-        rawRoll: number;
-        rawHasYaw: boolean;
-        rawHasRoll: boolean;
-        faceID: number;
-    }>({
-        detected: false,
-        yaw: 0,
-        hasYaw: false,
-        rawYaw: 0,
-        rawRoll: 0,
-        rawHasYaw: false,
-        rawHasRoll: false,
-        faceID: 0,
-    });
-
-    const phaseRef = useRef<TestPhase>('idle');
-    phaseRef.current = phase;
-
-    // ── VisionCamera v5 outputs ─────────────────────────────
-
-    const photoOutput = usePhotoOutput();
-
-    // Scan callback: ZERO state updates — only writes to refs
-    const onObjectsScanned = useCallback((objects: ScannedObject[]) => {
-        const face = objects.find(isScannedFace);
-        if (face) {
-            let yaw = face.yawAngle > 180 ? face.yawAngle - 360 : face.yawAngle;
-            yaw = -yaw; // Front camera mirror
-            faceDataRef.current = {
-                detected: true,
-                yaw: Math.round(yaw * 10) / 10,
-                hasYaw: face.hasYawAngle,
-                rawYaw: face.yawAngle,
-                rawRoll: face.rollAngle,
-                rawHasYaw: face.hasYawAngle,
-                rawHasRoll: face.hasRollAngle,
-                faceID: face.faceID,
-            };
-        } else {
-            faceDataRef.current = { ...faceDataRef.current, detected: false };
-        }
-    }, []);
-
-    const objectOutput = useObjectOutput({
-        types: ['face'],
-        onObjectsScanned,
-    });
-
-    // ── Polling timer: reads refs → updates state + liveness ──
-
-    useEffect(() => {
-        if (!cameraActive) return;
-
-        const interval = setInterval(() => {
-            const data = faceDataRef.current;
-            setDisplayYaw(data.yaw);
-            setDisplayFace(data.detected);
-
-            if (phaseRef.current !== 'idle' && data.detected) {
-                onFaceDetected({
-                    yawAngle: data.rawYaw,
-                    rollAngle: data.rawRoll,
-                    hasYawAngle: data.rawHasYaw,
-                    hasRollAngle: data.rawHasRoll,
-                    faceID: data.faceID,
-                });
-            }
-        }, POLL_INTERVAL);
-
-        return () => clearInterval(interval);
-    }, [cameraActive, onFaceDetected]);
+    const [captureCount, setCaptureCount] = useState(0);
 
     // ── Init ────────────────────────────────────────────────
 
@@ -155,21 +70,48 @@ export default function FaceTestScreen() {
         if (!hasPermission) requestPermission();
     }, [hasPermission, requestPermission]);
 
-    // ── Liveness passed → process embedding ───────────────
+    // ── Capture at each step ────────────────────────────────
 
-    useEffect(() => {
-        if (livenessState === 'passed' && (phase === 'registering' || phase === 'verifying') && !processing) {
-            setCameraActive(false);
-            handleProcess();
-        }
-        // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [livenessState, phase]);
-
-    const handleProcess = useCallback(async () => {
-        if (processing) return;
-        setProcessing(true);
+    const handleCapture = useCallback(async () => {
+        if (capturing) return;
+        setCapturing(true);
 
         try {
+            // Take photo
+            const photoFile = await photoOutput.capturePhotoToFile({ flashMode: 'off', enableShutterSound: false }, {});
+
+            if (!photoFile?.filePath) {
+                Alert.alert('Error', 'Failed to take photo');
+                setCapturing(false);
+                return;
+            }
+
+            // Advance liveness step
+            const nextCount = captureCount + 1;
+            setCaptureCount(nextCount);
+
+            if (step === 'look_straight') {
+                setStep('turn_left');
+            } else if (step === 'turn_left') {
+                setStep('turn_right');
+            } else if (step === 'turn_right') {
+                // All 3 captures done — liveness passed
+                setStep('done');
+                setCameraActive(false);
+                await processEmbedding();
+                return;
+            }
+        } catch (err) {
+            Alert.alert('Error', err instanceof Error ? err.message : 'Capture failed');
+        } finally {
+            setCapturing(false);
+        }
+    }, [capturing, step, captureCount, photoOutput]);
+
+    const processEmbedding = useCallback(async () => {
+        try {
+            // POC: test ONNX inference with deterministic input
+            // In production, this will extract real pixel data from the captured face photo
             const embedding = await generateTestEmbedding();
 
             if (phase === 'registering') {
@@ -179,7 +121,7 @@ export default function FaceTestScreen() {
             } else if (phase === 'verifying') {
                 const stored = await getEmbedding(TEST_USER_ID);
                 if (!stored) {
-                    Alert.alert('Error', 'No registered face found. Register first.');
+                    Alert.alert('Error', 'No registered face found.');
                 } else {
                     const score = compareEmbeddings(embedding, stored);
                     setSimilarity(Math.round(score * 1000) / 1000);
@@ -193,11 +135,9 @@ export default function FaceTestScreen() {
         } catch (err) {
             Alert.alert('Error', err instanceof Error ? err.message : 'Processing failed');
         } finally {
-            setProcessing(false);
-            setCameraActive(false);
             setPhase('idle');
         }
-    }, [phase, processing]);
+    }, [phase]);
 
     async function generateTestEmbedding(): Promise<Float32Array> {
         const testInput = new Float32Array(3 * 112 * 112);
@@ -212,11 +152,12 @@ export default function FaceTestScreen() {
 
     const startRegistration = useCallback(() => {
         setPhase('registering');
+        setStep('look_straight');
+        setCaptureCount(0);
         setSimilarity(null);
         setMatchResult(null);
-        resetLiveness();
         setCameraActive(true);
-    }, [resetLiveness]);
+    }, []);
 
     const startVerification = useCallback(() => {
         if (!hasRegistered) {
@@ -224,11 +165,12 @@ export default function FaceTestScreen() {
             return;
         }
         setPhase('verifying');
+        setStep('look_straight');
+        setCaptureCount(0);
         setSimilarity(null);
         setMatchResult(null);
-        resetLiveness();
         setCameraActive(true);
-    }, [hasRegistered, resetLiveness]);
+    }, [hasRegistered]);
 
     const handleClearRegistration = useCallback(async () => {
         await deleteEmbedding(TEST_USER_ID);
@@ -241,8 +183,9 @@ export default function FaceTestScreen() {
     const handleCancel = useCallback(() => {
         setCameraActive(false);
         setPhase('idle');
-        resetLiveness();
-    }, [resetLiveness]);
+        setStep('ready');
+        setCaptureCount(0);
+    }, []);
 
     // ── Render ──────────────────────────────────────────────
 
@@ -268,45 +211,50 @@ export default function FaceTestScreen() {
 
             {cameraActive && device ? (
                 <View style={styles.cameraContainer}>
+                    {/* Camera with ONLY photo output — zero scanning, 100% smooth */}
                     <Camera
                         ref={cameraRef}
                         style={StyleSheet.absoluteFill}
                         device={device}
                         isActive={cameraActive}
-                        outputs={[photoOutput, objectOutput]}
+                        outputs={[photoOutput]}
                     />
 
                     {/* Face frame guide */}
                     <View style={styles.overlay}>
-                        <View
-                            style={[
-                                styles.faceFrame,
-                                {
-                                    borderColor: displayFace
-                                        ? livenessState === 'passed'
-                                            ? '#34C759'
-                                            : '#FF9500'
-                                        : '#FF3B30',
-                                },
-                            ]}
-                        />
+                        <View style={[styles.faceFrame, { borderColor: '#FF9500' }]} />
                     </View>
 
-                    {/* Liveness prompt */}
+                    {/* Step indicator */}
+                    <View style={styles.stepIndicator}>
+                        <View style={[styles.stepDot, captureCount >= 1 && styles.stepDotDone]} />
+                        <View style={[styles.stepDot, captureCount >= 2 && styles.stepDotDone]} />
+                        <View style={[styles.stepDot, captureCount >= 3 && styles.stepDotDone]} />
+                    </View>
+
+                    {/* Prompt */}
                     <View style={styles.promptContainer}>
-                        <Text style={styles.promptText}>{livenessPrompt}</Text>
+                        <Text style={styles.promptText}>{STEP_PROMPTS[step]}</Text>
                     </View>
 
-                    {/* Debug readout */}
-                    <View style={styles.debugOverlay}>
-                        <Text style={styles.debugText}>Yaw: {displayYaw}°</Text>
-                        <Text style={styles.debugText}>Liveness: {livenessState}</Text>
-                        <Text style={styles.debugText}>Face: {displayFace ? 'YES' : 'NO'}</Text>
-                    </View>
+                    {/* Capture + Cancel buttons */}
+                    <View style={styles.bottomButtons}>
+                        <Pressable style={styles.cancelButton} onPress={handleCancel}>
+                            <Text style={styles.cancelText}>Cancel</Text>
+                        </Pressable>
 
-                    <Pressable style={styles.cancelButton} onPress={handleCancel}>
-                        <Text style={styles.cancelText}>Cancel</Text>
-                    </Pressable>
+                        {step !== 'done' && (
+                            <Pressable
+                                style={[styles.captureButton, capturing && styles.captureButtonDisabled]}
+                                onPress={handleCapture}
+                                disabled={capturing}
+                            >
+                                <View style={styles.captureButtonInner} />
+                            </Pressable>
+                        )}
+
+                        <View style={{ width: 70 }} />
+                    </View>
                 </View>
             ) : (
                 <ScrollView contentContainerStyle={styles.content}>
@@ -383,12 +331,12 @@ export default function FaceTestScreen() {
                     <View style={[styles.card, { backgroundColor: colors.surfacePrimary }]}>
                         <Text style={[styles.cardTitle, { color: colors.textPrimary }]}>How it works</Text>
                         <Text style={[styles.infoText, { color: colors.textSecondary }]}>
-                            1. Register: Camera opens, turn head left then right to prove liveness{'\n'}
-                            2. Verify: Same flow, new embedding compared against stored one{'\n'}
-                            3. If cosine similarity exceeds {MATCH_THRESHOLD}, it's a match{'\n\n'}
+                            1. Look straight → tap Capture{'\n'}
+                            2. Turn head left → tap Capture{'\n'}
+                            3. Turn head right → tap Capture{'\n'}
+                            4. 3 photos prove liveness, embedding is saved/compared{'\n\n'}
                             Model: OpenCV SFace (MobileFaceNet, int8, 9.4 MB){'\n'}
                             Embedding: 128-d vector{'\n'}
-                            Detection: VisionCamera v5 built-in face scanning{'\n'}
                             Platform: {Platform.OS} ({Platform.Version})
                         </Text>
                     </View>
@@ -462,7 +410,26 @@ const styles = StyleSheet.create({
     cameraContainer: { flex: 1 },
     overlay: { ...StyleSheet.absoluteFillObject, justifyContent: 'center', alignItems: 'center' },
     faceFrame: { width: 250, height: 320, borderRadius: 125, borderWidth: 3 },
-    promptContainer: { position: 'absolute', bottom: 120, left: 0, right: 0, alignItems: 'center' },
+    stepIndicator: {
+        position: 'absolute',
+        top: 60,
+        alignSelf: 'center',
+        flexDirection: 'row',
+        gap: 10,
+    },
+    stepDot: {
+        width: 12,
+        height: 12,
+        borderRadius: 6,
+        backgroundColor: 'rgba(255,255,255,0.3)',
+        borderWidth: 1,
+        borderColor: '#FFFFFF',
+    },
+    stepDotDone: {
+        backgroundColor: '#34C759',
+        borderColor: '#34C759',
+    },
+    promptContainer: { position: 'absolute', bottom: 160, left: 0, right: 0, alignItems: 'center' },
     promptText: {
         color: '#FFFFFF',
         fontSize: 18,
@@ -473,28 +440,39 @@ const styles = StyleSheet.create({
         textShadowRadius: 3,
         paddingHorizontal: 20,
     },
-    debugOverlay: {
-        position: 'absolute',
-        top: 60,
-        left: 16,
-        backgroundColor: 'rgba(0,0,0,0.6)',
-        borderRadius: 8,
-        padding: 8,
-    },
-    debugText: {
-        color: '#00FF00',
-        fontSize: 12,
-        fontFamily: Platform.OS === 'ios' ? 'Menlo' : 'monospace',
-        lineHeight: 18,
-    },
-    cancelButton: {
+    bottomButtons: {
         position: 'absolute',
         bottom: 50,
-        alignSelf: 'center',
-        backgroundColor: 'rgba(0,0,0,0.5)',
-        paddingHorizontal: 32,
-        paddingVertical: 14,
-        borderRadius: 25,
+        left: 0,
+        right: 0,
+        flexDirection: 'row',
+        justifyContent: 'space-between',
+        alignItems: 'center',
+        paddingHorizontal: 40,
     },
-    cancelText: { color: '#FFFFFF', fontSize: 16, fontWeight: '600' },
+    cancelButton: {
+        backgroundColor: 'rgba(0,0,0,0.5)',
+        paddingHorizontal: 20,
+        paddingVertical: 12,
+        borderRadius: 20,
+        width: 70,
+        alignItems: 'center',
+    },
+    cancelText: { color: '#FFFFFF', fontSize: 14, fontWeight: '600' },
+    captureButton: {
+        width: 72,
+        height: 72,
+        borderRadius: 36,
+        borderWidth: 4,
+        borderColor: '#FFFFFF',
+        justifyContent: 'center',
+        alignItems: 'center',
+    },
+    captureButtonDisabled: { opacity: 0.4 },
+    captureButtonInner: {
+        width: 58,
+        height: 58,
+        borderRadius: 29,
+        backgroundColor: '#FFFFFF',
+    },
 });
