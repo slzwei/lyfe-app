@@ -168,16 +168,14 @@ jest.mock('expo-av', () => ({
     },
 }));
 
-// Mock react-native-vision-camera (native camera not available in test env)
+// Mock react-native-vision-camera v5 (native camera not available in test env)
 jest.mock('react-native-vision-camera', () => ({
     Camera: 'Camera',
     useCameraDevice: jest.fn(() => ({ id: 'mock' })),
     useCameraPermission: jest.fn(() => ({ hasPermission: true, requestPermission: jest.fn() })),
-}));
-
-// Mock react-native-vision-camera-face-detector
-jest.mock('react-native-vision-camera-face-detector', () => ({
-    useFaceDetector: jest.fn(() => ({ detectFaces: jest.fn(() => []) })),
+    useObjectOutput: jest.fn(() => ({})),
+    usePhotoOutput: jest.fn(() => ({})),
+    isScannedFace: jest.fn(() => false),
 }));
 
 // Mock expo-asset

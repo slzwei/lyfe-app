@@ -1,25 +1,16 @@
 /**
  * DEV-ONLY: Face Verification Test Screen
  *
- * Tests the full pipeline in isolation:
- * 1. Camera + ML Kit face detection (real-time Euler angles)
- * 2. Liveness detection state machine (nod gesture)
+ * Tests the full pipeline using VisionCamera v5:
+ * 1. Camera + built-in face scanning (yaw/roll angles)
+ * 2. Liveness detection (head turn left → right)
  * 3. ONNX face embedding extraction
  * 4. Face registration + verification (cosine similarity)
- *
- * Not wired into any production flow. Access via profile > Face Test.
  */
 import { useTheme } from '@/contexts/ThemeContext';
 import { useLivenessDetection } from '@/hooks/useLivenessDetection';
-import type { FaceFrame } from '@/hooks/useLivenessDetection';
 import { deleteEmbedding, getEmbedding, hasEmbedding, saveEmbedding } from '@/lib/faceEmbeddingStore';
-import {
-    compareEmbeddings,
-    extractEmbedding,
-    loadModel,
-    MATCH_THRESHOLD,
-    rgbaToModelInput,
-} from '@/lib/faceVerification';
+import { compareEmbeddings, extractEmbedding, loadModel, MATCH_THRESHOLD } from '@/lib/faceVerification';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import React, { useCallback, useEffect, useRef, useState } from 'react';
@@ -34,15 +25,20 @@ import {
     Text,
     View,
 } from 'react-native';
-import { runOnJS } from 'react-native-reanimated';
-import { Camera, useCameraDevice, useCameraPermission, useFrameProcessor } from 'react-native-vision-camera';
-import { useFaceDetector } from 'react-native-vision-camera-face-detector';
+import {
+    Camera,
+    type CameraRef,
+    isScannedFace,
+    type ScannedObject,
+    useCameraDevice,
+    useCameraPermission,
+    useObjectOutput,
+    usePhotoOutput,
+} from 'react-native-vision-camera';
 
 // ── Types ───────────────────────────────────────────────────
 
 type TestPhase = 'idle' | 'registering' | 'verifying';
-
-// Test user ID for SecureStore (not a real user)
 const TEST_USER_ID = '__face_test_user__';
 
 // ── Component ───────────────────────────────────────────────
@@ -50,7 +46,7 @@ const TEST_USER_ID = '__face_test_user__';
 export default function FaceTestScreen() {
     const { colors } = useTheme();
     const router = useRouter();
-    const cameraRef = useRef<Camera>(null);
+    const cameraRef = useRef<CameraRef>(null);
 
     // Camera
     const device = useCameraDevice('front');
@@ -60,20 +56,10 @@ export default function FaceTestScreen() {
     const {
         state: livenessState,
         prompt: livenessPrompt,
-        pitchAngle,
+        yawAngle,
         onFaceDetected,
         reset: resetLiveness,
     } = useLivenessDetection();
-
-    // Face detection
-    const { detectFaces } = useFaceDetector({
-        performanceMode: 'fast',
-        landmarkMode: 'all',
-        classificationMode: 'all',
-        contourMode: 'none',
-        trackingEnabled: true,
-        minFaceSize: 0.25,
-    });
 
     // State
     const [phase, setPhase] = useState<TestPhase>('idle');
@@ -84,74 +70,52 @@ export default function FaceTestScreen() {
     const [processing, setProcessing] = useState(false);
     const [similarity, setSimilarity] = useState<number | null>(null);
     const [matchResult, setMatchResult] = useState<'pass' | 'fail' | null>(null);
-    const [lastEuler, setLastEuler] = useState({ pitch: 0, yaw: 0, roll: 0 });
+    const [lastYaw, setLastYaw] = useState(0);
     const [faceDetected, setFaceDetected] = useState(false);
 
-    // ── Init ──────────────────────────────────────��─────────
+    // ── VisionCamera v5 outputs ─────────────────────────────
+
+    const photoOutput = usePhotoOutput();
+
+    const onObjectsScanned = useCallback(
+        (objects: ScannedObject[]) => {
+            const face = objects.find(isScannedFace);
+            if (face) {
+                setFaceDetected(true);
+                setLastYaw(Math.round(face.yawAngle * 10) / 10);
+                if (phase !== 'idle') {
+                    onFaceDetected({
+                        yawAngle: face.yawAngle,
+                        rollAngle: face.rollAngle,
+                        hasYawAngle: face.hasYawAngle,
+                        hasRollAngle: face.hasRollAngle,
+                        faceID: face.faceID,
+                    });
+                }
+            } else {
+                setFaceDetected(false);
+            }
+        },
+        [phase, onFaceDetected],
+    );
+
+    const objectOutput = useObjectOutput({
+        types: ['face'],
+        onObjectsScanned,
+    });
+
+    // ── Init ────────────────────────────────────────────────
 
     useEffect(() => {
-        // Pre-load the ONNX model
         loadModel()
             .then(() => setModelReady(true))
             .catch((err) => setModelError(err.message));
-
-        // Check if test user has a registered face
         hasEmbedding(TEST_USER_ID).then(setHasRegistered);
     }, []);
 
     useEffect(() => {
         if (!hasPermission) requestPermission();
     }, [hasPermission, requestPermission]);
-
-    // ── Frame processor helpers (called from worklet via runOnJS) ──
-
-    const updateEulerAngles = useCallback((pitch: number, yaw: number, roll: number) => {
-        setLastEuler({
-            pitch: Math.round(pitch * 10) / 10,
-            yaw: Math.round(yaw * 10) / 10,
-            roll: Math.round(roll * 10) / 10,
-        });
-    }, []);
-
-    const handleFaceFrame = useCallback(
-        (faceFrame: FaceFrame) => {
-            onFaceDetected(faceFrame);
-        },
-        [onFaceDetected],
-    );
-
-    const setFaceDetectedJS = useCallback((detected: boolean) => {
-        setFaceDetected(detected);
-    }, []);
-
-    // ── Frame processor ─────────────────────────────────────
-
-    const frameProcessor = useFrameProcessor(
-        (frame) => {
-            'worklet';
-            try {
-                const faces = detectFaces(frame);
-                if (faces.length > 0) {
-                    const face = faces[0];
-                    runOnJS(updateEulerAngles)(face.pitchAngle, face.yawAngle, face.rollAngle);
-                    runOnJS(setFaceDetectedJS)(true);
-                    runOnJS(handleFaceFrame)({
-                        pitchAngle: face.pitchAngle,
-                        yawAngle: face.yawAngle,
-                        rollAngle: face.rollAngle,
-                        leftEyeOpenProbability: face.leftEyeOpenProbability,
-                        rightEyeOpenProbability: face.rightEyeOpenProbability,
-                    });
-                } else {
-                    runOnJS(setFaceDetectedJS)(false);
-                }
-            } catch (e) {
-                // Log errors to Metro console for debugging
-                runOnJS(console.warn)('Frame processor error: ' + String(e));
-            }
-        },
-        [detectFaces, updateEulerAngles, setFaceDetectedJS, handleFaceFrame],
-    );
 
     // ── Liveness passed → capture + process ─────────────────
 
@@ -167,25 +131,19 @@ export default function FaceTestScreen() {
         setProcessing(true);
 
         try {
-            // Take a photo
-            const photo = await cameraRef.current.takePhoto({
+            const photo = await cameraRef.current.controller?.photoOutput?.takePhoto({
                 flash: 'off',
                 enableShutterSound: false,
             });
 
-            // For now, we'll use a placeholder approach for pixel data extraction.
-            // In a real implementation, we'd decode the photo and extract RGBA pixels.
-            // The ONNX model needs 112x112 RGB CHW normalised input.
-            //
-            // TODO: Use react-native-image-crop-tools or a native module to:
-            // 1. Crop to face bounding box
-            // 2. Resize to 112x112
-            // 3. Extract raw RGBA pixel data
-            //
-            // For this POC, we'll generate a dummy embedding from the photo path
-            // to validate the pipeline flow. Replace with real pixel extraction
-            // when testing on device.
-            const embedding = await generateTestEmbedding(photo.path);
+            if (!photo) {
+                Alert.alert('Error', 'Failed to take photo');
+                setProcessing(false);
+                return;
+            }
+
+            // For POC: test ONNX inference with deterministic input
+            const embedding = await generateTestEmbedding();
 
             if (phase === 'registering') {
                 await saveEmbedding(TEST_USER_ID, embedding);
@@ -214,31 +172,12 @@ export default function FaceTestScreen() {
         }
     }, [phase, processing]);
 
-    /**
-     * Generate a face embedding from a photo.
-     *
-     * NOTE: This is a simplified path for the POC. On-device, we need a way
-     * to decode the JPEG, crop the face region, resize to 112x112, and get
-     * raw RGBA pixel data. That will require either:
-     * - A native module (e.g., react-native-image-crop-tools)
-     * - An offscreen canvas (react-native-skia)
-     * - A custom frame processor that outputs pixel buffers
-     *
-     * For now this uses the ONNX model with a deterministic test input
-     * derived from the photo path hash, to validate the ONNX pipeline works.
-     */
-    async function generateTestEmbedding(_photoPath: string): Promise<Float32Array> {
-        // Attempt real ONNX inference with a test input
-        // This validates: model loads, tensor creation works, inference runs
+    async function generateTestEmbedding(): Promise<Float32Array> {
         const testInput = new Float32Array(3 * 112 * 112);
-
-        // Fill with deterministic pseudo-random data based on timestamp
-        // (different each capture, to simulate different face embeddings)
         const seed = Date.now() % 10000;
         for (let i = 0; i < testInput.length; i++) {
             testInput[i] = Math.sin(seed + i * 0.01) * 0.5;
         }
-
         return extractEmbedding(testInput);
     }
 
@@ -302,15 +241,13 @@ export default function FaceTestScreen() {
             </View>
 
             {cameraActive && device ? (
-                /* Camera view */
                 <View style={styles.cameraContainer}>
                     <Camera
                         ref={cameraRef}
                         style={StyleSheet.absoluteFill}
                         device={device}
                         isActive={cameraActive}
-                        photo={true}
-                        frameProcessor={frameProcessor}
+                        outputs={[photoOutput, objectOutput]}
                     />
 
                     {/* Face frame guide */}
@@ -335,24 +272,19 @@ export default function FaceTestScreen() {
                         {processing && <ActivityIndicator color="#FFFFFF" style={{ marginTop: 8 }} />}
                     </View>
 
-                    {/* Euler angle debug readout */}
+                    {/* Debug readout */}
                     <View style={styles.debugOverlay}>
-                        <Text style={styles.debugText}>Pitch: {lastEuler.pitch}°</Text>
-                        <Text style={styles.debugText}>Yaw: {lastEuler.yaw}°</Text>
-                        <Text style={styles.debugText}>Roll: {lastEuler.roll}°</Text>
+                        <Text style={styles.debugText}>Yaw: {lastYaw}°</Text>
                         <Text style={styles.debugText}>Liveness: {livenessState}</Text>
                         <Text style={styles.debugText}>Face: {faceDetected ? 'YES' : 'NO'}</Text>
                     </View>
 
-                    {/* Cancel button */}
                     <Pressable style={styles.cancelButton} onPress={handleCancel}>
                         <Text style={styles.cancelText}>Cancel</Text>
                     </Pressable>
                 </View>
             ) : (
-                /* Control panel */
                 <ScrollView contentContainerStyle={styles.content}>
-                    {/* Status cards */}
                     <View style={[styles.card, { backgroundColor: colors.surfacePrimary }]}>
                         <Text style={[styles.cardTitle, { color: colors.textPrimary }]}>System Status</Text>
                         <StatusRow label="Camera Permission" ok={hasPermission} />
@@ -361,7 +293,6 @@ export default function FaceTestScreen() {
                         <StatusRow label="Face Registered" ok={hasRegistered} />
                     </View>
 
-                    {/* Last result */}
                     {similarity !== null && (
                         <View style={[styles.card, { backgroundColor: colors.surfacePrimary }]}>
                             <Text style={[styles.cardTitle, { color: colors.textPrimary }]}>Last Result</Text>
@@ -377,19 +308,13 @@ export default function FaceTestScreen() {
                                 Cosine Similarity (threshold: {MATCH_THRESHOLD})
                             </Text>
                             <Text
-                                style={[
-                                    styles.matchBadge,
-                                    {
-                                        color: matchResult === 'pass' ? '#34C759' : '#FF3B30',
-                                    },
-                                ]}
+                                style={[styles.matchBadge, { color: matchResult === 'pass' ? '#34C759' : '#FF3B30' }]}
                             >
                                 {matchResult === 'pass' ? 'MATCH' : 'NO MATCH'}
                             </Text>
                         </View>
                     )}
 
-                    {/* Actions */}
                     <View style={[styles.card, { backgroundColor: colors.surfacePrimary }]}>
                         <Text style={[styles.cardTitle, { color: colors.textPrimary }]}>Actions</Text>
 
@@ -410,10 +335,7 @@ export default function FaceTestScreen() {
                         <Pressable
                             style={[
                                 styles.button,
-                                {
-                                    backgroundColor: hasRegistered ? '#34C759' : colors.textTertiary,
-                                    marginTop: 10,
-                                },
+                                { backgroundColor: hasRegistered ? '#34C759' : colors.textTertiary, marginTop: 10 },
                             ]}
                             onPress={startVerification}
                             disabled={!hasPermission || !hasRegistered}
@@ -433,17 +355,15 @@ export default function FaceTestScreen() {
                         )}
                     </View>
 
-                    {/* Info */}
                     <View style={[styles.card, { backgroundColor: colors.surfacePrimary }]}>
                         <Text style={[styles.cardTitle, { color: colors.textPrimary }]}>How it works</Text>
                         <Text style={[styles.infoText, { color: colors.textSecondary }]}>
-                            1. Register: Camera opens, nod to prove liveness, face embedding is saved{'\n'}
-                            2. Verify: Camera opens again, nod again, new embedding is compared against stored one
-                            {'\n'}
+                            1. Register: Camera opens, turn head left then right to prove liveness{'\n'}
+                            2. Verify: Same flow, new embedding compared against stored one{'\n'}
                             3. If cosine similarity exceeds {MATCH_THRESHOLD}, it's a match{'\n\n'}
                             Model: OpenCV SFace (MobileFaceNet, int8, 9.4 MB){'\n'}
                             Embedding: 128-d vector{'\n'}
-                            Detection: Google ML Kit (on-device){'\n'}
+                            Detection: VisionCamera v5 built-in face scanning{'\n'}
                             Platform: {Platform.OS} ({Platform.Version})
                         </Text>
                     </View>
@@ -452,8 +372,6 @@ export default function FaceTestScreen() {
         </SafeAreaView>
     );
 }
-
-// ── Status row ──────────────────────────────────────────────
 
 function StatusRow({ label, ok, error }: { label: string; ok: boolean; error?: string | null }) {
     return (
@@ -478,8 +396,6 @@ function StatusRow({ label, ok, error }: { label: string; ok: boolean; error?: s
     );
 }
 
-// ── Styles ──────────────────────────────────────────────────
-
 const styles = StyleSheet.create({
     container: { flex: 1 },
     header: {
@@ -491,11 +407,7 @@ const styles = StyleSheet.create({
     },
     headerTitle: { fontSize: 17, fontWeight: '600' },
     content: { padding: 16, paddingBottom: 40 },
-    card: {
-        borderRadius: 12,
-        padding: 16,
-        marginBottom: 16,
-    },
+    card: { borderRadius: 12, padding: 16, marginBottom: 16 },
     cardTitle: { fontSize: 15, fontWeight: '600', marginBottom: 12 },
     statusRow: {
         flexDirection: 'row',
@@ -522,27 +434,10 @@ const styles = StyleSheet.create({
     matchBadge: { fontSize: 20, fontWeight: '700', textAlign: 'center', marginTop: 8 },
     infoText: { fontSize: 13, lineHeight: 20 },
     errorText: { fontSize: 15, textAlign: 'center', marginTop: 40 },
-
-    // Camera view
     cameraContainer: { flex: 1 },
-    overlay: {
-        ...StyleSheet.absoluteFillObject,
-        justifyContent: 'center',
-        alignItems: 'center',
-    },
-    faceFrame: {
-        width: 250,
-        height: 320,
-        borderRadius: 125,
-        borderWidth: 3,
-    },
-    promptContainer: {
-        position: 'absolute',
-        bottom: 120,
-        left: 0,
-        right: 0,
-        alignItems: 'center',
-    },
+    overlay: { ...StyleSheet.absoluteFillObject, justifyContent: 'center', alignItems: 'center' },
+    faceFrame: { width: 250, height: 320, borderRadius: 125, borderWidth: 3 },
+    promptContainer: { position: 'absolute', bottom: 120, left: 0, right: 0, alignItems: 'center' },
     promptText: {
         color: '#FFFFFF',
         fontSize: 18,
