@@ -277,6 +277,35 @@ export default function ProfileScreen() {
                     onPress={handleSettingsPress}
                 />
 
+                {/* DEV: Face Verification Test */}
+                {__DEV__ && (
+                    <TouchableOpacity
+                        style={[
+                            styles.card,
+                            {
+                                backgroundColor: colors.cardBackground,
+                                shadowColor: colors.textPrimary,
+                                flexDirection: 'row',
+                                alignItems: 'center',
+                                gap: 10,
+                            },
+                        ]}
+                        onPress={() => router.push('/(tabs)/profile/face-test')}
+                        activeOpacity={0.7}
+                    >
+                        <Ionicons name="scan" size={22} color={colors.accent} />
+                        <View style={{ flex: 1 }}>
+                            <Text style={{ fontSize: 15, fontWeight: '600', color: colors.textPrimary }}>
+                                Face Verification Test
+                            </Text>
+                            <Text style={{ fontSize: 12, color: colors.textTertiary, marginTop: 2 }}>
+                                DEV ONLY — Camera + ML Kit + ONNX pipeline test
+                            </Text>
+                        </View>
+                        <Ionicons name="chevron-forward" size={18} color={colors.textTertiary} />
+                    </TouchableOpacity>
+                )}
+
                 {/* App Info */}
                 <View
                     style={[

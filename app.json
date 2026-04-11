@@ -18,7 +18,8 @@
             "appleTeamId": "Y953XF3N6C",
             "infoPlist": {
                 "NSFaceIDUsageDescription": "Use Face ID to sign in to Lyfe quickly and securely.",
-                "NSCameraUsageDescription": "Allow Lyfe to take a profile photo.",
+                "NSCameraUsageDescription": "Allow Lyfe to take a profile photo and verify your identity at check-in.",
+                "NSLocationWhenInUseUsageDescription": "Lyfe uses your location to verify you are at the roadshow venue during check-in.",
                 "NSPhotoLibraryUsageDescription": "Allow Lyfe to choose a profile photo from your library.",
                 "ITSAppUsesNonExemptEncryption": false,
                 "UIRequiredDeviceCapabilities": []
@@ -37,7 +38,9 @@
                 "android.permission.USE_BIOMETRIC",
                 "android.permission.USE_FINGERPRINT",
                 "android.permission.CAMERA",
-                "android.permission.READ_MEDIA_IMAGES"
+                "android.permission.READ_MEDIA_IMAGES",
+                "android.permission.ACCESS_FINE_LOCATION",
+                "android.permission.ACCESS_COARSE_LOCATION"
             ]
         },
         "web": {
@@ -60,12 +63,22 @@
                     "project": "apple-ios"
                 }
             ],
-            "./plugins/withSwiftConcurrency"
+            "./plugins/withSwiftConcurrency",
+            [
+                "react-native-vision-camera",
+                {
+                    "cameraPermissionText": "Lyfe needs camera access for face verification check-in.",
+                    "enableFrameProcessors": true,
+                    "enableMicrophonePermission": false,
+                    "enableCodeScanner": false
+                }
+            ],
+            "expo-location"
         ],
         "experiments": {
             "typedRoutes": true
         },
-        "newArchEnabled": true,
+        "newArchEnabled": false,
         "extra": {
             "router": {},
             "eas": {

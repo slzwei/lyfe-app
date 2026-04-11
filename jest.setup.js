@@ -136,6 +136,31 @@ jest.mock('expo-av', () => ({
     },
 }));
 
+// Mock react-native-vision-camera (native camera not available in test env)
+jest.mock('react-native-vision-camera', () => ({
+    Camera: 'Camera',
+    useCameraDevice: jest.fn(() => ({ id: 'mock' })),
+    useCameraPermission: jest.fn(() => ({ hasPermission: true, requestPermission: jest.fn() })),
+}));
+
+// Mock react-native-vision-camera-face-detector
+jest.mock('react-native-vision-camera-face-detector', () => ({
+    useFaceDetector: jest.fn(() => ({ detectFaces: jest.fn(() => []) })),
+}));
+
+// Mock onnxruntime-react-native
+jest.mock('onnxruntime-react-native', () => ({
+    InferenceSession: { create: jest.fn() },
+    Tensor: jest.fn(),
+}));
+
+// Mock expo-location
+jest.mock('expo-location', () => ({
+    requestForegroundPermissionsAsync: jest.fn().mockResolvedValue({ status: 'granted' }),
+    getCurrentPositionAsync: jest.fn().mockResolvedValue({ coords: { latitude: 0, longitude: 0 } }),
+    Accuracy: { High: 6 },
+}));
+
 // Mock AsyncStorage
 jest.mock('@react-native-async-storage/async-storage', () => ({
     getItem: jest.fn(),
