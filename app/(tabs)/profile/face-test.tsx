@@ -31,7 +31,7 @@ const TEST_USER_ID = '__face_test_user__';
 const YAW_STRAIGHT_MAX = 10;
 const YAW_LEFT_THRESHOLD = -20;
 const YAW_RIGHT_THRESHOLD = 20;
-const SCAN_INTERVAL_MS = 300;
+const SCAN_INTERVAL_MS = 800;
 
 const STEP_PROMPTS: Record<LivenessStep, string> = {
     look_straight: 'Look straight at the camera',
@@ -186,6 +186,8 @@ export default function FaceTestScreen() {
 
     const processEmbedding = useCallback(async () => {
         setCameraActive(false);
+        // Wait for scan loop to fully stop before allocating memory for embedding
+        await new Promise((r) => setTimeout(r, 500));
 
         try {
             const photoPath = straightPhotoRef.current;
