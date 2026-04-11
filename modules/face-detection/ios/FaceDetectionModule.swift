@@ -102,40 +102,8 @@ public class FaceDetectionModule: Module {
             )
 
             // TODO: Re-enable alignment once warp is fixed
-            // For now, always use simple crop to validate pipeline
-            if true {
-                return Self.simpleCrop(cgImage: cgImage, bbox: bbox, imgW: imgW, imgH: imgH)
-            }
-
-            // SFace reference alignment targets (112x112 space)
-            let dstPoints: [(CGFloat, CGFloat)] = [
-                (38.2946, 51.6963),  // left eye
-                (73.5318, 51.5014),  // right eye
-                (56.0252, 71.7366),  // nose tip
-                (41.5493, 92.3655),  // left mouth
-                (70.7299, 92.2041),  // right mouth
-            ]
-
-            // Compute similarity transform (rotation + uniform scale + translation)
-            let transform = Self.computeSimilarityTransform(src: srcPoints, dst: dstPoints)
-
-            // Apply affine warp to produce 112x112 aligned face
-            let aligned = Self.warpAffine(cgImage: cgImage, transform: transform, outputSize: 112)
-
-            // Extract BGR CHW pixels
-            let pixels = Self.extractBGRPixels(aligned, size: 112)
-
-            return [
-                "pixels": pixels,
-                "boundingBox": [
-                    "x": bbox.origin.x,
-                    "y": bbox.origin.y,
-                    "width": bbox.size.width,
-                    "height": bbox.size.height,
-                ],
-                "yaw": (face.yaw?.doubleValue ?? 0.0) * 180.0 / .pi,
-                "aligned": true,
-            ]
+            // For now, use simple crop to validate pipeline
+            return Self.simpleCrop(cgImage: cgImage, bbox: bbox, imgW: imgW, imgH: imgH)
         }
     }
 
