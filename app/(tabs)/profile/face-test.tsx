@@ -9,7 +9,7 @@
 import { useTheme } from '@/contexts/ThemeContext';
 import { deleteEmbedding, getEmbedding, hasEmbedding, saveEmbedding } from '@/lib/faceEmbeddingStore';
 import { compareEmbeddings, extractEmbeddingFromPhoto, loadModel, MATCH_THRESHOLD } from '@/lib/faceVerification';
-import { detectFaces } from '../../../modules/face-detection/src';
+import { detectFaces, setMaxBrightness, restoreBrightness } from '../../../modules/face-detection/src';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import React, { useCallback, useEffect, useRef, useState } from 'react';
@@ -184,7 +184,8 @@ export default function FaceTestScreen() {
 
     const processEmbedding = useCallback(async () => {
         setCameraActive(false);
-        // Wait for scan loop to fully stop before allocating memory for embedding
+        restoreBrightness();
+        // Wait for scan loop to fully stop
         await new Promise((r) => setTimeout(r, 500));
 
         try {
@@ -250,6 +251,7 @@ export default function FaceTestScreen() {
             straightPhotoRef.current = null;
             setSimilarity(null);
             setMatchResult(null);
+            setMaxBrightness();
             setCameraActive(true);
         },
         [hasRegistered],
@@ -258,6 +260,7 @@ export default function FaceTestScreen() {
     const handleCancel = useCallback(() => {
         setCameraActive(false);
         setPhase('idle');
+        restoreBrightness();
     }, []);
 
     const handleClearRegistration = useCallback(async () => {

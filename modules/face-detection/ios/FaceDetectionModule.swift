@@ -4,8 +4,29 @@ import UIKit
 import CoreGraphics
 
 public class FaceDetectionModule: Module {
+    private static var savedBrightness: CGFloat = -1
+
     public func definition() -> ModuleDefinition {
         Name("FaceDetection")
+
+        /// Set screen brightness to maximum (acts as fill light for face capture).
+        /// Saves current brightness to restore later.
+        Function("setMaxBrightness") {
+            DispatchQueue.main.async {
+                Self.savedBrightness = UIScreen.main.brightness
+                UIScreen.main.brightness = 1.0
+            }
+        }
+
+        /// Restore screen brightness to the value before setMaxBrightness.
+        Function("restoreBrightness") {
+            DispatchQueue.main.async {
+                if Self.savedBrightness >= 0 {
+                    UIScreen.main.brightness = Self.savedBrightness
+                    Self.savedBrightness = -1
+                }
+            }
+        }
 
         AsyncFunction("detectFaces") { (imagePath: String) -> [[String: Any]] in
             guard let uiImage = Self.loadImage(from: imagePath) else {

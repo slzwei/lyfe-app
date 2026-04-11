@@ -21,6 +21,16 @@ export interface DetectedFace {
 
 const NativeModule = requireNativeModule('FaceDetection');
 
+/** Set screen brightness to max (fill light for face capture). */
+export function setMaxBrightness(): void {
+    NativeModule.setMaxBrightness();
+}
+
+/** Restore brightness to the value before setMaxBrightness was called. */
+export function restoreBrightness(): void {
+    NativeModule.restoreBrightness();
+}
+
 /**
  * Detect faces in a static image. Runs on a background thread
  * using Apple's Vision framework — does not affect camera preview.
