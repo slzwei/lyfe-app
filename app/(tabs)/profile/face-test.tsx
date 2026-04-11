@@ -89,8 +89,9 @@ export default function FaceTestScreen() {
             const face = objects.find(isScannedFace);
             if (face) {
                 setFaceDetected(true);
-                // Normalize 0°–360° to -180°–+180°
-                const normalizedYaw = face.yawAngle > 180 ? face.yawAngle - 360 : face.yawAngle;
+                // Normalize 0°–360° to -180°–+180°, then negate for front camera mirror
+                let normalizedYaw = face.yawAngle > 180 ? face.yawAngle - 360 : face.yawAngle;
+                normalizedYaw = -normalizedYaw; // Front camera mirrors left/right
                 setLastYaw(Math.round(normalizedYaw * 10) / 10);
                 setHasYaw(face.hasYawAngle);
                 if (phase !== 'idle') {

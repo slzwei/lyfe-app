@@ -72,10 +72,10 @@ export function useLivenessDetection() {
 
             if (current === 'passed' || current === 'timeout') return;
 
-            // Normalize yaw from 0°–360° to -180°–+180°
-            // VisionCamera v5 reports 325° for a left turn (= -35°)
+            // Normalize yaw from 0°–360° to -180°–+180°, negate for front camera
             let yaw = face.yawAngle;
             if (yaw > 180) yaw -= 360;
+            yaw = -yaw; // Front camera mirrors left/right
 
             if (face.hasYawAngle || yaw !== 0) {
                 setYawAngle(Math.round(yaw * 10) / 10);

@@ -63,7 +63,9 @@ export async function extractEmbedding(rgbData: Float32Array): Promise<Float32Ar
 
     const inputTensor = new Tensor('float32', rgbData, [1, 3, INPUT_SIZE, INPUT_SIZE]);
 
-    const results = await sess.run({ input: inputTensor });
+    // Use the model's actual input name (SFace uses 'data', not 'input')
+    const inputName = sess.inputNames?.[0] ?? 'data';
+    const results = await sess.run({ [inputName]: inputTensor });
 
     // The output tensor name may vary — get the first output
     const outputNames = Object.keys(results);
