@@ -96,11 +96,14 @@ public class FaceDetectionModule: Module {
             let bboxW = bbox.size.width * CGFloat(imgW)
             let bboxH = bbox.size.height * CGFloat(imgH)
 
-            guard let srcPoints = Self.extract5Points(
+            let srcPoints = Self.extract5Points(
                 landmarks: landmarks, bboxX: bboxX, bboxY: bboxY,
                 bboxW: bboxW, bboxH: bboxH, imgH: CGFloat(imgH)
-            ) else {
-                // Fallback to simple crop if landmarks insufficient
+            )
+
+            // TODO: Re-enable alignment once warp is fixed
+            // For now, always use simple crop to validate pipeline
+            if true || srcPoints == nil {
                 return Self.simpleCrop(cgImage: cgImage, bbox: bbox, imgW: imgW, imgH: imgH)
             }
 
