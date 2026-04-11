@@ -71,7 +71,9 @@ export default function FaceTestScreen() {
     const [similarity, setSimilarity] = useState<number | null>(null);
     const [matchResult, setMatchResult] = useState<'pass' | 'fail' | null>(null);
     const [lastYaw, setLastYaw] = useState(0);
+    const [hasYaw, setHasYaw] = useState(false);
     const [faceDetected, setFaceDetected] = useState(false);
+    const lastScanRef = useRef(0);
 
     // ── VisionCamera v5 outputs ─────────────────────────────
 
@@ -79,10 +81,16 @@ export default function FaceTestScreen() {
 
     const onObjectsScanned = useCallback(
         (objects: ScannedObject[]) => {
+            // Throttle to ~10fps to reduce choppiness
+            const now = Date.now();
+            if (now - lastScanRef.current < 100) return;
+            lastScanRef.current = now;
+
             const face = objects.find(isScannedFace);
             if (face) {
                 setFaceDetected(true);
                 setLastYaw(Math.round(face.yawAngle * 10) / 10);
+                setHasYaw(face.hasYawAngle);
                 if (phase !== 'idle') {
                     onFaceDetected({
                         yawAngle: face.yawAngle,
@@ -274,8 +282,11 @@ export default function FaceTestScreen() {
 
                     {/* Debug readout */}
                     <View style={styles.debugOverlay}>
-                        <Text style={styles.debugText}>Yaw: {lastYaw}°</Text>
+                        <Text style={styles.debugText}>
+                            Yaw: {lastYaw}° (has: {hasYaw ? 'Y' : 'N'})
+                        </Text>
                         <Text style={styles.debugText}>Liveness: {livenessState}</Text>
+                        <Text style={styles.debugText}>Need: &lt;-15° then &gt;+15°</Text>
                         <Text style={styles.debugText}>Face: {faceDetected ? 'YES' : 'NO'}</Text>
                     </View>
 

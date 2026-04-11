@@ -90,7 +90,9 @@ export function useLivenessDetection() {
 
             lastFaceTimeRef.current = now;
 
-            if (!face.hasYawAngle) return;
+            // Skip yaw check if angle is exactly 0 (no data)
+            // Note: hasYawAngle may be false on iOS even when yawAngle has data
+            if (face.yawAngle === 0 && !face.hasYawAngle) return;
 
             switch (current) {
                 case 'waiting':
