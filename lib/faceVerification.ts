@@ -173,51 +173,59 @@ export async function extractEmbeddingFromPhoto(
     // Strip file:// prefix if present — loadImage expects a plain path
     const cleanPath = filePath.replace(/^file:\/\//, '');
 
-    // Load the photo
-    console.log('[FaceVerify] Loading image:', cleanPath.slice(-40));
+    // Load the full photo
     const image: Image = await loadImage({ filePath: cleanPath });
-    console.log('[FaceVerify] Image loaded:', image.width, 'x', image.height);
 
-    // Crop to face if bounding box provided
-    let faceImage: Image;
+    // Get raw pixel data from the FULL image (NitroImage crop is unreliable)
+    const rawData = image.toRawPixelData();
+    const pixels = new Uint8Array(rawData.buffer);
+
+    // Calculate face region in pixel coordinates
+    let cropX = 0,
+        cropY = 0,
+        cropW = rawData.width,
+        cropH = rawData.height;
     if (boundingBox) {
-        // Vision framework returns normalised coords (0-1), Y is flipped (origin at bottom-left)
-        const startX = Math.max(0, Math.floor(boundingBox.x * image.width));
-        const startY = Math.max(0, Math.floor((1 - boundingBox.y - boundingBox.height) * image.height));
-        const endX = Math.min(image.width, Math.floor((boundingBox.x + boundingBox.width) * image.width));
-        const endY = Math.min(image.height, Math.floor((1 - boundingBox.y) * image.height));
-        console.log('[FaceVerify] Crop:', { startX, startY, endX, endY });
-        faceImage = image.crop(startX, startY, endX, endY);
-        console.log('[FaceVerify] Cropped:', faceImage.width, 'x', faceImage.height);
-    } else {
-        faceImage = image;
+        // Vision framework: normalised coords (0-1), Y origin at bottom-left
+        cropX = Math.max(0, Math.floor(boundingBox.x * rawData.width));
+        cropY = Math.max(0, Math.floor((1 - boundingBox.y - boundingBox.height) * rawData.height));
+        cropW = Math.min(rawData.width - cropX, Math.floor(boundingBox.width * rawData.width));
+        cropH = Math.min(rawData.height - cropY, Math.floor(boundingBox.height * rawData.height));
     }
 
-    // Get raw pixel data from the cropped image
-    const rawData = faceImage.toRawPixelData();
-    const pixels = new Uint8Array(rawData.buffer);
     console.log(
-        '[FaceVerify] Raw pixels:',
+        '[FaceVerify] Image:',
         rawData.width,
         'x',
         rawData.height,
         'format:',
         rawData.pixelFormat,
-        'bytes:',
-        pixels.length,
+        'face region:',
+        cropX,
+        cropY,
+        cropW,
+        cropH,
     );
 
-    // Resize to 112x112 using nearest-neighbour sampling and convert to CHW float32
-    const modelInput = resizeAndConvert(pixels, rawData.width, rawData.height, rawData.pixelFormat);
+    // Crop + resize to 112x112 in one step and convert to CHW float32
+    const modelInput = cropResizeConvert(pixels, rawData.width, rawData.pixelFormat, cropX, cropY, cropW, cropH);
 
     return extractEmbedding(modelInput);
 }
 
 /**
- * Resize raw pixel data to 112x112 and convert to CHW float32 tensor.
- * Uses nearest-neighbour sampling. Handles all pixel formats.
+ * Crop a region from raw pixels and resize to 112x112 CHW float32 in one pass.
+ * Nearest-neighbour sampling directly from the source bounding box.
  */
-function resizeAndConvert(pixels: Uint8Array, srcWidth: number, srcHeight: number, format: PixelFormat): Float32Array {
+function cropResizeConvert(
+    pixels: Uint8Array,
+    srcFullWidth: number,
+    format: PixelFormat,
+    cropX: number,
+    cropY: number,
+    cropW: number,
+    cropH: number,
+): Float32Array {
     const output = new Float32Array(3 * INPUT_SIZE * INPUT_SIZE);
     const pixelCount = INPUT_SIZE * INPUT_SIZE;
 
@@ -272,14 +280,12 @@ function resizeAndConvert(pixels: Uint8Array, srcWidth: number, srcHeight: numbe
             break;
     }
 
-    const xRatio = srcWidth / INPUT_SIZE;
-    const yRatio = srcHeight / INPUT_SIZE;
-
     for (let y = 0; y < INPUT_SIZE; y++) {
         for (let x = 0; x < INPUT_SIZE; x++) {
-            const srcX = Math.min(Math.floor(x * xRatio), srcWidth - 1);
-            const srcY = Math.min(Math.floor(y * yRatio), srcHeight - 1);
-            const srcIdx = (srcY * srcWidth + srcX) * stride;
+            // Map output pixel to source pixel within the crop region
+            const srcX = cropX + Math.min(Math.floor((x * cropW) / INPUT_SIZE), cropW - 1);
+            const srcY = cropY + Math.min(Math.floor((y * cropH) / INPUT_SIZE), cropH - 1);
+            const srcIdx = (srcY * srcFullWidth + srcX) * stride;
             const dstIdx = y * INPUT_SIZE + x;
 
             output[0 * pixelCount + dstIdx] = pixels[srcIdx + rOff] / 127.5 - 1;
