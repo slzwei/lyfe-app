@@ -188,14 +188,17 @@ export async function extractEmbeddingFromPhoto(
     const pixels = new Uint8Array(rawData.buffer);
 
     // Detect if raw buffer is rotated vs the logical image orientation.
-    // image.width/height respect EXIF rotation, rawData.width/height are the raw buffer.
-    // For portrait photos on iOS, raw buffer is often landscape (rotated 90°).
-    const isRotated = image.width !== rawData.width && image.height !== rawData.height;
+    // Check if aspect ratio orientation is swapped (portrait vs landscape).
+    // Just comparing dimensions is wrong — Retina scaling (3x) changes them too.
+    const logicalIsPortrait = image.width < image.height;
+    const rawIsPortrait = rawData.width < rawData.height;
+    const isRotated = logicalIsPortrait !== rawIsPortrait;
 
-    // The bounding box from Vision is in the LOGICAL image space (image.width x image.height).
-    // We need to map to the RAW pixel buffer space.
-    const logicalW = image.width;
-    const logicalH = image.height;
+    // The bounding box from Vision is in normalised coords (0-1).
+    // Map to RAW pixel buffer dimensions (which may be scaled and/or rotated).
+    // When rotated, logical W maps to raw H and vice versa.
+    const logicalW = isRotated ? rawData.height : rawData.width;
+    const logicalH = isRotated ? rawData.width : rawData.height;
 
     // Calculate face region in LOGICAL coordinates — SQUARE crop centered on face
     let cropX = 0,
