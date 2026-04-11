@@ -35,7 +35,7 @@ export async function loadModel(): Promise<InferenceSession> {
         // ONNX Runtime needs a file:// URI, not the HTTP URL that
         // Image.resolveAssetSource returns in dev mode.
         // eslint-disable-next-line @typescript-eslint/no-var-requires
-        const asset = Asset.fromModule(require('@/assets/models/sface_int8.onnx'));
+        const asset = Asset.fromModule(require('@/assets/models/sface.onnx'));
         await asset.downloadAsync();
 
         const modelPath = asset.localUri;
