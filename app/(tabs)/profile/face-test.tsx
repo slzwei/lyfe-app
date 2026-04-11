@@ -194,13 +194,26 @@ export default function FaceTestScreen() {
                 return;
             }
 
+            // Debug: log bounding box
+            console.log('Photo:', photoPath);
+            console.log('BBox:', JSON.stringify(bbox));
+
             // Extract REAL face embedding from the captured photo
             const embedding = await extractEmbeddingFromPhoto(photoPath, bbox ?? undefined);
+
+            // Debug: log first 5 embedding values
+            console.log(
+                'Embedding[0..4]:',
+                Array.from(embedding.slice(0, 5)).map((v) => v.toFixed(4)),
+            );
 
             if (phaseRef.current === 'registering') {
                 await saveEmbedding(TEST_USER_ID, embedding);
                 setHasRegistered(true);
-                Alert.alert('Registered', `Face embedding saved (${embedding.length}-d vector)`);
+                Alert.alert(
+                    'Registered',
+                    `Embedding: ${embedding.length}-d\nBBox: ${bbox ? `x=${bbox.x.toFixed(2)} y=${bbox.y.toFixed(2)} w=${bbox.width.toFixed(2)} h=${bbox.height.toFixed(2)}` : 'none'}`,
+                );
             } else if (phaseRef.current === 'verifying') {
                 const stored = await getEmbedding(TEST_USER_ID);
                 if (!stored) {
