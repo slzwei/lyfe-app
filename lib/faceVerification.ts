@@ -173,25 +173,18 @@ export async function extractEmbeddingFromPhoto(
     // Strip file:// prefix if present — loadImage expects a plain path
     const cleanPath = filePath.replace(/^file:\/\//, '');
 
-    // Load the photo
-    const image: Image = await loadImage({ filePath: cleanPath });
+    // Load the photo, save as JPEG to apply EXIF rotation, then reload.
+    // This guarantees the raw pixel buffer matches the logical orientation.
+    const origImage: Image = await loadImage({ filePath: cleanPath });
+    const jpegPath = await origImage.saveToTemporaryFileAsync('jpg', 85);
+    const image: Image = await loadImage({ filePath: jpegPath });
 
-    // Get raw pixel data
+    // Now raw pixels will be correctly oriented (no rotation needed)
     const rawData = image.toRawPixelData();
     const pixels = new Uint8Array(rawData.buffer);
 
-    // Detect if raw buffer is rotated vs the logical image orientation.
-    // Check if aspect ratio orientation is swapped (portrait vs landscape).
-    // Just comparing dimensions is wrong — Retina scaling (3x) changes them too.
-    const logicalIsPortrait = image.width < image.height;
-    const rawIsPortrait = rawData.width < rawData.height;
-    const isRotated = logicalIsPortrait !== rawIsPortrait;
-
-    // The bounding box from Vision is in normalised coords (0-1).
-    // Map to RAW pixel buffer dimensions (which may be scaled and/or rotated).
-    // When rotated, logical W maps to raw H and vice versa.
-    const logicalW = isRotated ? rawData.height : rawData.width;
-    const logicalH = isRotated ? rawData.width : rawData.height;
+    const logicalW = rawData.width;
+    const logicalH = rawData.height;
 
     // Calculate face region in LOGICAL coordinates — SQUARE crop centered on face
     let cropX = 0,
@@ -235,19 +228,8 @@ export async function extractEmbeddingFromPhoto(
         cropH,
     );
 
-    // Crop + resize to 112x112 in one step, handling rotation
-    const modelInput = cropResizeConvert(
-        pixels,
-        rawData.width,
-        rawData.pixelFormat,
-        cropX,
-        cropY,
-        cropW,
-        cropH,
-        isRotated,
-        logicalW,
-        logicalH,
-    );
+    // Crop + resize to 112x112 in one step (no rotation needed)
+    const modelInput = cropResizeConvert(pixels, rawData.width, rawData.pixelFormat, cropX, cropY, cropW, cropH);
 
     return extractEmbedding(modelInput);
 }
@@ -264,9 +246,6 @@ function cropResizeConvert(
     cropY: number,
     cropW: number,
     cropH: number,
-    isRotated: boolean = false,
-    _logicalW: number = 0,
-    logicalH: number = 0,
 ): Float32Array {
     const output = new Float32Array(3 * INPUT_SIZE * INPUT_SIZE);
     const pixelCount = INPUT_SIZE * INPUT_SIZE;
@@ -324,23 +303,9 @@ function cropResizeConvert(
 
     for (let y = 0; y < INPUT_SIZE; y++) {
         for (let x = 0; x < INPUT_SIZE; x++) {
-            // Map output pixel to logical pixel within the crop region
-            const logX = cropX + Math.min(Math.floor((x * cropW) / INPUT_SIZE), cropW - 1);
-            const logY = cropY + Math.min(Math.floor((y * cropH) / INPUT_SIZE), cropH - 1);
-
-            // Map logical pixel to raw buffer pixel (handle 90° CW rotation)
-            // For iOS portrait photos: raw buffer is landscape (rotated 90° CW)
-            // logical (x, y) in portrait → raw (logicalH - 1 - y, x) in landscape buffer
-            let rawX: number, rawY: number;
-            if (isRotated) {
-                rawX = logicalH - 1 - logY;
-                rawY = logX;
-            } else {
-                rawX = logX;
-                rawY = logY;
-            }
-
-            const srcIdx = (rawY * rawBufWidth + rawX) * stride;
+            const srcX = cropX + Math.min(Math.floor((x * cropW) / INPUT_SIZE), cropW - 1);
+            const srcY = cropY + Math.min(Math.floor((y * cropH) / INPUT_SIZE), cropH - 1);
+            const srcIdx = (srcY * rawBufWidth + srcX) * stride;
             const dstIdx = y * INPUT_SIZE + x;
 
             output[0 * pixelCount + dstIdx] = pixels[srcIdx + rOff] / 127.5 - 1;
