@@ -137,22 +137,21 @@ export default function FaceTestScreen() {
     }, [livenessState, phase]);
 
     const handleCapture = useCallback(async () => {
-        if (!cameraRef.current || processing) return;
+        if (processing) return;
         setProcessing(true);
 
         try {
-            const photo = await cameraRef.current.controller?.photoOutput?.takePhoto({
-                flash: 'off',
-                enableShutterSound: false,
-            });
+            // VisionCamera v5: capture photo via the photoOutput hook
+            const photoFile = await photoOutput.capturePhotoToFile({ flashMode: 'off', enableShutterSound: false }, {});
 
-            if (!photo) {
+            if (!photoFile?.filePath) {
                 Alert.alert('Error', 'Failed to take photo');
                 setProcessing(false);
                 return;
             }
 
             // For POC: test ONNX inference with deterministic input
+            // photoFile.filePath available for real pixel extraction later
             const embedding = await generateTestEmbedding();
 
             if (phase === 'registering') {
