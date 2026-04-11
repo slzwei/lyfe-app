@@ -190,17 +190,27 @@ export async function extractEmbeddingFromPhoto(
     const logicalW = image.width;
     const logicalH = image.height;
 
-    // Calculate face region in LOGICAL coordinates
+    // Calculate face region in LOGICAL coordinates — SQUARE crop centered on face
     let cropX = 0,
         cropY = 0,
         cropW = logicalW,
         cropH = logicalH;
     if (boundingBox) {
         // Vision framework: normalised coords (0-1), Y origin at bottom-left
-        cropX = Math.max(0, Math.floor(boundingBox.x * logicalW));
-        cropY = Math.max(0, Math.floor((1 - boundingBox.y - boundingBox.height) * logicalH));
-        cropW = Math.min(logicalW - cropX, Math.floor(boundingBox.width * logicalW));
-        cropH = Math.min(logicalH - cropY, Math.floor(boundingBox.height * logicalH));
+        const faceX = Math.floor(boundingBox.x * logicalW);
+        const faceY = Math.floor((1 - boundingBox.y - boundingBox.height) * logicalH);
+        const faceW = Math.floor(boundingBox.width * logicalW);
+        const faceH = Math.floor(boundingBox.height * logicalH);
+
+        // Make square crop (use the larger dimension) with 20% padding
+        const size = Math.floor(Math.max(faceW, faceH) * 1.2);
+        const centerX = faceX + Math.floor(faceW / 2);
+        const centerY = faceY + Math.floor(faceH / 2);
+
+        cropX = Math.max(0, centerX - Math.floor(size / 2));
+        cropY = Math.max(0, centerY - Math.floor(size / 2));
+        cropW = Math.min(size, logicalW - cropX);
+        cropH = Math.min(size, logicalH - cropY);
     }
 
     console.log(
