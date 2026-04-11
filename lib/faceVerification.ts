@@ -193,32 +193,31 @@ export async function extractEmbeddingFromPhoto(
         faceImage = image;
     }
 
-    // Resize to 112x112
-    const resized = faceImage.resize(INPUT_SIZE, INPUT_SIZE);
-
-    // Get raw pixel data
-    const rawData = resized.toRawPixelData();
+    // Get raw pixel data from the cropped image
+    const rawData = faceImage.toRawPixelData();
     const pixels = new Uint8Array(rawData.buffer);
     console.log(
-        '[FaceVerify] Pixels:',
-        pixels.length,
+        '[FaceVerify] Raw pixels:',
+        rawData.width,
+        'x',
+        rawData.height,
         'format:',
         rawData.pixelFormat,
-        'sample[0..7]:',
-        Array.from(pixels.slice(0, 8)),
+        'bytes:',
+        pixels.length,
     );
 
-    // Convert to CHW float32 normalised to [-1, 1]
-    const modelInput = pixelsToModelInput(pixels, rawData.pixelFormat);
+    // Resize to 112x112 using nearest-neighbour sampling and convert to CHW float32
+    const modelInput = resizeAndConvert(pixels, rawData.width, rawData.height, rawData.pixelFormat);
 
     return extractEmbedding(modelInput);
 }
 
 /**
- * Convert raw pixel buffer to CHW float32 tensor for the model.
- * Handles RGBA, BGRA, ARGB, and RGB pixel formats.
+ * Resize raw pixel data to 112x112 and convert to CHW float32 tensor.
+ * Uses nearest-neighbour sampling. Handles all pixel formats.
  */
-function pixelsToModelInput(pixels: Uint8Array, format: PixelFormat): Float32Array {
+function resizeAndConvert(pixels: Uint8Array, srcWidth: number, srcHeight: number, format: PixelFormat): Float32Array {
     const output = new Float32Array(3 * INPUT_SIZE * INPUT_SIZE);
     const pixelCount = INPUT_SIZE * INPUT_SIZE;
 
@@ -266,7 +265,6 @@ function pixelsToModelInput(pixels: Uint8Array, format: PixelFormat): Float32Arr
             stride = 3;
             break;
         default:
-            // Assume RGBA
             rOff = 0;
             gOff = 1;
             bOff = 2;
@@ -274,12 +272,20 @@ function pixelsToModelInput(pixels: Uint8Array, format: PixelFormat): Float32Arr
             break;
     }
 
-    for (let i = 0; i < pixelCount; i++) {
-        const srcIdx = i * stride;
-        // Normalise to [-1, 1]
-        output[0 * pixelCount + i] = pixels[srcIdx + rOff] / 127.5 - 1; // R
-        output[1 * pixelCount + i] = pixels[srcIdx + gOff] / 127.5 - 1; // G
-        output[2 * pixelCount + i] = pixels[srcIdx + bOff] / 127.5 - 1; // B
+    const xRatio = srcWidth / INPUT_SIZE;
+    const yRatio = srcHeight / INPUT_SIZE;
+
+    for (let y = 0; y < INPUT_SIZE; y++) {
+        for (let x = 0; x < INPUT_SIZE; x++) {
+            const srcX = Math.min(Math.floor(x * xRatio), srcWidth - 1);
+            const srcY = Math.min(Math.floor(y * yRatio), srcHeight - 1);
+            const srcIdx = (srcY * srcWidth + srcX) * stride;
+            const dstIdx = y * INPUT_SIZE + x;
+
+            output[0 * pixelCount + dstIdx] = pixels[srcIdx + rOff] / 127.5 - 1;
+            output[1 * pixelCount + dstIdx] = pixels[srcIdx + gOff] / 127.5 - 1;
+            output[2 * pixelCount + dstIdx] = pixels[srcIdx + bOff] / 127.5 - 1;
+        }
     }
 
     return output;
