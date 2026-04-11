@@ -5,8 +5,8 @@
  * Input: 112x112 RGB image normalised to [-1, 1].
  * Output: 128-d float32 embedding vector.
  */
+import { Asset } from 'expo-asset';
 import { InferenceSession, Tensor } from 'onnxruntime-react-native';
-import { Image } from 'react-native';
 
 // ── Constants ───────────────────────────────────────────────
 
@@ -27,12 +27,15 @@ export async function loadModel(): Promise<InferenceSession> {
     if (sessionLoading) return sessionLoading;
 
     sessionLoading = (async () => {
+        // Download the model asset to a local file path.
+        // ONNX Runtime needs a file:// URI, not the HTTP URL that
+        // Image.resolveAssetSource returns in dev mode.
         // eslint-disable-next-line @typescript-eslint/no-var-requires
-        const modelAsset = require('@/assets/models/sface_int8.onnx');
+        const asset = Asset.fromModule(require('@/assets/models/sface_int8.onnx'));
+        await asset.downloadAsync();
 
-        // Resolve the asset URI — Expo bundles assets and provides a local URI
-        const resolved = Image.resolveAssetSource(modelAsset);
-        const modelPath = resolved.uri;
+        const modelPath = asset.localUri;
+        if (!modelPath) throw new Error('Failed to download ONNX model asset');
 
         const sess = await InferenceSession.create(modelPath);
         session = sess;

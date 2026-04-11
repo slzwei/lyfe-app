@@ -394,9 +394,12 @@ export default function FaceTestScreen() {
                         <Text style={[styles.cardTitle, { color: colors.textPrimary }]}>Actions</Text>
 
                         <Pressable
-                            style={[styles.button, { backgroundColor: colors.accent }]}
+                            style={[
+                                styles.button,
+                                { backgroundColor: hasPermission ? colors.accent : colors.textTertiary },
+                            ]}
                             onPress={startRegistration}
-                            disabled={!modelReady || !hasPermission}
+                            disabled={!hasPermission}
                         >
                             <Ionicons name="person-add" size={20} color="#FFFFFF" />
                             <Text style={styles.buttonText}>
@@ -413,7 +416,7 @@ export default function FaceTestScreen() {
                                 },
                             ]}
                             onPress={startVerification}
-                            disabled={!modelReady || !hasPermission || !hasRegistered}
+                            disabled={!hasPermission || !hasRegistered}
                         >
                             <Ionicons name="shield-checkmark" size={20} color="#FFFFFF" />
                             <Text style={styles.buttonText}>Verify Face</Text>

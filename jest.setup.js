@@ -148,6 +148,16 @@ jest.mock('react-native-vision-camera-face-detector', () => ({
     useFaceDetector: jest.fn(() => ({ detectFaces: jest.fn(() => []) })),
 }));
 
+// Mock expo-asset
+jest.mock('expo-asset', () => ({
+    Asset: {
+        fromModule: jest.fn(() => ({
+            downloadAsync: jest.fn().mockResolvedValue(undefined),
+            localUri: 'file:///mock/model.onnx',
+        })),
+    },
+}));
+
 // Mock onnxruntime-react-native
 jest.mock('onnxruntime-react-native', () => ({
     InferenceSession: { create: jest.fn() },
