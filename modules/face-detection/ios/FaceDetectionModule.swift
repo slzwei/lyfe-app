@@ -257,22 +257,25 @@ public class FaceDetectionModule: Module {
     // MARK: - Affine Warp
 
     private static func warpAffine(cgImage: CGImage, transform: CGAffineTransform, outputSize: Int) -> CGImage {
-        let colorSpace = CGColorSpaceCreateDeviceRGB()
-        let context = CGContext(
-            data: nil,
-            width: outputSize,
-            height: outputSize,
-            bitsPerComponent: 8,
-            bytesPerRow: outputSize * 4,
-            space: colorSpace,
-            bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue
-        )!
+        let size = CGFloat(outputSize)
 
-        context.interpolationQuality = .high
-        context.concatenate(transform)
-        context.draw(cgImage, in: CGRect(x: 0, y: 0, width: cgImage.width, height: cgImage.height))
+        // Use UIGraphicsImageRenderer which handles coordinate systems correctly
+        // (top-left origin, matching our landmark coordinates)
+        let renderer = UIGraphicsImageRenderer(size: CGSize(width: size, height: size))
+        let uiImage = renderer.image { ctx in
+            let cgCtx = ctx.cgContext
 
-        return context.makeImage()!
+            // Apply the similarity transform
+            cgCtx.concatenate(transform)
+
+            // Draw the source image at its original pixel dimensions
+            // UIKit context has top-left origin, so we need to flip for CGImage drawing
+            cgCtx.translateBy(x: 0, y: CGFloat(cgImage.height))
+            cgCtx.scaleBy(x: 1, y: -1)
+            cgCtx.draw(cgImage, in: CGRect(x: 0, y: 0, width: cgImage.width, height: cgImage.height))
+        }
+
+        return uiImage.cgImage!
     }
 
     // MARK: - Simple Crop Fallback
