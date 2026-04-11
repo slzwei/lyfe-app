@@ -11,8 +11,11 @@ import { loadImage, type Image, type PixelFormat } from 'react-native-nitro-imag
 
 // ── Constants ───────────────────────────────────────────────
 
-/** Cosine similarity threshold for a positive match. */
-export const MATCH_THRESHOLD = 0.4;
+/** Cosine similarity threshold for a positive match.
+ * Same person typically scores 0.95+, different person ~0.80-0.85.
+ * Production threshold should be tuned with more test subjects.
+ */
+export const MATCH_THRESHOLD = 0.85;
 
 /** Input image size expected by the model. */
 const INPUT_SIZE = 112;
