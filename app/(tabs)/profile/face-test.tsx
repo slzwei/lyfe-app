@@ -69,8 +69,9 @@ export default function FaceTestScreen() {
     const phaseRef = useRef<TestPhase>('idle');
     const scanningRef = useRef(false);
     const captureCountRef = useRef(0);
-    const lastPhotoRef = useRef<string | null>(null);
-    const lastBBoxRef = useRef<{ x: number; y: number; width: number; height: number } | null>(null);
+    // Store the "look straight" photo for embedding (best angle for face recognition)
+    const straightPhotoRef = useRef<string | null>(null);
+    const straightBBoxRef = useRef<{ x: number; y: number; width: number; height: number } | null>(null);
     stepRef.current = step;
     phaseRef.current = phase;
 
@@ -126,9 +127,11 @@ export default function FaceTestScreen() {
                     setDisplayYaw(Math.round(yaw * 10) / 10);
                     setDisplayFace(true);
 
-                    // Store photo + bounding box for embedding extraction
-                    lastPhotoRef.current = photoFile.filePath;
-                    lastBBoxRef.current = face.boundingBox;
+                    // Save the "look straight" photo for embedding (best frontal angle)
+                    if (stepRef.current === 'look_straight') {
+                        straightPhotoRef.current = photoFile.filePath;
+                        straightBBoxRef.current = face.boundingBox;
+                    }
 
                     // Auto-capture logic
                     const currentStep = stepRef.current;
@@ -185,8 +188,8 @@ export default function FaceTestScreen() {
         setCameraActive(false);
 
         try {
-            const photoPath = lastPhotoRef.current;
-            const bbox = lastBBoxRef.current;
+            const photoPath = straightPhotoRef.current;
+            const bbox = straightBBoxRef.current;
 
             if (!photoPath) {
                 Alert.alert('Error', 'No photo captured');
@@ -254,6 +257,8 @@ export default function FaceTestScreen() {
             captureCountRef.current = 0;
             setCaptureCount(0);
             scanningRef.current = false;
+            straightPhotoRef.current = null;
+            straightBBoxRef.current = null;
             setSimilarity(null);
             setMatchResult(null);
             setCameraActive(true);
