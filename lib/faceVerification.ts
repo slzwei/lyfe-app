@@ -180,35 +180,60 @@ export async function extractEmbeddingFromPhoto(
     const rawData = image.toRawPixelData();
     const pixels = new Uint8Array(rawData.buffer);
 
-    // Calculate face region in pixel coordinates
+    // Detect if raw buffer is rotated vs the logical image orientation.
+    // image.width/height respect EXIF rotation, rawData.width/height are the raw buffer.
+    // For portrait photos on iOS, raw buffer is often landscape (rotated 90°).
+    const isRotated = image.width !== rawData.width && image.height !== rawData.height;
+
+    // The bounding box from Vision is in the LOGICAL image space (image.width x image.height).
+    // We need to map to the RAW pixel buffer space.
+    const logicalW = image.width;
+    const logicalH = image.height;
+
+    // Calculate face region in LOGICAL coordinates
     let cropX = 0,
         cropY = 0,
-        cropW = rawData.width,
-        cropH = rawData.height;
+        cropW = logicalW,
+        cropH = logicalH;
     if (boundingBox) {
         // Vision framework: normalised coords (0-1), Y origin at bottom-left
-        cropX = Math.max(0, Math.floor(boundingBox.x * rawData.width));
-        cropY = Math.max(0, Math.floor((1 - boundingBox.y - boundingBox.height) * rawData.height));
-        cropW = Math.min(rawData.width - cropX, Math.floor(boundingBox.width * rawData.width));
-        cropH = Math.min(rawData.height - cropY, Math.floor(boundingBox.height * rawData.height));
+        cropX = Math.max(0, Math.floor(boundingBox.x * logicalW));
+        cropY = Math.max(0, Math.floor((1 - boundingBox.y - boundingBox.height) * logicalH));
+        cropW = Math.min(logicalW - cropX, Math.floor(boundingBox.width * logicalW));
+        cropH = Math.min(logicalH - cropY, Math.floor(boundingBox.height * logicalH));
     }
 
     console.log(
-        '[FaceVerify] Image:',
+        '[FaceVerify] logical:',
+        logicalW,
+        'x',
+        logicalH,
+        'raw:',
         rawData.width,
         'x',
         rawData.height,
-        'format:',
-        rawData.pixelFormat,
-        'face region:',
+        'rotated:',
+        isRotated,
+        'face:',
         cropX,
         cropY,
         cropW,
         cropH,
     );
 
-    // Crop + resize to 112x112 in one step and convert to CHW float32
-    const modelInput = cropResizeConvert(pixels, rawData.width, rawData.pixelFormat, cropX, cropY, cropW, cropH);
+    // Crop + resize to 112x112 in one step, handling rotation
+    const modelInput = cropResizeConvert(
+        pixels,
+        rawData.width,
+        rawData.pixelFormat,
+        cropX,
+        cropY,
+        cropW,
+        cropH,
+        isRotated,
+        logicalW,
+        logicalH,
+    );
 
     return extractEmbedding(modelInput);
 }
@@ -219,12 +244,15 @@ export async function extractEmbeddingFromPhoto(
  */
 function cropResizeConvert(
     pixels: Uint8Array,
-    srcFullWidth: number,
+    rawBufWidth: number,
     format: PixelFormat,
     cropX: number,
     cropY: number,
     cropW: number,
     cropH: number,
+    isRotated: boolean = false,
+    _logicalW: number = 0,
+    logicalH: number = 0,
 ): Float32Array {
     const output = new Float32Array(3 * INPUT_SIZE * INPUT_SIZE);
     const pixelCount = INPUT_SIZE * INPUT_SIZE;
@@ -282,10 +310,23 @@ function cropResizeConvert(
 
     for (let y = 0; y < INPUT_SIZE; y++) {
         for (let x = 0; x < INPUT_SIZE; x++) {
-            // Map output pixel to source pixel within the crop region
-            const srcX = cropX + Math.min(Math.floor((x * cropW) / INPUT_SIZE), cropW - 1);
-            const srcY = cropY + Math.min(Math.floor((y * cropH) / INPUT_SIZE), cropH - 1);
-            const srcIdx = (srcY * srcFullWidth + srcX) * stride;
+            // Map output pixel to logical pixel within the crop region
+            const logX = cropX + Math.min(Math.floor((x * cropW) / INPUT_SIZE), cropW - 1);
+            const logY = cropY + Math.min(Math.floor((y * cropH) / INPUT_SIZE), cropH - 1);
+
+            // Map logical pixel to raw buffer pixel (handle 90° CW rotation)
+            // For iOS portrait photos: raw buffer is landscape (rotated 90° CW)
+            // logical (x, y) in portrait → raw (logicalH - 1 - y, x) in landscape buffer
+            let rawX: number, rawY: number;
+            if (isRotated) {
+                rawX = logicalH - 1 - logY;
+                rawY = logX;
+            } else {
+                rawX = logX;
+                rawY = logY;
+            }
+
+            const srcIdx = (rawY * rawBufWidth + rawX) * stride;
             const dstIdx = y * INPUT_SIZE + x;
 
             output[0 * pixelCount + dstIdx] = pixels[srcIdx + rOff] / 127.5 - 1;
