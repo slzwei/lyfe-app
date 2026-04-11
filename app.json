@@ -64,15 +64,6 @@
                 }
             ],
             "./plugins/withSwiftConcurrency",
-            [
-                "react-native-vision-camera",
-                {
-                    "cameraPermissionText": "Lyfe needs camera access for face verification check-in.",
-                    "enableFrameProcessors": true,
-                    "enableMicrophonePermission": false,
-                    "enableCodeScanner": false
-                }
-            ],
             "expo-location",
             [
                 "expo-build-properties",
