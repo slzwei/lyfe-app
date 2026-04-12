@@ -5,16 +5,20 @@
  * After liveness passes, the "look straight" photo is sent to the verify-face
  * edge function which uses AWS Rekognition for comparison.
  */
+import { FaceTurnPrompt } from '@/components/face/FaceTurnPrompt';
+import { TAB_BAR_HEIGHT, TAB_BAR_PADDING_BOTTOM, TAB_BAR_PADDING_TOP } from '@/constants/platform';
 import { useTheme } from '@/contexts/ThemeContext';
 import { registerFace, verifyFace, MATCH_THRESHOLD } from '@/lib/faceVerification';
 import { detectFaces, setMaxBrightness, restoreBrightness } from '../../../modules/face-detection/src';
 import * as Haptics from 'expo-haptics';
 import { Ionicons } from '@expo/vector-icons';
-import { useRouter } from 'expo-router';
+import { useNavigation, useRouter } from 'expo-router';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import {
     ActivityIndicator,
     Alert,
+    LayoutChangeEvent,
     Platform,
     Pressable,
     SafeAreaView,
@@ -26,16 +30,12 @@ import {
 import Animated, {
     useSharedValue,
     useAnimatedStyle,
-    withRepeat,
-    withSequence,
-    withTiming,
     withSpring,
-    withDelay,
-    Easing,
     FadeIn,
     FadeOut,
     ZoomIn,
 } from 'react-native-reanimated';
+import Svg, { Circle as SvgCircle, Defs, Mask, Rect } from 'react-native-svg';
 import {
     Camera,
     type CameraRef,
@@ -60,34 +60,6 @@ const STEP_PROMPTS: Record<LivenessStep, string> = {
     turn_right: 'Now turn your head right',
     done: 'Processing...',
 };
-
-// ── Animated Arrow ──────────────────────────────────────────
-
-function AnimatedArrow({ direction }: { direction: 'left' | 'right' }) {
-    const translateX = useSharedValue(0);
-
-    useEffect(() => {
-        const dist = direction === 'left' ? -12 : 12;
-        translateX.value = withRepeat(
-            withSequence(
-                withTiming(dist, { duration: 600, easing: Easing.inOut(Easing.ease) }),
-                withTiming(0, { duration: 600, easing: Easing.inOut(Easing.ease) }),
-            ),
-            -1,
-            false,
-        );
-    }, [direction]);
-
-    const animatedStyle = useAnimatedStyle(() => ({
-        transform: [{ translateX: translateX.value }],
-    }));
-
-    return (
-        <Animated.Text style={[styles.arrowText, animatedStyle]}>
-            {direction === 'left' ? '  <<<' : '>>>  '}
-        </Animated.Text>
-    );
-}
 
 // ── Success Overlay ─────────────────────────────────────────
 
@@ -158,6 +130,8 @@ function ProcessingOverlay() {
 export default function FaceTestScreen() {
     const { colors } = useTheme();
     const router = useRouter();
+    const navigation = useNavigation();
+    const insets = useSafeAreaInsets();
     const cameraRef = useRef<CameraRef>(null);
 
     const device = useCameraDevice('front');
@@ -176,6 +150,12 @@ export default function FaceTestScreen() {
     const [captureCount, setCaptureCount] = useState(0);
     const [processing, setProcessing] = useState(false);
     const [showResult, setShowResult] = useState<'pass' | 'fail' | null>(null);
+    const [cameraLayout, setCameraLayout] = useState({ width: 0, height: 0 });
+
+    const handleCameraLayout = useCallback((e: LayoutChangeEvent) => {
+        const { width, height } = e.nativeEvent.layout;
+        setCameraLayout({ width, height });
+    }, []);
 
     // Refs for async detection loop
     const stepRef = useRef<LivenessStep>('look_straight');
@@ -191,6 +171,28 @@ export default function FaceTestScreen() {
     useEffect(() => {
         if (!hasPermission) requestPermission();
     }, [hasPermission, requestPermission]);
+
+    // Hide tab bar while camera is active. Setting tabBarStyle to undefined
+    // doesn't restore screenOptions defaults (it falls back to RN's built-in
+    // white bar), so we explicitly rebuild the original style from _layout.tsx.
+    useEffect(() => {
+        const tabNav = navigation.getParent();
+        if (!tabNav || !cameraVisible) return;
+        const navBarInset = Platform.OS === 'android' ? insets.bottom : 0;
+        const originalStyle = {
+            backgroundColor: colors.tabBar,
+            borderTopColor: colors.tabBarBorder,
+            borderTopWidth: 0.5,
+            elevation: 0,
+            paddingBottom: TAB_BAR_PADDING_BOTTOM + navBarInset,
+            paddingTop: TAB_BAR_PADDING_TOP,
+            height: TAB_BAR_HEIGHT + navBarInset,
+        };
+        tabNav.setOptions({ tabBarStyle: { display: 'none' } });
+        return () => {
+            tabNav.setOptions({ tabBarStyle: originalStyle });
+        };
+    }, [cameraVisible, navigation, colors.tabBar, colors.tabBarBorder, insets.bottom]);
 
     // ── Snapshot-based face detection loop ───────────────────
 
@@ -418,7 +420,11 @@ export default function FaceTestScreen() {
             {/* Camera stays mounted once activated — layout never changes
                 to avoid VisionCamera Android stream config errors */}
             {cameraMounted && device && (
-                <View style={styles.cameraContainer} pointerEvents={cameraVisible ? 'auto' : 'none'}>
+                <View
+                    style={styles.cameraContainer}
+                    pointerEvents={cameraVisible ? 'auto' : 'none'}
+                    onLayout={handleCameraLayout}
+                >
                     <Camera
                         ref={cameraRef}
                         style={StyleSheet.absoluteFill}
@@ -427,17 +433,12 @@ export default function FaceTestScreen() {
                         outputs={[photoOutput]}
                     />
 
-                    {/* Face frame */}
-                    <View style={styles.overlay}>
-                        <View
-                            style={[
-                                styles.faceFrame,
-                                {
-                                    borderColor: step === 'done' ? '#34C759' : displayFace ? '#FF9500' : '#FF3B30',
-                                },
-                            ]}
-                        />
-                    </View>
+                    {/* Circle mask: darkens everything outside the circular hole */}
+                    <CircleMaskOverlay
+                        width={cameraLayout.width}
+                        height={cameraLayout.height}
+                        borderColor={step === 'done' ? '#34C759' : displayFace ? '#FF9500' : '#FF3B30'}
+                    />
 
                     {/* Step dots */}
                     <View style={styles.stepIndicator}>
@@ -446,12 +447,12 @@ export default function FaceTestScreen() {
                         <View style={[styles.stepDot, captureCount >= 3 && styles.stepDotDone]} />
                     </View>
 
-                    {/* Prompt with animated arrows */}
+                    {/* Face-turn prompt: animates based on current liveness step */}
                     <View style={styles.promptContainer}>
-                        <View style={styles.promptRow}>
-                            {step === 'turn_left' && <AnimatedArrow direction="left" />}
-                            {step === 'turn_right' && <AnimatedArrow direction="right" />}
-                        </View>
+                        <FaceTurnPrompt
+                            direction={step === 'turn_left' ? 'left' : step === 'turn_right' ? 'right' : 'straight'}
+                            size={96}
+                        />
                         <Text style={styles.promptText}>{STEP_PROMPTS[step]}</Text>
                     </View>
 
@@ -464,9 +465,11 @@ export default function FaceTestScreen() {
 
                     {/* Cancel button (hide during processing/result) */}
                     {!processing && !showResult && (
-                        <Pressable style={styles.cancelButton} onPress={handleCancel}>
-                            <Text style={styles.cancelText}>Cancel</Text>
-                        </Pressable>
+                        <View style={styles.cancelButtonWrapper} pointerEvents="box-none">
+                            <Pressable style={styles.cancelButton} onPress={handleCancel}>
+                                <Text style={styles.cancelText}>Cancel</Text>
+                            </Pressable>
+                        </View>
                     )}
                 </View>
             )}
@@ -536,6 +539,29 @@ export default function FaceTestScreen() {
     );
 }
 
+// ── Circle mask overlay ─────────────────────────────────────
+
+function CircleMaskOverlay({ width, height, borderColor }: { width: number; height: number; borderColor: string }) {
+    if (width === 0 || height === 0) return null;
+
+    const cx = width / 2;
+    const cy = height / 2 - 40; // lift slightly to leave room for prompt
+    const r = Math.min(width * 0.38, 160);
+
+    return (
+        <Svg width={width} height={height} style={StyleSheet.absoluteFill} pointerEvents="none">
+            <Defs>
+                <Mask id="faceHole">
+                    <Rect x={0} y={0} width={width} height={height} fill="white" />
+                    <SvgCircle cx={cx} cy={cy} r={r} fill="black" />
+                </Mask>
+            </Defs>
+            <Rect x={0} y={0} width={width} height={height} fill="rgba(0,0,0,0.55)" mask="url(#faceHole)" />
+            <SvgCircle cx={cx} cy={cy} r={r} stroke={borderColor} strokeWidth={4} fill="none" />
+        </Svg>
+    );
+}
+
 function StatusRow({ label, ok, error }: { label: string; ok: boolean; error?: string | null }) {
     return (
         <View style={styles.statusRow}>
@@ -602,8 +628,6 @@ const styles = StyleSheet.create({
     infoText: { fontSize: 13, lineHeight: 20 },
     errorText: { fontSize: 15, textAlign: 'center', marginTop: 40 },
     cameraContainer: { flex: 1 },
-    overlay: { ...StyleSheet.absoluteFillObject, justifyContent: 'center', alignItems: 'center' },
-    faceFrame: { width: 250, height: 320, borderRadius: 125, borderWidth: 3 },
     stepIndicator: {
         position: 'absolute',
         top: 60,
@@ -620,25 +644,20 @@ const styles = StyleSheet.create({
         borderColor: '#FFFFFF',
     },
     stepDotDone: { backgroundColor: '#34C759', borderColor: '#34C759' },
-    promptContainer: { position: 'absolute', bottom: 120, left: 0, right: 0, alignItems: 'center' },
-    promptRow: {
-        flexDirection: 'row',
-        justifyContent: 'center',
-        marginBottom: 8,
-    },
-    arrowText: {
-        color: '#FFFFFF',
-        fontSize: 24,
-        fontWeight: '700',
-        textShadowColor: 'rgba(0,0,0,0.7)',
-        textShadowOffset: { width: 0, height: 1 },
-        textShadowRadius: 3,
+    promptContainer: {
+        position: 'absolute',
+        bottom: 80,
+        left: 0,
+        right: 0,
+        alignItems: 'center',
+        gap: 10,
     },
     promptText: {
         color: '#FFFFFF',
         fontSize: 18,
         fontWeight: '600',
         textAlign: 'center',
+        alignSelf: 'stretch',
         textShadowColor: 'rgba(0,0,0,0.7)',
         textShadowOffset: { width: 0, height: 1 },
         textShadowRadius: 3,
@@ -658,10 +677,14 @@ const styles = StyleSheet.create({
         fontFamily: Platform.OS === 'ios' ? 'Menlo' : 'monospace',
         lineHeight: 18,
     },
-    cancelButton: {
+    cancelButtonWrapper: {
         position: 'absolute',
-        bottom: 50,
-        alignSelf: 'center',
+        bottom: 16,
+        left: 0,
+        right: 0,
+        alignItems: 'center',
+    },
+    cancelButton: {
         backgroundColor: 'rgba(0,0,0,0.5)',
         paddingHorizontal: 32,
         paddingVertical: 14,
