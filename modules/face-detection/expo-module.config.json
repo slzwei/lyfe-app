@@ -1,6 +1,9 @@
 {
-    "platforms": ["apple"],
+    "platforms": ["apple", "android"],
     "apple": {
         "modules": ["FaceDetectionModule"]
+    },
+    "android": {
+        "modules": ["com.lyfe.facedetection.FaceDetectionModule"]
     }
 }

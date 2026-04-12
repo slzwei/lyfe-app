@@ -251,7 +251,7 @@ export default function LoginScreen() {
                 <TouchableWithoutFeedback onPress={step === 'phone' ? Keyboard.dismiss : undefined} accessible={false}>
                     <KeyboardAvoidingView
                         style={styles.keyboardView}
-                        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+                        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
                     >
                         <View style={styles.content}>
                             <View style={styles.logoContainer}>

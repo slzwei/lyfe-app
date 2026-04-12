@@ -8,10 +8,34 @@
 import { useTheme } from '@/contexts/ThemeContext';
 import { registerFace, verifyFace, MATCH_THRESHOLD } from '@/lib/faceVerification';
 import { detectFaces, setMaxBrightness, restoreBrightness } from '../../../modules/face-detection/src';
+import * as Haptics from 'expo-haptics';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import React, { useCallback, useEffect, useRef, useState } from 'react';
-import { Alert, Platform, Pressable, SafeAreaView, ScrollView, StyleSheet, Text, View } from 'react-native';
+import {
+    ActivityIndicator,
+    Alert,
+    Platform,
+    Pressable,
+    SafeAreaView,
+    ScrollView,
+    StyleSheet,
+    Text,
+    View,
+} from 'react-native';
+import Animated, {
+    useSharedValue,
+    useAnimatedStyle,
+    withRepeat,
+    withSequence,
+    withTiming,
+    withSpring,
+    withDelay,
+    Easing,
+    FadeIn,
+    FadeOut,
+    ZoomIn,
+} from 'react-native-reanimated';
 import {
     Camera,
     type CameraRef,
@@ -25,17 +49,109 @@ import {
 type TestPhase = 'idle' | 'registering' | 'verifying';
 type LivenessStep = 'look_straight' | 'turn_left' | 'turn_right' | 'done';
 
-const YAW_STRAIGHT_MAX = 10;
-const YAW_LEFT_THRESHOLD = -20;
-const YAW_RIGHT_THRESHOLD = 20;
-const SCAN_INTERVAL_MS = 1500;
+const YAW_STRAIGHT_MAX = Platform.OS === 'android' ? 18 : 10;
+const YAW_LEFT_THRESHOLD = -15;
+const YAW_RIGHT_THRESHOLD = 15;
+const SCAN_INTERVAL_MS = 400;
 
 const STEP_PROMPTS: Record<LivenessStep, string> = {
     look_straight: 'Look straight at the camera',
-    turn_left: 'Slowly turn your head left',
+    turn_left: 'Turn your head left',
     turn_right: 'Now turn your head right',
     done: 'Processing...',
 };
+
+// ── Animated Arrow ──────────────────────────────────────────
+
+function AnimatedArrow({ direction }: { direction: 'left' | 'right' }) {
+    const translateX = useSharedValue(0);
+
+    useEffect(() => {
+        const dist = direction === 'left' ? -12 : 12;
+        translateX.value = withRepeat(
+            withSequence(
+                withTiming(dist, { duration: 600, easing: Easing.inOut(Easing.ease) }),
+                withTiming(0, { duration: 600, easing: Easing.inOut(Easing.ease) }),
+            ),
+            -1,
+            false,
+        );
+    }, [direction]);
+
+    const animatedStyle = useAnimatedStyle(() => ({
+        transform: [{ translateX: translateX.value }],
+    }));
+
+    return (
+        <Animated.Text style={[styles.arrowText, animatedStyle]}>
+            {direction === 'left' ? '  <<<' : '>>>  '}
+        </Animated.Text>
+    );
+}
+
+// ── Success Overlay ─────────────────────────────────────────
+
+function CheckedInOverlay({ onDismiss }: { onDismiss: () => void }) {
+    const scale = useSharedValue(0);
+
+    useEffect(() => {
+        scale.value = withSpring(1, { damping: 12, stiffness: 150 });
+    }, []);
+
+    const circleStyle = useAnimatedStyle(() => ({
+        transform: [{ scale: scale.value }],
+    }));
+
+    return (
+        <Animated.View entering={FadeIn.duration(200)} style={styles.resultOverlay}>
+            <Animated.View style={[styles.successCircle, circleStyle]}>
+                <Ionicons name="checkmark" size={64} color="#FFFFFF" />
+            </Animated.View>
+            <Animated.Text entering={FadeIn.delay(300).duration(300)} style={styles.checkedInText}>
+                Checked In
+            </Animated.Text>
+            <Animated.View entering={FadeIn.delay(600).duration(300)}>
+                <Pressable style={styles.dismissButton} onPress={onDismiss}>
+                    <Text style={styles.dismissText}>Done</Text>
+                </Pressable>
+            </Animated.View>
+        </Animated.View>
+    );
+}
+
+// ── Fail Overlay ────────────────────────────────────────────
+
+function FailedOverlay({ onDismiss, onRetry }: { onDismiss: () => void; onRetry: () => void }) {
+    return (
+        <Animated.View entering={FadeIn.duration(200)} style={styles.resultOverlay}>
+            <Animated.View entering={ZoomIn.duration(300)} style={styles.failCircle}>
+                <Ionicons name="close" size={64} color="#FFFFFF" />
+            </Animated.View>
+            <Animated.Text entering={FadeIn.delay(300).duration(300)} style={styles.failText}>
+                Face Not Recognized
+            </Animated.Text>
+            <Animated.View entering={FadeIn.delay(500).duration(300)} style={styles.failButtons}>
+                <Pressable style={styles.retryButton} onPress={onRetry}>
+                    <Text style={styles.retryText}>Try Again</Text>
+                </Pressable>
+                <Pressable style={styles.dismissButton} onPress={onDismiss}>
+                    <Text style={styles.dismissText}>Cancel</Text>
+                </Pressable>
+            </Animated.View>
+        </Animated.View>
+    );
+}
+
+// ── Processing Overlay ──────────────────────────────────────
+
+function ProcessingOverlay() {
+    return (
+        <Animated.View entering={FadeIn.duration(200)} exiting={FadeOut.duration(200)} style={styles.resultOverlay}>
+            <ActivityIndicator size="large" color="#FFFFFF" style={{ marginBottom: 20 }} />
+            <Text style={styles.processingText}>Verifying...</Text>
+        </Animated.View>
+    );
+}
 
 // ── Component ───────────────────────────────────────────────
 
@@ -46,7 +162,7 @@ export default function FaceTestScreen() {
 
     const device = useCameraDevice('front');
     const { hasPermission, requestPermission } = useCameraPermission();
-    const photoOutput = usePhotoOutput({ quality: 0.7, qualityPrioritization: 'speed' });
+    const photoOutput = usePhotoOutput({ quality: 0.5, qualityPrioritization: 'speed' });
 
     // State
     const [phase, setPhase] = useState<TestPhase>('idle');
@@ -55,12 +171,11 @@ export default function FaceTestScreen() {
     const [cameraVisible, setCameraVisible] = useState(false);
     const [cameraMounted, setCameraMounted] = useState(false);
     const [scanning, setScanning] = useState(false);
-    const [similarity, setSimilarity] = useState<number | null>(null);
-    const [matchResult, setMatchResult] = useState<'pass' | 'fail' | null>(null);
     const [displayYaw, setDisplayYaw] = useState(0);
     const [displayFace, setDisplayFace] = useState(false);
     const [captureCount, setCaptureCount] = useState(0);
     const [processing, setProcessing] = useState(false);
+    const [showResult, setShowResult] = useState<'pass' | 'fail' | null>(null);
 
     // Refs for async detection loop
     const stepRef = useRef<LivenessStep>('look_straight');
@@ -92,10 +207,12 @@ export default function FaceTestScreen() {
                     scanningRef.current = false;
                     return;
                 }
+                const t0 = Date.now();
                 const photoFile = await photoOutput.capturePhotoToFile(
                     { flashMode: 'off', enableShutterSound: false },
                     {},
                 );
+                const t1 = Date.now();
                 if (!photoFile?.filePath || cancelled) {
                     scanningRef.current = false;
                     if (!cancelled) setTimeout(tick, SCAN_INTERVAL_MS);
@@ -103,6 +220,8 @@ export default function FaceTestScreen() {
                 }
 
                 const faces = await detectFaces(photoFile.filePath);
+                const t2 = Date.now();
+                console.log(`[FaceScan] capture=${t1 - t0}ms detect=${t2 - t1}ms total=${t2 - t0}ms`);
 
                 if (cancelled) {
                     scanningRef.current = false;
@@ -111,7 +230,7 @@ export default function FaceTestScreen() {
 
                 if (faces.length > 0) {
                     const face = faces[0];
-                    const yaw = -face.yaw; // Negate for front camera mirror
+                    const yaw = -face.yaw;
                     setDisplayYaw(Math.round(yaw * 10) / 10);
                     setDisplayFace(true);
 
@@ -131,6 +250,7 @@ export default function FaceTestScreen() {
                         }
 
                         if (shouldAdvance) {
+                            Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
                             captureCountRef.current += 1;
                             setCaptureCount(captureCountRef.current);
 
@@ -153,7 +273,11 @@ export default function FaceTestScreen() {
                     setDisplayFace(false);
                 }
             } catch (err) {
-                console.error('[FaceScan] ERROR:', err instanceof Error ? err.message : String(err));
+                const msg = err instanceof Error ? err.message : String(err);
+                // "Camera is closed" is expected during teardown between flows on Android
+                if (!msg.includes('Camera is closed')) {
+                    console.error('[FaceScan] ERROR:', msg);
+                }
             }
 
             scanningRef.current = false;
@@ -169,16 +293,16 @@ export default function FaceTestScreen() {
     // ── Process photo via edge function ─────────────────────
 
     const processPhoto = useCallback(async () => {
-        // Stop scanning first, but keep camera alive to avoid AVCaptureSession crash
         setScanning(false);
-        // Wait for any in-flight capture to complete
         let waitAttempts = 0;
         while (scanningRef.current && waitAttempts < 20) {
             await new Promise((r) => setTimeout(r, 100));
             waitAttempts++;
         }
-        setCameraVisible(false);
-        restoreBrightness();
+        // On Android, fully unmount the camera so the next flow gets a fresh session
+        if (Platform.OS === 'android') {
+            setCameraMounted(false);
+        }
         setProcessing(true);
 
         try {
@@ -186,12 +310,17 @@ export default function FaceTestScreen() {
             if (!photoPath) {
                 Alert.alert('Error', 'No photo captured');
                 setPhase('idle');
+                setCameraVisible(false);
                 return;
             }
 
             if (phaseRef.current === 'registering') {
                 await registerFace(photoPath);
                 setHasRegistered(true);
+                setProcessing(false);
+                setCameraVisible(false);
+                restoreBrightness();
+                Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
                 Alert.alert('Registered', 'Face reference photo saved.');
             } else if (phaseRef.current === 'verifying') {
                 const result = await verifyFace(photoPath);
@@ -200,19 +329,25 @@ export default function FaceTestScreen() {
                     result.similarity.toFixed(1) + '%',
                     result.match ? 'MATCH' : 'REJECTED',
                 );
-                setSimilarity(result.similarity);
-                setMatchResult(result.match ? 'pass' : 'fail');
-                Alert.alert(
-                    result.match ? 'Match!' : 'No Match',
-                    `Similarity: ${result.similarity.toFixed(1)}% (threshold: ${MATCH_THRESHOLD}%)`,
-                );
+                setProcessing(false);
+                restoreBrightness();
+
+                if (result.match) {
+                    Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+                    setShowResult('pass');
+                } else {
+                    Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
+                    setShowResult('fail');
+                }
             }
         } catch (err) {
             console.error('[FaceVerify] ERROR:', err instanceof Error ? err.message : String(err));
+            setProcessing(false);
+            setCameraVisible(false);
+            restoreBrightness();
             Alert.alert('Error', err instanceof Error ? err.message : 'Processing failed');
         } finally {
             setPhase('idle');
-            setProcessing(false);
         }
     }, []);
 
@@ -231,8 +366,7 @@ export default function FaceTestScreen() {
             setCaptureCount(0);
             scanningRef.current = false;
             straightPhotoRef.current = null;
-            setSimilarity(null);
-            setMatchResult(null);
+            setShowResult(null);
             setMaxBrightness();
             setCameraMounted(true);
             setCameraVisible(true);
@@ -245,8 +379,19 @@ export default function FaceTestScreen() {
         setScanning(false);
         setCameraVisible(false);
         setPhase('idle');
+        setShowResult(null);
         restoreBrightness();
     }, []);
+
+    const handleDismissResult = useCallback(() => {
+        setShowResult(null);
+        setCameraVisible(false);
+    }, []);
+
+    const handleRetry = useCallback(() => {
+        setShowResult(null);
+        startFlow('verifying');
+    }, [startFlow]);
 
     // ── Render ──────────────────────────────────────────────
 
@@ -270,10 +415,10 @@ export default function FaceTestScreen() {
                 <View style={{ width: 28 }} />
             </View>
 
-            {/* Camera stays mounted once activated — never unmount mid-session
-                to avoid AVCaptureSession dealloc crash */}
+            {/* Camera stays mounted once activated — layout never changes
+                to avoid VisionCamera Android stream config errors */}
             {cameraMounted && device && (
-                <View style={[styles.cameraContainer, !cameraVisible && { position: 'absolute', opacity: 0 }]}>
+                <View style={styles.cameraContainer} pointerEvents={cameraVisible ? 'auto' : 'none'}>
                     <Camera
                         ref={cameraRef}
                         style={StyleSheet.absoluteFill}
@@ -282,6 +427,7 @@ export default function FaceTestScreen() {
                         outputs={[photoOutput]}
                     />
 
+                    {/* Face frame */}
                     <View style={styles.overlay}>
                         <View
                             style={[
@@ -293,67 +439,54 @@ export default function FaceTestScreen() {
                         />
                     </View>
 
+                    {/* Step dots */}
                     <View style={styles.stepIndicator}>
                         <View style={[styles.stepDot, captureCount >= 1 && styles.stepDotDone]} />
                         <View style={[styles.stepDot, captureCount >= 2 && styles.stepDotDone]} />
                         <View style={[styles.stepDot, captureCount >= 3 && styles.stepDotDone]} />
                     </View>
 
+                    {/* Prompt with animated arrows */}
                     <View style={styles.promptContainer}>
+                        <View style={styles.promptRow}>
+                            {step === 'turn_left' && <AnimatedArrow direction="left" />}
+                            {step === 'turn_right' && <AnimatedArrow direction="right" />}
+                        </View>
                         <Text style={styles.promptText}>{STEP_PROMPTS[step]}</Text>
                     </View>
 
+                    {/* Debug overlay */}
                     <View style={styles.debugOverlay}>
                         <Text style={styles.debugText}>Yaw: {displayYaw}°</Text>
                         <Text style={styles.debugText}>Face: {displayFace ? 'YES' : 'NO'}</Text>
                         <Text style={styles.debugText}>Step: {step}</Text>
                     </View>
 
-                    <Pressable style={styles.cancelButton} onPress={handleCancel}>
-                        <Text style={styles.cancelText}>Cancel</Text>
-                    </Pressable>
+                    {/* Cancel button (hide during processing/result) */}
+                    {!processing && !showResult && (
+                        <Pressable style={styles.cancelButton} onPress={handleCancel}>
+                            <Text style={styles.cancelText}>Cancel</Text>
+                        </Pressable>
+                    )}
                 </View>
             )}
 
+            {/* Overlays rendered at top level so they survive camera unmount on Android */}
+            {processing && <ProcessingOverlay />}
+            {showResult === 'pass' && <CheckedInOverlay onDismiss={handleDismissResult} />}
+            {showResult === 'fail' && <FailedOverlay onDismiss={handleDismissResult} onRetry={handleRetry} />}
+
             {!cameraVisible && (
-                <ScrollView contentContainerStyle={styles.content}>
+                <ScrollView
+                    contentContainerStyle={styles.content}
+                    style={cameraMounted ? [styles.scrollOverlay, { backgroundColor: colors.background }] : undefined}
+                >
                     <View style={[styles.card, { backgroundColor: colors.surfacePrimary }]}>
                         <Text style={[styles.cardTitle, { color: colors.textPrimary }]}>System Status</Text>
                         <StatusRow label="Camera Permission" ok={hasPermission} />
                         <StatusRow label="Camera Device" ok={!!device} />
                         <StatusRow label="Face Registered" ok={hasRegistered} />
                     </View>
-
-                    {processing && (
-                        <View style={[styles.card, { backgroundColor: colors.surfacePrimary }]}>
-                            <Text style={[styles.cardTitle, { color: colors.textPrimary }]}>Processing...</Text>
-                            <Text style={[styles.infoText, { color: colors.textSecondary }]}>
-                                Sending to AWS Rekognition...
-                            </Text>
-                        </View>
-                    )}
-
-                    {similarity !== null && (
-                        <View style={[styles.card, { backgroundColor: colors.surfacePrimary }]}>
-                            <Text style={[styles.cardTitle, { color: colors.textPrimary }]}>Last Result</Text>
-                            <Text
-                                style={[
-                                    styles.similarityScore,
-                                    { color: matchResult === 'pass' ? '#34C759' : '#FF3B30' },
-                                ]}
-                            >
-                                {similarity.toFixed(1)}%
-                            </Text>
-                            <Text style={[styles.similarityLabel, { color: colors.textSecondary }]}>
-                                AWS Rekognition Similarity (threshold: {MATCH_THRESHOLD}%)
-                            </Text>
-                            <Text
-                                style={[styles.matchBadge, { color: matchResult === 'pass' ? '#34C759' : '#FF3B30' }]}
-                            >
-                                {matchResult === 'pass' ? 'MATCH' : 'NO MATCH'}
-                            </Text>
-                        </View>
-                    )}
 
                     <View style={[styles.card, { backgroundColor: colors.surfacePrimary }]}>
                         <Text style={[styles.cardTitle, { color: colors.textPrimary }]}>Actions</Text>
@@ -437,6 +570,13 @@ const styles = StyleSheet.create({
     },
     headerTitle: { fontSize: 17, fontWeight: '600' },
     content: { padding: 16, paddingBottom: 40 },
+    scrollOverlay: {
+        position: 'absolute',
+        top: 60,
+        left: 0,
+        right: 0,
+        bottom: 0,
+    },
     card: { borderRadius: 12, padding: 16, marginBottom: 16 },
     cardTitle: { fontSize: 15, fontWeight: '600', marginBottom: 12 },
     statusRow: {
@@ -459,9 +599,6 @@ const styles = StyleSheet.create({
         gap: 8,
     },
     buttonText: { color: '#FFFFFF', fontSize: 16, fontWeight: '600' },
-    similarityScore: { fontSize: 48, fontWeight: '700', textAlign: 'center' },
-    similarityLabel: { fontSize: 13, textAlign: 'center', marginTop: 4 },
-    matchBadge: { fontSize: 20, fontWeight: '700', textAlign: 'center', marginTop: 8 },
     infoText: { fontSize: 13, lineHeight: 20 },
     errorText: { fontSize: 15, textAlign: 'center', marginTop: 40 },
     cameraContainer: { flex: 1 },
@@ -484,6 +621,19 @@ const styles = StyleSheet.create({
     },
     stepDotDone: { backgroundColor: '#34C759', borderColor: '#34C759' },
     promptContainer: { position: 'absolute', bottom: 120, left: 0, right: 0, alignItems: 'center' },
+    promptRow: {
+        flexDirection: 'row',
+        justifyContent: 'center',
+        marginBottom: 8,
+    },
+    arrowText: {
+        color: '#FFFFFF',
+        fontSize: 24,
+        fontWeight: '700',
+        textShadowColor: 'rgba(0,0,0,0.7)',
+        textShadowOffset: { width: 0, height: 1 },
+        textShadowRadius: 3,
+    },
     promptText: {
         color: '#FFFFFF',
         fontSize: 18,
@@ -518,4 +668,63 @@ const styles = StyleSheet.create({
         borderRadius: 25,
     },
     cancelText: { color: '#FFFFFF', fontSize: 16, fontWeight: '600' },
+    // Result overlays
+    resultOverlay: {
+        ...StyleSheet.absoluteFillObject,
+        backgroundColor: 'rgba(0,0,0,0.75)',
+        justifyContent: 'center',
+        alignItems: 'center',
+    },
+    successCircle: {
+        width: 120,
+        height: 120,
+        borderRadius: 60,
+        backgroundColor: '#34C759',
+        justifyContent: 'center',
+        alignItems: 'center',
+        marginBottom: 24,
+    },
+    failCircle: {
+        width: 120,
+        height: 120,
+        borderRadius: 60,
+        backgroundColor: '#FF3B30',
+        justifyContent: 'center',
+        alignItems: 'center',
+        marginBottom: 24,
+    },
+    checkedInText: {
+        color: '#FFFFFF',
+        fontSize: 32,
+        fontWeight: '700',
+        marginBottom: 32,
+    },
+    failText: {
+        color: '#FFFFFF',
+        fontSize: 24,
+        fontWeight: '700',
+        marginBottom: 32,
+    },
+    processingText: {
+        color: '#FFFFFF',
+        fontSize: 20,
+        fontWeight: '600',
+    },
+    failButtons: {
+        gap: 12,
+    },
+    retryButton: {
+        backgroundColor: '#FF9500',
+        paddingHorizontal: 40,
+        paddingVertical: 14,
+        borderRadius: 25,
+    },
+    retryText: { color: '#FFFFFF', fontSize: 16, fontWeight: '600', textAlign: 'center' },
+    dismissButton: {
+        backgroundColor: 'rgba(255,255,255,0.2)',
+        paddingHorizontal: 40,
+        paddingVertical: 14,
+        borderRadius: 25,
+    },
+    dismissText: { color: '#FFFFFF', fontSize: 16, fontWeight: '600', textAlign: 'center' },
 });

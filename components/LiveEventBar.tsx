@@ -1,5 +1,6 @@
 import { TAB_BAR_HEIGHT } from '@/constants/platform';
 import { useAuth } from '@/contexts/AuthContext';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useTheme } from '@/contexts/ThemeContext';
 import { formatTime, isEventLive } from '@/lib/dateTime';
 import { fetchEvents } from '@/lib/events';
@@ -24,6 +25,7 @@ export default memo(function LiveEventBar() {
     const { user } = useAuth();
     const router = useTypedRouter();
     const pathname = usePathname();
+    const insets = useSafeAreaInsets();
     const isPa = user?.role === 'pa';
     const onEventsTab = pathname.startsWith('/events');
 
@@ -201,6 +203,7 @@ export default memo(function LiveEventBar() {
             style={[
                 styles.wrapper,
                 {
+                    bottom: TAB_BAR_HEIGHT + BAR_MARGIN_BOTTOM + insets.bottom,
                     transform: [{ translateX: Animated.add(translateX, swipeAnim) }],
                     opacity: entranceAnim,
                 },
@@ -287,7 +290,6 @@ export default memo(function LiveEventBar() {
 const styles = StyleSheet.create({
     wrapper: {
         position: 'absolute',
-        bottom: TAB_BAR_HEIGHT + BAR_MARGIN_BOTTOM,
         left: BAR_MARGIN_H,
         right: BAR_MARGIN_H,
         zIndex: 100,

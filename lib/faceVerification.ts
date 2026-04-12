@@ -12,8 +12,10 @@ export const MATCH_THRESHOLD = 90.0;
 
 async function readPhotoAsBase64(filePath: string): Promise<string> {
     // VisionCamera saves as HEIC on modern iPhones — convert to JPEG
-    const jpegPath = await convertToJpeg(filePath, 0.8);
-    const file = new File(jpegPath);
+    const jpegPath = await convertToJpeg(filePath, 0.5);
+    // Ensure file:// prefix (Android returns raw paths, File constructor needs URI)
+    const uri = jpegPath.startsWith('file://') ? jpegPath : `file://${jpegPath}`;
+    const file = new File(uri);
     const bytes = await file.bytes();
     console.log(`[FaceVerify] JPEG: ${bytes.length} bytes, header: ${bytes[0]},${bytes[1]},${bytes[2]}`);
     let binary = '';
