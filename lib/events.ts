@@ -165,29 +165,34 @@ export async function createEvent(
 }
 
 /**
- * Update only the location coordinates on an event, without round-tripping
- * the full CreateEventInput. Used by the event detail screen's "Pin venue"
- * flow so managers can backfill legacy events or retune an existing pin
- * without having to re-confirm title / date / attendees.
+ * Update only the location fields on an event, without round-tripping the
+ * full CreateEventInput. Used by the event detail screen's "Pin venue" flow
+ * so managers can backfill legacy events or retune an existing pin without
+ * having to re-confirm title / date / attendees.
  *
- * Pass `latitude: null, longitude: null` to clear the pin back to TBC —
- * check-in will then be blocked for the event until it's pinned again.
+ * - Pass `latitude: null, longitude: null` to clear the pin back to TBC.
+ *   Check-in will then be blocked for the event until it's pinned again.
+ * - Pass `locationName` to also update the free-text venue label (e.g. when
+ *   the user searched for "NTUC Bukit Timah" in the MapPicker). Undefined
+ *   means don't touch the existing label.
  */
 export async function updateEventLocation(
     eventId: string,
-    coords: {
+    fields: {
         latitude: number | null;
         longitude: number | null;
+        locationName?: string;
         locationRadiusMeters?: number;
     },
 ): Promise<{ error: string | null }> {
     const { error } = await supabase
         .from('events')
         .update({
-            latitude: coords.latitude,
-            longitude: coords.longitude,
-            ...(coords.locationRadiusMeters !== undefined
-                ? { location_radius_meters: coords.locationRadiusMeters }
+            latitude: fields.latitude,
+            longitude: fields.longitude,
+            ...(fields.locationName !== undefined ? { location: fields.locationName } : {}),
+            ...(fields.locationRadiusMeters !== undefined
+                ? { location_radius_meters: fields.locationRadiusMeters }
                 : {}),
         })
         .eq('id', eventId);

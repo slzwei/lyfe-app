@@ -26,9 +26,15 @@ export default function CreateEventScreen() {
     const [showMapPicker, setShowMapPicker] = useState(false);
 
     const handleConfirmPin = useCallback(
-        (coords: { latitude: number; longitude: number }) => {
-            form.setLatitude(coords.latitude);
-            form.setLongitude(coords.longitude);
+        (payload: { latitude: number; longitude: number; name?: string }) => {
+            form.setLatitude(payload.latitude);
+            form.setLongitude(payload.longitude);
+            // If the user searched by name in the MapPicker and the current
+            // location text field is empty, auto-fill it. Never clobber a
+            // value the user already typed — that's their label.
+            if (payload.name && !form.location.trim()) {
+                form.setLocation(payload.name);
+            }
             setShowMapPicker(false);
         },
         [form],
@@ -436,6 +442,7 @@ export default function CreateEventScreen() {
                 visible={showMapPicker}
                 initialLatitude={latitude}
                 initialLongitude={longitude}
+                initialName={location}
                 onConfirm={handleConfirmPin}
                 onCancel={() => setShowMapPicker(false)}
             />

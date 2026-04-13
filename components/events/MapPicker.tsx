@@ -18,7 +18,7 @@ import { useTheme } from '@/contexts/ThemeContext';
 import { Ionicons } from '@expo/vector-icons';
 import * as Location from 'expo-location';
 import React, { useCallback, useEffect, useRef, useState } from 'react';
-import { ActivityIndicator, Modal, Pressable, StyleSheet, Text, View } from 'react-native';
+import { ActivityIndicator, Modal, Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
 import MapView, { type Region } from 'react-native-maps';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
@@ -27,18 +27,38 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 const SINGAPORE_FALLBACK = { latitude: 1.3521, longitude: 103.8198 };
 const DEFAULT_DELTA = 0.008; // ~800m viewport, wide enough to orient
 
+export interface MapPickerConfirmPayload {
+    latitude: number;
+    longitude: number;
+    /** Populated if the user typed a place name in the search field. Empty
+     * when they panned manually. Callers can use this to auto-fill the
+     * event's location text field without clobbering a manual entry. */
+    name?: string;
+}
+
 export interface MapPickerProps {
     visible: boolean;
     /** If set, the map opens centred here and the pin starts at these coords. */
     initialLatitude?: number | null;
     initialLongitude?: number | null;
-    /** Called when the user taps Confirm. Receives the coords under the pin. */
-    onConfirm: (coords: { latitude: number; longitude: number }) => void;
+    /** Optional initial value for the search field — e.g. the event's existing
+     * location text so the user can edit it rather than retype. */
+    initialName?: string;
+    /** Called when the user taps Confirm. Receives the coords under the pin
+     * plus the search text if one was typed. */
+    onConfirm: (payload: MapPickerConfirmPayload) => void;
     /** Called when the user taps Cancel or dismisses the modal. */
     onCancel: () => void;
 }
 
-export default function MapPicker({ visible, initialLatitude, initialLongitude, onConfirm, onCancel }: MapPickerProps) {
+export default function MapPicker({
+    visible,
+    initialLatitude,
+    initialLongitude,
+    initialName,
+    onConfirm,
+    onCancel,
+}: MapPickerProps) {
     const { colors } = useTheme();
     const mapRef = useRef<MapView | null>(null);
 
@@ -54,6 +74,15 @@ export default function MapPicker({ visible, initialLatitude, initialLongitude, 
     });
     const [locating, setLocating] = useState(false);
     const [ready, setReady] = useState(false);
+    // Search text typed into the search field — persists across pan/confirm.
+    // If the user typed something and it resolved successfully, we pass it
+    // back to the caller so the event's location text can auto-fill.
+    const [searchText, setSearchText] = useState(initialName ?? '');
+    const [searching, setSearching] = useState(false);
+    const [searchError, setSearchError] = useState<string | null>(null);
+    // Whether the current pinCoords came from a successful search (vs. pan).
+    // Used to decide whether to include the name in the onConfirm payload.
+    const [pinNameLocked, setPinNameLocked] = useState(!!initialName);
 
     // On open, if no initial coords were passed, try to jump to the user's
     // current location. Best-effort — falls back silently to Singapore.
@@ -99,7 +128,37 @@ export default function MapPicker({ visible, initialLatitude, initialLongitude, 
 
     const handleRegionChange = useCallback((region: Region) => {
         setPinCoords({ latitude: region.latitude, longitude: region.longitude });
+        // User panned manually — the pin no longer represents the searched
+        // name, so drop the name lock. onConfirm will return the current
+        // pin coords only, not the stale search text.
+        setPinNameLocked(false);
     }, []);
+
+    const handleSearch = useCallback(async () => {
+        const trimmed = searchText.trim();
+        if (!trimmed) return;
+        setSearching(true);
+        setSearchError(null);
+        try {
+            const results = await Location.geocodeAsync(trimmed);
+            if (results.length === 0) {
+                setSearchError('No matches found. Try a broader search.');
+                return;
+            }
+            const first = results[0];
+            const coords = { latitude: first.latitude, longitude: first.longitude };
+            setPinCoords(coords);
+            setPinNameLocked(true);
+            mapRef.current?.animateToRegion(
+                { ...coords, latitudeDelta: DEFAULT_DELTA, longitudeDelta: DEFAULT_DELTA },
+                300,
+            );
+        } catch {
+            setSearchError('Search failed. Check your connection and try again.');
+        } finally {
+            setSearching(false);
+        }
+    }, [searchText]);
 
     const handleUseCurrentLocation = useCallback(async () => {
         setLocating(true);
@@ -109,6 +168,8 @@ export default function MapPicker({ visible, initialLatitude, initialLongitude, 
             const fix = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.High });
             const coords = { latitude: fix.coords.latitude, longitude: fix.coords.longitude };
             setPinCoords(coords);
+            // Using current location invalidates any previously-searched name.
+            setPinNameLocked(false);
             mapRef.current?.animateToRegion(
                 { ...coords, latitudeDelta: DEFAULT_DELTA, longitudeDelta: DEFAULT_DELTA },
                 300,
@@ -121,8 +182,15 @@ export default function MapPicker({ visible, initialLatitude, initialLongitude, 
     }, []);
 
     const handleConfirm = useCallback(() => {
-        onConfirm(pinCoords);
-    }, [onConfirm, pinCoords]);
+        onConfirm({
+            latitude: pinCoords.latitude,
+            longitude: pinCoords.longitude,
+            // Only pass the name if the current pin came from a successful
+            // search — if the user searched, then panned away, the stale
+            // name doesn't represent the pin.
+            name: pinNameLocked && searchText.trim() ? searchText.trim() : undefined,
+        });
+    }, [onConfirm, pinCoords, pinNameLocked, searchText]);
 
     const initialRegion: Region = {
         latitude: pinCoords.latitude,
@@ -157,6 +225,42 @@ export default function MapPicker({ visible, initialLatitude, initialLongitude, 
                         </Text>
                     </Pressable>
                 </View>
+
+                {/* Search — type a place name / address and hit return to
+                    geocode it via expo-location (uses Apple Maps on iOS /
+                    Android's platform geocoder). No API key needed. */}
+                <View style={[styles.searchRow, { backgroundColor: colors.cardBackground }]}>
+                    <Ionicons name="search" size={18} color={colors.textTertiary} />
+                    <TextInput
+                        style={[styles.searchInput, { color: colors.textPrimary }]}
+                        placeholder="Search venue or address"
+                        placeholderTextColor={colors.textTertiary}
+                        value={searchText}
+                        onChangeText={(t) => {
+                            setSearchText(t);
+                            if (searchError) setSearchError(null);
+                        }}
+                        onSubmitEditing={handleSearch}
+                        returnKeyType="search"
+                        autoCorrect={false}
+                        autoCapitalize="words"
+                    />
+                    {searching ? (
+                        <ActivityIndicator size="small" color={colors.accent} />
+                    ) : searchText.trim() ? (
+                        <Pressable
+                            onPress={() => {
+                                setSearchText('');
+                                setSearchError(null);
+                            }}
+                            hitSlop={8}
+                            accessibilityLabel="Clear search"
+                        >
+                            <Ionicons name="close-circle" size={18} color={colors.textTertiary} />
+                        </Pressable>
+                    ) : null}
+                </View>
+                {searchError ? <Text style={[styles.searchError, { color: colors.danger }]}>{searchError}</Text> : null}
 
                 {/* Map */}
                 <View style={styles.mapWrapper}>
@@ -222,6 +326,26 @@ const styles = StyleSheet.create({
     },
     headerTitle: { fontSize: 17, fontWeight: '600' },
     headerAction: { fontSize: 16 },
+    searchRow: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 10,
+        marginHorizontal: 16,
+        marginTop: 12,
+        paddingHorizontal: 14,
+        paddingVertical: 10,
+        borderRadius: 12,
+    },
+    searchInput: {
+        flex: 1,
+        fontSize: 15,
+        padding: 0,
+    },
+    searchError: {
+        fontSize: 12,
+        marginHorizontal: 16,
+        marginTop: 6,
+    },
     mapWrapper: { flex: 1 },
     pinWrapper: {
         ...StyleSheet.absoluteFillObject,

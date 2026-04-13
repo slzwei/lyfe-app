@@ -401,10 +401,17 @@ export default function EventDetailScreen() {
             (user.role === 'pa' && user.reports_to === event.created_by));
     const canDelete = !!user && (user.id === event.created_by || user.role === 'admin');
 
-    const handleConfirmPin = async (coords: { latitude: number; longitude: number }) => {
+    const handleConfirmPin = async (payload: { latitude: number; longitude: number; name?: string }) => {
         setMapPickerVisible(false);
         setSavingPin(true);
-        const { error } = await updateEventLocation(event.id, coords);
+        // Only write the name if the user searched by name AND the event's
+        // existing label is empty. Never clobber a manual label.
+        const shouldWriteName = !!payload.name && !event.location?.trim();
+        const { error } = await updateEventLocation(event.id, {
+            latitude: payload.latitude,
+            longitude: payload.longitude,
+            ...(shouldWriteName ? { locationName: payload.name } : {}),
+        });
         setSavingPin(false);
         if (error) {
             Alert.alert('Error', error);
@@ -682,6 +689,7 @@ export default function EventDetailScreen() {
                 visible={mapPickerVisible}
                 initialLatitude={event.latitude}
                 initialLongitude={event.longitude}
+                initialName={event.location ?? undefined}
                 onConfirm={handleConfirmPin}
                 onCancel={() => setMapPickerVisible(false)}
             />
