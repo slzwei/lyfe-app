@@ -165,6 +165,36 @@ export async function createEvent(
 }
 
 /**
+ * Update only the location coordinates on an event, without round-tripping
+ * the full CreateEventInput. Used by the event detail screen's "Pin venue"
+ * flow so managers can backfill legacy events or retune an existing pin
+ * without having to re-confirm title / date / attendees.
+ *
+ * Pass `latitude: null, longitude: null` to clear the pin back to TBC —
+ * check-in will then be blocked for the event until it's pinned again.
+ */
+export async function updateEventLocation(
+    eventId: string,
+    coords: {
+        latitude: number | null;
+        longitude: number | null;
+        locationRadiusMeters?: number;
+    },
+): Promise<{ error: string | null }> {
+    const { error } = await supabase
+        .from('events')
+        .update({
+            latitude: coords.latitude,
+            longitude: coords.longitude,
+            ...(coords.locationRadiusMeters !== undefined
+                ? { location_radius_meters: coords.locationRadiusMeters }
+                : {}),
+        })
+        .eq('id', eventId);
+    return { error: error?.message ?? null };
+}
+
+/**
  * Fetch all non-admin users for the attendee picker.
  */
 export async function fetchAllUsers(): Promise<{ data: SimpleUser[]; error: string | null }> {

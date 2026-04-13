@@ -1,12 +1,13 @@
 import Confetti, { CONFETTI_DURATION } from '@/components/Confetti';
 import ScreenHeader from '@/components/ScreenHeader';
+import MapPicker from '@/components/events/MapPicker';
 import { useEventDetail } from '@/hooks/useEventDetail';
 import { useCheckInFlow } from '@/hooks/useCheckInFlow';
 import { useActivityLog } from '@/hooks/useActivityLog';
 import { useManagerOverride } from '@/hooks/useManagerOverride';
 import { useAuth } from '@/contexts/AuthContext';
 import { useTheme } from '@/contexts/ThemeContext';
-import { deleteEvent } from '@/lib/events';
+import { deleteEvent, updateEventLocation } from '@/lib/events';
 import { logRoadshowActivity } from '@/lib/roadshow';
 import { formatCreatedAt, formatDateLong, formatTime, getRoadshowStatus } from '@/lib/dateTime';
 import type { AttendeeRole, EventAttendee } from '@/types/event';
@@ -64,6 +65,11 @@ export default function EventDetailScreen() {
     // ── Confetti (stays in screen — used by activity log's onMilestone) ──
     const [confettiVisible, setConfettiVisible] = useState(false);
     const [confettiKey, setConfettiKey] = useState(0);
+    // MapPicker for setting / editing the venue pin. Only managers (canEdit)
+    // can open it; the picker itself is rendered unconditionally so we can
+    // control visibility via a single state flag.
+    const [mapPickerVisible, setMapPickerVisible] = useState(false);
+    const [savingPin, setSavingPin] = useState(false);
     const confettiTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
     const triggerConfetti = useCallback(() => {
@@ -279,6 +285,18 @@ export default function EventDetailScreen() {
             (user.role === 'pa' && user.reports_to === event.created_by));
     const canDelete = !!user && (user.id === event.created_by || user.role === 'admin');
 
+    const handleConfirmPin = async (coords: { latitude: number; longitude: number }) => {
+        setMapPickerVisible(false);
+        setSavingPin(true);
+        const { error } = await updateEventLocation(event.id, coords);
+        setSavingPin(false);
+        if (error) {
+            Alert.alert('Error', error);
+            return;
+        }
+        await loadEvent();
+    };
+
     const handleDelete = () => {
         Alert.alert('Delete Event', `Are you sure you want to delete "${event.title}"? This cannot be undone.`, [
             { text: 'Cancel', style: 'cancel' },
@@ -401,6 +419,63 @@ export default function EventDetailScreen() {
                         <View style={styles.metaRow}>
                             <Ionicons name="location-outline" size={16} color={colors.textTertiary} />
                             <Text style={[styles.metaText, { color: colors.textSecondary }]}>{event.location}</Text>
+                        </View>
+                    )}
+
+                    {/* Precise venue pin for check-in proximity. Managers can
+                        set or update it; everyone sees the current state. */}
+                    {event.latitude != null && event.longitude != null ? (
+                        <TouchableOpacity
+                            style={styles.metaRow}
+                            onPress={canEdit ? () => setMapPickerVisible(true) : undefined}
+                            disabled={!canEdit || savingPin}
+                            accessibilityRole={canEdit ? 'button' : undefined}
+                        >
+                            <Ionicons name="pin" size={16} color={colors.accent} />
+                            <Text
+                                style={[
+                                    styles.metaText,
+                                    { color: colors.textSecondary, flex: 1, fontVariant: ['tabular-nums'] },
+                                ]}
+                            >
+                                {event.latitude.toFixed(5)}, {event.longitude.toFixed(5)}
+                            </Text>
+                            {canEdit && (
+                                <Text style={[styles.metaAction, { color: colors.accent }]}>
+                                    {savingPin ? 'Saving…' : 'Edit'}
+                                </Text>
+                            )}
+                        </TouchableOpacity>
+                    ) : canEdit ? (
+                        <TouchableOpacity
+                            style={[
+                                styles.metaRow,
+                                {
+                                    backgroundColor: colors.warningLight,
+                                    borderRadius: 8,
+                                    padding: 8,
+                                    marginHorizontal: -8,
+                                },
+                            ]}
+                            onPress={() => setMapPickerVisible(true)}
+                            disabled={savingPin}
+                            accessibilityRole="button"
+                            accessibilityLabel="Set venue location"
+                        >
+                            <Ionicons name="warning-outline" size={16} color={colors.warning} />
+                            <Text style={[styles.metaText, { color: colors.warning, flex: 1 }]}>
+                                Location TBC — tap to pin the venue
+                            </Text>
+                            <Text style={[styles.metaAction, { color: colors.warning }]}>
+                                {savingPin ? 'Saving…' : 'Set'}
+                            </Text>
+                        </TouchableOpacity>
+                    ) : (
+                        <View style={styles.metaRow}>
+                            <Ionicons name="warning-outline" size={16} color={colors.warning} />
+                            <Text style={[styles.metaText, { color: colors.warning }]}>
+                                Location TBC — check-in unavailable
+                            </Text>
                         </View>
                     )}
                 </View>
@@ -535,6 +610,14 @@ export default function EventDetailScreen() {
             </ScrollView>
 
             <Confetti visible={confettiVisible} confettiKey={confettiKey} />
+
+            <MapPicker
+                visible={mapPickerVisible}
+                initialLatitude={event.latitude}
+                initialLongitude={event.longitude}
+                onConfirm={handleConfirmPin}
+                onCancel={() => setMapPickerVisible(false)}
+            />
         </SafeAreaView>
     );
 }
@@ -560,6 +643,7 @@ const styles = StyleSheet.create({
     heroTitle: { fontSize: 22, fontWeight: '800', letterSpacing: letterSpacing(-0.4), lineHeight: 28 },
     metaRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
     metaText: { fontSize: 14, flex: 1 },
+    metaAction: { fontSize: 13, fontWeight: '600' },
     card: { borderRadius: 16, padding: 16, gap: 12 },
     cardTitle: { fontSize: 15, fontWeight: '700' },
     description: { fontSize: 14, lineHeight: 21 },
