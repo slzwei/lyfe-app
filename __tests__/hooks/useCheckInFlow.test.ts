@@ -6,11 +6,16 @@ jest.mock('@/lib/supabase');
 const mockLogRoadshowAttendanceWithPledge = jest.fn();
 const mockHasUserCheckedIn = jest.fn();
 const mockLogRoadshowActivity = jest.fn();
+const mockCheckEventProximity = jest.fn();
 
 jest.mock('@/lib/roadshow', () => ({
     logRoadshowAttendanceWithPledge: (...args: any[]) => mockLogRoadshowAttendanceWithPledge(...args),
     hasUserCheckedIn: (...args: any[]) => mockHasUserCheckedIn(...args),
     logRoadshowActivity: (...args: any[]) => mockLogRoadshowActivity(...args),
+}));
+
+jest.mock('@/lib/gpsVerification', () => ({
+    checkEventProximity: (...args: any[]) => mockCheckEventProximity(...args),
 }));
 
 describe('useCheckInFlow', () => {
@@ -37,6 +42,8 @@ describe('useCheckInFlow', () => {
     beforeEach(() => {
         jest.clearAllMocks();
         mockLogRoadshowActivity.mockResolvedValue({ data: null, error: null });
+        // Default: proximity passes — overridden in failure-path tests.
+        mockCheckEventProximity.mockResolvedValue({ ok: true, distanceMeters: 12, requiredMeters: 100 });
     });
 
     it('handleOpenCheckin sets pledge defaults from config', () => {
@@ -122,5 +129,43 @@ describe('useCheckInFlow', () => {
         expect(mockLogRoadshowAttendanceWithPledge).not.toHaveBeenCalled();
         expect(defaultParams.onCheckedIn).toHaveBeenCalled();
         expect(result.current.showPledgeSheet).toBe(false);
+    });
+
+    it('blocks check-in when proximity check fails', async () => {
+        mockCheckEventProximity.mockResolvedValue({
+            ok: false,
+            reason: 'out_of_range',
+            message: 'You are 350m from the venue. Move within 100m to check in.',
+            distanceMeters: 350,
+            requiredMeters: 100,
+        });
+
+        const { result } = renderHook(() => useCheckInFlow(defaultParams));
+
+        await act(async () => {
+            await result.current.handleConfirmPledge();
+        });
+
+        expect(result.current.checkinError).toBe('You are 350m from the venue. Move within 100m to check in.');
+        expect(mockHasUserCheckedIn).not.toHaveBeenCalled();
+        expect(mockLogRoadshowAttendanceWithPledge).not.toHaveBeenCalled();
+        expect(defaultParams.onCheckedIn).not.toHaveBeenCalled();
+    });
+
+    it('blocks check-in when event location is TBC', async () => {
+        mockCheckEventProximity.mockResolvedValue({
+            ok: false,
+            reason: 'no_location_set',
+            message: 'This event has no pinned location yet. Ask your manager to set the venue.',
+        });
+
+        const { result } = renderHook(() => useCheckInFlow(defaultParams));
+
+        await act(async () => {
+            await result.current.handleConfirmPledge();
+        });
+
+        expect(result.current.checkinError).toContain('no pinned location');
+        expect(mockLogRoadshowAttendanceWithPledge).not.toHaveBeenCalled();
     });
 });

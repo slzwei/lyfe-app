@@ -1,6 +1,7 @@
 import { useCallback, useState } from 'react';
 import { Alert } from 'react-native';
 import { DEFAULT_PLEDGED_CLOSED, DEFAULT_PLEDGED_PITCHES, DEFAULT_PLEDGED_SITDOWNS } from '@/constants/ui';
+import { checkEventProximity } from '@/lib/gpsVerification';
 import {
     hasUserCheckedIn,
     logRoadshowActivity,
@@ -43,6 +44,17 @@ export function useCheckInFlow({ eventId, userId, userFullName, roadshowConfig, 
         if (checkingIn) return;
         setCheckingIn(true);
         setCheckinError(null);
+
+        // ── Proximity gate ──────────────────────────────────
+        // Verify the user is physically at the venue before committing the
+        // check-in. Failures (TBC location, denied permission, GPS error,
+        // out of range) surface a structured reason + human message.
+        const proximity = await checkEventProximity(eventId!);
+        if (!proximity.ok) {
+            setCheckinError(proximity.message);
+            setCheckingIn(false);
+            return;
+        }
 
         // Check for existing attendance (manager may have checked in already)
         const { data: alreadyCheckedIn, error: checkError } = await hasUserCheckedIn(eventId!, userId!);
