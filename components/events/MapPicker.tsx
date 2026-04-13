@@ -1,24 +1,25 @@
 /**
  * MapPicker — reusable modal for pinning a precise location on a map.
  *
+ * Primary flow: users type into the search field which powers Google Places
+ * Autocomplete, pick a suggestion from the dropdown, and the map jumps to
+ * that place with the pin dropped there. Pan the map to fine-tune if the
+ * Places result is slightly off, then Confirm to return the coordinates
+ * and the place name to the parent.
+ *
  * Used by the event create and detail screens to capture a venue's lat/lng.
- * The pin stays centred on the visible map region; users pan the map so
- * their desired location lines up under the pin. Tap "Confirm" and the
- * parent receives { latitude, longitude } via `onConfirm`.
+ * The pin stays centred on the visible map region.
  *
- * On mount, tries to jump to the user's current GPS position (with a
- * fallback to Singapore centre if no initial coords were provided and
- * location permission is denied / unavailable). The "Use Current Location"
+ * On mount (when no initial coords are provided), tries to jump to the
+ * user's current GPS position as a starting point. "Use Current Location"
  * button re-triggers the jump on demand.
- *
- * Renders via the Modal component so it can overlay any parent screen
- * without routing. Parent controls visibility via `visible`.
  */
 import { useTheme } from '@/contexts/ThemeContext';
 import { Ionicons } from '@expo/vector-icons';
 import * as Location from 'expo-location';
 import React, { useCallback, useEffect, useRef, useState } from 'react';
-import { ActivityIndicator, Modal, Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
+import { ActivityIndicator, Modal, Pressable, StyleSheet, Text, View } from 'react-native';
+import { GooglePlacesAutocomplete } from 'react-native-google-places-autocomplete';
 import MapView, { type Region } from 'react-native-maps';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
@@ -74,15 +75,10 @@ export default function MapPicker({
     });
     const [locating, setLocating] = useState(false);
     const [ready, setReady] = useState(false);
-    // Search text typed into the search field — persists across pan/confirm.
-    // If the user typed something and it resolved successfully, we pass it
-    // back to the caller so the event's location text can auto-fill.
-    const [searchText, setSearchText] = useState(initialName ?? '');
-    const [searching, setSearching] = useState(false);
-    const [searchError, setSearchError] = useState<string | null>(null);
-    // Whether the current pinCoords came from a successful search (vs. pan).
-    // Used to decide whether to include the name in the onConfirm payload.
-    const [pinNameLocked, setPinNameLocked] = useState(!!initialName);
+    // Name associated with the current pin — set after a successful Places
+    // selection, cleared on manual pan. If set at Confirm time, passed back
+    // to the caller so the event's location text field can auto-fill.
+    const [selectedName, setSelectedName] = useState<string | null>(initialName ?? null);
 
     // On open, if no initial coords were passed, try to jump to the user's
     // current location. Best-effort — falls back silently to Singapore.
@@ -129,36 +125,31 @@ export default function MapPicker({
     const handleRegionChange = useCallback((region: Region) => {
         setPinCoords({ latitude: region.latitude, longitude: region.longitude });
         // User panned manually — the pin no longer represents the searched
-        // name, so drop the name lock. onConfirm will return the current
-        // pin coords only, not the stale search text.
-        setPinNameLocked(false);
+        // name, so drop the name. onConfirm will return the current pin
+        // coords only, not the stale place name.
+        setSelectedName(null);
     }, []);
 
-    const handleSearch = useCallback(async () => {
-        const trimmed = searchText.trim();
-        if (!trimmed) return;
-        setSearching(true);
-        setSearchError(null);
-        try {
-            const results = await Location.geocodeAsync(trimmed);
-            if (results.length === 0) {
-                setSearchError('No matches found. Try a broader search.');
-                return;
-            }
-            const first = results[0];
-            const coords = { latitude: first.latitude, longitude: first.longitude };
+    // Called by the GooglePlacesAutocomplete component when the user taps a
+    // suggestion from the dropdown. `details` contains the full Place Details
+    // (including geometry.location) thanks to fetchDetails={true} on the
+    // component.
+    const handlePlaceSelected = useCallback(
+        (description: string, details: { geometry: { location: { lat: number; lng: number } } } | null) => {
+            if (!details?.geometry?.location) return;
+            const coords = {
+                latitude: details.geometry.location.lat,
+                longitude: details.geometry.location.lng,
+            };
             setPinCoords(coords);
-            setPinNameLocked(true);
+            setSelectedName(description);
             mapRef.current?.animateToRegion(
                 { ...coords, latitudeDelta: DEFAULT_DELTA, longitudeDelta: DEFAULT_DELTA },
                 300,
             );
-        } catch {
-            setSearchError('Search failed. Check your connection and try again.');
-        } finally {
-            setSearching(false);
-        }
-    }, [searchText]);
+        },
+        [],
+    );
 
     const handleUseCurrentLocation = useCallback(async () => {
         setLocating(true);
@@ -168,8 +159,8 @@ export default function MapPicker({
             const fix = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.High });
             const coords = { latitude: fix.coords.latitude, longitude: fix.coords.longitude };
             setPinCoords(coords);
-            // Using current location invalidates any previously-searched name.
-            setPinNameLocked(false);
+            // Using current location invalidates any previously-selected name.
+            setSelectedName(null);
             mapRef.current?.animateToRegion(
                 { ...coords, latitudeDelta: DEFAULT_DELTA, longitudeDelta: DEFAULT_DELTA },
                 300,
@@ -185,12 +176,12 @@ export default function MapPicker({
         onConfirm({
             latitude: pinCoords.latitude,
             longitude: pinCoords.longitude,
-            // Only pass the name if the current pin came from a successful
-            // search — if the user searched, then panned away, the stale
-            // name doesn't represent the pin.
-            name: pinNameLocked && searchText.trim() ? searchText.trim() : undefined,
+            // Only pass the name if the pin still corresponds to the last
+            // Places selection. If the user searched, then panned away,
+            // selectedName was cleared and we return coords only.
+            name: selectedName ?? undefined,
         });
-    }, [onConfirm, pinCoords, pinNameLocked, searchText]);
+    }, [onConfirm, pinCoords, selectedName]);
 
     const initialRegion: Region = {
         latitude: pinCoords.latitude,
@@ -226,41 +217,91 @@ export default function MapPicker({
                     </Pressable>
                 </View>
 
-                {/* Search — type a place name / address and hit return to
-                    geocode it via expo-location (uses Apple Maps on iOS /
-                    Android's platform geocoder). No API key needed. */}
-                <View style={[styles.searchRow, { backgroundColor: colors.cardBackground }]}>
-                    <Ionicons name="search" size={18} color={colors.textTertiary} />
-                    <TextInput
-                        style={[styles.searchInput, { color: colors.textPrimary }]}
+                {/* Places autocomplete — debounced search with dropdown
+                    suggestions backed by Google Places API. On selection,
+                    animates the map and drops the pin. The component
+                    renders its dropdown absolute-positioned so it floats
+                    over the map below. */}
+                <View style={styles.searchWrapper}>
+                    <GooglePlacesAutocomplete
                         placeholder="Search venue or address"
-                        placeholderTextColor={colors.textTertiary}
-                        value={searchText}
-                        onChangeText={(t) => {
-                            setSearchText(t);
-                            if (searchError) setSearchError(null);
+                        fetchDetails
+                        debounce={300}
+                        minLength={2}
+                        enablePoweredByContainer={false}
+                        onPress={(data, details) => {
+                            // `details` is typed as `any` by the lib — narrow
+                            // to what we actually read.
+                            const geometry = (details as { geometry?: { location?: { lat: number; lng: number } } })
+                                ?.geometry?.location;
+                            if (!geometry) return;
+                            handlePlaceSelected(data.description, {
+                                geometry: { location: { lat: geometry.lat, lng: geometry.lng } },
+                            });
                         }}
-                        onSubmitEditing={handleSearch}
-                        returnKeyType="search"
-                        autoCorrect={false}
-                        autoCapitalize="words"
+                        query={{
+                            key: process.env.EXPO_PUBLIC_GOOGLE_MAPS_API_KEY,
+                            language: 'en',
+                            // Bias results to Singapore — staff app footprint.
+                            components: 'country:sg',
+                        }}
+                        textInputProps={{
+                            defaultValue: initialName ?? '',
+                            placeholderTextColor: colors.textTertiary,
+                            autoCorrect: false,
+                            autoCapitalize: 'words',
+                        }}
+                        styles={{
+                            container: {
+                                flex: 0,
+                                marginHorizontal: 16,
+                                marginTop: 12,
+                            },
+                            textInputContainer: {
+                                backgroundColor: colors.cardBackground,
+                                borderRadius: 12,
+                                paddingHorizontal: 12,
+                                flexDirection: 'row',
+                                alignItems: 'center',
+                            },
+                            textInput: {
+                                backgroundColor: 'transparent',
+                                color: colors.textPrimary,
+                                fontSize: 15,
+                                paddingVertical: 10,
+                                margin: 0,
+                            },
+                            listView: {
+                                backgroundColor: colors.cardBackground,
+                                borderRadius: 12,
+                                marginTop: 4,
+                                elevation: 4,
+                                shadowColor: colors.textPrimary,
+                                shadowOffset: { width: 0, height: 2 },
+                                shadowOpacity: 0.12,
+                                shadowRadius: 8,
+                                // Float above the map — crucial.
+                                zIndex: 10,
+                            },
+                            row: {
+                                backgroundColor: 'transparent',
+                                paddingHorizontal: 14,
+                                paddingVertical: 12,
+                            },
+                            description: {
+                                color: colors.textPrimary,
+                                fontSize: 14,
+                            },
+                            separator: {
+                                height: StyleSheet.hairlineWidth,
+                                backgroundColor: colors.border,
+                            },
+                        }}
+                        renderLeftButton={() => (
+                            <Ionicons name="search" size={18} color={colors.textTertiary} style={{ marginRight: 8 }} />
+                        )}
                     />
-                    {searching ? (
-                        <ActivityIndicator size="small" color={colors.accent} />
-                    ) : searchText.trim() ? (
-                        <Pressable
-                            onPress={() => {
-                                setSearchText('');
-                                setSearchError(null);
-                            }}
-                            hitSlop={8}
-                            accessibilityLabel="Clear search"
-                        >
-                            <Ionicons name="close-circle" size={18} color={colors.textTertiary} />
-                        </Pressable>
-                    ) : null}
                 </View>
-                {searchError ? <Text style={[styles.searchError, { color: colors.danger }]}>{searchError}</Text> : null}
 
                 {/* Map */}
                 <View style={styles.mapWrapper}>
@@ -326,27 +367,15 @@ const styles = StyleSheet.create({
     },
     headerTitle: { fontSize: 17, fontWeight: '600' },
     headerAction: { fontSize: 16 },
-    searchRow: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        gap: 10,
-        marginHorizontal: 16,
-        marginTop: 12,
-        paddingHorizontal: 14,
-        paddingVertical: 10,
-        borderRadius: 12,
+    // Wrapper exists just to give the GooglePlacesAutocomplete dropdown a
+    // predictable z-index above the map. The component handles its own
+    // internal padding + background via the `styles` prop.
+    searchWrapper: {
+        zIndex: 10,
+        // No flex: 1 — we want this row to size to content so the map
+        // below can fill the remaining space.
     },
-    searchInput: {
-        flex: 1,
-        fontSize: 15,
-        padding: 0,
-    },
-    searchError: {
-        fontSize: 12,
-        marginHorizontal: 16,
-        marginTop: 6,
-    },
-    mapWrapper: { flex: 1 },
+    mapWrapper: { flex: 1, zIndex: 0 },
     pinWrapper: {
         ...StyleSheet.absoluteFillObject,
         justifyContent: 'center',
