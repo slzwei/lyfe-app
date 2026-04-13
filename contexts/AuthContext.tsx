@@ -45,6 +45,7 @@ interface ProfileContextType {
     user: User | null;
     updateProfile: (name: string, email: string | null) => Promise<{ error: string | null }>;
     updateAvatarUrl: (url: string | null) => void;
+    updateFaceRegisteredAt: (iso: string | null) => void;
     refreshUser: () => Promise<void>;
 }
 
@@ -274,6 +275,16 @@ function ProfileProvider({
         [setUser],
     );
 
+    // Optimistic updater used by the face registration screen after a
+    // successful registerFace() call. Pass `null` to clear (future "Remove
+    // Face ID" flow). Keeps the Profile card reactive without a round-trip.
+    const updateFaceRegisteredAt = useCallback(
+        (iso: string | null) => {
+            setUser((prev) => (prev ? { ...prev, face_registered_at: iso } : prev));
+        },
+        [setUser],
+    );
+
     const refreshUser = useCallback(async () => {
         if (sessionRef.current?.user) {
             const profile = await fetchUserProfile(sessionRef.current.user.id);
@@ -282,8 +293,8 @@ function ProfileProvider({
     }, [sessionRef, setUser]);
 
     const profileValue = useMemo(
-        () => ({ user, updateProfile, updateAvatarUrl, refreshUser }),
-        [user, updateProfile, updateAvatarUrl, refreshUser],
+        () => ({ user, updateProfile, updateAvatarUrl, updateFaceRegisteredAt, refreshUser }),
+        [user, updateProfile, updateAvatarUrl, updateFaceRegisteredAt, refreshUser],
     );
 
     return <ProfileContext.Provider value={profileValue}>{children}</ProfileContext.Provider>;
@@ -586,6 +597,7 @@ export function useAuth() {
             user: null,
             updateProfile: async () => ({ error: 'Not ready' }),
             updateAvatarUrl: () => {},
+            updateFaceRegisteredAt: () => {},
             refreshUser: async () => {},
         }),
         ...(biometrics ?? {

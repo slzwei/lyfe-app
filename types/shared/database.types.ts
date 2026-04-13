@@ -2054,10 +2054,12 @@ export type Database = {
                     email: string | null;
                     email_verified: boolean | null;
                     external_id: string | null;
+                    face_registered_at: string | null;
                     full_name: string;
                     id: string;
                     is_active: boolean | null;
                     last_login_at: string | null;
+                    last_seen_at: string | null;
                     lifecycle_stage: Database['public']['Enums']['lifecycle_stage'] | null;
                     notification_preferences: Json | null;
                     onboarding_complete: boolean | null;
@@ -2074,10 +2076,12 @@ export type Database = {
                     email?: string | null;
                     email_verified?: boolean | null;
                     external_id?: string | null;
+                    face_registered_at?: string | null;
                     full_name: string;
                     id: string;
                     is_active?: boolean | null;
                     last_login_at?: string | null;
+                    last_seen_at?: string | null;
                     lifecycle_stage?: Database['public']['Enums']['lifecycle_stage'] | null;
                     notification_preferences?: Json | null;
                     onboarding_complete?: boolean | null;
@@ -2094,10 +2098,12 @@ export type Database = {
                     email?: string | null;
                     email_verified?: boolean | null;
                     external_id?: string | null;
+                    face_registered_at?: string | null;
                     full_name?: string;
                     id?: string;
                     is_active?: boolean | null;
                     last_login_at?: string | null;
+                    last_seen_at?: string | null;
                     lifecycle_stage?: Database['public']['Enums']['lifecycle_stage'] | null;
                     notification_preferences?: Json | null;
                     onboarding_complete?: boolean | null;
