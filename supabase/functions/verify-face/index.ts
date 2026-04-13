@@ -145,25 +145,26 @@ Deno.serve(async (req) => {
         const adminClient = createClient(Deno.env.get('SUPABASE_URL')!, Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!);
 
         if (action === 'check') {
-            // Lightweight existence probe — no photo download, no Rekognition call.
-            // Returns whether the user has an active reference so the UI can show
-            // the correct "registered" state on mount.
-            const { data, error: listError } = await adminClient.storage.from(BUCKET).list('', {
-                limit: 1,
-                search: `${user.id}.jpg`,
-            });
+            // Lightweight registration probe — reads the users.face_registered_at
+            // column instead of hitting storage. The column is the authoritative
+            // source of truth for "has this user registered a face"; the bucket
+            // file is the actual photo bytes used by verify. They're kept in sync
+            // by the register branch below (both are written transactionally from
+            // the app's perspective — if the upload fails, the column isn't set).
+            const { data, error: selectError } = await adminClient
+                .from('users')
+                .select('face_registered_at')
+                .eq('id', user.id)
+                .maybeSingle();
 
-            if (listError) {
-                console.error('List error:', listError);
+            if (selectError) {
+                console.error('Select error:', selectError);
                 return jsonResponse({ error: 'Failed to check registration status' }, 500);
             }
 
-            const match = data?.find(
-                (f: { name: string; updated_at?: string; created_at?: string }) => f.name === `${user.id}.jpg`,
-            );
             return jsonResponse({
-                registered: !!match,
-                registered_at: match?.updated_at ?? match?.created_at ?? null,
+                registered: !!data?.face_registered_at,
+                registered_at: data?.face_registered_at ?? null,
             });
         }
 
@@ -204,7 +205,28 @@ Deno.serve(async (req) => {
                 return jsonResponse({ error: 'Failed to store reference photo' }, 500);
             }
 
-            return jsonResponse({ success: true, message: 'Reference photo registered' });
+            // Stamp the registration on the users row so the check action and
+            // any future DB-level queries know this user is registered. If this
+            // update fails after a successful upload the bucket file still
+            // exists — not ideal, but better than blocking the whole register
+            // call; the user can re-register to resync.
+            const registeredAt = new Date().toISOString();
+            const { error: updateError } = await adminClient
+                .from('users')
+                .update({ face_registered_at: registeredAt })
+                .eq('id', user.id);
+
+            if (updateError) {
+                console.error('face_registered_at update error:', updateError);
+                // Do not fail the request — the photo is stored and verify will
+                // still work. Log loudly so we notice drift.
+            }
+
+            return jsonResponse({
+                success: true,
+                message: 'Reference photo registered',
+                registered_at: registeredAt,
+            });
         }
 
         if (action === 'verify') {
