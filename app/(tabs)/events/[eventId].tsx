@@ -40,6 +40,122 @@ import { RoadshowLeaderboard, RoadshowActivityFeed } from '@/components/events/R
 import { RoadshowPast } from '@/components/events/RoadshowPast';
 import { EventAttendees } from '@/components/events/EventAttendees';
 
+// ── Location row helper ──────────────────────────────────────
+//
+// Folds the four meaningful states (pinned/unpinned × editable/view-only)
+// into one visual row instead of stacking two separate meta rows like the
+// first cut of this feature did. The raw coordinates are intentionally
+// hidden from end users — they're still stored on the event row and still
+// used by the check-in proximity gate, we just don't pollute the UI with
+// numbers nobody can read.
+function renderLocationRow(props: {
+    location: string | null;
+    pinned: boolean;
+    canEdit: boolean;
+    savingPin: boolean;
+    colors: ReturnType<typeof useTheme>['colors'];
+    onEditPress: () => void;
+}) {
+    const { location, pinned, canEdit, savingPin, colors, onEditPress } = props;
+
+    // State 1: location text AND pinned — happy path. Show the friendly name
+    // with the filled pin icon; managers can tap to re-pin.
+    if (location && pinned) {
+        return (
+            <TouchableOpacity
+                style={styles.metaRow}
+                onPress={canEdit ? onEditPress : undefined}
+                disabled={!canEdit || savingPin}
+                accessibilityRole={canEdit ? 'button' : undefined}
+                accessibilityLabel={canEdit ? 'Edit venue pin' : undefined}
+            >
+                <Ionicons name="location" size={16} color={colors.accent} />
+                <Text style={[styles.metaText, { color: colors.textSecondary, flex: 1 }]}>{location}</Text>
+                {canEdit && (
+                    <Text style={[styles.metaAction, { color: colors.accent }]}>
+                        {savingPin ? 'Saving…' : 'Edit Pin'}
+                    </Text>
+                )}
+            </TouchableOpacity>
+        );
+    }
+
+    // State 2: location text set, but no pin yet. Most common for legacy
+    // events created before the proximity feature. Warning color, managers
+    // get a "Pin" CTA to set it.
+    if (location && !pinned) {
+        if (canEdit) {
+            return (
+                <TouchableOpacity
+                    style={[
+                        styles.metaRow,
+                        {
+                            backgroundColor: colors.warningLight,
+                            borderRadius: 8,
+                            padding: 8,
+                            marginHorizontal: -8,
+                        },
+                    ]}
+                    onPress={onEditPress}
+                    disabled={savingPin}
+                    accessibilityRole="button"
+                    accessibilityLabel="Pin venue location"
+                >
+                    <Ionicons name="location-outline" size={16} color={colors.warning} />
+                    <View style={{ flex: 1 }}>
+                        <Text style={[styles.metaText, { color: colors.textPrimary }]}>{location}</Text>
+                        <Text style={[styles.metaSubtext, { color: colors.warning }]}>Tap to pin for check-in</Text>
+                    </View>
+                    <Text style={[styles.metaAction, { color: colors.warning }]}>{savingPin ? 'Saving…' : 'Pin'}</Text>
+                </TouchableOpacity>
+            );
+        }
+        return (
+            <View style={styles.metaRow}>
+                <Ionicons name="location-outline" size={16} color={colors.textTertiary} />
+                <View style={{ flex: 1 }}>
+                    <Text style={[styles.metaText, { color: colors.textSecondary }]}>{location}</Text>
+                    <Text style={[styles.metaSubtext, { color: colors.warning }]}>
+                        Not yet pinned — check-in unavailable
+                    </Text>
+                </View>
+            </View>
+        );
+    }
+
+    // State 3: no location text at all. Managers get a "Set location" CTA;
+    // everyone else sees a muted placeholder.
+    if (canEdit) {
+        return (
+            <TouchableOpacity
+                style={[
+                    styles.metaRow,
+                    {
+                        backgroundColor: colors.warningLight,
+                        borderRadius: 8,
+                        padding: 8,
+                        marginHorizontal: -8,
+                    },
+                ]}
+                onPress={onEditPress}
+                disabled={savingPin}
+                accessibilityRole="button"
+                accessibilityLabel="Set venue location"
+            >
+                <Ionicons name="location-outline" size={16} color={colors.warning} />
+                <Text style={[styles.metaText, { color: colors.warning, flex: 1 }]}>Location not set — tap to pin</Text>
+                <Text style={[styles.metaAction, { color: colors.warning }]}>{savingPin ? 'Saving…' : 'Set'}</Text>
+            </TouchableOpacity>
+        );
+    }
+    return (
+        <View style={styles.metaRow}>
+            <Ionicons name="location-outline" size={16} color={colors.warning} />
+            <Text style={[styles.metaText, { color: colors.warning }]}>Location not set — check-in unavailable</Text>
+        </View>
+    );
+}
+
 // ── Main Screen ───────────────────────────────────────────────
 export default function EventDetailScreen() {
     const { colors } = useTheme();
@@ -415,69 +531,20 @@ export default function EventDetailScreen() {
                             {event.end_time ? ` – ${formatTime(event.end_time)}` : ''}
                         </Text>
                     </View>
-                    {event.location && (
-                        <View style={styles.metaRow}>
-                            <Ionicons name="location-outline" size={16} color={colors.textTertiary} />
-                            <Text style={[styles.metaText, { color: colors.textSecondary }]}>{event.location}</Text>
-                        </View>
-                    )}
-
-                    {/* Precise venue pin for check-in proximity. Managers can
-                        set or update it; everyone sees the current state. */}
-                    {event.latitude != null && event.longitude != null ? (
-                        <TouchableOpacity
-                            style={styles.metaRow}
-                            onPress={canEdit ? () => setMapPickerVisible(true) : undefined}
-                            disabled={!canEdit || savingPin}
-                            accessibilityRole={canEdit ? 'button' : undefined}
-                        >
-                            <Ionicons name="pin" size={16} color={colors.accent} />
-                            <Text
-                                style={[
-                                    styles.metaText,
-                                    { color: colors.textSecondary, flex: 1, fontVariant: ['tabular-nums'] },
-                                ]}
-                            >
-                                {event.latitude.toFixed(5)}, {event.longitude.toFixed(5)}
-                            </Text>
-                            {canEdit && (
-                                <Text style={[styles.metaAction, { color: colors.accent }]}>
-                                    {savingPin ? 'Saving…' : 'Edit'}
-                                </Text>
-                            )}
-                        </TouchableOpacity>
-                    ) : canEdit ? (
-                        <TouchableOpacity
-                            style={[
-                                styles.metaRow,
-                                {
-                                    backgroundColor: colors.warningLight,
-                                    borderRadius: 8,
-                                    padding: 8,
-                                    marginHorizontal: -8,
-                                },
-                            ]}
-                            onPress={() => setMapPickerVisible(true)}
-                            disabled={savingPin}
-                            accessibilityRole="button"
-                            accessibilityLabel="Set venue location"
-                        >
-                            <Ionicons name="warning-outline" size={16} color={colors.warning} />
-                            <Text style={[styles.metaText, { color: colors.warning, flex: 1 }]}>
-                                Location TBC — tap to pin the venue
-                            </Text>
-                            <Text style={[styles.metaAction, { color: colors.warning }]}>
-                                {savingPin ? 'Saving…' : 'Set'}
-                            </Text>
-                        </TouchableOpacity>
-                    ) : (
-                        <View style={styles.metaRow}>
-                            <Ionicons name="warning-outline" size={16} color={colors.warning} />
-                            <Text style={[styles.metaText, { color: colors.warning }]}>
-                                Location TBC — check-in unavailable
-                            </Text>
-                        </View>
-                    )}
+                    {/* Location row — shows the friendly venue name and folds
+                        the pin state into the icon + right-side affordance.
+                        Managers can tap the whole row to open the MapPicker
+                        and set / edit the venue coordinates. Raw lat/lng are
+                        intentionally hidden — they're stored and used by the
+                        proximity check but never shown to end users. */}
+                    {renderLocationRow({
+                        location: event.location,
+                        pinned: event.latitude != null && event.longitude != null,
+                        canEdit,
+                        savingPin,
+                        colors,
+                        onEditPress: () => setMapPickerVisible(true),
+                    })}
                 </View>
 
                 {/* Description */}
@@ -643,6 +710,7 @@ const styles = StyleSheet.create({
     heroTitle: { fontSize: 22, fontWeight: '800', letterSpacing: letterSpacing(-0.4), lineHeight: 28 },
     metaRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
     metaText: { fontSize: 14, flex: 1 },
+    metaSubtext: { fontSize: 11, marginTop: 2 },
     metaAction: { fontSize: 13, fontWeight: '600' },
     card: { borderRadius: 16, padding: 16, gap: 12 },
     cardTitle: { fontSize: 15, fontWeight: '700' },
