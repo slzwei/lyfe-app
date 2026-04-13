@@ -7,6 +7,7 @@ import AssignedManagersCard from '@/components/profile/AssignedManagersCard';
 import AvatarPickerSheet, { type AvatarAction } from '@/components/profile/AvatarPickerSheet';
 import DeleteAccountModal from '@/components/profile/DeleteAccountModal';
 import EditProfileSheet from '@/components/profile/EditProfileSheet';
+import FaceIdCard from '@/components/profile/FaceIdCard';
 import SecurityCard from '@/components/profile/SecurityCard';
 import SettingsListCard, { type SettingsRowConfig } from '@/components/profile/SettingsListCard';
 import SignOutModal from '@/components/profile/SignOutModal';
@@ -256,6 +257,9 @@ export default function ProfileScreen() {
                         onToggle={handleToggleBiometrics}
                     />
                 )}
+
+                {/* Face ID — face verification reference photo for roadshow check-in */}
+                <FaceIdCard testID="profile-face-id-card" colors={colors} />
 
                 {/* General Settings */}
                 <SettingsListCard
