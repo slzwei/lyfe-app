@@ -7,7 +7,6 @@ import AssignedManagersCard from '@/components/profile/AssignedManagersCard';
 import AvatarPickerSheet, { type AvatarAction } from '@/components/profile/AvatarPickerSheet';
 import DeleteAccountModal from '@/components/profile/DeleteAccountModal';
 import EditProfileSheet from '@/components/profile/EditProfileSheet';
-import LyfeIdCard from '@/components/profile/LyfeIdCard';
 import SecurityCard from '@/components/profile/SecurityCard';
 import SettingsListCard, { type SettingsRowConfig } from '@/components/profile/SettingsListCard';
 import SignOutModal from '@/components/profile/SignOutModal';
@@ -247,19 +246,16 @@ export default function ProfileScreen() {
                     <PersonalityQuizzesCard colors={colors} userId={user.id} />
                 )}
 
-                {/* Security -- Biometrics */}
-                {biometryType !== 'none' && (
-                    <SecurityCard
-                        testID="profile-security-card"
-                        colors={colors}
-                        biometryType={biometryType}
-                        enabled={biometricsEnabled}
-                        onToggle={handleToggleBiometrics}
-                    />
-                )}
-
-                {/* Lyfe ID — face reference photo for roadshow check-in (distinct from Apple Face ID biometric above) */}
-                <LyfeIdCard testID="profile-lyfe-id-card" colors={colors} />
+                {/* Security — biometric sign-in toggle + Lyfe ID (face check-in) */}
+                <SecurityCard
+                    testID="profile-security-card"
+                    colors={colors}
+                    biometryType={biometryType}
+                    enabled={biometricsEnabled}
+                    onToggle={handleToggleBiometrics}
+                    faceRegisteredAt={user?.face_registered_at ?? null}
+                    onFaceRegisterPress={() => router.push('/(tabs)/profile/face-register')}
+                />
 
                 {/* General Settings */}
                 <SettingsListCard
