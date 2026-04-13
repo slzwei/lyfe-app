@@ -24,6 +24,16 @@ export interface AgencyEvent {
     start_time: string; // 'HH:MM'
     end_time: string | null;
     location: string | null;
+    /** Decimal degrees WGS84. NULL means the venue is "TBC" — the check-in
+     * proximity gate blocks check-ins for such events until a manager pins
+     * coordinates via the MapPicker. Latitude and longitude are either both
+     * set or both null (enforced by a CHECK constraint on the table). */
+    latitude: number | null;
+    longitude: number | null;
+    /** Radius in metres around (latitude, longitude) within which a user's
+     * GPS position must be for check-in to succeed. Defaults to 100m; each
+     * event can override. */
+    location_radius_meters: number;
     created_by: string;
     creator_name: string | null;
     created_at: string;
@@ -40,6 +50,12 @@ export interface CreateEventInput {
     start_time: string;
     end_time: string | null;
     location: string | null;
+    /** Optional at input time — unset means the event is created with TBC
+     * location. If provided, BOTH latitude and longitude must be set. */
+    latitude?: number | null;
+    longitude?: number | null;
+    /** Optional — defaults to 100m server-side if omitted. */
+    location_radius_meters?: number;
     attendees: { user_id: string; attendee_role: AttendeeRole }[];
     external_attendees: ExternalAttendee[];
 }

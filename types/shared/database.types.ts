@@ -738,7 +738,10 @@ export type Database = {
                     event_type: Database['public']['Enums']['event_type'];
                     external_attendees: Json;
                     id: string;
+                    latitude: number | null;
                     location: string | null;
+                    location_radius_meters: number;
+                    longitude: number | null;
                     start_time: string;
                     title: string;
                     updated_at: string | null;
@@ -752,7 +755,10 @@ export type Database = {
                     event_type?: Database['public']['Enums']['event_type'];
                     external_attendees?: Json;
                     id?: string;
+                    latitude?: number | null;
                     location?: string | null;
+                    location_radius_meters?: number;
+                    longitude?: number | null;
                     start_time: string;
                     title: string;
                     updated_at?: string | null;
@@ -766,7 +772,10 @@ export type Database = {
                     event_type?: Database['public']['Enums']['event_type'];
                     external_attendees?: Json;
                     id?: string;
+                    latitude?: number | null;
                     location?: string | null;
+                    location_radius_meters?: number;
+                    longitude?: number | null;
                     start_time?: string;
                     title?: string;
                     updated_at?: string | null;

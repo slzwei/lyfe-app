@@ -135,6 +135,14 @@ export async function createEvent(
             start_time: input.start_time,
             end_time: input.end_time || null,
             location: input.location || null,
+            // Location coords — both set together or both null (DB CHECK enforces).
+            // Undefined at input time => null => TBC state.
+            latitude: input.latitude ?? null,
+            longitude: input.longitude ?? null,
+            // Omit location_radius_meters when undefined so the DB DEFAULT 100 applies.
+            ...(input.location_radius_meters !== undefined
+                ? { location_radius_meters: input.location_radius_meters }
+                : {}),
             created_by: createdBy,
             external_attendees: input.external_attendees as unknown as Json,
         })
@@ -182,6 +190,9 @@ interface EventRow {
     start_time: string;
     end_time: string | null;
     location: string | null;
+    latitude: number | null;
+    longitude: number | null;
+    location_radius_meters: number;
     created_by: string;
     creator_user?: { full_name: string } | null;
     created_at: string | null;
@@ -208,6 +219,9 @@ function mapEvents(rows: EventRow[]): AgencyEvent[] {
         start_time: row.start_time,
         end_time: row.end_time,
         location: row.location,
+        latitude: row.latitude,
+        longitude: row.longitude,
+        location_radius_meters: row.location_radius_meters,
         created_by: row.created_by,
         creator_name: row.creator_user?.full_name || null,
         created_at: row.created_at ?? '',
@@ -258,6 +272,14 @@ export async function updateEvent(
             start_time: input.start_time,
             end_time: input.end_time || null,
             location: input.location || null,
+            // Location coords — set both or null both. Preserves any existing
+            // pin only if `input` explicitly passes undefined (i.e. update
+            // called without touching location); passing null clears to TBC.
+            ...(input.latitude !== undefined ? { latitude: input.latitude } : {}),
+            ...(input.longitude !== undefined ? { longitude: input.longitude } : {}),
+            ...(input.location_radius_meters !== undefined
+                ? { location_radius_meters: input.location_radius_meters }
+                : {}),
             external_attendees: input.external_attendees as unknown as Json,
         })
         .eq('id', eventId);
