@@ -8,7 +8,7 @@
 import { FaceTurnPrompt } from '@/components/face/FaceTurnPrompt';
 import { TAB_BAR_HEIGHT, TAB_BAR_PADDING_BOTTOM, TAB_BAR_PADDING_TOP } from '@/constants/platform';
 import { useTheme } from '@/contexts/ThemeContext';
-import { registerFace, verifyFace, MATCH_THRESHOLD } from '@/lib/faceVerification';
+import { checkFaceRegistration, registerFace, verifyFace, MATCH_THRESHOLD } from '@/lib/faceVerification';
 import { detectFaces, setMaxBrightness, restoreBrightness } from '../../../modules/face-detection/src';
 import * as Haptics from 'expo-haptics';
 import { Ionicons } from '@expo/vector-icons';
@@ -30,6 +30,7 @@ import {
 import Animated, {
     useSharedValue,
     useAnimatedStyle,
+    withDelay,
     withSpring,
     FadeIn,
     FadeOut,
@@ -53,6 +54,9 @@ const YAW_STRAIGHT_MAX = Platform.OS === 'android' ? 18 : 10;
 const YAW_LEFT_THRESHOLD = -15;
 const YAW_RIGHT_THRESHOLD = 15;
 const SCAN_INTERVAL_MS = 400;
+// How long the brackets→ring and ring→tick morph plays before the success
+// overlay fades in. Matches the `morph` withTiming duration in FaceTurnPrompt.
+const MORPH_DELAY_MS = 600;
 
 const STEP_PROMPTS: Record<LivenessStep, string> = {
     look_straight: 'Look straight at the camera',
@@ -67,22 +71,21 @@ function CheckedInOverlay({ onDismiss }: { onDismiss: () => void }) {
     const scale = useSharedValue(0);
 
     useEffect(() => {
-        scale.value = withSpring(1, { damping: 12, stiffness: 150 });
-    }, []);
+        // Delay the pop-in so the brackets→ring→tick morph in FaceTurnPrompt
+        // has time to play before the overlay covers it.
+        scale.value = withDelay(MORPH_DELAY_MS, withSpring(1, { damping: 12, stiffness: 150 }));
+    }, [scale]);
 
     const circleStyle = useAnimatedStyle(() => ({
         transform: [{ scale: scale.value }],
     }));
 
     return (
-        <Animated.View entering={FadeIn.duration(200)} style={styles.resultOverlay}>
+        <Animated.View entering={FadeIn.delay(MORPH_DELAY_MS).duration(300)} style={styles.resultOverlay}>
             <Animated.View style={[styles.successCircle, circleStyle]}>
                 <Ionicons name="checkmark" size={64} color="#FFFFFF" />
             </Animated.View>
-            <Animated.Text entering={FadeIn.delay(300).duration(300)} style={styles.checkedInText}>
-                Checked In
-            </Animated.Text>
-            <Animated.View entering={FadeIn.delay(600).duration(300)}>
+            <Animated.View entering={FadeIn.delay(MORPH_DELAY_MS + 300).duration(300)}>
                 <Pressable style={styles.dismissButton} onPress={onDismiss}>
                     <Text style={styles.dismissText}>Done</Text>
                 </Pressable>
@@ -93,15 +96,30 @@ function CheckedInOverlay({ onDismiss }: { onDismiss: () => void }) {
 
 // ── Fail Overlay ────────────────────────────────────────────
 
-function FailedOverlay({ onDismiss, onRetry }: { onDismiss: () => void; onRetry: () => void }) {
+function FailedOverlay({
+    onDismiss,
+    onRetry,
+    title,
+    subtitle,
+}: {
+    onDismiss: () => void;
+    onRetry: () => void;
+    title: string;
+    subtitle?: string;
+}) {
     return (
         <Animated.View entering={FadeIn.duration(200)} style={styles.resultOverlay}>
             <Animated.View entering={ZoomIn.duration(300)} style={styles.failCircle}>
                 <Ionicons name="close" size={64} color="#FFFFFF" />
             </Animated.View>
             <Animated.Text entering={FadeIn.delay(300).duration(300)} style={styles.failText}>
-                Face Not Recognized
+                {title}
             </Animated.Text>
+            {subtitle && (
+                <Animated.Text entering={FadeIn.delay(400).duration(300)} style={styles.failSubtitle}>
+                    {subtitle}
+                </Animated.Text>
+            )}
             <Animated.View entering={FadeIn.delay(500).duration(300)} style={styles.failButtons}>
                 <Pressable style={styles.retryButton} onPress={onRetry}>
                     <Text style={styles.retryText}>Try Again</Text>
@@ -142,6 +160,8 @@ export default function FaceTestScreen() {
     const [phase, setPhase] = useState<TestPhase>('idle');
     const [step, setStep] = useState<LivenessStep>('look_straight');
     const [hasRegistered, setHasRegistered] = useState(false);
+    const [registeredAt, setRegisteredAt] = useState<string | null>(null);
+    const [checkingRegistration, setCheckingRegistration] = useState(true);
     const [cameraVisible, setCameraVisible] = useState(false);
     const [cameraMounted, setCameraMounted] = useState(false);
     const [scanning, setScanning] = useState(false);
@@ -150,6 +170,7 @@ export default function FaceTestScreen() {
     const [captureCount, setCaptureCount] = useState(0);
     const [processing, setProcessing] = useState(false);
     const [showResult, setShowResult] = useState<'pass' | 'fail' | null>(null);
+    const [failMessage, setFailMessage] = useState<string | null>(null);
     const [cameraLayout, setCameraLayout] = useState({ width: 0, height: 0 });
 
     const handleCameraLayout = useCallback((e: LayoutChangeEvent) => {
@@ -163,6 +184,9 @@ export default function FaceTestScreen() {
     const scanningRef = useRef(false);
     const captureCountRef = useRef(0);
     const straightPhotoRef = useRef<string | null>(null);
+    // Preserved across the `setPhase('idle')` reset so handleRetry knows which
+    // flow to re-run after a quality-gate failure.
+    const lastFailedPhaseRef = useRef<TestPhase>('idle');
     stepRef.current = step;
     phaseRef.current = phase;
 
@@ -171,6 +195,30 @@ export default function FaceTestScreen() {
     useEffect(() => {
         if (!hasPermission) requestPermission();
     }, [hasPermission, requestPermission]);
+
+    // Poll the edge function on mount to find out whether a face reference
+    // already exists for this user. Avoids the previous UX where the screen
+    // always defaulted to "Not Registered" even when the bucket had a file.
+    useEffect(() => {
+        let cancelled = false;
+        checkFaceRegistration()
+            .then((status) => {
+                if (cancelled) return;
+                setHasRegistered(status.registered);
+                setRegisteredAt(status.registeredAt);
+            })
+            .catch((err) => {
+                if (cancelled) return;
+                console.error('[FaceVerify] check error:', err instanceof Error ? err.message : String(err));
+                // Fail-safe: leave hasRegistered = false so user is nudged to register.
+            })
+            .finally(() => {
+                if (!cancelled) setCheckingRegistration(false);
+            });
+        return () => {
+            cancelled = true;
+        };
+    }, []);
 
     // Hide tab bar while camera is active. Setting tabBarStyle to undefined
     // doesn't restore screenOptions defaults (it falls back to RN's built-in
@@ -317,28 +365,51 @@ export default function FaceTestScreen() {
             }
 
             if (phaseRef.current === 'registering') {
-                await registerFace(photoPath);
-                setHasRegistered(true);
-                setProcessing(false);
-                setCameraVisible(false);
+                const result = await registerFace(photoPath);
+                console.log('[FaceVerify] Register:', result.success ? 'OK' : `REJECTED (${result.reason})`);
                 restoreBrightness();
-                Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-                Alert.alert('Registered', 'Face reference photo saved.');
+
+                if (result.success) {
+                    setHasRegistered(true);
+                    setRegisteredAt(new Date().toISOString());
+                    setProcessing(false);
+                    setCameraVisible(false);
+                    Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+                    Alert.alert('Registered', 'Face reference photo saved.');
+                } else {
+                    Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
+                    setProcessing(false);
+                    lastFailedPhaseRef.current = 'registering';
+                    setFailMessage(result.message);
+                    setShowResult('fail');
+                }
             } else if (phaseRef.current === 'verifying') {
                 const result = await verifyFace(photoPath);
                 console.log(
                     '[FaceVerify] Rekognition:',
                     result.similarity.toFixed(1) + '%',
-                    result.match ? 'MATCH' : 'REJECTED',
+                    result.match ? 'MATCH' : `REJECTED (${result.reason ?? 'unknown'})`,
                 );
-                setProcessing(false);
                 restoreBrightness();
 
                 if (result.match) {
                     Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
                     setShowResult('pass');
+                    // On iOS the tick morph plays in FaceTurnPrompt during the
+                    // MORPH_DELAY_MS window before CheckedInOverlay fades in, so
+                    // hide the ProcessingOverlay immediately. On Android the
+                    // camera was unmounted, so keep ProcessingOverlay visible
+                    // for the same window to avoid a blank frame.
+                    if (Platform.OS === 'android') {
+                        setTimeout(() => setProcessing(false), MORPH_DELAY_MS);
+                    } else {
+                        setProcessing(false);
+                    }
                 } else {
                     Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
+                    setProcessing(false);
+                    lastFailedPhaseRef.current = 'verifying';
+                    setFailMessage(result.message ?? null);
                     setShowResult('fail');
                 }
             }
@@ -387,12 +458,20 @@ export default function FaceTestScreen() {
 
     const handleDismissResult = useCallback(() => {
         setShowResult(null);
+        setFailMessage(null);
         setCameraVisible(false);
     }, []);
 
     const handleRetry = useCallback(() => {
+        // Retry whichever flow just failed — quality-gate rejections can
+        // happen on either register or verify, and the user expects the
+        // retry button to re-run the same action. `phase` has already been
+        // reset to 'idle' by processPhoto's finally block, so we read the
+        // preserved ref instead.
+        const retryPhase: TestPhase = lastFailedPhaseRef.current === 'registering' ? 'registering' : 'verifying';
         setShowResult(null);
-        startFlow('verifying');
+        setFailMessage(null);
+        startFlow(retryPhase);
     }, [startFlow]);
 
     // ── Render ──────────────────────────────────────────────
@@ -440,28 +519,41 @@ export default function FaceTestScreen() {
                         borderColor={step === 'done' ? '#34C759' : displayFace ? '#FF9500' : '#FF3B30'}
                     />
 
-                    {/* Step dots */}
-                    <View style={styles.stepIndicator}>
-                        <View style={[styles.stepDot, captureCount >= 1 && styles.stepDotDone]} />
-                        <View style={[styles.stepDot, captureCount >= 2 && styles.stepDotDone]} />
-                        <View style={[styles.stepDot, captureCount >= 3 && styles.stepDotDone]} />
-                    </View>
+                    {/* Step dots — hide once a result is shown */}
+                    {!showResult && (
+                        <View style={styles.stepIndicator}>
+                            <View style={[styles.stepDot, captureCount >= 1 && styles.stepDotDone]} />
+                            <View style={[styles.stepDot, captureCount >= 2 && styles.stepDotDone]} />
+                            <View style={[styles.stepDot, captureCount >= 3 && styles.stepDotDone]} />
+                        </View>
+                    )}
 
-                    {/* Face-turn prompt: animates based on current liveness step */}
-                    <View style={styles.promptContainer}>
-                        <FaceTurnPrompt
-                            direction={step === 'turn_left' ? 'left' : step === 'turn_right' ? 'right' : 'straight'}
-                            size={96}
-                        />
-                        <Text style={styles.promptText}>{STEP_PROMPTS[step]}</Text>
-                    </View>
+                    {/* Face-turn prompt: animates based on current liveness step.
+                        Morphs brackets → ring once all 3 photos are captured, then
+                        ring → checkmark once AWS Rekognition confirms the match.
+                        Stays visible on 'pass' so the tick morph plays behind the
+                        success overlay; hides entirely on 'fail'. */}
+                    {showResult !== 'fail' && (
+                        <View style={styles.promptContainer}>
+                            <FaceTurnPrompt
+                                direction={step === 'turn_left' ? 'left' : step === 'turn_right' ? 'right' : 'straight'}
+                                size={96}
+                                morphStage={
+                                    showResult === 'pass' ? 'tick' : step === 'done' || processing ? 'ring' : 'live'
+                                }
+                            />
+                            <Text style={styles.promptText}>{STEP_PROMPTS[step]}</Text>
+                        </View>
+                    )}
 
-                    {/* Debug overlay */}
-                    <View style={styles.debugOverlay}>
-                        <Text style={styles.debugText}>Yaw: {displayYaw}°</Text>
-                        <Text style={styles.debugText}>Face: {displayFace ? 'YES' : 'NO'}</Text>
-                        <Text style={styles.debugText}>Step: {step}</Text>
-                    </View>
+                    {/* Debug overlay — hide once a result is shown */}
+                    {!showResult && (
+                        <View style={styles.debugOverlay}>
+                            <Text style={styles.debugText}>Yaw: {displayYaw}°</Text>
+                            <Text style={styles.debugText}>Face: {displayFace ? 'YES' : 'NO'}</Text>
+                            <Text style={styles.debugText}>Step: {step}</Text>
+                        </View>
+                    )}
 
                     {/* Cancel button (hide during processing/result) */}
                     {!processing && !showResult && (
@@ -477,7 +569,20 @@ export default function FaceTestScreen() {
             {/* Overlays rendered at top level so they survive camera unmount on Android */}
             {processing && <ProcessingOverlay />}
             {showResult === 'pass' && <CheckedInOverlay onDismiss={handleDismissResult} />}
-            {showResult === 'fail' && <FailedOverlay onDismiss={handleDismissResult} onRetry={handleRetry} />}
+            {showResult === 'fail' && (
+                <FailedOverlay
+                    onDismiss={handleDismissResult}
+                    onRetry={handleRetry}
+                    title={
+                        lastFailedPhaseRef.current === 'registering'
+                            ? 'Registration Failed'
+                            : failMessage
+                              ? 'Verification Failed'
+                              : 'Face Not Recognized'
+                    }
+                    subtitle={failMessage ?? undefined}
+                />
+            )}
 
             {!cameraVisible && (
                 <ScrollView
@@ -488,7 +593,12 @@ export default function FaceTestScreen() {
                         <Text style={[styles.cardTitle, { color: colors.textPrimary }]}>System Status</Text>
                         <StatusRow label="Camera Permission" ok={hasPermission} />
                         <StatusRow label="Camera Device" ok={!!device} />
-                        <StatusRow label="Face Registered" ok={hasRegistered} />
+                        <StatusRow
+                            label="Face Registered"
+                            ok={hasRegistered}
+                            loading={checkingRegistration}
+                            subtitle={hasRegistered && registeredAt ? formatRegisteredAt(registeredAt) : undefined}
+                        />
                     </View>
 
                     <View style={[styles.card, { backgroundColor: colors.surfacePrimary }]}>
@@ -497,10 +607,13 @@ export default function FaceTestScreen() {
                         <Pressable
                             style={[
                                 styles.button,
-                                { backgroundColor: hasPermission ? colors.accent : colors.textTertiary },
+                                {
+                                    backgroundColor:
+                                        hasPermission && !checkingRegistration ? colors.accent : colors.textTertiary,
+                                },
                             ]}
                             onPress={() => startFlow('registering')}
-                            disabled={!hasPermission || processing}
+                            disabled={!hasPermission || processing || checkingRegistration}
                         >
                             <Ionicons name="person-add" size={20} color="#FFFFFF" />
                             <Text style={styles.buttonText}>
@@ -511,10 +624,14 @@ export default function FaceTestScreen() {
                         <Pressable
                             style={[
                                 styles.button,
-                                { backgroundColor: hasRegistered ? '#34C759' : colors.textTertiary, marginTop: 10 },
+                                {
+                                    backgroundColor:
+                                        hasRegistered && !checkingRegistration ? '#34C759' : colors.textTertiary,
+                                    marginTop: 10,
+                                },
                             ]}
                             onPress={() => startFlow('verifying')}
-                            disabled={!hasPermission || !hasRegistered || processing}
+                            disabled={!hasPermission || !hasRegistered || processing || checkingRegistration}
                         >
                             <Ionicons name="shield-checkmark" size={20} color="#FFFFFF" />
                             <Text style={styles.buttonText}>Verify Face</Text>
@@ -562,27 +679,58 @@ function CircleMaskOverlay({ width, height, borderColor }: { width: number; heig
     );
 }
 
-function StatusRow({ label, ok, error }: { label: string; ok: boolean; error?: string | null }) {
+function StatusRow({
+    label,
+    ok,
+    error,
+    loading,
+    subtitle,
+}: {
+    label: string;
+    ok: boolean;
+    error?: string | null;
+    loading?: boolean;
+    subtitle?: string;
+}) {
     return (
         <View style={styles.statusRow}>
-            <Text style={styles.statusLabel}>{label}</Text>
+            <View style={{ flex: 1 }}>
+                <Text style={styles.statusLabel}>{label}</Text>
+                {subtitle && !loading ? <Text style={styles.statusSubtitle}>{subtitle}</Text> : null}
+            </View>
             <View style={styles.statusRight}>
-                {error ? (
+                {loading ? (
+                    <>
+                        <ActivityIndicator size="small" color="#8E8E93" />
+                        <Text style={[styles.statusValue, { color: '#8E8E93', marginLeft: 6 }]}>Checking…</Text>
+                    </>
+                ) : error ? (
                     <Text style={[styles.statusValue, { color: '#FF3B30' }]}>{error}</Text>
                 ) : (
-                    <Text style={[styles.statusValue, { color: ok ? '#34C759' : '#FF9500' }]}>
-                        {ok ? 'Ready' : 'Not Ready'}
-                    </Text>
+                    <>
+                        <Text style={[styles.statusValue, { color: ok ? '#34C759' : '#FF9500' }]}>
+                            {ok ? 'Ready' : 'Not Ready'}
+                        </Text>
+                        <Ionicons
+                            name={ok ? 'checkmark-circle' : 'ellipse-outline'}
+                            size={18}
+                            color={ok ? '#34C759' : '#FF9500'}
+                            style={{ marginLeft: 6 }}
+                        />
+                    </>
                 )}
-                <Ionicons
-                    name={ok ? 'checkmark-circle' : error ? 'close-circle' : 'ellipse-outline'}
-                    size={18}
-                    color={ok ? '#34C759' : error ? '#FF3B30' : '#FF9500'}
-                    style={{ marginLeft: 6 }}
-                />
             </View>
         </View>
     );
+}
+
+function formatRegisteredAt(iso: string): string {
+    try {
+        const d = new Date(iso);
+        return `Registered ${d.toLocaleDateString('en-SG', { year: 'numeric', month: 'short', day: 'numeric' })}`;
+    } catch {
+        return 'Registered';
+    }
 }
 
 const styles = StyleSheet.create({
@@ -614,6 +762,7 @@ const styles = StyleSheet.create({
         borderBottomColor: '#E5E5EA',
     },
     statusLabel: { fontSize: 14, color: '#8E8E93' },
+    statusSubtitle: { fontSize: 11, color: '#C7C7CC', marginTop: 2 },
     statusRight: { flexDirection: 'row', alignItems: 'center' },
     statusValue: { fontSize: 14, fontWeight: '500' },
     button: {
@@ -716,17 +865,19 @@ const styles = StyleSheet.create({
         alignItems: 'center',
         marginBottom: 24,
     },
-    checkedInText: {
-        color: '#FFFFFF',
-        fontSize: 32,
-        fontWeight: '700',
-        marginBottom: 32,
-    },
     failText: {
         color: '#FFFFFF',
         fontSize: 24,
         fontWeight: '700',
-        marginBottom: 32,
+        marginBottom: 12,
+    },
+    failSubtitle: {
+        color: 'rgba(255,255,255,0.85)',
+        fontSize: 15,
+        fontWeight: '500',
+        textAlign: 'center',
+        paddingHorizontal: 32,
+        marginBottom: 28,
     },
     processingText: {
         color: '#FFFFFF',
