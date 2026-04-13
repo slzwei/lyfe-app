@@ -5,22 +5,27 @@ import { useRouter } from 'expo-router';
 import React, { useCallback } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 
-interface FaceIdCardProps {
+interface LyfeIdCardProps {
     colors: ThemeColors;
     testID?: string;
 }
 
 /**
- * Profile card that surfaces face registration state and lets users set up
- * or re-register their face reference. Tapping the whole card navigates to
+ * Profile card for "Lyfe ID" — the user-facing name for our face-based
+ * check-in feature. Surfaces registration state and lets users set up or
+ * re-register their reference photo. Tapping the whole card navigates to
  * the production face-register screen (app/(tabs)/profile/face-register.tsx),
  * which wraps FaceCaptureFlow and calls registerFace on success.
+ *
+ * Deliberately named "Lyfe ID" rather than "Face ID" to avoid colliding
+ * with Apple's Face ID biometric, which is already used elsewhere in this
+ * app for session unlock (see components/profile/SecurityCard.tsx).
  *
  * Reads face_registered_at off the user object — that field is populated by
  * the verify-face edge function's register action and optimistically updated
  * by the register screen via AuthContext.updateFaceRegisteredAt.
  */
-export default function FaceIdCard({ colors, testID }: FaceIdCardProps) {
+export default function LyfeIdCard({ colors, testID }: LyfeIdCardProps) {
     const { user } = useAuth();
     const router = useRouter();
 
@@ -38,19 +43,19 @@ export default function FaceIdCard({ colors, testID }: FaceIdCardProps) {
             testID={testID}
             style={[styles.card, { backgroundColor: colors.cardBackground, shadowColor: colors.textPrimary }]}
         >
-            <Text style={[styles.sectionLabel, { color: colors.textTertiary }]}>FACE ID</Text>
+            <Text style={[styles.sectionLabel, { color: colors.textTertiary }]}>LYFE ID</Text>
             <Pressable
                 style={({ pressed }) => [styles.row, pressed && { opacity: 0.6 }]}
                 onPress={handlePress}
                 accessibilityRole="button"
-                accessibilityLabel={isRegistered ? 'Re-register Face ID' : 'Set up Face ID'}
-                accessibilityHint="Opens the face registration camera"
+                accessibilityLabel={isRegistered ? 'Re-register your Lyfe ID' : 'Set up your Lyfe ID'}
+                accessibilityHint="Opens the Lyfe ID registration camera"
             >
                 <View style={[styles.iconCircle, { backgroundColor: colors.accentLight }]}>
                     <Ionicons name="scan" size={18} color={colors.accent} />
                 </View>
                 <View style={styles.textCol}>
-                    <Text style={[styles.label, { color: colors.textPrimary }]}>Face ID</Text>
+                    <Text style={[styles.label, { color: colors.textPrimary }]}>Lyfe ID</Text>
                     <Text style={[styles.subtitle, { color: colors.textTertiary }]}>{subtitle}</Text>
                 </View>
                 {isRegistered ? (

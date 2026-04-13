@@ -6,7 +6,9 @@
  *     compresses the face horizontally (scaleX) to cue a head turn.
  *   - morphStage: 'live' | 'ring' | 'tick' → true SVG path interpolation that
  *     morphs the four corner brackets into a closed ring, then collapses
- *     two of the ring quadrants into a green checkmark (Face ID style).
+ *     two of the ring quadrants into a green checkmark (visually inspired by
+ *     Apple's Face ID enrollment animation, though our feature is "Lyfe ID",
+ *     a separate face-based check-in — not the Apple Face ID biometric).
  *
  * Each of the four brackets is a single cubic bezier path whose 8 control
  * coordinates are interpolated across three keyframe states. The TR and BL

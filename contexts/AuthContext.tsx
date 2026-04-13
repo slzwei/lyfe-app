@@ -275,9 +275,9 @@ function ProfileProvider({
         [setUser],
     );
 
-    // Optimistic updater used by the face registration screen after a
+    // Optimistic updater used by the Lyfe ID registration screen after a
     // successful registerFace() call. Pass `null` to clear (future "Remove
-    // Face ID" flow). Keeps the Profile card reactive without a round-trip.
+    // Lyfe ID" flow). Keeps the Profile card reactive without a round-trip.
     const updateFaceRegisteredAt = useCallback(
         (iso: string | null) => {
             setUser((prev) => (prev ? { ...prev, face_registered_at: iso } : prev));

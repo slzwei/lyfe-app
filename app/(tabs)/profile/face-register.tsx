@@ -1,9 +1,9 @@
 /**
- * Face registration screen — user-facing, production path.
+ * Lyfe ID registration screen — user-facing, production path.
  *
  * Wraps FaceCaptureFlow in `register` mode. On a successful photo, runs
  * registerFace(), optimistically updates AuthContext so the Profile
- * FaceIdCard reflects the new state immediately, and navigates back.
+ * LyfeIdCard reflects the new state immediately, and navigates back.
  *
  * Quality-gate rejections (blurry, occluded, multi-face, etc.) are handled
  * by FaceCaptureFlow's built-in retry overlay — the parent only sees
@@ -26,7 +26,7 @@ export default function FaceRegisterScreen() {
                 const result = await registerFace(photoPath);
 
                 if (result.success) {
-                    // Optimistic update — the FaceIdCard on the Profile index
+                    // Optimistic update — the LyfeIdCard on the Profile index
                     // reads this value via useAuth() so it re-renders the
                     // moment the user dismisses the success overlay.
                     updateFaceRegisteredAt(new Date().toISOString());

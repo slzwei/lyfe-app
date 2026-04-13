@@ -7,7 +7,7 @@ import AssignedManagersCard from '@/components/profile/AssignedManagersCard';
 import AvatarPickerSheet, { type AvatarAction } from '@/components/profile/AvatarPickerSheet';
 import DeleteAccountModal from '@/components/profile/DeleteAccountModal';
 import EditProfileSheet from '@/components/profile/EditProfileSheet';
-import FaceIdCard from '@/components/profile/FaceIdCard';
+import LyfeIdCard from '@/components/profile/LyfeIdCard';
 import SecurityCard from '@/components/profile/SecurityCard';
 import SettingsListCard, { type SettingsRowConfig } from '@/components/profile/SettingsListCard';
 import SignOutModal from '@/components/profile/SignOutModal';
@@ -258,8 +258,8 @@ export default function ProfileScreen() {
                     />
                 )}
 
-                {/* Face ID — face verification reference photo for roadshow check-in */}
-                <FaceIdCard testID="profile-face-id-card" colors={colors} />
+                {/* Lyfe ID — face reference photo for roadshow check-in (distinct from Apple Face ID biometric above) */}
+                <LyfeIdCard testID="profile-lyfe-id-card" colors={colors} />
 
                 {/* General Settings */}
                 <SettingsListCard
