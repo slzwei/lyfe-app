@@ -4,6 +4,7 @@ import AttendeeList from '@/components/events/AttendeeList';
 import AttendeePickerModal from '@/components/events/AttendeePickerModal';
 import EventDateSection from '@/components/events/EventDateSection';
 import EventTypeSelector from '@/components/events/EventTypeSelector';
+import MapPicker from '@/components/events/MapPicker';
 import RoadshowSettingsForm from '@/components/events/RoadshowSettingsForm';
 import TimePickerModal from '@/components/events/TimePickerModal';
 import TimeRowCard from '@/components/events/TimeRowCard';
@@ -12,7 +13,8 @@ import { useTheme } from '@/contexts/ThemeContext';
 import { useEventForm } from '@/hooks/useEventForm';
 import { useSubmitGuard } from '@/hooks/useSubmitGuard';
 import { dateDiffDays, isValidDate } from '@/lib/dateTime';
-import React from 'react';
+import { Ionicons } from '@expo/vector-icons';
+import React, { useCallback, useState } from 'react';
 import { ActivityIndicator, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
 import { KeyboardAwareScrollView } from 'react-native-keyboard-controller';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -21,6 +23,21 @@ export default function CreateEventScreen() {
     const { colors } = useTheme();
     const { isSubmitting: isGuardSubmitting, guard } = useSubmitGuard();
     const form = useEventForm();
+    const [showMapPicker, setShowMapPicker] = useState(false);
+
+    const handleConfirmPin = useCallback(
+        (coords: { latitude: number; longitude: number }) => {
+            form.setLatitude(coords.latitude);
+            form.setLongitude(coords.longitude);
+            setShowMapPicker(false);
+        },
+        [form],
+    );
+
+    const handleClearPin = useCallback(() => {
+        form.setLatitude(null);
+        form.setLongitude(null);
+    }, [form]);
 
     const {
         isEditing,
@@ -38,6 +55,10 @@ export default function CreateEventScreen() {
         setShowDatePicker,
         location,
         setLocation,
+        latitude,
+        setLatitude,
+        longitude,
+        setLongitude,
         description,
         setDescription,
         timePicker,
@@ -250,7 +271,7 @@ export default function CreateEventScreen() {
                     endTimeError={errors.endTime}
                 />
 
-                {/* Location */}
+                {/* Location — text label + optional precise pin for check-in proximity */}
                 <View style={styles.field}>
                     <Text style={labelStyle}>Location</Text>
                     <TextInput
@@ -260,6 +281,56 @@ export default function CreateEventScreen() {
                         value={location}
                         onChangeText={setLocation}
                     />
+
+                    {/* Precise venue pin — required for GPS check-in, optional at create time. */}
+                    {latitude != null && longitude != null ? (
+                        <View
+                            style={[
+                                styles.pinRow,
+                                { backgroundColor: colors.cardBackground, borderColor: colors.border },
+                            ]}
+                        >
+                            <Ionicons name="location" size={18} color={colors.accent} />
+                            <View style={{ flex: 1, marginLeft: 8 }}>
+                                <Text style={[styles.pinRowLabel, { color: colors.textPrimary }]}>Pinned</Text>
+                                <Text style={[styles.pinRowCoords, { color: colors.textTertiary }]}>
+                                    {latitude.toFixed(5)}, {longitude.toFixed(5)}
+                                </Text>
+                            </View>
+                            <TouchableOpacity
+                                testID="event-create-edit-pin"
+                                onPress={() => setShowMapPicker(true)}
+                                hitSlop={8}
+                            >
+                                <Text style={[styles.pinRowAction, { color: colors.accent }]}>Edit</Text>
+                            </TouchableOpacity>
+                            <TouchableOpacity
+                                testID="event-create-clear-pin"
+                                onPress={handleClearPin}
+                                hitSlop={8}
+                                style={{ marginLeft: 12 }}
+                            >
+                                <Text style={[styles.pinRowAction, { color: colors.danger }]}>Clear</Text>
+                            </TouchableOpacity>
+                        </View>
+                    ) : (
+                        <TouchableOpacity
+                            testID="event-create-pin-location"
+                            style={[
+                                styles.pinButton,
+                                { backgroundColor: colors.cardBackground, borderColor: colors.border },
+                            ]}
+                            onPress={() => setShowMapPicker(true)}
+                        >
+                            <Ionicons name="location-outline" size={18} color={colors.accent} />
+                            <Text style={[styles.pinButtonText, { color: colors.textPrimary }]}>
+                                Pin Venue Location
+                            </Text>
+                            <Text style={[styles.pinButtonHint, { color: colors.textTertiary }]}>
+                                Required for check-in
+                            </Text>
+                        </TouchableOpacity>
+                    )}
                 </View>
 
                 {/* Description */}
@@ -360,6 +431,14 @@ export default function CreateEventScreen() {
                 onAddExternal={handleAddExternal}
                 onRemoveExternal={handleRemoveExternal}
             />
+
+            <MapPicker
+                visible={showMapPicker}
+                initialLatitude={latitude}
+                initialLongitude={longitude}
+                onConfirm={handleConfirmPin}
+                onCancel={() => setShowMapPicker(false)}
+            />
         </SafeAreaView>
     );
 }
@@ -375,4 +454,28 @@ const styles = StyleSheet.create({
     saveBtn: { paddingHorizontal: 16, paddingVertical: 8, borderRadius: 10 },
     saveBtnText: { fontWeight: '700', fontSize: 14 },
     submitError: { borderRadius: 10, padding: 12, marginBottom: 8 },
+    pinButton: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        borderWidth: 1,
+        borderRadius: 12,
+        paddingHorizontal: 14,
+        paddingVertical: 12,
+        marginTop: 8,
+        gap: 8,
+    },
+    pinButtonText: { fontSize: 15, fontWeight: '500', flex: 1 },
+    pinButtonHint: { fontSize: 12 },
+    pinRow: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        borderWidth: 1,
+        borderRadius: 12,
+        paddingHorizontal: 14,
+        paddingVertical: 10,
+        marginTop: 8,
+    },
+    pinRowLabel: { fontSize: 14, fontWeight: '500' },
+    pinRowCoords: { fontSize: 11, fontVariant: ['tabular-nums'], marginTop: 1 },
+    pinRowAction: { fontSize: 14, fontWeight: '600' },
 });

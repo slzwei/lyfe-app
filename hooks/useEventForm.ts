@@ -27,6 +27,11 @@ export function useEventForm() {
     const [eventDate, setEventDate] = useState(todayStr());
     const [showDatePicker, setShowDatePicker] = useState<'single' | 'range' | null>(null);
     const [location, setLocation] = useState('');
+    // Precise venue coordinates — null means the location is TBC and
+    // check-in will be blocked until a manager pins the spot. Set by
+    // the MapPicker component in the create / detail screens.
+    const [latitude, setLatitude] = useState<number | null>(null);
+    const [longitude, setLongitude] = useState<number | null>(null);
     const [description, setDescription] = useState('');
     const [submitting, setSubmitting] = useState(false);
     const [loadingEvent, setLoadingEvent] = useState(isEditing);
@@ -69,6 +74,8 @@ export function useEventForm() {
                 setEventDate(data.event_date);
                 populateFromEdit(data.start_time, data.end_time);
                 setLocation(data.location || '');
+                setLatitude(data.latitude);
+                setLongitude(data.longitude);
                 setDescription(data.description || '');
                 setSelectedAttendees(
                     data.attendees.map((a) => ({
@@ -223,6 +230,9 @@ export function useEventForm() {
             start_time: startTime,
             end_time: endTime,
             location: location.trim() || null,
+            // Coordinates — null when TBC, set via MapPicker.
+            latitude,
+            longitude,
             attendees: selectedAttendees.map((a) => ({
                 user_id: a.user_id,
                 attendee_role: a.attendee_role,
@@ -328,6 +338,10 @@ export function useEventForm() {
         setShowDatePicker,
         location,
         setLocation,
+        latitude,
+        setLatitude,
+        longitude,
+        setLongitude,
         description,
         setDescription,
         // Sub-hooks
