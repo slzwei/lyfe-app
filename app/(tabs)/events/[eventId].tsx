@@ -404,13 +404,13 @@ export default function EventDetailScreen() {
     const handleConfirmPin = async (payload: { latitude: number; longitude: number; name?: string }) => {
         setMapPickerVisible(false);
         setSavingPin(true);
-        // Only write the name if the user searched by name AND the event's
-        // existing label is empty. Never clobber a manual label.
-        const shouldWriteName = !!payload.name && !event.location?.trim();
+        // The selected place name IS the event's Location — always override
+        // when a name is returned. Matches the create-flow behaviour so users
+        // see consistent results across both screens.
         const { error } = await updateEventLocation(event.id, {
             latitude: payload.latitude,
             longitude: payload.longitude,
-            ...(shouldWriteName ? { locationName: payload.name } : {}),
+            ...(payload.name ? { locationName: payload.name } : {}),
         });
         setSavingPin(false);
         if (error) {

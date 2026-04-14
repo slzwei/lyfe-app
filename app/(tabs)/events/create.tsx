@@ -29,10 +29,11 @@ export default function CreateEventScreen() {
         (payload: { latitude: number; longitude: number; name?: string }) => {
             form.setLatitude(payload.latitude);
             form.setLongitude(payload.longitude);
-            // If the user searched by name in the MapPicker and the current
-            // location text field is empty, auto-fill it. Never clobber a
-            // value the user already typed — that's their label.
-            if (payload.name && !form.location.trim()) {
+            // The selected place name IS the Location on the event. Always
+            // override — the user's intent when they open the MapPicker is
+            // "replace the location with what I pick". Manual free-typing
+            // after a pin still works because the TextInput is editable.
+            if (payload.name) {
                 form.setLocation(payload.name);
             }
             setShowMapPicker(false);
@@ -277,65 +278,58 @@ export default function CreateEventScreen() {
                     endTimeError={errors.endTime}
                 />
 
-                {/* Location — text label + optional precise pin for check-in proximity */}
+                {/* Location — single row combining the free-text field and
+                    the pin picker. Tap the pin icon to open the MapPicker;
+                    selecting a place overrides the text with the resolved
+                    name and stores the coords. The pin icon is filled when
+                    coords are set, outlined when TBC. Free typing still
+                    works for virtual events with no physical venue. */}
                 <View style={styles.field}>
                     <Text style={labelStyle}>Location</Text>
-                    <TextInput
-                        style={inputStyle}
-                        placeholder="e.g. Zoom, Marina Bay Sands"
-                        placeholderTextColor={colors.textTertiary}
-                        value={location}
-                        onChangeText={setLocation}
-                    />
-
-                    {/* Precise venue pin — required for GPS check-in, optional at create time. */}
-                    {latitude != null && longitude != null ? (
-                        <View
-                            style={[
-                                styles.pinRow,
-                                { backgroundColor: colors.cardBackground, borderColor: colors.border },
-                            ]}
-                        >
-                            <Ionicons name="location" size={18} color={colors.accent} />
-                            <View style={{ flex: 1, marginLeft: 8 }}>
-                                <Text style={[styles.pinRowLabel, { color: colors.textPrimary }]}>Pinned</Text>
-                                <Text style={[styles.pinRowCoords, { color: colors.textTertiary }]}>
-                                    {latitude.toFixed(5)}, {longitude.toFixed(5)}
-                                </Text>
-                            </View>
-                            <TouchableOpacity
-                                testID="event-create-edit-pin"
-                                onPress={() => setShowMapPicker(true)}
-                                hitSlop={8}
-                            >
-                                <Text style={[styles.pinRowAction, { color: colors.accent }]}>Edit</Text>
-                            </TouchableOpacity>
-                            <TouchableOpacity
-                                testID="event-create-clear-pin"
-                                onPress={handleClearPin}
-                                hitSlop={8}
-                                style={{ marginLeft: 12 }}
-                            >
-                                <Text style={[styles.pinRowAction, { color: colors.danger }]}>Clear</Text>
-                            </TouchableOpacity>
-                        </View>
-                    ) : (
+                    <View
+                        style={[
+                            inputStyle,
+                            {
+                                flexDirection: 'row',
+                                alignItems: 'center',
+                                paddingRight: 8,
+                            },
+                        ]}
+                    >
+                        <TextInput
+                            testID="event-create-location-input"
+                            style={{ flex: 1, color: colors.textPrimary, fontSize: 15 }}
+                            placeholder="Tap the pin or type a venue"
+                            placeholderTextColor={colors.textTertiary}
+                            value={location}
+                            onChangeText={setLocation}
+                        />
                         <TouchableOpacity
                             testID="event-create-pin-location"
-                            style={[
-                                styles.pinButton,
-                                { backgroundColor: colors.cardBackground, borderColor: colors.border },
-                            ]}
                             onPress={() => setShowMapPicker(true)}
+                            hitSlop={8}
+                            accessibilityRole="button"
+                            accessibilityLabel={
+                                latitude != null ? 'Edit pinned venue location' : 'Pin venue location on map'
+                            }
+                            style={{ paddingHorizontal: 8, paddingVertical: 4 }}
                         >
-                            <Ionicons name="location-outline" size={18} color={colors.accent} />
-                            <Text style={[styles.pinButtonText, { color: colors.textPrimary }]}>
-                                Pin Venue Location
-                            </Text>
-                            <Text style={[styles.pinButtonHint, { color: colors.textTertiary }]}>
-                                Required for check-in
-                            </Text>
+                            <Ionicons
+                                name={latitude != null ? 'location' : 'location-outline'}
+                                size={22}
+                                color={latitude != null ? colors.accent : colors.textTertiary}
+                            />
                         </TouchableOpacity>
+                    </View>
+                    {latitude != null && (
+                        <View style={styles.pinStatusRow}>
+                            <Text style={[styles.pinStatusText, { color: colors.textTertiary }]}>
+                                Pinned — check-in enabled
+                            </Text>
+                            <TouchableOpacity testID="event-create-clear-pin" onPress={handleClearPin} hitSlop={8}>
+                                <Text style={[styles.pinStatusAction, { color: colors.danger }]}>Clear pin</Text>
+                            </TouchableOpacity>
+                        </View>
                     )}
                 </View>
 
@@ -461,28 +455,13 @@ const styles = StyleSheet.create({
     saveBtn: { paddingHorizontal: 16, paddingVertical: 8, borderRadius: 10 },
     saveBtnText: { fontWeight: '700', fontSize: 14 },
     submitError: { borderRadius: 10, padding: 12, marginBottom: 8 },
-    pinButton: {
+    pinStatusRow: {
         flexDirection: 'row',
         alignItems: 'center',
-        borderWidth: 1,
-        borderRadius: 12,
-        paddingHorizontal: 14,
-        paddingVertical: 12,
-        marginTop: 8,
-        gap: 8,
+        justifyContent: 'space-between',
+        marginTop: 6,
+        paddingHorizontal: 2,
     },
-    pinButtonText: { fontSize: 15, fontWeight: '500', flex: 1 },
-    pinButtonHint: { fontSize: 12 },
-    pinRow: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        borderWidth: 1,
-        borderRadius: 12,
-        paddingHorizontal: 14,
-        paddingVertical: 10,
-        marginTop: 8,
-    },
-    pinRowLabel: { fontSize: 14, fontWeight: '500' },
-    pinRowCoords: { fontSize: 11, fontVariant: ['tabular-nums'], marginTop: 1 },
-    pinRowAction: { fontSize: 14, fontWeight: '600' },
+    pinStatusText: { fontSize: 12 },
+    pinStatusAction: { fontSize: 12, fontWeight: '600' },
 });
