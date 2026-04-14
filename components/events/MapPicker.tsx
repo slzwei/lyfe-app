@@ -122,12 +122,19 @@ export default function MapPicker({
         };
     }, [visible, initialLatitude, initialLongitude]);
 
-    const handleRegionChange = useCallback((region: Region) => {
+    const handleRegionChange = useCallback((region: Region, details?: { isGesture?: boolean }) => {
         setPinCoords({ latitude: region.latitude, longitude: region.longitude });
-        // User panned manually — the pin no longer represents the searched
-        // name, so drop the name. onConfirm will return the current pin
-        // coords only, not the stale place name.
-        setSelectedName(null);
+        // ONLY clear the name when the user actually panned with a finger.
+        // `animateToRegion` (triggered after selecting a Places suggestion)
+        // also fires this callback, but react-native-maps 1.7+ marks those
+        // programmatic moves with `details.isGesture === false`. Without
+        // this check, the Places-resolved name gets clobbered immediately
+        // after selection and handleConfirm falls back to reverse-geocoding
+        // the coords, returning a nearby but wrong place (e.g. "Causeway
+        // Point" instead of the user's selected "Woods Square NTUC").
+        if (details?.isGesture === true) {
+            setSelectedName(null);
+        }
     }, []);
 
     // Called by the GooglePlacesAutocomplete component when the user taps a
