@@ -63,6 +63,10 @@ export default function MapPicker({
     const { colors } = useTheme();
     const mapRef = useRef<MapView | null>(null);
     const autocompleteRef = useRef<GooglePlacesAutocompleteRef | null>(null);
+    // Monotonic counter used to ignore stale reverse-geocode responses when
+    // the user pans multiple times in quick succession. Only the most
+    // recent request's result is applied.
+    const pendingGeocodeIdRef = useRef(0);
 
     // The pin coordinates == current map centre. We don't actually move the
     // pin view (it's visually fixed in the centre of the screen); we update
@@ -156,20 +160,56 @@ export default function MapPicker({
         };
     }, [visible, initialLatitude, initialLongitude, initialName]);
 
-    const handleRegionChange = useCallback((region: Region, details?: { isGesture?: boolean }) => {
-        setPinCoords({ latitude: region.latitude, longitude: region.longitude });
-        // ONLY clear the name when the user actually panned with a finger.
-        // `animateToRegion` (triggered after selecting a Places suggestion)
-        // also fires this callback, but react-native-maps 1.7+ marks those
-        // programmatic moves with `details.isGesture === false`. Without
-        // this check, the Places-resolved name gets clobbered immediately
-        // after selection and handleConfirm falls back to reverse-geocoding
-        // the coords, returning a nearby but wrong place (e.g. "Causeway
-        // Point" instead of the user's selected "Woods Square NTUC").
-        if (details?.isGesture === true) {
-            setSelectedName(null);
+    // Reverse-geocode a coord pair and pick the most specific label from
+    // the OS response. Prefers a POI name, then street+district, then
+    // city, then country. Returns null if the geocoder gave no usable
+    // result — caller should leave whatever name is currently displayed.
+    const resolveCoordName = useCallback(async (latitude: number, longitude: number): Promise<string | null> => {
+        try {
+            const results = await Location.reverseGeocodeAsync({ latitude, longitude });
+            if (results.length === 0) return null;
+            const first = results[0];
+            return (
+                first.name ||
+                [first.street, first.district || first.city].filter(Boolean).join(', ') ||
+                first.city ||
+                first.country ||
+                null
+            );
+        } catch {
+            return null;
         }
     }, []);
+
+    const handleRegionChange = useCallback(
+        async (region: Region, details?: { isGesture?: boolean }) => {
+            setPinCoords({ latitude: region.latitude, longitude: region.longitude });
+            // Only react to user-initiated pans. Programmatic animations
+            // (from animateToRegion after a Places pick) fire this callback
+            // with isGesture === false and must NOT trigger reverse-geocoding
+            // — otherwise the Places-resolved name gets clobbered with a
+            // nearby but different label immediately after selection.
+            if (details?.isGesture !== true) return;
+
+            // User panned. Reverse-geocode the new pin coords and update
+            // the search bar live so the label tracks the pin. Track the
+            // request ID so a slow response from a stale pan doesn't
+            // overwrite a later pan's result.
+            const myId = ++pendingGeocodeIdRef.current;
+            const name = await resolveCoordName(region.latitude, region.longitude);
+            if (myId !== pendingGeocodeIdRef.current) return; // stale
+            if (name) {
+                setSelectedName(name);
+                autocompleteRef.current?.setAddressText(name);
+            } else {
+                // Geocoder gave us nothing — clear both so Confirm's
+                // safety-net fallback can try again later if needed.
+                setSelectedName(null);
+                autocompleteRef.current?.setAddressText('');
+            }
+        },
+        [resolveCoordName],
+    );
 
     // Called by the GooglePlacesAutocomplete component when the user taps a
     // suggestion from the dropdown. `details` contains the full Place Details
@@ -214,30 +254,16 @@ export default function MapPicker({
     }, []);
 
     const handleConfirm = useCallback(async () => {
-        // If the user picked a Places suggestion, use that name directly.
-        // Otherwise they panned manually — reverse-geocode the pin coords
-        // to produce a human-readable name so every pin has a label.
+        // handleRegionChange already populates selectedName on every user
+        // pan and handlePlaceSelected sets it from the Places suggestion,
+        // so selectedName is almost always populated by the time Confirm
+        // fires. Safety net: if it isn't (e.g. a slow reverse-geocode that
+        // hadn't returned yet), resolve it now before returning to the
+        // caller so every pin has a label.
         let name = selectedName ?? undefined;
         if (!name) {
-            try {
-                const results = await Location.reverseGeocodeAsync({
-                    latitude: pinCoords.latitude,
-                    longitude: pinCoords.longitude,
-                });
-                if (results.length > 0) {
-                    const first = results[0];
-                    // Prefer the most specific label Places gives us:
-                    // name > street > district > city > country.
-                    name =
-                        first.name ||
-                        [first.street, first.district || first.city].filter(Boolean).join(', ') ||
-                        first.city ||
-                        first.country ||
-                        undefined;
-                }
-            } catch {
-                // Fall through with undefined name — caller will handle.
-            }
+            const resolved = await resolveCoordName(pinCoords.latitude, pinCoords.longitude);
+            if (resolved) name = resolved;
         }
 
         onConfirm({
@@ -245,7 +271,7 @@ export default function MapPicker({
             longitude: pinCoords.longitude,
             name,
         });
-    }, [onConfirm, pinCoords, selectedName]);
+    }, [onConfirm, pinCoords, selectedName, resolveCoordName]);
 
     const initialRegion: Region = {
         latitude: pinCoords.latitude,
