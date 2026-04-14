@@ -19,7 +19,7 @@ import { Ionicons } from '@expo/vector-icons';
 import * as Location from 'expo-location';
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { ActivityIndicator, Modal, Pressable, StyleSheet, Text, View } from 'react-native';
-import { GooglePlacesAutocomplete } from 'react-native-google-places-autocomplete';
+import { GooglePlacesAutocomplete, type GooglePlacesAutocompleteRef } from 'react-native-google-places-autocomplete';
 import MapView, { type Region } from 'react-native-maps';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
@@ -62,6 +62,7 @@ export default function MapPicker({
 }: MapPickerProps) {
     const { colors } = useTheme();
     const mapRef = useRef<MapView | null>(null);
+    const autocompleteRef = useRef<GooglePlacesAutocompleteRef | null>(null);
 
     // The pin coordinates == current map centre. We don't actually move the
     // pin view (it's visually fixed in the centre of the screen); we update
@@ -80,17 +81,50 @@ export default function MapPicker({
     // to the caller so the event's location text field can auto-fill.
     const [selectedName, setSelectedName] = useState<string | null>(initialName ?? null);
 
-    // On open, if no initial coords were passed, try to jump to the user's
-    // current location. Best-effort — falls back silently to Singapore.
+    // On every visible → true transition, re-sync internal state from the
+    // latest props. Without this, a previously-mounted MapPicker retains
+    // whatever pin / name / map region it was last showing — even though
+    // the parent may now be editing a different event, or re-opening the
+    // picker to adjust the same one. Handles three cases:
+    //
+    //   1. Re-opening with existing coords (user saved Woods Square, tapped
+    //      the location row to edit again): restore the pin + autocomplete
+    //      text + map centre to that saved state.
+    //   2. Opening fresh with no coords: reset everything, then try to
+    //      jump to the user's current GPS position as a starting point.
+    //   3. Closing: reset `ready` so the Confirm button is disabled until
+    //      the next open finishes laying out.
     useEffect(() => {
         if (!visible) {
             setReady(false);
             return;
         }
+
+        // Case 1: reopening with a saved selection — restore it.
         if (initialLatitude != null && initialLongitude != null) {
+            const coords = { latitude: initialLatitude, longitude: initialLongitude };
+            setPinCoords(coords);
+            setSelectedName(initialName ?? null);
+            // Snap map to the saved coords on open. Duration 0 = instant
+            // (no visible animation), so the user sees their last pick
+            // immediately, not a jump from wherever the map was.
+            mapRef.current?.animateToRegion(
+                { ...coords, latitudeDelta: DEFAULT_DELTA, longitudeDelta: DEFAULT_DELTA },
+                0,
+            );
+            // Pre-fill the search field with the saved name so the user
+            // can tap it to edit or replace the selection.
+            autocompleteRef.current?.setAddressText(initialName ?? '');
             setReady(true);
             return;
         }
+
+        // Case 2: fresh open (no saved coords). Clear any stale state
+        // from a previous session and try to centre on current GPS.
+        setPinCoords(SINGAPORE_FALLBACK);
+        setSelectedName(null);
+        autocompleteRef.current?.setAddressText('');
+
         let cancelled = false;
         (async () => {
             setLocating(true);
@@ -120,7 +154,7 @@ export default function MapPicker({
         return () => {
             cancelled = true;
         };
-    }, [visible, initialLatitude, initialLongitude]);
+    }, [visible, initialLatitude, initialLongitude, initialName]);
 
     const handleRegionChange = useCallback((region: Region, details?: { isGesture?: boolean }) => {
         setPinCoords({ latitude: region.latitude, longitude: region.longitude });
@@ -254,6 +288,7 @@ export default function MapPicker({
                     over the map below. */}
                 <View style={styles.searchWrapper}>
                     <GooglePlacesAutocomplete
+                        ref={autocompleteRef}
                         placeholder="Search venue or address"
                         fetchDetails
                         debounce={300}
@@ -276,10 +311,12 @@ export default function MapPicker({
                             components: 'country:sg',
                         }}
                         textInputProps={{
-                            defaultValue: initialName ?? '',
                             placeholderTextColor: colors.textTertiary,
                             autoCorrect: false,
                             autoCapitalize: 'words',
+                            // Tap → select all so the user can replace the
+                            // saved name in one go without backspacing.
+                            selectTextOnFocus: true,
                         }}
                         styles={{
                             container: {
