@@ -29,10 +29,13 @@ export default function CreateEventScreen() {
         (payload: { latitude: number; longitude: number; name?: string }) => {
             form.setLatitude(payload.latitude);
             form.setLongitude(payload.longitude);
-            // The selected place name IS the Location on the event. Always
-            // override — the user's intent when they open the MapPicker is
-            // "replace the location with what I pick". Manual free-typing
-            // after a pin still works because the TextInput is editable.
+            // The selected place name IS the Location on the event.
+            // Location can ONLY be set through this flow — there is no
+            // free-text input on the form. If the user dropped a pin
+            // without selecting a suggestion (pure pan), `payload.name`
+            // will be undefined and we leave the text as-is — but the
+            // map itself currently always resolves a name from the
+            // Places search, so this is effectively always set.
             if (payload.name) {
                 form.setLocation(payload.name);
             }
@@ -42,8 +45,10 @@ export default function CreateEventScreen() {
     );
 
     const handleClearPin = useCallback(() => {
+        // The location text IS the pin, so clearing drops all three.
         form.setLatitude(null);
         form.setLongitude(null);
+        form.setLocation('');
     }, [form]);
 
     const {
@@ -278,56 +283,55 @@ export default function CreateEventScreen() {
                     endTimeError={errors.endTime}
                 />
 
-                {/* Location — single row combining the free-text field and
-                    the pin picker. Tap the pin icon to open the MapPicker;
-                    selecting a place overrides the text with the resolved
-                    name and stores the coords. The pin icon is filled when
-                    coords are set, outlined when TBC. Free typing still
-                    works for virtual events with no physical venue. */}
+                {/* Location — the ONLY way to set this is through the
+                    MapPicker's Google Places search. Tapping the row opens
+                    the picker; the selected place name is what gets stored.
+                    There is no free-text input: if a venue isn't in Places,
+                    the manager can still pan the map and drop a pin, and
+                    the Places geocoded name of whatever's under that pin
+                    will be used. */}
                 <View style={styles.field}>
                     <Text style={labelStyle}>Location</Text>
-                    <View
+                    <TouchableOpacity
+                        testID="event-create-pin-location"
                         style={[
                             inputStyle,
                             {
                                 flexDirection: 'row',
                                 alignItems: 'center',
-                                paddingRight: 8,
+                                paddingRight: 10,
                             },
                         ]}
+                        onPress={() => setShowMapPicker(true)}
+                        accessibilityRole="button"
+                        accessibilityLabel={latitude != null ? 'Edit pinned venue location' : 'Pick venue location'}
                     >
-                        <TextInput
-                            testID="event-create-location-input"
-                            style={{ flex: 1, color: colors.textPrimary, fontSize: 15 }}
-                            placeholder="Tap the pin or type a venue"
-                            placeholderTextColor={colors.textTertiary}
-                            value={location}
-                            onChangeText={setLocation}
-                        />
-                        <TouchableOpacity
-                            testID="event-create-pin-location"
-                            onPress={() => setShowMapPicker(true)}
-                            hitSlop={8}
-                            accessibilityRole="button"
-                            accessibilityLabel={
-                                latitude != null ? 'Edit pinned venue location' : 'Pin venue location on map'
-                            }
-                            style={{ paddingHorizontal: 8, paddingVertical: 4 }}
+                        <Text
+                            style={[
+                                {
+                                    flex: 1,
+                                    fontSize: 15,
+                                    color: location ? colors.textPrimary : colors.textTertiary,
+                                },
+                            ]}
+                            numberOfLines={1}
                         >
-                            <Ionicons
-                                name={latitude != null ? 'location' : 'location-outline'}
-                                size={22}
-                                color={latitude != null ? colors.accent : colors.textTertiary}
-                            />
-                        </TouchableOpacity>
-                    </View>
+                            {location || 'Tap to pick a venue'}
+                        </Text>
+                        <Ionicons
+                            name={latitude != null ? 'location' : 'location-outline'}
+                            size={22}
+                            color={latitude != null ? colors.accent : colors.textTertiary}
+                            style={{ marginLeft: 8 }}
+                        />
+                    </TouchableOpacity>
                     {latitude != null && (
                         <View style={styles.pinStatusRow}>
                             <Text style={[styles.pinStatusText, { color: colors.textTertiary }]}>
                                 Pinned — check-in enabled
                             </Text>
                             <TouchableOpacity testID="event-create-clear-pin" onPress={handleClearPin} hitSlop={8}>
-                                <Text style={[styles.pinStatusAction, { color: colors.danger }]}>Clear pin</Text>
+                                <Text style={[styles.pinStatusAction, { color: colors.danger }]}>Clear</Text>
                             </TouchableOpacity>
                         </View>
                     )}

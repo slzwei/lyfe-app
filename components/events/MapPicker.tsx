@@ -172,14 +172,37 @@ export default function MapPicker({
         }
     }, []);
 
-    const handleConfirm = useCallback(() => {
+    const handleConfirm = useCallback(async () => {
+        // If the user picked a Places suggestion, use that name directly.
+        // Otherwise they panned manually — reverse-geocode the pin coords
+        // to produce a human-readable name so every pin has a label.
+        let name = selectedName ?? undefined;
+        if (!name) {
+            try {
+                const results = await Location.reverseGeocodeAsync({
+                    latitude: pinCoords.latitude,
+                    longitude: pinCoords.longitude,
+                });
+                if (results.length > 0) {
+                    const first = results[0];
+                    // Prefer the most specific label Places gives us:
+                    // name > street > district > city > country.
+                    name =
+                        first.name ||
+                        [first.street, first.district || first.city].filter(Boolean).join(', ') ||
+                        first.city ||
+                        first.country ||
+                        undefined;
+                }
+            } catch {
+                // Fall through with undefined name — caller will handle.
+            }
+        }
+
         onConfirm({
             latitude: pinCoords.latitude,
             longitude: pinCoords.longitude,
-            // Only pass the name if the pin still corresponds to the last
-            // Places selection. If the user searched, then panned away,
-            // selectedName was cleared and we return coords only.
-            name: selectedName ?? undefined,
+            name,
         });
     }, [onConfirm, pinCoords, selectedName]);
 
