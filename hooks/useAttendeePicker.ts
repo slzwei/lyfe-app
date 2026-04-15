@@ -40,7 +40,7 @@ interface AttendeePickerState {
     removeExternal: (key: string) => void;
 }
 
-export function useAttendeePicker(): AttendeePickerState {
+export function useAttendeePicker(eventType?: string): AttendeePickerState {
     const [selectedAttendees, setSelectedAttendees] = useState<SelectedAttendee[]>([]);
     const [showAttendeePicker, setShowAttendeePicker] = useState(false);
     const [pickerTab, setPickerTab] = useState<'team' | 'external'>('team');
@@ -65,15 +65,26 @@ export function useAttendeePicker(): AttendeePickerState {
         loadUsers();
     }, [loadUsers]);
 
-    const filteredUsers = useMemo(
-        () =>
-            allUsers.filter(
-                (u) =>
-                    u.full_name.toLowerCase().includes(userSearch.toLowerCase()) ||
-                    u.role.toLowerCase().includes(userSearch.toLowerCase()),
-            ),
-        [allUsers, userSearch],
-    );
+    // Candidates may attend normal events (training, team meetings, etc.) but
+    // not roadshows — roadshow attendance is tracked separately and candidates
+    // are not part of the sales floor rotation.
+    const filteredUsers = useMemo(() => {
+        const search = userSearch.toLowerCase();
+        return allUsers.filter((u) => {
+            if (eventType === 'roadshow' && u.role === 'candidate') return false;
+            return u.full_name.toLowerCase().includes(search) || u.role.toLowerCase().includes(search);
+        });
+    }, [allUsers, userSearch, eventType]);
+
+    // Strip any already-selected candidates if the event type flips to roadshow
+    // (e.g. user picks attendees for a team_meeting then switches the type).
+    useEffect(() => {
+        if (eventType !== 'roadshow') return;
+        setSelectedAttendees((prev) => {
+            const next = prev.filter((a) => a.role !== 'candidate');
+            return next.length === prev.length ? prev : next;
+        });
+    }, [eventType]);
 
     const toggleAttendee = useCallback((u: SimpleUser) => {
         setSelectedAttendees((prev) => {

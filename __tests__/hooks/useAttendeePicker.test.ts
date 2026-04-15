@@ -7,6 +7,7 @@ jest.mock('@/lib/events', () => ({
         data: [
             { id: 'u1', full_name: 'Alice Wong', role: 'agent', avatar_url: null },
             { id: 'u2', full_name: 'Bob Tan', role: 'manager', avatar_url: null },
+            { id: 'u3', full_name: 'Carol Lim', role: 'candidate', avatar_url: null },
         ],
         error: null,
     }),
@@ -16,7 +17,7 @@ describe('useAttendeePicker', () => {
     it('loads users on mount', async () => {
         const { result } = renderHook(() => useAttendeePicker());
         await waitFor(() => expect(result.current.loadingUsers).toBe(false));
-        expect(result.current.filteredUsers).toHaveLength(2);
+        expect(result.current.filteredUsers).toHaveLength(3);
     });
 
     it('toggleAttendee adds and removes', async () => {
@@ -72,5 +73,37 @@ describe('useAttendeePicker', () => {
         const key = result.current.externalAttendees[0]._key;
         act(() => result.current.removeExternal(key));
         expect(result.current.externalAttendees).toHaveLength(0);
+    });
+
+    it('hides candidates from the team list when eventType is roadshow', async () => {
+        const { result } = renderHook(() => useAttendeePicker('roadshow'));
+        await waitFor(() => expect(result.current.loadingUsers).toBe(false));
+        expect(result.current.filteredUsers).toHaveLength(2);
+        expect(result.current.filteredUsers.map((u) => u.role)).not.toContain('candidate');
+    });
+
+    it('shows candidates for non-roadshow event types', async () => {
+        const { result } = renderHook(() => useAttendeePicker('training'));
+        await waitFor(() => expect(result.current.loadingUsers).toBe(false));
+        expect(result.current.filteredUsers).toHaveLength(3);
+        expect(result.current.filteredUsers.map((u) => u.role)).toContain('candidate');
+    });
+
+    it('drops already-selected candidates when eventType flips to roadshow', async () => {
+        const { result, rerender } = renderHook(({ type }) => useAttendeePicker(type), {
+            initialProps: { type: 'training' as string },
+        });
+        await waitFor(() => expect(result.current.loadingUsers).toBe(false));
+
+        const candidate = { id: 'u3', full_name: 'Carol Lim', role: 'candidate', avatar_url: null };
+        const agent = { id: 'u1', full_name: 'Alice Wong', role: 'agent', avatar_url: null };
+        act(() => {
+            result.current.toggleAttendee(candidate);
+            result.current.toggleAttendee(agent);
+        });
+        expect(result.current.selectedAttendees).toHaveLength(2);
+
+        rerender({ type: 'roadshow' });
+        await waitFor(() => expect(result.current.selectedAttendees.map((a) => a.user_id)).toEqual(['u1']));
     });
 });
