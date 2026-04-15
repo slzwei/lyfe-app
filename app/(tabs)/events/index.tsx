@@ -11,6 +11,7 @@ import type { AgencyEvent } from '@/types/event';
 import { Ionicons } from '@expo/vector-icons';
 import { useFocusEffect, useNavigation, useRouter } from 'expo-router';
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import type { NativeScrollEvent, NativeSyntheticEvent } from 'react-native';
 import { RefreshControl, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 
@@ -123,40 +124,102 @@ export default function EventsScreen() {
     // ── Scroll machinery ───────────────────────────────────────
     const scrollRef = useRef<ScrollView>(null);
     const sectionOffsets = useRef<Map<string, number>>(new Map());
-    const pendingScroll = useRef<string | null>(null);
+    const pendingScroll = useRef<{ date: string; animated: boolean } | null>(null);
 
-    const scrollToDate = useCallback((date: string) => {
+    const scrollToDate = useCallback((date: string, animated = true) => {
         const y = sectionOffsets.current.get(date);
         if (y != null) {
-            scrollRef.current?.scrollTo({ y, animated: true });
-            pendingScroll.current = null;
+            scrollRef.current?.scrollTo({ y, animated });
         }
     }, []);
 
-    // Called by each section's onLayout — records offset and fulfils pending scroll
-    const handleSectionLayout = useCallback(
-        (date: string, y: number) => {
-            sectionOffsets.current.set(date, y);
-            if (pendingScroll.current === date) {
-                scrollToDate(date);
-            }
+    // Called by each section's onLayout — records offset and fulfils pending scroll.
+    // Re-scrolls if the target section's y just changed (new mount or shifted position).
+    const handleSectionLayout = useCallback((date: string, y: number) => {
+        const prev = sectionOffsets.current.get(date);
+        sectionOffsets.current.set(date, y);
+        const pending = pendingScroll.current;
+        if (pending?.date === date && prev !== y) {
+            scrollRef.current?.scrollTo({ y, animated: pending.animated });
+        }
+    }, []);
+
+    // Tracks whether the list is being dragged by the user, so we can sync the
+    // calendar pill from scroll position without the effect below fighting back.
+    const isUserScrolling = useRef(false);
+    const userScrollTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+    useEffect(
+        () => () => {
+            if (userScrollTimer.current) clearTimeout(userScrollTimer.current);
         },
-        [scrollToDate],
+        [],
     );
 
-    // Scroll to selected date when it changes
+    const handleScroll = useCallback((e: NativeSyntheticEvent<NativeScrollEvent>) => {
+        if (!isUserScrolling.current) return;
+        const scrollY = e.nativeEvent.contentOffset.y + 1;
+        let topDate: string | undefined;
+        let topOffset = -1;
+        for (const [date, y] of sectionOffsets.current) {
+            if (y <= scrollY && y > topOffset) {
+                topOffset = y;
+                topDate = date;
+            }
+        }
+        if (topDate === undefined) return;
+        const next = topDate;
+        setSelectedDate((prev) => (prev !== next ? next : prev));
+    }, []);
+
+    const handleScrollBeginDrag = useCallback(() => {
+        isUserScrolling.current = true;
+        if (userScrollTimer.current) {
+            clearTimeout(userScrollTimer.current);
+            userScrollTimer.current = null;
+        }
+    }, []);
+
+    const handleScrollEndDrag = useCallback(() => {
+        // Fallback clear for slow drags that produce no momentum.
+        // Cancelled by handleMomentumScrollBegin as soon as momentum kicks in.
+        userScrollTimer.current = setTimeout(() => {
+            isUserScrolling.current = false;
+            userScrollTimer.current = null;
+        }, 200);
+    }, []);
+
+    const handleMomentumScrollBegin = useCallback(() => {
+        if (userScrollTimer.current) {
+            clearTimeout(userScrollTimer.current);
+            userScrollTimer.current = null;
+        }
+    }, []);
+
+    const handleMomentumScrollEnd = useCallback(() => {
+        if (userScrollTimer.current) {
+            clearTimeout(userScrollTimer.current);
+            userScrollTimer.current = null;
+        }
+        isUserScrolling.current = false;
+    }, []);
+
+    // Scroll to selected date when it changes (unless the user is the one scrolling).
     const prevSelectedDate = useRef(selectedDate);
     useEffect(() => {
         if (prevSelectedDate.current === selectedDate) return;
         prevSelectedDate.current = selectedDate;
+        if (isUserScrolling.current) return;
 
-        // Clear stale offsets — sections may have changed
-        sectionOffsets.current.clear();
-
-        pendingScroll.current = selectedDate;
-        // Try immediately (works if section existed before and offset is still cached)
+        pendingScroll.current = { date: selectedDate, animated: true };
+        // Fast path — cached offsets are still valid when the section didn't shift.
         scrollToDate(selectedDate);
-        // If section is new, handleSectionLayout will fulfil the pending scroll on measure
+        // Slow path — handleSectionLayout re-scrolls for new or moved sections.
+        // Grace period so late-firing onLayout events can still correct the scroll.
+        const timeout = setTimeout(() => {
+            pendingScroll.current = null;
+        }, 500);
+        return () => clearTimeout(timeout);
     }, [selectedDate, scrollToDate]);
 
     // ── Section data ───────────────────────────────────────────
@@ -179,6 +242,23 @@ export default function EventsScreen() {
             return { date, events };
         });
     }, [allEvents, eventDates, selectedDate]);
+
+    // Initial scroll to selectedDate (today) once sections mount — otherwise
+    // the list opens on the earliest past event section at the top of the list.
+    // Non-animated so the user never sees the list at the wrong position.
+    const didInitialScrollRef = useRef(false);
+    useEffect(() => {
+        if (didInitialScrollRef.current) return;
+        if (isLoading || allSections.length === 0) return;
+        didInitialScrollRef.current = true;
+
+        pendingScroll.current = { date: selectedDate, animated: false };
+        scrollToDate(selectedDate, false);
+        const timeout = setTimeout(() => {
+            pendingScroll.current = null;
+        }, 1500);
+        return () => clearTimeout(timeout);
+    }, [isLoading, allSections.length, selectedDate, scrollToDate]);
 
     if (isLoading) {
         return (
@@ -208,6 +288,12 @@ export default function EventsScreen() {
                 ref={scrollRef}
                 contentContainerStyle={styles.listContent}
                 showsVerticalScrollIndicator={false}
+                scrollEventThrottle={32}
+                onScroll={handleScroll}
+                onScrollBeginDrag={handleScrollBeginDrag}
+                onScrollEndDrag={handleScrollEndDrag}
+                onMomentumScrollBegin={handleMomentumScrollBegin}
+                onMomentumScrollEnd={handleMomentumScrollEnd}
                 refreshControl={
                     <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={colors.accent} />
                 }

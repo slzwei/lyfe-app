@@ -352,6 +352,24 @@ export default function InlineCalendar({
         [monthPages, todayPageIdx],
     );
 
+    // When selectedDate changes from outside (parent syncs it to list scroll),
+    // re-center the strip or page the month grid so the pill stays in view.
+    const prevSelectedDateRef = useRef(selectedDate);
+    useEffect(() => {
+        if (prevSelectedDateRef.current === selectedDate) return;
+        prevSelectedDateRef.current = selectedDate;
+
+        if (isExpandedRef.current) {
+            const d = new Date(selectedDate + 'T00:00:00');
+            const idx = findPageIdx(d.getFullYear(), d.getMonth());
+            if (idx >= 0 && idx !== visiblePageIdx.current) {
+                scrollMonthToPage(idx, true);
+            }
+        } else {
+            scrollStripToDate(selectedDate, true);
+        }
+    }, [selectedDate, findPageIdx, scrollMonthToPage, scrollStripToDate]);
+
     // ── animateTo (stable ref so PanResponder closure never goes stale) ──
     const animateToRef = useRef<(v: number) => void>(() => {});
     animateToRef.current = (toValue: number) => {
