@@ -12,8 +12,15 @@ import type { ViewStyle } from 'react-native';
 
 // ── Document List (inline in scroll) ──
 
+export interface GeneratedPdf {
+    label: string;
+    title: string;
+    onView: () => void;
+}
+
 interface DocumentListProps {
     documents: CandidateDocument[];
+    generatedPdfs?: GeneratedPdf[];
     hasDocumentPicker: boolean;
     colors: ThemeColors;
     onViewDocument: (doc: CandidateDocument) => void;
@@ -23,47 +30,72 @@ interface DocumentListProps {
 
 export function DocumentList({
     documents,
+    generatedPdfs,
     hasDocumentPicker,
     colors,
     onViewDocument,
     onDeleteDocument,
     onAddDocument,
 }: DocumentListProps) {
+    const hasAny = (generatedPdfs && generatedPdfs.length > 0) || documents.length > 0;
+
     return (
         <>
-            {documents.length === 0 ? (
+            {!hasAny ? (
                 <View style={docStyles.emptyState}>
                     <Ionicons name="folder-open-outline" size={28} color={colors.textTertiary} />
                     <Text style={[docStyles.emptyText, { color: colors.textTertiary }]}>No documents yet</Text>
                 </View>
             ) : (
-                documents.map((doc) => (
-                    <View key={doc.id} style={[docStyles.docRow, { backgroundColor: colors.surfacePrimary }]}>
-                        <View style={[docStyles.labelChip, { backgroundColor: colors.accentLight }]}>
-                            <Text style={[docStyles.labelChipText, { color: colors.accent }]} numberOfLines={1}>
-                                {doc.label}
+                <>
+                    {generatedPdfs?.map((pdf) => (
+                        <View key={pdf.label} style={[docStyles.docRow, { backgroundColor: colors.surfacePrimary }]}>
+                            <View style={[docStyles.labelChip, { backgroundColor: colors.accentLight }]}>
+                                <Text style={[docStyles.labelChipText, { color: colors.accent }]} numberOfLines={1}>
+                                    {pdf.label}
+                                </Text>
+                            </View>
+                            <Text style={[docStyles.docFileName, { color: colors.textSecondary }]} numberOfLines={1}>
+                                {pdf.title}
                             </Text>
+                            <TouchableOpacity
+                                style={[docStyles.viewBtn, { backgroundColor: colors.accent }]}
+                                onPress={pdf.onView}
+                                activeOpacity={0.8}
+                            >
+                                <Ionicons name="eye-outline" size={14} color={colors.textInverse} />
+                                <Text style={[docStyles.viewBtnText, { color: colors.textInverse }]}>View</Text>
+                            </TouchableOpacity>
                         </View>
-                        <Text style={[docStyles.docFileName, { color: colors.textSecondary }]} numberOfLines={1}>
-                            {doc.file_name}
-                        </Text>
-                        <TouchableOpacity
-                            style={[docStyles.viewBtn, { backgroundColor: colors.accent }]}
-                            onPress={() => onViewDocument(doc)}
-                            activeOpacity={0.8}
-                        >
-                            <Ionicons name="eye-outline" size={14} color={colors.textInverse} />
-                            <Text style={[docStyles.viewBtnText, { color: colors.textInverse }]}>View</Text>
-                        </TouchableOpacity>
-                        <TouchableOpacity
-                            onPress={() => onDeleteDocument(doc)}
-                            hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-                            style={{ marginLeft: 6 }}
-                        >
-                            <Ionicons name="trash-outline" size={16} color={colors.textTertiary} />
-                        </TouchableOpacity>
-                    </View>
-                ))
+                    ))}
+                    {documents.map((doc) => (
+                        <View key={doc.id} style={[docStyles.docRow, { backgroundColor: colors.surfacePrimary }]}>
+                            <View style={[docStyles.labelChip, { backgroundColor: colors.accentLight }]}>
+                                <Text style={[docStyles.labelChipText, { color: colors.accent }]} numberOfLines={1}>
+                                    {doc.label}
+                                </Text>
+                            </View>
+                            <Text style={[docStyles.docFileName, { color: colors.textSecondary }]} numberOfLines={1}>
+                                {doc.file_name}
+                            </Text>
+                            <TouchableOpacity
+                                style={[docStyles.viewBtn, { backgroundColor: colors.accent }]}
+                                onPress={() => onViewDocument(doc)}
+                                activeOpacity={0.8}
+                            >
+                                <Ionicons name="eye-outline" size={14} color={colors.textInverse} />
+                                <Text style={[docStyles.viewBtnText, { color: colors.textInverse }]}>View</Text>
+                            </TouchableOpacity>
+                            <TouchableOpacity
+                                onPress={() => onDeleteDocument(doc)}
+                                hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                                style={{ marginLeft: 6 }}
+                            >
+                                <Ionicons name="trash-outline" size={16} color={colors.textTertiary} />
+                            </TouchableOpacity>
+                        </View>
+                    ))}
+                </>
             )}
 
             <TouchableOpacity

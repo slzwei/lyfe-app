@@ -9,7 +9,16 @@ import { useTypedRouter } from '@/hooks/useTypedRouter';
 import { Ionicons } from '@expo/vector-icons';
 import { usePathname } from 'expo-router';
 import React, { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { AccessibilityInfo, Animated, PanResponder, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import {
+    AccessibilityInfo,
+    Animated,
+    PanResponder,
+    Platform,
+    StyleSheet,
+    Text,
+    TouchableOpacity,
+    View,
+} from 'react-native';
 
 const BAR_H = 64;
 const BAR_MARGIN_H = 16;
@@ -203,7 +212,7 @@ export default memo(function LiveEventBar() {
             style={[
                 styles.wrapper,
                 {
-                    bottom: TAB_BAR_HEIGHT + BAR_MARGIN_BOTTOM + insets.bottom,
+                    bottom: TAB_BAR_HEIGHT + BAR_MARGIN_BOTTOM + (Platform.OS === 'android' ? insets.bottom : 0),
                     transform: [{ translateX: Animated.add(translateX, swipeAnim) }],
                     opacity: entranceAnim,
                 },

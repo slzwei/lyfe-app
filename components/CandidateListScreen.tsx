@@ -21,13 +21,18 @@ import React, { useCallback, useState } from 'react';
 import { FlatList, RefreshControl, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
-export interface CandidateListScreenProps {
+export interface CandidateListProps {
     /** Builds the path for the candidate detail screen given a candidate id. */
     candidateRoute: (id: string) => string;
-    /** Path to navigate to when the "add candidate" button is pressed. */
-    addRoute: string;
     /** When true, fetches candidates in manager-view scope. Defaults to false. */
     isManagerView?: boolean;
+    /** When true, removes top padding so the search bar sits flush with the parent's sticky header. */
+    embedded?: boolean;
+}
+
+export interface CandidateListScreenProps extends CandidateListProps {
+    /** Path to navigate to when the "add candidate" button is pressed. */
+    addRoute: string;
 }
 
 const CANDIDATE_SEARCH_FIELDS: (keyof RecruitmentCandidate)[] = ['name', 'phone'];
@@ -40,11 +45,12 @@ const FILTER_TABS: { key: CandidateStatus | 'all'; label: string }[] = [
     })),
 ];
 
-export default function CandidateListScreen({
-    candidateRoute,
-    addRoute,
-    isManagerView = false,
-}: CandidateListScreenProps) {
+/**
+ * Embeddable candidate list body — search, filter chips, list, loading/error.
+ * No SafeAreaView or ScreenHeader, so it can be dropped inside another screen
+ * (e.g. the Team tab's Candidates segment).
+ */
+export function CandidateList({ candidateRoute, isManagerView = false, embedded = false }: CandidateListProps) {
     const { colors } = useTheme();
     const { user } = useAuth();
     const router = useTypedRouter();
@@ -92,31 +98,13 @@ export default function CandidateListScreen({
     }, [loadCandidates]);
 
     if (isLoading) {
-        return (
-            <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]} edges={['top']}>
-                <ScreenHeader title="Candidates" />
-                <LoadingState />
-            </SafeAreaView>
-        );
+        return <LoadingState />;
     }
 
     return (
-        <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]} edges={['top']}>
-            <ScreenHeader
-                title="Candidates"
-                rightAction={
-                    <TouchableOpacity
-                        style={[styles.addButton, { backgroundColor: colors.accent }]}
-                        onPress={() => router.push(addRoute)}
-                        accessibilityLabel="Add new candidate"
-                    >
-                        <Ionicons name="person-add" size={20} color="#FFFFFF" />
-                    </TouchableOpacity>
-                }
-            />
-
+        <View style={{ flex: 1 }}>
             {/* Pinned Search + Filters */}
-            <View style={styles.stickyHeader}>
+            <View style={[styles.stickyHeader, embedded && { paddingTop: 0 }]}>
                 <View
                     style={[styles.searchBar, { backgroundColor: colors.cardBackground, borderColor: colors.border }]}
                 >
@@ -216,6 +204,33 @@ export default function CandidateListScreen({
                     <CandidateCard candidate={item} onPress={() => router.push(candidateRoute(item.id))} />
                 )}
             />
+        </View>
+    );
+}
+
+export default function CandidateListScreen({
+    candidateRoute,
+    addRoute,
+    isManagerView = false,
+}: CandidateListScreenProps) {
+    const { colors } = useTheme();
+    const router = useTypedRouter();
+
+    return (
+        <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]} edges={['top']}>
+            <ScreenHeader
+                title="Candidates"
+                rightAction={
+                    <TouchableOpacity
+                        style={[styles.addButton, { backgroundColor: colors.accent }]}
+                        onPress={() => router.push(addRoute)}
+                        accessibilityLabel="Add new candidate"
+                    >
+                        <Ionicons name="person-add" size={20} color="#FFFFFF" />
+                    </TouchableOpacity>
+                }
+            />
+            <CandidateList candidateRoute={candidateRoute} isManagerView={isManagerView} />
         </SafeAreaView>
     );
 }

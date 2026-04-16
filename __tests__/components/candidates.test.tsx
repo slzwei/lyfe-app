@@ -1,26 +1,18 @@
 /**
- * Tests for components/candidates/ — all 12 components at 0% coverage.
+ * Tests for components/candidates/ — active components.
  */
 import React from 'react';
 import { render, fireEvent } from '@testing-library/react-native';
 import { Colors } from '@/constants/Colors';
 
-// ── Imports (after mocks) ──
-
-import ActivityEntry from '@/components/candidates/ActivityEntry';
-import CandidateProfileCard from '@/components/candidates/CandidateProfileCard';
-import ContactHistoryCard from '@/components/candidates/ContactHistoryCard';
 import ContactOutcomeSheet from '@/components/candidates/ContactOutcomeSheet';
 import { DocumentList, AddDocumentSheet } from '@/components/candidates/DocumentSection';
 import InterviewSchedulerSheet from '@/components/candidates/InterviewSchedulerSheet';
-import InterviewSection from '@/components/candidates/InterviewSection';
 import NoteSheet from '@/components/candidates/NoteSheet';
 import PdfViewerModal from '@/components/candidates/PdfViewerModal';
-import ProfileCard from '@/components/candidates/ProfileCard';
-import QuickAction from '@/components/candidates/QuickAction';
 import QuickActionsBar from '@/components/candidates/QuickActionsBar';
 
-import type { CandidateActivity, Interview, RecruitmentCandidate, CandidateDocument } from '@/types/recruitment';
+import type { Interview, CandidateDocument } from '@/types/recruitment';
 
 // ── Mocks ──
 
@@ -55,52 +47,9 @@ jest.mock('@/components/WheelPicker', () => {
     };
 });
 
-jest.mock('@/components/candidates/InterviewCard', () => {
-    const { Text } = require('react-native');
-    return function MockInterviewCard({ interview }: any) {
-        return <Text>Interview R{interview.round_number}</Text>;
-    };
-});
-
 // ── Shared helpers ──
 
 const colors = Colors.light;
-
-function makeActivity(overrides: Partial<CandidateActivity> = {}): CandidateActivity {
-    return {
-        id: 'act-1',
-        candidate_id: 'c1',
-        user_id: 'u1',
-        type: 'call',
-        outcome: 'reached',
-        note: null,
-        created_at: '2026-03-15T10:00:00Z',
-        actor_name: 'John',
-        ...overrides,
-    };
-}
-
-function makeCandidate(overrides: Partial<RecruitmentCandidate> = {}): RecruitmentCandidate {
-    return {
-        id: 'c1',
-        name: 'Alice Tan',
-        phone: '+6591234567',
-        email: 'alice@example.com',
-        status: 'applied',
-        assigned_manager_id: 'm1',
-        assigned_manager_name: 'Bob Lee',
-        created_by_id: 'u1',
-        invite_token: null,
-        notes: null,
-        resume_url: null,
-        profile_pdf_path: null,
-        disc_pdf_path: null,
-        interviews: [],
-        created_at: '2026-03-01T00:00:00Z',
-        updated_at: '2026-03-15T00:00:00Z',
-        ...overrides,
-    };
-}
 
 function makeInterview(overrides: Partial<Interview> = {}): Interview {
     return {
@@ -136,154 +85,7 @@ function makeDocument(overrides: Partial<CandidateDocument> = {}): CandidateDocu
 const noopAnimatedStyle = {} as any;
 
 // ────────────────────────────────────────────────────────────────
-// 1. ActivityEntry
-// ────────────────────────────────────────────────────────────────
-describe('ActivityEntry', () => {
-    it('renders call type with Connected outcome', () => {
-        const entry = makeActivity({ type: 'call', outcome: 'reached' });
-        const { getByText } = render(<ActivityEntry entry={entry} isLast={false} colors={colors} />);
-        expect(getByText(/Call/)).toBeTruthy();
-        expect(getByText(/Connected/)).toBeTruthy();
-    });
-
-    it('renders call type with No answer outcome', () => {
-        const entry = makeActivity({ type: 'call', outcome: 'no_answer' });
-        const { getByText } = render(<ActivityEntry entry={entry} isLast={false} colors={colors} />);
-        expect(getByText(/Call/)).toBeTruthy();
-        expect(getByText(/No answer/)).toBeTruthy();
-    });
-
-    it('renders whatsapp type with Sent outcome', () => {
-        const entry = makeActivity({ type: 'whatsapp', outcome: 'sent' });
-        const { getByText } = render(<ActivityEntry entry={entry} isLast={false} colors={colors} />);
-        expect(getByText(/WhatsApp/)).toBeTruthy();
-        expect(getByText(/Sent/)).toBeTruthy();
-    });
-
-    it('renders note type with Note label', () => {
-        const entry = makeActivity({ type: 'note', outcome: null });
-        const { getByText, queryByText } = render(<ActivityEntry entry={entry} isLast={false} colors={colors} />);
-        expect(getByText('Note')).toBeTruthy();
-        expect(queryByText('Connected')).toBeNull();
-        expect(queryByText('Sent')).toBeNull();
-    });
-
-    it('renders note text when present', () => {
-        const entry = makeActivity({ note: 'Follow up tomorrow' });
-        const { getByText } = render(<ActivityEntry entry={entry} isLast={false} colors={colors} />);
-        expect(getByText('Follow up tomorrow')).toBeTruthy();
-    });
-
-    it('does not render note box when note is null', () => {
-        const entry = makeActivity({ note: null });
-        const { queryByText } = render(<ActivityEntry entry={entry} isLast={false} colors={colors} />);
-        expect(queryByText('Follow up tomorrow')).toBeNull();
-    });
-
-    it('renders actor name and time', () => {
-        const entry = makeActivity({ actor_name: 'Jane' });
-        const { getByText } = render(<ActivityEntry entry={entry} isLast={false} colors={colors} />);
-        expect(getByText(/Jane/)).toBeTruthy();
-        expect(getByText(/2m ago/)).toBeTruthy();
-    });
-
-    it('renders without actor name', () => {
-        const entry = makeActivity({ actor_name: undefined });
-        const { getByText } = render(<ActivityEntry entry={entry} isLast={true} colors={colors} />);
-        expect(getByText('2m ago')).toBeTruthy();
-    });
-});
-
-// ────────────────────────────────────────────────────────────────
-// 2. CandidateProfileCard
-// ────────────────────────────────────────────────────────────────
-describe('CandidateProfileCard', () => {
-    it('renders candidate name and phone', () => {
-        const candidate = makeCandidate();
-        const { getByText } = render(<CandidateProfileCard candidate={candidate} colors={colors} />);
-        expect(getByText('Alice Tan')).toBeTruthy();
-        expect(getByText('+6591234567')).toBeTruthy();
-    });
-
-    it('renders avatar initial', () => {
-        const candidate = makeCandidate({ name: 'Bob' });
-        const { getByText } = render(<CandidateProfileCard candidate={candidate} colors={colors} />);
-        expect(getByText('B')).toBeTruthy();
-    });
-
-    it('renders status badge', () => {
-        const candidate = makeCandidate({ status: 'applied' });
-        const { getByText } = render(<CandidateProfileCard candidate={candidate} colors={colors} />);
-        expect(getByText('Applied')).toBeTruthy();
-    });
-
-    it('renders email when present', () => {
-        const candidate = makeCandidate({ email: 'test@test.com' });
-        const { getByText } = render(<CandidateProfileCard candidate={candidate} colors={colors} />);
-        expect(getByText('test@test.com')).toBeTruthy();
-    });
-
-    it('does not render email when null', () => {
-        const candidate = makeCandidate({ email: null });
-        const { queryByText } = render(<CandidateProfileCard candidate={candidate} colors={colors} />);
-        expect(queryByText('test@test.com')).toBeNull();
-    });
-
-    it('renders recruiter name', () => {
-        const candidate = makeCandidate({ assigned_manager_name: 'Manager Kim' });
-        const { getByText } = render(<CandidateProfileCard candidate={candidate} colors={colors} />);
-        expect(getByText(/Recruiter: Manager Kim/)).toBeTruthy();
-    });
-
-    it('renders invite link banner when status is applied and invite_token exists', () => {
-        const candidate = makeCandidate({ status: 'applied', invite_token: 'abc123' });
-        const { getByText } = render(<CandidateProfileCard candidate={candidate} colors={colors} />);
-        expect(getByText('Copy Invite Link')).toBeTruthy();
-    });
-
-    it('does not render invite link when status is not applied', () => {
-        const candidate = makeCandidate({ status: 'interviewed', invite_token: 'abc123' });
-        const { queryByText } = render(<CandidateProfileCard candidate={candidate} colors={colors} />);
-        expect(queryByText('Copy Invite Link')).toBeNull();
-    });
-
-    it('does not render invite link when invite_token is null', () => {
-        const candidate = makeCandidate({ status: 'applied', invite_token: null });
-        const { queryByText } = render(<CandidateProfileCard candidate={candidate} colors={colors} />);
-        expect(queryByText('Copy Invite Link')).toBeNull();
-    });
-});
-
-// ────────────────────────────────────────────────────────────────
-// 3. ContactHistoryCard
-// ────────────────────────────────────────────────────────────────
-describe('ContactHistoryCard', () => {
-    it('renders empty state when no call log', () => {
-        const { getByText } = render(<ContactHistoryCard callLog={[]} colors={colors} />);
-        expect(getByText('Contact History')).toBeTruthy();
-        expect(getByText(/No calls or messages logged yet/)).toBeTruthy();
-    });
-
-    it('renders activity entries when call log is present', () => {
-        const entries = [
-            makeActivity({ id: 'a1', type: 'call', outcome: 'reached' }),
-            makeActivity({ id: 'a2', type: 'whatsapp', outcome: 'sent' }),
-        ];
-        const { getByText, getAllByText } = render(<ContactHistoryCard callLog={entries} colors={colors} />);
-        expect(getByText('Contact History')).toBeTruthy();
-        expect(getByText('2')).toBeTruthy(); // count badge
-        expect(getByText(/Call/)).toBeTruthy();
-        expect(getByText(/WhatsApp/)).toBeTruthy();
-    });
-
-    it('does not show count badge when call log is empty', () => {
-        const { queryByText } = render(<ContactHistoryCard callLog={[]} colors={colors} />);
-        expect(queryByText('0')).toBeNull();
-    });
-});
-
-// ────────────────────────────────────────────────────────────────
-// 4. ContactOutcomeSheet
+// 1. ContactOutcomeSheet
 // ────────────────────────────────────────────────────────────────
 describe('ContactOutcomeSheet', () => {
     const baseProps = {
@@ -407,7 +209,7 @@ describe('ContactOutcomeSheet', () => {
 });
 
 // ────────────────────────────────────────────────────────────────
-// 5. DocumentSection (DocumentList + AddDocumentSheet)
+// 2. DocumentSection (DocumentList + AddDocumentSheet)
 // ────────────────────────────────────────────────────────────────
 describe('DocumentList', () => {
     it('renders empty state when no documents', () => {
@@ -529,7 +331,7 @@ describe('AddDocumentSheet', () => {
 });
 
 // ────────────────────────────────────────────────────────────────
-// 6. InterviewSchedulerSheet
+// 3. InterviewSchedulerSheet
 // ────────────────────────────────────────────────────────────────
 describe('InterviewSchedulerSheet', () => {
     const baseProps = {
@@ -642,31 +444,7 @@ describe('InterviewSchedulerSheet', () => {
 });
 
 // ────────────────────────────────────────────────────────────────
-// 7. InterviewSection
-// ────────────────────────────────────────────────────────────────
-describe('InterviewSection', () => {
-    it('renders empty state when no interviews', () => {
-        const { getByText } = render(<InterviewSection interviews={[]} colors={colors} />);
-        expect(getByText('Interviews')).toBeTruthy();
-        expect(getByText('0')).toBeTruthy();
-        expect(getByText('No interviews yet')).toBeTruthy();
-    });
-
-    it('renders interview cards when interviews are present', () => {
-        const interviews = [
-            makeInterview({ id: 'i1', round_number: 1, datetime: '2026-03-10T10:00:00Z' }),
-            makeInterview({ id: 'i2', round_number: 2, datetime: '2026-03-15T10:00:00Z' }),
-        ];
-        const { getByText } = render(<InterviewSection interviews={interviews} colors={colors} />);
-        expect(getByText('Interviews')).toBeTruthy();
-        expect(getByText('2')).toBeTruthy();
-        expect(getByText('Interview R1')).toBeTruthy();
-        expect(getByText('Interview R2')).toBeTruthy();
-    });
-});
-
-// ────────────────────────────────────────────────────────────────
-// 8. NoteSheet
+// 4. NoteSheet
 // ────────────────────────────────────────────────────────────────
 describe('NoteSheet', () => {
     const baseProps = {
@@ -702,7 +480,7 @@ describe('NoteSheet', () => {
 });
 
 // ────────────────────────────────────────────────────────────────
-// 9. PdfViewerModal
+// 5. PdfViewerModal
 // ────────────────────────────────────────────────────────────────
 describe('PdfViewerModal', () => {
     it('renders title and close button', () => {
@@ -759,79 +537,7 @@ describe('PdfViewerModal', () => {
 });
 
 // ────────────────────────────────────────────────────────────────
-// 10. ProfileCard
-// ────────────────────────────────────────────────────────────────
-describe('ProfileCard', () => {
-    it('renders candidate name and phone', () => {
-        const candidate = makeCandidate();
-        const { getByText } = render(<ProfileCard candidate={candidate} colors={colors} />);
-        expect(getByText('Alice Tan')).toBeTruthy();
-        expect(getByText('+6591234567')).toBeTruthy();
-    });
-
-    it('renders avatar initial', () => {
-        const candidate = makeCandidate({ name: 'Charlie' });
-        const { getByText } = render(<ProfileCard candidate={candidate} colors={colors} />);
-        expect(getByText('C')).toBeTruthy();
-    });
-
-    it('renders status badge', () => {
-        const candidate = makeCandidate({ status: 'interview_scheduled' });
-        const { getByText } = render(<ProfileCard candidate={candidate} colors={colors} />);
-        expect(getByText('Interview')).toBeTruthy();
-    });
-
-    it('renders email when present', () => {
-        const candidate = makeCandidate({ email: 'charlie@test.com' });
-        const { getByText } = render(<ProfileCard candidate={candidate} colors={colors} />);
-        expect(getByText('charlie@test.com')).toBeTruthy();
-    });
-
-    it('does not render email when null', () => {
-        const candidate = makeCandidate({ email: null });
-        const { queryByText } = render(<ProfileCard candidate={candidate} colors={colors} />);
-        expect(queryByText('charlie@test.com')).toBeNull();
-    });
-
-    it('renders recruiter name', () => {
-        const candidate = makeCandidate({ assigned_manager_name: 'Manager Lee' });
-        const { getByText } = render(<ProfileCard candidate={candidate} colors={colors} />);
-        expect(getByText(/Recruiter: Manager Lee/)).toBeTruthy();
-    });
-});
-
-// ────────────────────────────────────────────────────────────────
-// 11. QuickAction
-// ────────────────────────────────────────────────────────────────
-describe('QuickAction', () => {
-    it('renders label', () => {
-        const { getByText } = render(
-            <QuickAction icon="call" label="Call" color="#007AFF" bgColor="#E5F1FF" onPress={jest.fn()} />,
-        );
-        expect(getByText('Call')).toBeTruthy();
-    });
-
-    it('calls onPress when pressed', () => {
-        const onPress = jest.fn();
-        const { getByText } = render(
-            <QuickAction icon="call" label="Call" color="#007AFF" bgColor="#E5F1FF" onPress={onPress} />,
-        );
-        fireEvent.press(getByText('Call'));
-        expect(onPress).toHaveBeenCalledTimes(1);
-    });
-
-    it('is disabled when disabled prop is true', () => {
-        const onPress = jest.fn();
-        const { getByText } = render(
-            <QuickAction icon="call" label="Call" color="#007AFF" bgColor="#E5F1FF" onPress={onPress} disabled />,
-        );
-        fireEvent.press(getByText('Call'));
-        expect(onPress).not.toHaveBeenCalled();
-    });
-});
-
-// ────────────────────────────────────────────────────────────────
-// 12. QuickActionsBar
+// 6. QuickActionsBar
 // ────────────────────────────────────────────────────────────────
 describe('QuickActionsBar', () => {
     const actions = [

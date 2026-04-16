@@ -1,13 +1,13 @@
 import Confetti, { CONFETTI_DURATION } from '@/components/Confetti';
 import ScreenHeader from '@/components/ScreenHeader';
-import MapPicker from '@/components/events/MapPicker';
+import { FaceCaptureFlow } from '@/components/face/FaceCaptureFlow';
 import { useEventDetail } from '@/hooks/useEventDetail';
 import { useCheckInFlow } from '@/hooks/useCheckInFlow';
 import { useActivityLog } from '@/hooks/useActivityLog';
 import { useManagerOverride } from '@/hooks/useManagerOverride';
 import { useAuth } from '@/contexts/AuthContext';
 import { useTheme } from '@/contexts/ThemeContext';
-import { deleteEvent, updateEventLocation } from '@/lib/events';
+import { deleteEvent } from '@/lib/events';
 import { logRoadshowActivity } from '@/lib/roadshow';
 import { formatCreatedAt, formatDateLong, formatTime, getRoadshowStatus } from '@/lib/dateTime';
 import type { AttendeeRole, EventAttendee } from '@/types/event';
@@ -42,74 +42,29 @@ import { EventAttendees } from '@/components/events/EventAttendees';
 
 // ── Location row helper ──────────────────────────────────────
 //
-// Folds the four meaningful states (pinned/unpinned × editable/view-only)
-// into one visual row instead of stacking two separate meta rows like the
-// first cut of this feature did. The raw coordinates are intentionally
-// hidden from end users — they're still stored on the event row and still
+// Display-only on this screen — location is edited exclusively via the Edit
+// Event page (pencil icon in the header). Folds the three meaningful states
+// (pinned, unpinned-with-text, missing) into one visual row. Raw lat/lng are
+// intentionally hidden from end users — still stored on the event row and
 // used by the check-in proximity gate, we just don't pollute the UI with
 // numbers nobody can read.
 function renderLocationRow(props: {
     location: string | null;
     pinned: boolean;
-    canEdit: boolean;
-    savingPin: boolean;
     colors: ReturnType<typeof useTheme>['colors'];
-    onEditPress: () => void;
 }) {
-    const { location, pinned, canEdit, savingPin, colors, onEditPress } = props;
+    const { location, pinned, colors } = props;
 
-    // State 1: location text AND pinned — happy path. Show the friendly name
-    // with the filled pin icon; managers can tap to re-pin.
     if (location && pinned) {
         return (
-            <TouchableOpacity
-                style={styles.metaRow}
-                onPress={canEdit ? onEditPress : undefined}
-                disabled={!canEdit || savingPin}
-                accessibilityRole={canEdit ? 'button' : undefined}
-                accessibilityLabel={canEdit ? 'Edit venue pin' : undefined}
-            >
+            <View style={styles.metaRow}>
                 <Ionicons name="location" size={16} color={colors.accent} />
                 <Text style={[styles.metaText, { color: colors.textSecondary, flex: 1 }]}>{location}</Text>
-                {canEdit && (
-                    <Text style={[styles.metaAction, { color: colors.accent }]}>
-                        {savingPin ? 'Saving…' : 'Edit Pin'}
-                    </Text>
-                )}
-            </TouchableOpacity>
+            </View>
         );
     }
 
-    // State 2: location text set, but no pin yet. Most common for legacy
-    // events created before the proximity feature. Warning color, managers
-    // get a "Pin" CTA to set it.
     if (location && !pinned) {
-        if (canEdit) {
-            return (
-                <TouchableOpacity
-                    style={[
-                        styles.metaRow,
-                        {
-                            backgroundColor: colors.warningLight,
-                            borderRadius: 8,
-                            padding: 8,
-                            marginHorizontal: -8,
-                        },
-                    ]}
-                    onPress={onEditPress}
-                    disabled={savingPin}
-                    accessibilityRole="button"
-                    accessibilityLabel="Pin venue location"
-                >
-                    <Ionicons name="location-outline" size={16} color={colors.warning} />
-                    <View style={{ flex: 1 }}>
-                        <Text style={[styles.metaText, { color: colors.textPrimary }]}>{location}</Text>
-                        <Text style={[styles.metaSubtext, { color: colors.warning }]}>Tap to pin for check-in</Text>
-                    </View>
-                    <Text style={[styles.metaAction, { color: colors.warning }]}>{savingPin ? 'Saving…' : 'Pin'}</Text>
-                </TouchableOpacity>
-            );
-        }
         return (
             <View style={styles.metaRow}>
                 <Ionicons name="location-outline" size={16} color={colors.textTertiary} />
@@ -123,31 +78,6 @@ function renderLocationRow(props: {
         );
     }
 
-    // State 3: no location text at all. Managers get a "Set location" CTA;
-    // everyone else sees a muted placeholder.
-    if (canEdit) {
-        return (
-            <TouchableOpacity
-                style={[
-                    styles.metaRow,
-                    {
-                        backgroundColor: colors.warningLight,
-                        borderRadius: 8,
-                        padding: 8,
-                        marginHorizontal: -8,
-                    },
-                ]}
-                onPress={onEditPress}
-                disabled={savingPin}
-                accessibilityRole="button"
-                accessibilityLabel="Set venue location"
-            >
-                <Ionicons name="location-outline" size={16} color={colors.warning} />
-                <Text style={[styles.metaText, { color: colors.warning, flex: 1 }]}>Location not set — tap to pin</Text>
-                <Text style={[styles.metaAction, { color: colors.warning }]}>{savingPin ? 'Saving…' : 'Set'}</Text>
-            </TouchableOpacity>
-        );
-    }
     return (
         <View style={styles.metaRow}>
             <Ionicons name="location-outline" size={16} color={colors.warning} />
@@ -181,11 +111,6 @@ export default function EventDetailScreen() {
     // ── Confetti (stays in screen — used by activity log's onMilestone) ──
     const [confettiVisible, setConfettiVisible] = useState(false);
     const [confettiKey, setConfettiKey] = useState(0);
-    // MapPicker for setting / editing the venue pin. Only managers (canEdit)
-    // can open it; the picker itself is rendered unconditionally so we can
-    // control visibility via a single state flag.
-    const [mapPickerVisible, setMapPickerVisible] = useState(false);
-    const [savingPin, setSavingPin] = useState(false);
     const confettiTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
     const triggerConfetti = useCallback(() => {
@@ -213,10 +138,14 @@ export default function EventDetailScreen() {
         checkinError,
         handleOpenCheckin,
         handleConfirmPledge,
+        faceCaptureVisible,
+        handleFacePhotoCaptured,
+        handleFaceDismiss,
     } = useCheckInFlow({
         eventId,
         userId: user?.id,
         userFullName: user?.full_name,
+        faceRegisteredAt: user?.face_registered_at,
         roadshowConfig,
         onCheckedIn: () => loadEvent(true),
     });
@@ -401,25 +330,6 @@ export default function EventDetailScreen() {
             (user.role === 'pa' && user.reports_to === event.created_by));
     const canDelete = !!user && (user.id === event.created_by || user.role === 'admin');
 
-    const handleConfirmPin = async (payload: { latitude: number; longitude: number; name?: string }) => {
-        setMapPickerVisible(false);
-        setSavingPin(true);
-        // The selected place name IS the event's Location — always override
-        // when a name is returned. Matches the create-flow behaviour so users
-        // see consistent results across both screens.
-        const { error } = await updateEventLocation(event.id, {
-            latitude: payload.latitude,
-            longitude: payload.longitude,
-            ...(payload.name ? { locationName: payload.name } : {}),
-        });
-        setSavingPin(false);
-        if (error) {
-            Alert.alert('Error', error);
-            return;
-        }
-        await loadEvent();
-    };
-
     const handleDelete = () => {
         Alert.alert('Delete Event', `Are you sure you want to delete "${event.title}"? This cannot be undone.`, [
             { text: 'Cancel', style: 'cancel' },
@@ -463,237 +373,243 @@ export default function EventDetailScreen() {
     };
 
     // ── Full render ───────────────────────────────────────────
+    // Wrap in a plain View so FaceCaptureFlow can absolute-fill the entire
+    // screen (including above the top safe-area inset) as a sibling overlay
+    // instead of replacing the event tree. Keeping the tree mounted preserves
+    // the realtime subscriptions and autodepart timer during the ~10-15s
+    // liveness loop.
     return (
-        <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]} edges={['top']}>
-            <ScreenHeader
-                title="Event Detail"
-                showBack
-                onBack={() => router.back()}
-                rightAction={
-                    canEdit || canDelete ? (
-                        <View style={styles.headerActions}>
-                            {canEdit && (
-                                <TouchableOpacity
-                                    onPress={() => router.push(`/(tabs)/events/create?eventId=${event.id}`)}
-                                    hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-                                    accessibilityLabel="Edit event"
-                                >
-                                    <Ionicons name="pencil-outline" size={22} color={colors.accent} />
-                                </TouchableOpacity>
-                            )}
-                            {canDelete && (
-                                <TouchableOpacity
-                                    onPress={handleDelete}
-                                    hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-                                    accessibilityLabel="Delete event"
-                                >
-                                    <Ionicons name="trash-outline" size={22} color={colors.danger} />
-                                </TouchableOpacity>
+        <View style={styles.container}>
+            <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]} edges={['top']}>
+                <ScreenHeader
+                    title="Event Detail"
+                    showBack
+                    onBack={() => router.back()}
+                    rightAction={
+                        canEdit || canDelete ? (
+                            <View style={styles.headerActions}>
+                                {canEdit && (
+                                    <TouchableOpacity
+                                        onPress={() => router.push(`/(tabs)/events/create?eventId=${event.id}`)}
+                                        hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                                        accessibilityLabel="Edit event"
+                                    >
+                                        <Ionicons name="pencil-outline" size={22} color={colors.accent} />
+                                    </TouchableOpacity>
+                                )}
+                                {canDelete && (
+                                    <TouchableOpacity
+                                        onPress={handleDelete}
+                                        hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                                        accessibilityLabel="Delete event"
+                                    >
+                                        <Ionicons name="trash-outline" size={22} color={colors.danger} />
+                                    </TouchableOpacity>
+                                )}
+                            </View>
+                        ) : undefined
+                    }
+                />
+
+                <ScrollView
+                    contentContainerStyle={styles.scrollContent}
+                    showsVerticalScrollIndicator={false}
+                    refreshControl={
+                        <RefreshControl
+                            refreshing={refreshing}
+                            onRefresh={() => loadEvent(true)}
+                            tintColor={colors.accent}
+                        />
+                    }
+                >
+                    {/* Hero */}
+                    <View style={[styles.hero, { backgroundColor: colors.cardBackground }]}>
+                        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                            <View style={[styles.typePill, { backgroundColor: typeColor + '18' }]}>
+                                <View style={[styles.typeDot, { backgroundColor: typeColor }]} />
+                                <Text style={[styles.typePillText, { color: typeColor }]}>
+                                    {EVENT_TYPE_LABELS[event.event_type]}
+                                </Text>
+                            </View>
+                            {isLive && (
+                                <View style={[styles.livePill, { backgroundColor: colors.statusLive + '18' }]}>
+                                    <Animated.View
+                                        style={[
+                                            styles.liveDot,
+                                            { backgroundColor: colors.statusLive, opacity: liveAnim },
+                                        ]}
+                                    />
+                                    <Text style={[styles.liveText, { color: colors.statusLive }]}>LIVE</Text>
+                                </View>
                             )}
                         </View>
-                    ) : undefined
-                }
-            />
-
-            <ScrollView
-                contentContainerStyle={styles.scrollContent}
-                showsVerticalScrollIndicator={false}
-                refreshControl={
-                    <RefreshControl
-                        refreshing={refreshing}
-                        onRefresh={() => loadEvent(true)}
-                        tintColor={colors.accent}
-                    />
-                }
-            >
-                {/* Hero */}
-                <View style={[styles.hero, { backgroundColor: colors.cardBackground }]}>
-                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
-                        <View style={[styles.typePill, { backgroundColor: typeColor + '18' }]}>
-                            <View style={[styles.typeDot, { backgroundColor: typeColor }]} />
-                            <Text style={[styles.typePillText, { color: typeColor }]}>
-                                {EVENT_TYPE_LABELS[event.event_type]}
+                        <Text style={[styles.heroTitle, { color: colors.textPrimary }]}>{event.title}</Text>
+                        <View style={styles.metaRow}>
+                            <Ionicons name="calendar-outline" size={16} color={colors.textTertiary} />
+                            <Text style={[styles.metaText, { color: colors.textSecondary }]}>
+                                {formatDateLong(event.event_date)}
                             </Text>
                         </View>
-                        {isLive && (
-                            <View style={[styles.livePill, { backgroundColor: colors.statusLive + '18' }]}>
-                                <Animated.View
-                                    style={[styles.liveDot, { backgroundColor: colors.statusLive, opacity: liveAnim }]}
-                                />
-                                <Text style={[styles.liveText, { color: colors.statusLive }]}>LIVE</Text>
-                            </View>
-                        )}
+                        <View style={styles.metaRow}>
+                            <Ionicons name="time-outline" size={16} color={colors.textTertiary} />
+                            <Text style={[styles.metaText, { color: colors.textSecondary }]}>
+                                {formatTime(event.start_time)}
+                                {event.end_time ? ` – ${formatTime(event.end_time)}` : ''}
+                            </Text>
+                        </View>
+                        {/* Location row — display-only. Editing happens on the
+                        Edit Event page (pencil icon in the header) so there's
+                        exactly one entry point for location changes. */}
+                        {renderLocationRow({
+                            location: event.location,
+                            pinned: event.latitude != null && event.longitude != null,
+                            colors,
+                        })}
                     </View>
-                    <Text style={[styles.heroTitle, { color: colors.textPrimary }]}>{event.title}</Text>
-                    <View style={styles.metaRow}>
-                        <Ionicons name="calendar-outline" size={16} color={colors.textTertiary} />
-                        <Text style={[styles.metaText, { color: colors.textSecondary }]}>
-                            {formatDateLong(event.event_date)}
-                        </Text>
-                    </View>
-                    <View style={styles.metaRow}>
-                        <Ionicons name="time-outline" size={16} color={colors.textTertiary} />
-                        <Text style={[styles.metaText, { color: colors.textSecondary }]}>
-                            {formatTime(event.start_time)}
-                            {event.end_time ? ` – ${formatTime(event.end_time)}` : ''}
-                        </Text>
-                    </View>
-                    {/* Location row — shows the friendly venue name and folds
-                        the pin state into the icon + right-side affordance.
-                        Managers can tap the whole row to open the MapPicker
-                        and set / edit the venue coordinates. Raw lat/lng are
-                        intentionally hidden — they're stored and used by the
-                        proximity check but never shown to end users. */}
-                    {renderLocationRow({
-                        location: event.location,
-                        pinned: event.latitude != null && event.longitude != null,
-                        canEdit,
-                        savingPin,
-                        colors,
-                        onEditPress: () => setMapPickerVisible(true),
-                    })}
-                </View>
 
-                {/* Description */}
-                {event.description && (
-                    <View style={[styles.card, { backgroundColor: colors.cardBackground }]}>
-                        <Text style={[styles.cardTitle, { color: colors.textPrimary }]}>Description</Text>
-                        <Text style={[styles.description, { color: colors.textSecondary }]}>{event.description}</Text>
-                    </View>
-                )}
-
-                {/* ── Roadshow sections ── */}
-                {isUpcoming && <RoadshowUpcoming roadshowConfig={roadshowConfig} colors={colors} />}
-
-                {isLive && isT1 && (
-                    <RoadshowLiveT1
-                        colors={colors}
-                        attendance={attendance}
-                        myAttendance={myAttendance}
-                        myCounts={myCounts}
-                        roadshowConfig={roadshowConfig}
-                        activities={activities}
-                        isCurrentlyLate={isCurrentlyLate}
-                        minutesCurrentlyLate={minutesCurrentlyLate}
-                        insets={insets}
-                        userId={user?.id}
-                        hasCheckedIn={hasCheckedIn}
-                        lateReason={lateReason}
-                        setLateReason={setLateReason}
-                        showPledgeSheet={showPledgeSheet}
-                        setShowPledgeSheet={setShowPledgeSheet}
-                        pledgeSitdowns={pledgeSitdowns}
-                        setPledgeSitdowns={setPledgeSitdowns}
-                        pledgePitches={pledgePitches}
-                        setPledgePitches={setPledgePitches}
-                        pledgeClosed={pledgeClosed}
-                        setPledgeClosed={setPledgeClosed}
-                        pledgeAfyc={pledgeAfyc}
-                        setPledgeAfyc={setPledgeAfyc}
-                        checkingIn={checkingIn}
-                        checkinError={checkinError}
-                        handleOpenCheckin={handleOpenCheckin}
-                        handleConfirmPledge={handleConfirmPledge}
-                        logDebounce={logDebounce}
-                        confirmActivity={confirmActivity}
-                        setConfirmActivity={setConfirmActivity}
-                        showAfycSheet={showAfycSheet}
-                        setShowAfycSheet={setShowAfycSheet}
-                        afycInput={afycInput}
-                        setAfycInput={setAfycInput}
-                        loggingActivity={loggingActivity}
-                        logHour={logHour}
-                        setLogHour={setLogHour}
-                        logMinuteIdx={logMinuteIdx}
-                        setLogMinuteIdx={setLogMinuteIdx}
-                        logAmPm={logAmPm}
-                        setLogAmPm={setLogAmPm}
-                        initLogTime={initLogTime}
-                        handleLogActivity={handleLogActivity}
-                        handleLogCaseClosed={handleLogCaseClosed}
-                        handleLogDeparture={handleLogDeparture}
-                        handleReturnToBooth={handleReturnToBooth}
-                    />
-                )}
-
-                {isLive && isT2orT3 && (
-                    <RoadshowLiveT2
-                        colors={colors}
-                        event={event}
-                        attendance={attendance}
-                        activityCounts={activityCounts}
-                        boothTotals={boothTotals}
-                        roadshowConfig={roadshowConfig}
-                        overrideTarget={overrideTarget}
-                        setOverrideTarget={setOverrideTarget}
-                        overrideTime={overrideTime}
-                        setOverrideTime={setOverrideTime}
-                        overrideLateReason={overrideLateReason}
-                        setOverrideLateReason={setOverrideLateReason}
-                        overridePledgeSitdowns={overridePledgeSitdowns}
-                        setOverridePledgeSitdowns={setOverridePledgeSitdowns}
-                        overridePledgePitches={overridePledgePitches}
-                        setOverridePledgePitches={setOverridePledgePitches}
-                        overridePledgeClosed={overridePledgeClosed}
-                        setOverridePledgeClosed={setOverridePledgeClosed}
-                        overridePledgeAfyc={overridePledgeAfyc}
-                        setOverridePledgeAfyc={setOverridePledgeAfyc}
-                        overrideSubmitting={overrideSubmitting}
-                        overrideError={overrideError}
-                        openOverride={openOverride}
-                        handleConfirmOverride={handleConfirmOverride}
-                        userFullName={user?.full_name}
-                    />
-                )}
-
-                {isLive && <RoadshowLeaderboard colors={colors} leaderboard={leaderboard} userId={user?.id} />}
-                {isLive && <RoadshowActivityFeed colors={colors} activities={activities} />}
-
-                {isPast && (
-                    <RoadshowPast
-                        colors={colors}
-                        roadshowConfig={roadshowConfig}
-                        attendance={attendance}
-                        activityCounts={activityCounts}
-                        totalAttendees={event.attendees.length}
-                    />
-                )}
-                {isPast && <RoadshowActivityFeed colors={colors} activities={activities} />}
-
-                {/* Assigned Agents (upcoming + non-roadshow) */}
-                {(!isRoadshow || isUpcoming) && (
-                    <EventAttendees
-                        colors={colors}
-                        grouped={grouped}
-                        totalAttendees={totalAttendees}
-                        externalAttendees={event.external_attendees ?? []}
-                    />
-                )}
-
-                {/* Footer */}
-                <View style={[styles.footer, { backgroundColor: colors.cardBackground }]}>
-                    {event.creator_name && (
-                        <Text style={[styles.footerText, { color: colors.textTertiary }]}>
-                            Created by {event.creator_name}
-                        </Text>
+                    {/* Description */}
+                    {event.description && (
+                        <View style={[styles.card, { backgroundColor: colors.cardBackground }]}>
+                            <Text style={[styles.cardTitle, { color: colors.textPrimary }]}>Description</Text>
+                            <Text style={[styles.description, { color: colors.textSecondary }]}>
+                                {event.description}
+                            </Text>
+                        </View>
                     )}
-                    <Text style={[styles.footerText, { color: colors.textTertiary }]}>
-                        {formatCreatedAt(event.created_at)}
-                    </Text>
+
+                    {/* ── Roadshow sections ── */}
+                    {isUpcoming && <RoadshowUpcoming roadshowConfig={roadshowConfig} colors={colors} />}
+
+                    {isLive && isT1 && (
+                        <RoadshowLiveT1
+                            colors={colors}
+                            attendance={attendance}
+                            myAttendance={myAttendance}
+                            myCounts={myCounts}
+                            roadshowConfig={roadshowConfig}
+                            activities={activities}
+                            isCurrentlyLate={isCurrentlyLate}
+                            minutesCurrentlyLate={minutesCurrentlyLate}
+                            insets={insets}
+                            userId={user?.id}
+                            hasCheckedIn={hasCheckedIn}
+                            lateReason={lateReason}
+                            setLateReason={setLateReason}
+                            showPledgeSheet={showPledgeSheet}
+                            setShowPledgeSheet={setShowPledgeSheet}
+                            pledgeSitdowns={pledgeSitdowns}
+                            setPledgeSitdowns={setPledgeSitdowns}
+                            pledgePitches={pledgePitches}
+                            setPledgePitches={setPledgePitches}
+                            pledgeClosed={pledgeClosed}
+                            setPledgeClosed={setPledgeClosed}
+                            pledgeAfyc={pledgeAfyc}
+                            setPledgeAfyc={setPledgeAfyc}
+                            checkingIn={checkingIn}
+                            checkinError={checkinError}
+                            handleOpenCheckin={handleOpenCheckin}
+                            handleConfirmPledge={handleConfirmPledge}
+                            logDebounce={logDebounce}
+                            confirmActivity={confirmActivity}
+                            setConfirmActivity={setConfirmActivity}
+                            showAfycSheet={showAfycSheet}
+                            setShowAfycSheet={setShowAfycSheet}
+                            afycInput={afycInput}
+                            setAfycInput={setAfycInput}
+                            loggingActivity={loggingActivity}
+                            logHour={logHour}
+                            setLogHour={setLogHour}
+                            logMinuteIdx={logMinuteIdx}
+                            setLogMinuteIdx={setLogMinuteIdx}
+                            logAmPm={logAmPm}
+                            setLogAmPm={setLogAmPm}
+                            initLogTime={initLogTime}
+                            handleLogActivity={handleLogActivity}
+                            handleLogCaseClosed={handleLogCaseClosed}
+                            handleLogDeparture={handleLogDeparture}
+                            handleReturnToBooth={handleReturnToBooth}
+                        />
+                    )}
+
+                    {isLive && isT2orT3 && (
+                        <RoadshowLiveT2
+                            colors={colors}
+                            event={event}
+                            attendance={attendance}
+                            activityCounts={activityCounts}
+                            boothTotals={boothTotals}
+                            roadshowConfig={roadshowConfig}
+                            overrideTarget={overrideTarget}
+                            setOverrideTarget={setOverrideTarget}
+                            overrideTime={overrideTime}
+                            setOverrideTime={setOverrideTime}
+                            overrideLateReason={overrideLateReason}
+                            setOverrideLateReason={setOverrideLateReason}
+                            overridePledgeSitdowns={overridePledgeSitdowns}
+                            setOverridePledgeSitdowns={setOverridePledgeSitdowns}
+                            overridePledgePitches={overridePledgePitches}
+                            setOverridePledgePitches={setOverridePledgePitches}
+                            overridePledgeClosed={overridePledgeClosed}
+                            setOverridePledgeClosed={setOverridePledgeClosed}
+                            overridePledgeAfyc={overridePledgeAfyc}
+                            setOverridePledgeAfyc={setOverridePledgeAfyc}
+                            overrideSubmitting={overrideSubmitting}
+                            overrideError={overrideError}
+                            openOverride={openOverride}
+                            handleConfirmOverride={handleConfirmOverride}
+                            userFullName={user?.full_name}
+                        />
+                    )}
+
+                    {isLive && <RoadshowLeaderboard colors={colors} leaderboard={leaderboard} userId={user?.id} />}
+                    {isLive && <RoadshowActivityFeed colors={colors} activities={activities} />}
+
+                    {isPast && (
+                        <RoadshowPast
+                            colors={colors}
+                            roadshowConfig={roadshowConfig}
+                            attendance={attendance}
+                            activityCounts={activityCounts}
+                            totalAttendees={event.attendees.length}
+                        />
+                    )}
+                    {isPast && <RoadshowActivityFeed colors={colors} activities={activities} />}
+
+                    {/* Assigned Agents (upcoming + non-roadshow) */}
+                    {(!isRoadshow || isUpcoming) && (
+                        <EventAttendees
+                            colors={colors}
+                            grouped={grouped}
+                            totalAttendees={totalAttendees}
+                            externalAttendees={event.external_attendees ?? []}
+                        />
+                    )}
+
+                    {/* Footer */}
+                    <View style={[styles.footer, { backgroundColor: colors.cardBackground }]}>
+                        {event.creator_name && (
+                            <Text style={[styles.footerText, { color: colors.textTertiary }]}>
+                                Created by {event.creator_name}
+                            </Text>
+                        )}
+                        <Text style={[styles.footerText, { color: colors.textTertiary }]}>
+                            {formatCreatedAt(event.created_at)}
+                        </Text>
+                    </View>
+                </ScrollView>
+
+                <Confetti visible={confettiVisible} confettiKey={confettiKey} />
+            </SafeAreaView>
+            {faceCaptureVisible && (
+                <View style={StyleSheet.absoluteFill}>
+                    <FaceCaptureFlow
+                        mode="verify"
+                        onPhotoCaptured={handleFacePhotoCaptured}
+                        onDismiss={handleFaceDismiss}
+                    />
                 </View>
-            </ScrollView>
-
-            <Confetti visible={confettiVisible} confettiKey={confettiKey} />
-
-            <MapPicker
-                visible={mapPickerVisible}
-                initialLatitude={event.latitude}
-                initialLongitude={event.longitude}
-                initialName={event.location ?? undefined}
-                onConfirm={handleConfirmPin}
-                onCancel={() => setMapPickerVisible(false)}
-            />
-        </SafeAreaView>
+            )}
+        </View>
     );
 }
 

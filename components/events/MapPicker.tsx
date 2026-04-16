@@ -67,6 +67,33 @@ export default function MapPicker({
     // the user pans multiple times in quick succession. Only the most
     // recent request's result is applied.
     const pendingGeocodeIdRef = useRef(0);
+    // Target coords of the most recent animateToRegion call. When the
+    // matching onRegionChangeComplete arrives (region within tolerance of
+    // the target), we know it's a programmatic move and must NOT reverse-
+    // geocode — otherwise the Places-resolved name would get clobbered by
+    // a nearby label right after selection. Cleared on match so subsequent
+    // user pans go through.
+    //
+    // We can't use react-native-maps' `details.isGesture` for this: the
+    // library only populates it on Google Maps (Android). On iOS (Apple
+    // Maps) it's always undefined. A pure timestamp lockout was also
+    // fragile on slow devices where the animation completes later than
+    // expected. Matching on coords is robust to both.
+    const pendingProgrammaticTargetRef = useRef<{
+        latitude: number;
+        longitude: number;
+        expiresAt: number;
+    } | null>(null);
+    const markProgrammaticMove = useCallback((coords: { latitude: number; longitude: number }, durationMs: number) => {
+        pendingProgrammaticTargetRef.current = {
+            latitude: coords.latitude,
+            longitude: coords.longitude,
+            // Generous expiry so slow devices / hot reloads don't miss
+            // the match. Only enforces an upper bound; normal flow clears
+            // the ref immediately when the event arrives.
+            expiresAt: Date.now() + durationMs + 2000,
+        };
+    }, []);
 
     // The pin coordinates == current map centre. We don't actually move the
     // pin view (it's visually fixed in the centre of the screen); we update
@@ -112,6 +139,7 @@ export default function MapPicker({
             // Snap map to the saved coords on open. Duration 0 = instant
             // (no visible animation), so the user sees their last pick
             // immediately, not a jump from wherever the map was.
+            markProgrammaticMove(coords, 0);
             mapRef.current?.animateToRegion(
                 { ...coords, latitudeDelta: DEFAULT_DELTA, longitudeDelta: DEFAULT_DELTA },
                 0,
@@ -142,6 +170,7 @@ export default function MapPicker({
                 if (cancelled) return;
                 const coords = { latitude: fix.coords.latitude, longitude: fix.coords.longitude };
                 setPinCoords(coords);
+                markProgrammaticMove(coords, 300);
                 mapRef.current?.animateToRegion(
                     { ...coords, latitudeDelta: DEFAULT_DELTA, longitudeDelta: DEFAULT_DELTA },
                     300,
@@ -158,7 +187,7 @@ export default function MapPicker({
         return () => {
             cancelled = true;
         };
-    }, [visible, initialLatitude, initialLongitude, initialName]);
+    }, [visible, initialLatitude, initialLongitude, initialName, markProgrammaticMove]);
 
     // Reverse-geocode a coord pair and pick the most specific label from
     // the OS response. Prefers a POI name, then street+district, then
@@ -182,14 +211,24 @@ export default function MapPicker({
     }, []);
 
     const handleRegionChange = useCallback(
-        async (region: Region, details?: { isGesture?: boolean }) => {
+        async (region: Region) => {
             setPinCoords({ latitude: region.latitude, longitude: region.longitude });
-            // Only react to user-initiated pans. Programmatic animations
-            // (from animateToRegion after a Places pick) fire this callback
-            // with isGesture === false and must NOT trigger reverse-geocoding
-            // — otherwise the Places-resolved name gets clobbered with a
-            // nearby but different label immediately after selection.
-            if (details?.isGesture !== true) return;
+            // Skip the onRegionChangeComplete fired at the end of a
+            // programmatic animateToRegion: if the current region is within
+            // a tight tolerance of the stored target, it's the animation
+            // completing — consume the target and return so we don't
+            // clobber a Places-resolved name with a reverse-geocode.
+            const pending = pendingProgrammaticTargetRef.current;
+            if (pending && Date.now() < pending.expiresAt) {
+                const dLat = Math.abs(region.latitude - pending.latitude);
+                const dLng = Math.abs(region.longitude - pending.longitude);
+                // ~55m tolerance absorbs map rounding without letting a
+                // real user pan slip through.
+                if (dLat < 0.0005 && dLng < 0.0005) {
+                    pendingProgrammaticTargetRef.current = null;
+                    return;
+                }
+            }
 
             // User panned. Reverse-geocode the new pin coords and update
             // the search bar live so the label tracks the pin. Track the
@@ -224,12 +263,22 @@ export default function MapPicker({
             };
             setPinCoords(coords);
             setSelectedName(description);
+            // Force the search bar label to the Places description right
+            // away. The library also does this internally, but we mirror
+            // it so the text is guaranteed to update and so a later
+            // reverse-geocode can't race us.
+            autocompleteRef.current?.setAddressText(description);
+            // Invalidate any in-flight reverse-geocode from a previous
+            // manual pan — its result should not override the new
+            // Places-resolved name.
+            pendingGeocodeIdRef.current += 1;
+            markProgrammaticMove(coords, 300);
             mapRef.current?.animateToRegion(
                 { ...coords, latitudeDelta: DEFAULT_DELTA, longitudeDelta: DEFAULT_DELTA },
                 300,
             );
         },
-        [],
+        [markProgrammaticMove],
     );
 
     const handleUseCurrentLocation = useCallback(async () => {
@@ -242,6 +291,7 @@ export default function MapPicker({
             setPinCoords(coords);
             // Using current location invalidates any previously-selected name.
             setSelectedName(null);
+            markProgrammaticMove(coords, 300);
             mapRef.current?.animateToRegion(
                 { ...coords, latitudeDelta: DEFAULT_DELTA, longitudeDelta: DEFAULT_DELTA },
                 300,
@@ -251,7 +301,7 @@ export default function MapPicker({
         } finally {
             setLocating(false);
         }
-    }, []);
+    }, [markProgrammaticMove]);
 
     const handleConfirm = useCallback(async () => {
         // handleRegionChange already populates selectedName on every user

@@ -1,7 +1,9 @@
+import { CandidateList } from '@/components/CandidateListScreen';
 import EmptyState from '@/components/EmptyState';
 import ErrorBanner from '@/components/ErrorBanner';
 import LoadingState from '@/components/LoadingState';
 import ScreenHeader from '@/components/ScreenHeader';
+import { canCreateCandidates } from '@/constants/Roles';
 import { useAuth } from '@/contexts/AuthContext';
 import { useTheme } from '@/contexts/ThemeContext';
 import { fetchTeamMembers, type TeamMember } from '@/lib/team';
@@ -14,6 +16,7 @@ import { useTypedRouter } from '@/hooks/useTypedRouter';
 import React, { useCallback, useMemo, useState } from 'react';
 import { Alert, FlatList, RefreshControl, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import type { UserRole } from '@/types/shared/roles';
 
 const TEAM_SEARCH_FIELDS: (keyof TeamMember)[] = ['name', 'phone', 'email'];
 const AVATAR_COLOR_KEYS = ['statusProposed', 'accent', 'danger', 'warning', 'statusProposed', 'info'] as const;
@@ -40,6 +43,7 @@ export default function TeamScreen() {
     const [invitations, setInvitations] = useState<MemberInvitation[]>([]);
     const [isLoading, setIsLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
+    const [teamView, setTeamView] = useState<'members' | 'candidates'>('members');
 
     const canFilter = user?.role === 'director' || user?.role === 'admin' || user?.role === 'manager';
     const showInviteTab = canInviteMembers((user?.role ?? 'agent') as import('@/types/shared/roles').UserRole);
@@ -364,103 +368,169 @@ export default function TeamScreen() {
         );
     }
 
+    const role = (user?.role ?? 'agent') as UserRole;
+    const headerRight =
+        teamView === 'candidates' ? (
+            canCreateCandidates(role) ? (
+                <TouchableOpacity
+                    onPress={() => router.push('/(tabs)/team/add-candidate')}
+                    hitSlop={8}
+                    testID="team-add-candidate-button"
+                    accessibilityLabel="Add candidate"
+                >
+                    <Ionicons name="person-add" size={22} color={colors.accent} />
+                </TouchableOpacity>
+            ) : undefined
+        ) : canInviteMembers(role) ? (
+            <TouchableOpacity
+                onPress={() => router.push('/(tabs)/team/invite-member')}
+                hitSlop={8}
+                testID="team-invite-button"
+            >
+                <Ionicons name="person-add-outline" size={22} color={colors.accent} />
+            </TouchableOpacity>
+        ) : undefined;
+
     return (
         <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]} edges={['top']}>
-            <ScreenHeader
-                title="Team"
-                rightAction={
-                    canInviteMembers((user?.role ?? 'agent') as import('@/types/shared/roles').UserRole) ? (
-                        <TouchableOpacity
-                            onPress={() => router.push('/(tabs)/team/invite-member')}
-                            hitSlop={8}
-                            testID="team-invite-button"
-                        >
-                            <Ionicons name="person-add-outline" size={22} color={colors.accent} />
-                        </TouchableOpacity>
-                    ) : undefined
-                }
-            />
+            <ScreenHeader title="Team" rightAction={headerRight} />
 
-            {/* Pinned Search + Filters */}
-            <View style={styles.stickyHeader}>
-                {/* Search Bar */}
-                <View
-                    style={[styles.searchBar, { backgroundColor: colors.cardBackground, borderColor: colors.border }]}
-                >
-                    <Ionicons name="search" size={18} color={colors.textTertiary} />
-                    <TextInput
-                        style={[styles.searchInput, { color: colors.textPrimary }]}
-                        placeholder="Search team members..."
-                        placeholderTextColor={colors.textTertiary}
-                        value={search}
-                        onChangeText={setSearch}
-                        returnKeyType="search"
-                    />
-                    {search.length > 0 && (
-                        <TouchableOpacity
-                            onPress={() => setSearch('')}
-                            hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+            {/* Segment + (Members only) Search + Filters */}
+            <View style={[styles.stickyHeader, teamView === 'candidates' && { paddingBottom: 0 }]}>
+                <View style={styles.segmentRow}>
+                    <TouchableOpacity
+                        style={[
+                            styles.segmentButton,
+                            {
+                                backgroundColor: teamView === 'members' ? colors.accent : colors.cardBackground,
+                                borderColor: teamView === 'members' ? colors.accent : colors.border,
+                            },
+                        ]}
+                        onPress={() => setTeamView('members')}
+                        accessibilityRole="button"
+                        accessibilityState={{ selected: teamView === 'members' }}
+                        testID="team-segment-members"
+                    >
+                        <Text
+                            style={[
+                                styles.segmentText,
+                                { color: teamView === 'members' ? colors.textInverse : colors.textSecondary },
+                            ]}
                         >
-                            <Ionicons name="close-circle" size={18} color={colors.textTertiary} />
-                        </TouchableOpacity>
-                    )}
+                            Members
+                        </Text>
+                    </TouchableOpacity>
+                    <TouchableOpacity
+                        style={[
+                            styles.segmentButton,
+                            {
+                                backgroundColor: teamView === 'candidates' ? colors.accent : colors.cardBackground,
+                                borderColor: teamView === 'candidates' ? colors.accent : colors.border,
+                            },
+                        ]}
+                        onPress={() => setTeamView('candidates')}
+                        accessibilityRole="button"
+                        accessibilityState={{ selected: teamView === 'candidates' }}
+                        testID="team-segment-candidates"
+                    >
+                        <Text
+                            style={[
+                                styles.segmentText,
+                                { color: teamView === 'candidates' ? colors.textInverse : colors.textSecondary },
+                            ]}
+                        >
+                            Candidates
+                        </Text>
+                    </TouchableOpacity>
                 </View>
 
-                {/* Filter Chips */}
-                {filters.length > 1 && (
-                    <View style={styles.filterRow}>
-                        {filters.map((f) => {
-                            const isActive = filter === f.key;
-                            const count = f.key === 'pending' ? invitations.length : counts[f.key] || 0;
-                            return (
+                {teamView === 'members' && (
+                    <>
+                        {/* Search Bar */}
+                        <View
+                            style={[
+                                styles.searchBar,
+                                { backgroundColor: colors.cardBackground, borderColor: colors.border },
+                            ]}
+                        >
+                            <Ionicons name="search" size={18} color={colors.textTertiary} />
+                            <TextInput
+                                style={[styles.searchInput, { color: colors.textPrimary }]}
+                                placeholder="Search team members..."
+                                placeholderTextColor={colors.textTertiary}
+                                value={search}
+                                onChangeText={setSearch}
+                                returnKeyType="search"
+                            />
+                            {search.length > 0 && (
                                 <TouchableOpacity
-                                    key={f.key}
-                                    style={[
-                                        styles.filterChip,
-                                        {
-                                            backgroundColor: isActive ? colors.accent : colors.cardBackground,
-                                            borderColor: isActive ? colors.accent : colors.border,
-                                        },
-                                    ]}
-                                    onPress={() => setFilter(f.key)}
-                                    accessibilityRole="button"
-                                    accessibilityLabel={`Filter by ${f.label}`}
-                                    accessibilityState={{ selected: isActive }}
+                                    onPress={() => setSearch('')}
+                                    hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
                                 >
-                                    <Text
-                                        style={[
-                                            styles.filterText,
-                                            { color: isActive ? colors.textInverse : colors.textSecondary },
-                                        ]}
-                                    >
-                                        {f.label}
-                                    </Text>
-                                    <Text
-                                        style={[
-                                            styles.filterCount,
-                                            {
-                                                color: isActive ? colors.textInverse : colors.textTertiary,
-                                                opacity: isActive ? 0.8 : 1,
-                                            },
-                                        ]}
-                                    >
-                                        {count}
-                                    </Text>
+                                    <Ionicons name="close-circle" size={18} color={colors.textTertiary} />
                                 </TouchableOpacity>
-                            );
-                        })}
-                    </View>
+                            )}
+                        </View>
+
+                        {/* Filter Chips */}
+                        {filters.length > 1 && (
+                            <View style={styles.filterRow}>
+                                {filters.map((f) => {
+                                    const isActive = filter === f.key;
+                                    const count = f.key === 'pending' ? invitations.length : counts[f.key] || 0;
+                                    return (
+                                        <TouchableOpacity
+                                            key={f.key}
+                                            style={[
+                                                styles.filterChip,
+                                                {
+                                                    backgroundColor: isActive ? colors.accent : colors.cardBackground,
+                                                    borderColor: isActive ? colors.accent : colors.border,
+                                                },
+                                            ]}
+                                            onPress={() => setFilter(f.key)}
+                                            accessibilityRole="button"
+                                            accessibilityLabel={`Filter by ${f.label}`}
+                                            accessibilityState={{ selected: isActive }}
+                                        >
+                                            <Text
+                                                style={[
+                                                    styles.filterText,
+                                                    { color: isActive ? colors.textInverse : colors.textSecondary },
+                                                ]}
+                                            >
+                                                {f.label}
+                                            </Text>
+                                            <Text
+                                                style={[
+                                                    styles.filterCount,
+                                                    {
+                                                        color: isActive ? colors.textInverse : colors.textTertiary,
+                                                        opacity: isActive ? 0.8 : 1,
+                                                    },
+                                                ]}
+                                            >
+                                                {count}
+                                            </Text>
+                                        </TouchableOpacity>
+                                    );
+                                })}
+                            </View>
+                        )}
+                    </>
                 )}
             </View>
 
-            {/* Error Banner */}
-            {error && (
+            {/* Error Banner (members view only — CandidateList renders its own) */}
+            {error && teamView === 'members' && (
                 <View style={{ paddingHorizontal: 16 }}>
                     <ErrorBanner message={error} onRetry={loadMembers} />
                 </View>
             )}
 
-            {isPending ? (
+            {teamView === 'candidates' ? (
+                <CandidateList candidateRoute={(id) => `/(tabs)/team/candidate/${id}`} isManagerView embedded />
+            ) : isPending ? (
                 <FlatList
                     data={invitations}
                     renderItem={renderInvitation}
@@ -604,6 +674,24 @@ const styles = StyleSheet.create({
         flex: 1,
         fontSize: 15,
         padding: 0,
+    },
+
+    // ── Segment control ──
+    segmentRow: {
+        flexDirection: 'row',
+        gap: 8,
+        marginBottom: 12,
+    },
+    segmentButton: {
+        flex: 1,
+        paddingVertical: 10,
+        borderRadius: 10,
+        borderWidth: 1,
+        alignItems: 'center',
+    },
+    segmentText: {
+        fontSize: 14,
+        fontWeight: '700',
     },
 
     // ── Filters ──
