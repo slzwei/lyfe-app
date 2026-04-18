@@ -9,13 +9,14 @@ const navigationIntegration = reactNavigationIntegration({
 });
 
 export function initSentry() {
-    if (!DSN) return;
-
+    // Always call Sentry.init, even without a DSN — Sentry.wrap() in the root
+    // layout needs the SDK initialised to install its app-start span. With
+    // enabled:false (dev or missing DSN) nothing is actually sent.
     Sentry.init({
         dsn: DSN,
         tracesSampleRate: __DEV__ ? 1.0 : 0.2,
         debug: false,
-        enabled: !__DEV__,
+        enabled: !!DSN && !__DEV__,
         environment: __DEV__ ? 'development' : 'production',
         release: `com.shawnlee.lyfe@${Constants.expoConfig?.version ?? '0.0.0'}`,
         dist: Constants.expoConfig?.extra?.eas?.projectId ?? undefined,
