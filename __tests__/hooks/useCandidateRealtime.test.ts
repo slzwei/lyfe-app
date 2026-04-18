@@ -27,6 +27,10 @@ jest.mock('@/lib/supabase', () => ({
     },
 }));
 
+jest.mock('@/contexts/AuthContext', () => ({
+    useAuth: jest.fn(() => ({ user: { id: 'user-1' } })),
+}));
+
 beforeEach(() => {
     jest.clearAllMocks();
     jest.useFakeTimers();
@@ -39,6 +43,16 @@ afterEach(() => {
 });
 
 describe('useCandidateRealtime', () => {
+    it('does not subscribe when user is not authenticated', () => {
+        const { useAuth } = require('@/contexts/AuthContext');
+        (useAuth as jest.Mock).mockReturnValueOnce({ user: null });
+        const onUpdate = jest.fn();
+        renderHook(() => useCandidateRealtime(onUpdate));
+
+        const { supabase } = require('@/lib/supabase');
+        expect(supabase.channel).not.toHaveBeenCalled();
+    });
+
     it('subscribes to progress_signals on mount', () => {
         const onUpdate = jest.fn();
         renderHook(() => useCandidateRealtime(onUpdate));
