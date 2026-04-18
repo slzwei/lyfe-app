@@ -10,7 +10,7 @@ jest.mock('@/lib/recruitment', () => ({
                 id: 'doc_1',
                 candidate_id: 'c1',
                 label: 'Resume',
-                file_url: 'https://example.com/resume.pdf',
+                file_url: 'c1/docs/1700000000000_resume.pdf',
                 file_name: 'resume.pdf',
                 created_at: '2026-03-01T00:00:00.000Z',
             },
@@ -18,7 +18,7 @@ jest.mock('@/lib/recruitment', () => ({
                 id: 'doc_2',
                 candidate_id: 'c1',
                 label: 'M5',
-                file_url: 'https://example.com/m5.pdf',
+                file_url: 'candidates/c1/1700000000001_m5.pdf',
                 file_name: 'm5.pdf',
                 created_at: '2026-03-02T00:00:00.000Z',
             },
@@ -31,15 +31,23 @@ jest.mock('@/lib/recruitment', () => ({
             id: 'doc_new',
             candidate_id: 'c1',
             label: 'RES5',
-            file_url: 'https://example.com/res5.pdf',
+            file_url: 'c1/docs/1700000000002_res5.pdf',
             file_name: 'res5.pdf',
             created_at: '2026-03-09T00:00:00.000Z',
         },
         error: null,
     }),
+    getCandidateDocumentUrl: jest
+        .fn()
+        .mockImplementation((path: string) => Promise.resolve(`https://signed.example.com/${path}?token=abc`)),
 }));
 
-const { fetchCandidateDocuments, deleteCandidateDocument, uploadCandidateDocument } = require('@/lib/recruitment');
+const {
+    fetchCandidateDocuments,
+    deleteCandidateDocument,
+    uploadCandidateDocument,
+    getCandidateDocumentUrl,
+} = require('@/lib/recruitment');
 
 // Mock expo-document-picker
 const mockGetDocumentAsync = jest.fn();
@@ -71,7 +79,7 @@ describe('useDocumentManager', () => {
         expect(result.current.documents[0].id).toBe('doc_1');
     });
 
-    it('handleViewDocument opens PDF viewer', async () => {
+    it('handleViewDocument resolves signed URL and opens PDF viewer', async () => {
         const { result } = renderHook(() => useDocumentManager({ candidateId: 'c1' }));
 
         await act(async () => {
@@ -79,11 +87,41 @@ describe('useDocumentManager', () => {
         });
 
         const doc = result.current.documents[0];
-        act(() => result.current.handleViewDocument(doc));
+        await act(async () => {
+            await result.current.handleViewDocument(doc);
+        });
+
+        expect(getCandidateDocumentUrl).toHaveBeenCalledWith('c1/docs/1700000000000_resume.pdf');
+        expect(result.current.showPdf).toBe(true);
+        expect(result.current.pdfUrl).toBe('https://signed.example.com/c1/docs/1700000000000_resume.pdf?token=abc');
+        expect(result.current.pdfTitle).toBe('Resume');
+    });
+
+    it('handleViewDocument does not open viewer when URL resolution fails', async () => {
+        getCandidateDocumentUrl.mockResolvedValueOnce(null);
+        const { result } = renderHook(() => useDocumentManager({ candidateId: 'c1' }));
+
+        await act(async () => {
+            await result.current.loadDocuments();
+        });
+
+        const doc = result.current.documents[0];
+        await act(async () => {
+            await result.current.handleViewDocument(doc);
+        });
+
+        expect(result.current.showPdf).toBe(false);
+        expect(result.current.pdfUrl).toBeNull();
+    });
+
+    it('openPdfViewer opens PDF viewer with pre-resolved URL', () => {
+        const { result } = renderHook(() => useDocumentManager({ candidateId: 'c1' }));
+
+        act(() => result.current.openPdfViewer('https://signed.example.com/generated.pdf', 'Registration Form'));
 
         expect(result.current.showPdf).toBe(true);
-        expect(result.current.pdfUrl).toBe('https://example.com/resume.pdf');
-        expect(result.current.pdfTitle).toBe('Resume');
+        expect(result.current.pdfUrl).toBe('https://signed.example.com/generated.pdf');
+        expect(result.current.pdfTitle).toBe('Registration Form');
     });
 
     it('handleDeleteDocument removes document from list', async () => {

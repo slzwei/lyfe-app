@@ -31,6 +31,9 @@ import { TAB_BAR_HEIGHT } from '@/constants/platform';
 import { letterSpacing } from '@/constants/platform';
 import type { RoadmapModule, RoadmapResource, CandidateModuleProgress, ModuleItemWithProgress } from '@/types/roadmap';
 
+const SUPABASE_URL = process.env.EXPO_PUBLIC_SUPABASE_URL ?? '';
+const SUPABASE_ORIGIN = SUPABASE_URL ? new URL(SUPABASE_URL).origin : '';
+
 /**
  * Candidate-facing module detail screen.
  * Entirely read-only — no completion actions.
@@ -268,7 +271,7 @@ export default function ModuleDetailScreen() {
                         <WebView
                             source={{ uri: pdfUrl }}
                             style={{ flex: 1 }}
-                            originWhitelist={['https://nvtedkyjwulkzjeoqjgx.supabase.co']}
+                            originWhitelist={SUPABASE_ORIGIN ? [SUPABASE_ORIGIN] : ['*']}
                             startInLoadingState={true}
                             renderLoading={() => (
                                 <ActivityIndicator size="large" color={colors.accent} style={StyleSheet.absoluteFill} />

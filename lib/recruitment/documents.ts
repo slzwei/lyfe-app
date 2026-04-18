@@ -82,6 +82,43 @@ export async function getGeneratedPdfUrl(filePath: string): Promise<string | nul
     return data.signedUrl;
 }
 
+/**
+ * Resolve a candidate_documents.file_url to a signed URL.
+ * Historical records may hold an already-signed URL; new records hold a storage path.
+ * Path routing: candidates/... → candidate-documents bucket (lyfe-sg ATS),
+ * anything else → candidate-resumes (mobile uploads + invitation attachments).
+ * Falls back across buckets if the first createSignedUrl fails.
+ */
+export async function getCandidateDocumentUrl(fileUrlOrPath: string): Promise<string | null> {
+    if (/^https?:\/\//i.test(fileUrlOrPath)) return fileUrlOrPath;
+
+    const primary = fileUrlOrPath.startsWith('candidates/') ? 'candidate-documents' : 'candidate-resumes';
+    const fallback = primary === 'candidate-documents' ? 'candidate-resumes' : 'candidate-documents';
+
+    const signed = await supabase.storage.from(primary).createSignedUrl(fileUrlOrPath, 3600);
+    if (!signed.error && signed.data?.signedUrl) return signed.data.signedUrl;
+
+    const retry = await supabase.storage.from(fallback).createSignedUrl(fileUrlOrPath, 3600);
+    if (!retry.error && retry.data?.signedUrl) return retry.data.signedUrl;
+
+    if (__DEV__) {
+        console.warn('[getCandidateDocumentUrl] both buckets failed', {
+            fileUrlOrPath,
+            primaryBucket: primary,
+            primaryError: signed.error?.message,
+            fallbackBucket: fallback,
+            fallbackError: retry.error?.message,
+        });
+    }
+    captureError(signed.error ?? retry.error ?? new Error('Failed to sign candidate document URL'), {
+        fn: 'getCandidateDocumentUrl',
+        fileUrlOrPath,
+        primary,
+        fallback,
+    });
+    return null;
+}
+
 export async function deleteCandidateDocument(documentId: string): Promise<{ error: string | null }> {
     // Fetch the record first so we can delete the storage file
     const { data: doc, error: fetchError } = await supabase

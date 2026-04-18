@@ -3,7 +3,13 @@
  * Manages document list, PDF viewer, add-doc sheet, and upload flow.
  */
 import { useCallback, useState } from 'react';
-import { deleteCandidateDocument, fetchCandidateDocuments, uploadCandidateDocument } from '@/lib/recruitment';
+import { Alert } from 'react-native';
+import {
+    deleteCandidateDocument,
+    fetchCandidateDocuments,
+    getCandidateDocumentUrl,
+    uploadCandidateDocument,
+} from '@/lib/recruitment';
 import type { CandidateDocument } from '@/types/recruitment';
 
 let DocumentPicker: typeof import('expo-document-picker') | null = null;
@@ -34,7 +40,8 @@ interface DocumentManagerState {
     setAddDocLabel: (v: string) => void;
     setAddDocCustomLabel: (v: string) => void;
     loadDocuments: () => Promise<CandidateDocument[]>;
-    handleViewDocument: (doc: CandidateDocument) => void;
+    handleViewDocument: (doc: CandidateDocument) => Promise<void>;
+    openPdfViewer: (url: string, title: string) => void;
     handleDeleteDocument: (doc: CandidateDocument) => void;
     handleSelectLabel: (label: string) => Promise<void>;
     pickAndUploadDocument: (label: string) => Promise<void>;
@@ -58,11 +65,23 @@ export function useDocumentManager({ candidateId }: UseDocumentManagerParams): D
         return data;
     }, [candidateId]);
 
-    const handleViewDocument = useCallback((doc: CandidateDocument) => {
-        setPdfUrl(doc.file_url);
-        setPdfTitle(doc.label);
+    const openPdfViewer = useCallback((url: string, title: string) => {
+        setPdfUrl(url);
+        setPdfTitle(title);
         setShowPdf(true);
     }, []);
+
+    const handleViewDocument = useCallback(
+        async (doc: CandidateDocument) => {
+            const url = await getCandidateDocumentUrl(doc.file_url);
+            if (!url) {
+                Alert.alert('Unable to open document', 'This file could not be loaded. Please try again.');
+                return;
+            }
+            openPdfViewer(url, doc.label);
+        },
+        [openPdfViewer],
+    );
 
     const handleDeleteDocument = useCallback(
         (doc: CandidateDocument) => {
@@ -139,6 +158,7 @@ export function useDocumentManager({ candidateId }: UseDocumentManagerParams): D
         setAddDocCustomLabel,
         loadDocuments,
         handleViewDocument,
+        openPdfViewer,
         handleDeleteDocument,
         handleSelectLabel,
         pickAndUploadDocument,
