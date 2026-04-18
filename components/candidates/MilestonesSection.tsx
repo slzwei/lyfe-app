@@ -12,7 +12,11 @@ interface Props {
 }
 
 // Preferred display order in UI (not DB-enforced).
+// BDM is listed first — it's a pre-contracting formality, a gate before the
+// principal-onboarding milestones. It never fails and never has a
+// reference_number; same status shape as BES / SOAR.
 const DISPLAY_ORDER: { code: MilestoneCode; label: string; hint?: string }[] = [
+    { code: 'bdm', label: 'BDM Interview', hint: 'Principal formality' },
     { code: 'bes_induction', label: 'BES Induction' },
     { code: 'soar', label: 'SOAR', hint: 'Optional' },
     { code: 'rnf', label: 'RNF' },

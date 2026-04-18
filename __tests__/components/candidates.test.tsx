@@ -65,6 +65,7 @@ function makeInterview(overrides: Partial<Interview> = {}): Interview {
         google_calendar_event_id: null,
         status: 'scheduled',
         notes: null,
+        recommendation: null,
         created_at: '2026-03-01T00:00:00Z',
         ...overrides,
     };
@@ -349,6 +350,7 @@ describe('InterviewSchedulerSheet', () => {
         scheduleLocation: '',
         scheduleNotes: '',
         scheduleStatus: 'scheduled' as const,
+        scheduleRecommendation: null,
         scheduleError: null,
         isScheduling: false,
         onDateChange: jest.fn(),
@@ -360,6 +362,7 @@ describe('InterviewSchedulerSheet', () => {
         onLocationChange: jest.fn(),
         onNotesChange: jest.fn(),
         onStatusChange: jest.fn(),
+        onRecommendationChange: jest.fn(),
         onSubmit: jest.fn(),
         onDismiss: jest.fn(),
     };

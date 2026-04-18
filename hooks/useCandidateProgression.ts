@@ -125,6 +125,7 @@ export function useCandidateProgression(candidateId: string | undefined): UseCan
 
     const milestoneByCode = useMemo<Record<MilestoneCode, CandidateMilestone | null>>(() => {
         const base: Record<MilestoneCode, CandidateMilestone | null> = {
+            bdm: null,
             bes_induction: null,
             soar: null,
             rnf: null,

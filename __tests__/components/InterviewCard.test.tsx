@@ -75,7 +75,7 @@ describe('InterviewCard', () => {
     });
 
     it('shows recommendation badge when set', () => {
-        const withRec = { ...MOCK_INTERVIEW, recommendation: 'second_interview' };
+        const withRec = { ...MOCK_INTERVIEW, recommendation: 'second_interview' as const };
         const { getByText } = render(
             <InterviewCard interview={withRec} colors={COLORS} onEdit={() => {}} onDelete={() => {}} />,
         );
@@ -83,7 +83,7 @@ describe('InterviewCard', () => {
     });
 
     it('shows on_hold recommendation badge', () => {
-        const withRec = { ...MOCK_INTERVIEW, recommendation: 'on_hold' };
+        const withRec = { ...MOCK_INTERVIEW, recommendation: 'on_hold' as const };
         const { getByText } = render(
             <InterviewCard interview={withRec} colors={COLORS} onEdit={() => {}} onDelete={() => {}} />,
         );
@@ -91,7 +91,7 @@ describe('InterviewCard', () => {
     });
 
     it('shows pass recommendation badge', () => {
-        const withRec = { ...MOCK_INTERVIEW, recommendation: 'pass' };
+        const withRec = { ...MOCK_INTERVIEW, recommendation: 'pass' as const };
         const { getByText } = render(
             <InterviewCard interview={withRec} colors={COLORS} onEdit={() => {}} onDelete={() => {}} />,
         );

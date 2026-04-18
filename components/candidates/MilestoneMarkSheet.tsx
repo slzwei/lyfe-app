@@ -85,6 +85,11 @@ const STATUS_OPTIONS_BY_CODE: Record<
     MilestoneCode,
     { value: MilestoneStatus; label: string; icon: keyof typeof import('@expo/vector-icons').Ionicons.glyphMap }[]
 > = {
+    bdm: [
+        { value: 'not_started', label: 'Not Started', icon: 'ellipse-outline' },
+        { value: 'scheduled', label: 'Scheduled', icon: 'calendar-outline' },
+        { value: 'completed', label: 'Completed', icon: 'checkmark-circle' },
+    ],
     bes_induction: [
         { value: 'not_started', label: 'Not Started', icon: 'ellipse-outline' },
         { value: 'scheduled', label: 'Scheduled', icon: 'calendar-outline' },

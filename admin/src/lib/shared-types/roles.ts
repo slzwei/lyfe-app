@@ -26,7 +26,6 @@ export type Capability =
     | 'view_candidates'
     | 'verify_papers'
     | 'manage_milestones'
-    | 'schedule_bdm'
     | 'activate_agent'
     | 'put_on_hold'
     | 'reject_candidate';
@@ -46,7 +45,6 @@ export const ROLE_CAPABILITIES: Record<UserRole, Capability[]> = {
         'view_candidates',
         'verify_papers',
         'manage_milestones',
-        'schedule_bdm',
         'activate_agent',
         'put_on_hold',
         'reject_candidate',
@@ -63,7 +61,6 @@ export const ROLE_CAPABILITIES: Record<UserRole, Capability[]> = {
         'view_candidates',
         'verify_papers',
         'manage_milestones',
-        'schedule_bdm',
         'activate_agent',
         'put_on_hold',
         'reject_candidate',
@@ -80,7 +77,6 @@ export const ROLE_CAPABILITIES: Record<UserRole, Capability[]> = {
         'view_candidates',
         'verify_papers',
         'manage_milestones',
-        'schedule_bdm',
         'activate_agent',
         'put_on_hold',
         'reject_candidate',
@@ -92,7 +88,6 @@ export const ROLE_CAPABILITIES: Record<UserRole, Capability[]> = {
         'view_candidates',
         'verify_papers',
         'manage_milestones',
-        'schedule_bdm',
         'activate_agent',
         'put_on_hold',
         'reject_candidate',
@@ -150,10 +145,6 @@ export function canVerifyPapers(role: UserRole): boolean {
 
 export function canManageMilestones(role: UserRole): boolean {
     return hasCapability(role, 'manage_milestones');
-}
-
-export function canScheduleBdm(role: UserRole): boolean {
-    return hasCapability(role, 'schedule_bdm');
 }
 
 export function canActivateAgent(role: UserRole): boolean {
