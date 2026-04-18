@@ -37,6 +37,15 @@ function jsonResponse(body: Record<string, unknown>, status = 200) {
     });
 }
 
+/** Normalize SG phone to 65XXXXXXXX (no +). Mirrors create-member-invitation. */
+function normalizeSgPhone(raw: string): string | null {
+    const digits = raw.replace(/[\s\-()]/g, '');
+    if (/^\+65[89]\d{7}$/.test(digits)) return digits.slice(1);
+    if (/^[89]\d{7}$/.test(digits)) return `65${digits}`;
+    if (/^65[89]\d{7}$/.test(digits)) return digits;
+    return null;
+}
+
 Deno.serve(async (req) => {
     if (req.method === 'OPTIONS') {
         return new Response(null, { status: 204 });
@@ -211,6 +220,36 @@ Deno.serve(async (req) => {
             await admin.from('candidates').delete().eq('id', candidate.id);
             console.error('[create-candidate] invitation insert:', inviteErr.message);
             return jsonResponse({ error: 'Failed to create invitation' }, 500);
+        }
+
+        // ── Mirror into member_invitations so Team → Pending reflects the invite.
+        // Best-effort: non-SG formats or a pre-existing pending row for this phone
+        // skip silently so the primary candidate+invitation flow isn't blocked.
+        const normalizedPhone = normalizeSgPhone(phone);
+        if (normalizedPhone) {
+            const { data: existingMemberInv } = await admin
+                .from('member_invitations')
+                .select('id')
+                .eq('phone', normalizedPhone)
+                .eq('status', 'pending')
+                .maybeSingle();
+
+            if (!existingMemberInv) {
+                const { error: memberInvErr } = await admin.from('member_invitations').insert({
+                    phone: normalizedPhone,
+                    full_name: name.trim(),
+                    intended_role: 'candidate',
+                    status: 'pending',
+                    invited_by_id: caller.id,
+                    assigned_manager_id: managerId,
+                    notes: notes?.trim() || null,
+                });
+                if (memberInvErr) {
+                    console.warn('[create-candidate] member_invitations mirror:', memberInvErr.message);
+                }
+            }
+        } else {
+            console.warn('[create-candidate] skipping member_invitations mirror: non-SG phone format');
         }
 
         // ── Build invite URL ──────────────────────────────────────
