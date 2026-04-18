@@ -137,6 +137,16 @@ export interface RecruitmentCandidate {
     disc_results: CandidateDiscResults | null;
     profile_details: CandidateProfileDetails | null;
     interviews: Interview[];
+    /** Phase A2/F: when status='on_hold', the DB trigger captures the prior
+     *  status here so "resume" can restore it. NULL otherwise. */
+    stage_before_hold: CandidateStatus | null;
+    /** Phase A2/F: timestamp auto-stamped by DB trigger on first transition
+     *  into 'rejected'. NULL for non-rejected candidates. */
+    rejected_at: string | null;
+    /** Phase A2/F: free-text reason supplied at rejection time. */
+    rejected_reason: string | null;
+    /** Phase A2/F: user.id of the staff member who rejected. */
+    rejected_by_user_id: string | null;
     created_at: string;
     updated_at: string;
 }
@@ -190,8 +200,10 @@ export interface PaperRequirement {
     satisfied: boolean;
 }
 
-// ── Milestones (Phase C) ───────────────────────────────────────────────────
-export const MILESTONE_CODES = ['bes_induction', 'soar', 'rnf', 'sales_authority'] as const;
+// ── Milestones (Phase C + E) ───────────────────────────────────────────────
+// 'bdm' is a pre-contracting formality with the principal (never fails, just
+// "done" or "not"). Shares status shape with bes_induction and soar.
+export const MILESTONE_CODES = ['bdm', 'bes_induction', 'soar', 'rnf', 'sales_authority'] as const;
 export type MilestoneCode = (typeof MILESTONE_CODES)[number];
 
 // Union of status values accepted across all milestone codes; per-code valid

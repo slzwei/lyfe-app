@@ -8,6 +8,8 @@ import {
     fetchCandidate,
     createCandidate,
     updateCandidateStatus,
+    rejectCandidate,
+    activateAgent,
     addCandidateActivity,
     fetchAssignableManagers,
     reassignCandidate,
@@ -291,6 +293,120 @@ describe('updateCandidateStatus', () => {
         expect(result.error).toMatch(/paper/i);
         // No UPDATE on candidates should have happened.
         expect(mockSupa.from).not.toHaveBeenCalledWith('candidates');
+    });
+
+    it('refuses rejected — must go through rejectCandidate with a reason', async () => {
+        const result = await updateCandidateStatus('cand-1', 'rejected');
+        expect(result.error).toMatch(/reason/i);
+        expect(mockSupa.from).not.toHaveBeenCalled();
+    });
+});
+
+// ── rejectCandidate ──
+
+describe('rejectCandidate', () => {
+    it('rejects with trimmed reason + by user', async () => {
+        const chain = mockSupa.__getChain('candidates');
+        mockResolve(chain, { error: null });
+
+        const result = await rejectCandidate('cand-1', '  not interested  ', 'user-1');
+
+        expect(result.error).toBeNull();
+        expect(chain.update).toHaveBeenCalledWith({
+            status: 'rejected',
+            rejected_reason: 'not interested',
+            rejected_by_user_id: 'user-1',
+        });
+    });
+
+    it('requires a non-empty reason', async () => {
+        const result = await rejectCandidate('cand-1', '   ', 'user-1');
+        expect(result.error).toMatch(/reason/i);
+        expect(mockSupa.from).not.toHaveBeenCalled();
+    });
+
+    it('requires an authenticated user', async () => {
+        const result = await rejectCandidate('cand-1', 'no longer available', '');
+        expect(result.error).toMatch(/auth/i);
+        expect(mockSupa.from).not.toHaveBeenCalled();
+    });
+
+    it('surfaces DB error', async () => {
+        const chain = mockSupa.__getChain('candidates');
+        mockResolve(chain, { error: { message: 'RLS denied' } });
+
+        const result = await rejectCandidate('cand-1', 'reason', 'user-1');
+        expect(result.error).toBe('RLS denied');
+    });
+});
+
+// ── activateAgent ──
+
+describe('activateAgent', () => {
+    beforeEach(() => {
+        mockFetch.mockReset();
+        mockSupa.auth = {
+            getSession: jest.fn().mockResolvedValue({ data: { session: { access_token: 'tok' } } }),
+        };
+    });
+
+    it('returns error when not authenticated', async () => {
+        mockSupa.auth.getSession.mockResolvedValue({ data: { session: null } });
+        const result = await activateAgent('cand-1');
+        expect(result.error).toMatch(/auth/i);
+        expect(mockFetch).not.toHaveBeenCalled();
+    });
+
+    it('calls activate-agent edge function with candidate_id + bearer', async () => {
+        mockFetch.mockResolvedValueOnce({
+            ok: true,
+            status: 200,
+            json: async () => ({ ok: true, user_id: 'u1', candidate_id: 'cand-1', app_metadata_updated: true }),
+        });
+        const result = await activateAgent('cand-1');
+        expect(result.error).toBeNull();
+        expect(result.userId).toBe('u1');
+        expect(mockFetch).toHaveBeenCalledWith(
+            expect.stringContaining('/functions/v1/activate-agent'),
+            expect.objectContaining({
+                method: 'POST',
+                headers: expect.objectContaining({ Authorization: 'Bearer tok' }),
+                body: JSON.stringify({ candidate_id: 'cand-1' }),
+            }),
+        );
+    });
+
+    it('surfaces server error on !ok response', async () => {
+        mockFetch.mockResolvedValueOnce({
+            ok: false,
+            status: 409,
+            json: async () => ({ error: 'BDM Interview must be completed' }),
+        });
+        const result = await activateAgent('cand-1');
+        expect(result.error).toBe('BDM Interview must be completed');
+    });
+
+    it('returns warning when DB flipped but app_metadata update failed', async () => {
+        mockFetch.mockResolvedValueOnce({
+            ok: true,
+            status: 200,
+            json: async () => ({
+                ok: true,
+                user_id: 'u1',
+                candidate_id: 'cand-1',
+                app_metadata_updated: false,
+                warning: 'The user may need to sign out and back in.',
+            }),
+        });
+        const result = await activateAgent('cand-1');
+        expect(result.error).toBeNull();
+        expect(result.warning).toMatch(/sign out/i);
+    });
+
+    it('handles fetch rejection', async () => {
+        mockFetch.mockRejectedValueOnce(new Error('network down'));
+        const result = await activateAgent('cand-1');
+        expect(result.error).toBe('network down');
     });
 });
 

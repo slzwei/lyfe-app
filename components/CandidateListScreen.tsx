@@ -83,13 +83,23 @@ export function CandidateList({ candidateRoute, isManagerView = false, embedded 
     // Real-time: re-fetch when any candidate pipeline data changes
     useCandidateRealtime(loadCandidates);
 
-    const { filtered: filteredCandidates, counts } = useFilteredList(
+    const { filtered: filteredRaw, counts } = useFilteredList(
         candidates,
         search,
         activeFilter,
         'status',
         CANDIDATE_SEARCH_FIELDS,
     );
+    // Phase F: on the "All" tab, hide rejected candidates by default. Users
+    // can still see them via the dedicated "Rejected" filter chip, which is
+    // unaffected by this pre-filter.
+    const filteredCandidates =
+        activeFilter === 'all' ? filteredRaw.filter((c) => c.status !== 'rejected') : filteredRaw;
+    // Reflect the hidden-rejected behavior in the "All" chip count.
+    const displayedCounts: Record<string, number> = {
+        ...counts,
+        all: (counts.all ?? 0) - (counts.rejected ?? 0),
+    };
 
     const onRefresh = useCallback(async () => {
         setRefreshing(true);
@@ -137,7 +147,7 @@ export function CandidateList({ candidateRoute, isManagerView = false, embedded 
                     contentContainerStyle={styles.filterRow}
                     renderItem={({ item }) => {
                         const isActive = activeFilter === item.key;
-                        const count = counts[item.key] || 0;
+                        const count = displayedCounts[item.key] || 0;
                         return (
                             <TouchableOpacity
                                 style={[

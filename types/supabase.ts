@@ -669,6 +669,7 @@ export type Database = {
             candidates: {
                 Row: {
                     assigned_manager_id: string;
+                    converted_to_agent_at: string | null;
                     created_at: string | null;
                     created_by_id: string;
                     current_stage_id: string | null;
@@ -679,13 +680,18 @@ export type Database = {
                     name: string;
                     notes: string | null;
                     phone: string | null;
+                    rejected_at: string | null;
+                    rejected_by_user_id: string | null;
+                    rejected_reason: string | null;
                     resume_url: string | null;
+                    stage_before_hold: Database['public']['Enums']['candidate_status'] | null;
                     stage_entered_at: string | null;
                     status: Database['public']['Enums']['candidate_status'];
                     updated_at: string | null;
                 };
                 Insert: {
                     assigned_manager_id: string;
+                    converted_to_agent_at?: string | null;
                     created_at?: string | null;
                     created_by_id: string;
                     current_stage_id?: string | null;
@@ -696,13 +702,18 @@ export type Database = {
                     name: string;
                     notes?: string | null;
                     phone?: string | null;
+                    rejected_at?: string | null;
+                    rejected_by_user_id?: string | null;
+                    rejected_reason?: string | null;
                     resume_url?: string | null;
+                    stage_before_hold?: Database['public']['Enums']['candidate_status'] | null;
                     stage_entered_at?: string | null;
                     status?: Database['public']['Enums']['candidate_status'];
                     updated_at?: string | null;
                 };
                 Update: {
                     assigned_manager_id?: string;
+                    converted_to_agent_at?: string | null;
                     created_at?: string | null;
                     created_by_id?: string;
                     current_stage_id?: string | null;
@@ -713,7 +724,11 @@ export type Database = {
                     name?: string;
                     notes?: string | null;
                     phone?: string | null;
+                    rejected_at?: string | null;
+                    rejected_by_user_id?: string | null;
+                    rejected_reason?: string | null;
                     resume_url?: string | null;
+                    stage_before_hold?: Database['public']['Enums']['candidate_status'] | null;
                     stage_entered_at?: string | null;
                     status?: Database['public']['Enums']['candidate_status'];
                     updated_at?: string | null;

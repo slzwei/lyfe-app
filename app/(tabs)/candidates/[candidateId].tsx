@@ -13,6 +13,8 @@ import PapersSection from '@/components/candidates/PapersSection';
 import PdfViewerModal from '@/components/candidates/PdfViewerModal';
 import PrepCourseMarkSheet from '@/components/candidates/PrepCourseMarkSheet';
 import PrepCourseSection from '@/components/candidates/PrepCourseSection';
+import RejectCandidateSheet from '@/components/candidates/RejectCandidateSheet';
+import ActivateAgentSheet, { type ReadinessItem } from '@/components/candidates/ActivateAgentSheet';
 import ProgressSummaryCard from '@/components/roadmap/ProgressSummaryCard';
 import QuickActionsBar from '@/components/candidates/QuickActionsBar';
 import ScreenHeader from '@/components/ScreenHeader';
@@ -25,14 +27,22 @@ import { useContactOutcome } from '@/hooks/useContactOutcome';
 import { useDocumentManager } from '@/hooks/useDocumentManager';
 import { useInterviewScheduler } from '@/hooks/useInterviewScheduler';
 import {
+    activateAgent,
     addCandidateActivity,
     fetchCandidate,
     getGeneratedPdfUrl,
     markCandidateLicensed,
+    rejectCandidate,
     upsertMilestone,
     upsertPrepCourseBooking,
 } from '@/lib/recruitment';
-import { canManageMilestones, canVerifyPapers } from '@/types/shared/roles';
+import {
+    canActivateAgent,
+    canManageMilestones,
+    canPutOnHold,
+    canRejectCandidate,
+    canVerifyPapers,
+} from '@/types/shared/roles';
 import { fetchCandidateRoadmap, unlockProgrammeForCandidate } from '@/lib/roadmap';
 import type {
     CandidateActivity,
@@ -129,6 +139,20 @@ export default function CandidateDetailScreen() {
     const canConfirmLicensed =
         canVerifyPapers(role as Parameters<typeof canVerifyPapers>[0]) &&
         canManageMilestones(role as Parameters<typeof canManageMilestones>[0]);
+    const canHoldCandidate = canPutOnHold(role as Parameters<typeof canPutOnHold>[0]);
+    const canRejectCand = canRejectCandidate(role as Parameters<typeof canRejectCandidate>[0]);
+    const canActivate = canActivateAgent(role as Parameters<typeof canActivateAgent>[0]);
+
+    // ── Reject flow state ──
+    const [showRejectSheet, setShowRejectSheet] = useState(false);
+    const [rejectReason, setRejectReason] = useState('');
+    const [rejectError, setRejectError] = useState<string | null>(null);
+    const [isRejecting, setIsRejecting] = useState(false);
+
+    // ── Activate agent flow state ──
+    const [showActivateSheet, setShowActivateSheet] = useState(false);
+    const [activateError, setActivateError] = useState<string | null>(null);
+    const [isActivating, setIsActivating] = useState(false);
     const progression = useCandidateProgressionContext();
     const [programmes, setProgrammes] = useState<ProgrammeWithModules[]>([]);
     const [showUnlockSheet, setShowUnlockSheet] = useState(false);
@@ -246,6 +270,8 @@ export default function CandidateDetailScreen() {
     const addDocSheetY = useSharedValue(screenH);
     const milestoneSheetY = useSharedValue(screenH);
     const prepCourseSheetY = useSharedValue(screenH);
+    const rejectSheetY = useSharedValue(screenH);
+    const activateSheetY = useSharedValue(screenH);
 
     const confirmSheetVisible = useSheetAnimation(showConfirmSheet, confirmSheetY);
     const noteSheetVisible = useSheetAnimation(showNoteSheet, noteSheetY);
@@ -253,6 +279,8 @@ export default function CandidateDetailScreen() {
     const addDocSheetVisible = useSheetAnimation(showAddDoc, addDocSheetY);
     const milestoneSheetVisible = useSheetAnimation(!!markingMilestone, milestoneSheetY);
     const prepCourseSheetVisible = useSheetAnimation(!!markingPrepCourse, prepCourseSheetY);
+    const rejectSheetVisible = useSheetAnimation(showRejectSheet, rejectSheetY);
+    const activateSheetVisible = useSheetAnimation(showActivateSheet, activateSheetY);
 
     const confirmSheetStyle = useAnimatedStyle(() => ({ transform: [{ translateY: confirmSheetY.value }] }));
     const noteSheetStyle = useAnimatedStyle(() => ({ transform: [{ translateY: noteSheetY.value }] }));
@@ -260,6 +288,8 @@ export default function CandidateDetailScreen() {
     const addDocSheetStyle = useAnimatedStyle(() => ({ transform: [{ translateY: addDocSheetY.value }] }));
     const milestoneSheetStyle = useAnimatedStyle(() => ({ transform: [{ translateY: milestoneSheetY.value }] }));
     const prepCourseSheetStyle = useAnimatedStyle(() => ({ transform: [{ translateY: prepCourseSheetY.value }] }));
+    const rejectSheetStyle = useAnimatedStyle(() => ({ transform: [{ translateY: rejectSheetY.value }] }));
+    const activateSheetStyle = useAnimatedStyle(() => ({ transform: [{ translateY: activateSheetY.value }] }));
 
     // ── Data loading ──
     const loadCandidate = useCallback(async () => {
@@ -347,29 +377,206 @@ export default function CandidateDetailScreen() {
         [candidate, loadCandidate],
     );
 
+    const handleHoldPress = useCallback(() => {
+        if (!candidate) return;
+        Alert.alert(
+            'Put on Hold?',
+            `${candidate.name} will be moved to On Hold. Their current stage is preserved and can be restored when you resume them.`,
+            [
+                { text: 'Cancel', style: 'cancel' },
+                {
+                    text: 'Put on Hold',
+                    style: 'default',
+                    onPress: () => {
+                        void applyStatusChange('on_hold');
+                    },
+                },
+            ],
+        );
+    }, [candidate, applyStatusChange]);
+
+    const handleResumePress = useCallback(() => {
+        if (!candidate) return;
+        const target: CandidateStatus = candidate.stage_before_hold ?? 'applied';
+        const label = CANDIDATE_STATUS_CONFIG[target].label;
+        Alert.alert('Resume Candidate?', `${candidate.name} will be restored to ${label}.`, [
+            { text: 'Cancel', style: 'cancel' },
+            {
+                text: 'Resume',
+                style: 'default',
+                onPress: () => {
+                    void applyStatusChange(target);
+                },
+            },
+        ]);
+    }, [candidate, applyStatusChange]);
+
+    const openRejectSheet = useCallback(() => {
+        setRejectReason('');
+        setRejectError(null);
+        setShowRejectSheet(true);
+    }, []);
+
+    // ── Activate agent readiness (derived from progression milestones) ──
+    const activationReadiness = useCallback((): ReadinessItem[] => {
+        const statusSatisfied = candidate?.status === 'licensed';
+        const bdm = progression?.milestoneByCode?.bdm?.status;
+        const bes = progression?.milestoneByCode?.bes_induction?.status;
+        const rnf = progression?.milestoneByCode?.rnf?.status;
+        const sa = progression?.milestoneByCode?.sales_authority?.status;
+        return [
+            {
+                label: 'Status is Licensed',
+                satisfied: statusSatisfied,
+                detail: statusSatisfied
+                    ? undefined
+                    : `Current status: ${CANDIDATE_STATUS_CONFIG[candidate?.status ?? 'applied'].label}`,
+            },
+            { label: 'BDM Interview completed', satisfied: bdm === 'completed' },
+            { label: 'BES Induction completed', satisfied: bes === 'completed' },
+            { label: 'RNF issued', satisfied: rnf === 'issued' },
+            { label: 'Sales Authority issued', satisfied: sa === 'issued' },
+        ];
+    }, [candidate?.status, progression?.milestoneByCode]);
+
+    const openActivateSheet = useCallback(() => {
+        setActivateError(null);
+        setShowActivateSheet(true);
+    }, []);
+
+    const handleActivateSubmit = useCallback(async () => {
+        if (!candidate) return;
+        setActivateError(null);
+        setIsActivating(true);
+        const { error: actErr, warning } = await activateAgent(candidate.id);
+        setIsActivating(false);
+        if (actErr) {
+            setActivateError(actErr);
+            return;
+        }
+        setCandidate((prev) =>
+            prev
+                ? {
+                      ...prev,
+                      status: 'active_agent',
+                  }
+                : prev,
+        );
+        setShowActivateSheet(false);
+        if (warning) {
+            Alert.alert('Activated — session refresh needed', warning);
+        } else {
+            Alert.alert(
+                'Agent activated',
+                `${candidate.name} is now an active agent. They may need to sign out and back in to see their new role.`,
+            );
+        }
+    }, [candidate]);
+
+    const dismissRejectSheet = useCallback(() => {
+        if (rejectReason.trim()) {
+            Alert.alert('Discard rejection?', 'Your reason will not be saved.', [
+                { text: 'Keep editing', style: 'cancel' },
+                {
+                    text: 'Discard',
+                    style: 'destructive',
+                    onPress: () => {
+                        setShowRejectSheet(false);
+                    },
+                },
+            ]);
+        } else {
+            setShowRejectSheet(false);
+        }
+    }, [rejectReason]);
+
+    const handleRejectSubmit = useCallback(async () => {
+        if (!candidate || !user?.id) return;
+        setRejectError(null);
+        setIsRejecting(true);
+        const { error: rejErr } = await rejectCandidate(candidate.id, rejectReason, user.id);
+        setIsRejecting(false);
+        if (rejErr) {
+            setRejectError(rejErr);
+            return;
+        }
+        setCandidate((prev) =>
+            prev
+                ? {
+                      ...prev,
+                      status: 'rejected',
+                      rejected_reason: rejectReason.trim(),
+                      rejected_by_user_id: user.id,
+                      rejected_at: new Date().toISOString(),
+                  }
+                : prev,
+        );
+        setShowRejectSheet(false);
+    }, [candidate, user?.id, rejectReason]);
+
     const handleStatusPress = () => {
         if (!candidate) return;
-        // active_agent / licensed are not valid direct transitions:
-        //  - active_agent flips atomically via activate-agent edge function (Phase G)
-        //  - licensed goes through the LicensedReadinessBanner which re-verifies papers + RNF
+        // Direct status picks exclude:
+        //  - active_agent (Phase G — activate-agent edge function)
+        //  - licensed (goes via LicensedReadinessBanner which re-verifies papers + RNF)
+        //  - on_hold (dedicated Put on Hold action below)
+        //  - rejected (dedicated Reject action below — needs reason)
         const statuses = (
             Object.entries(CANDIDATE_STATUS_CONFIG) as [
                 CandidateStatus,
                 (typeof CANDIDATE_STATUS_CONFIG)[CandidateStatus],
             ][]
         )
-            .filter(([key]) => key !== 'active_agent' && key !== 'licensed')
+            .filter(([key]) => key !== 'active_agent' && key !== 'licensed' && key !== 'on_hold' && key !== 'rejected')
             .sort(([, a], [, b]) => a.order - b.order);
-        const options = statuses.map(([, v]) => v.label);
-        options.push('Cancel');
+
+        // Build contextual extra actions.
+        type ExtraAction = {
+            key: 'hold' | 'resume' | 'reject' | 'activate';
+            label: string;
+            destructive?: boolean;
+        };
+        const extras: ExtraAction[] = [];
+        if (candidate.status === 'licensed' && canActivate) {
+            extras.push({ key: 'activate', label: 'Activate as Agent...' });
+        }
+        if (candidate.status === 'on_hold') {
+            extras.push({ key: 'resume', label: 'Resume Candidate' });
+        } else if (candidate.status !== 'rejected' && canHoldCandidate) {
+            extras.push({ key: 'hold', label: 'Put on Hold...' });
+        }
+        if (candidate.status !== 'rejected' && canRejectCand) {
+            extras.push({ key: 'reject', label: 'Reject...', destructive: true });
+        }
+
+        const statusOptions = statuses.map(([, v]) => v.label);
+        const extraOptions = extras.map((e) => e.label);
+        const options = [...statusOptions, ...extraOptions, 'Cancel'];
+
+        const invokeExtra = (extra: ExtraAction) => {
+            if (extra.key === 'hold') handleHoldPress();
+            else if (extra.key === 'resume') handleResumePress();
+            else if (extra.key === 'reject') openRejectSheet();
+            else if (extra.key === 'activate') openActivateSheet();
+        };
 
         if (Platform.OS === 'ios') {
+            const destructiveButtonIndex = extras.findIndex((e) => e.destructive);
+            const adjustedDestructiveIndex =
+                destructiveButtonIndex >= 0 ? statuses.length + destructiveButtonIndex : undefined;
             ActionSheetIOS.showActionSheetWithOptions(
-                { options, cancelButtonIndex: options.length - 1, title: 'Change Status' },
+                {
+                    options,
+                    cancelButtonIndex: options.length - 1,
+                    destructiveButtonIndex: adjustedDestructiveIndex,
+                    title: 'Change Status',
+                },
                 (idx) => {
                     if (idx < statuses.length) {
                         const [key] = statuses[idx];
                         void applyStatusChange(key);
+                    } else if (idx < statuses.length + extras.length) {
+                        invokeExtra(extras[idx - statuses.length]);
                     }
                 },
             );
@@ -380,6 +587,11 @@ export default function CandidateDetailScreen() {
                     onPress: () => {
                         void applyStatusChange(key);
                     },
+                })),
+                ...extras.map((extra) => ({
+                    text: extra.label,
+                    style: extra.destructive ? ('destructive' as const) : ('default' as const),
+                    onPress: () => invokeExtra(extra),
                 })),
                 { text: 'Cancel', style: 'cancel' },
             ]);
@@ -1125,6 +1337,29 @@ export default function CandidateDetailScreen() {
                 onNoteTextChange={setMarkPcNote}
                 onSave={handleSavePrepCourse}
                 onDismiss={dismissMarkPrepCourse}
+            />
+            <RejectCandidateSheet
+                visible={rejectSheetVisible}
+                candidateName={candidate.name}
+                reason={rejectReason}
+                error={rejectError}
+                isSubmitting={isRejecting}
+                colors={colors}
+                animatedStyle={rejectSheetStyle}
+                onReasonChange={setRejectReason}
+                onSubmit={handleRejectSubmit}
+                onDismiss={dismissRejectSheet}
+            />
+            <ActivateAgentSheet
+                visible={activateSheetVisible}
+                candidateName={candidate.name}
+                readiness={activationReadiness()}
+                error={activateError}
+                isSubmitting={isActivating}
+                colors={colors}
+                animatedStyle={activateSheetStyle}
+                onSubmit={handleActivateSubmit}
+                onDismiss={() => setShowActivateSheet(false)}
             />
         </SafeAreaView>
     );

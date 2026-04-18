@@ -14,6 +14,8 @@ export {
     fetchCandidate,
     createCandidate,
     updateCandidateStatus,
+    rejectCandidate,
+    activateAgent,
     fetchAssignableManagers,
     reassignCandidate,
     addCandidateActivity,

@@ -46,6 +46,10 @@ export async function fetchCandidates(
         invite_token: string | null;
         notes: string | null;
         resume_url: string | null;
+        stage_before_hold: string | null;
+        rejected_at: string | null;
+        rejected_reason: string | null;
+        rejected_by_user_id: string | null;
         created_at: string;
         updated_at: string;
     }[];
@@ -100,6 +104,10 @@ export async function fetchCandidates(
         disc_results: null,
         profile_details: null,
         interviews: interviewMap[r.id] || [],
+        stage_before_hold: (r.stage_before_hold as CandidateStatus | null) ?? null,
+        rejected_at: r.rejected_at ?? null,
+        rejected_reason: r.rejected_reason ?? null,
+        rejected_by_user_id: r.rejected_by_user_id ?? null,
         created_at: r.created_at,
         updated_at: r.updated_at,
     }));
@@ -165,6 +173,10 @@ export async function fetchCandidate(
         resume_url: row.resume_url || null,
         profile_pdf_path: invitation?.profile_pdf_path || null,
         disc_pdf_path: invitation?.disc_pdf_path || null,
+        stage_before_hold: (row.stage_before_hold as CandidateStatus | null) ?? null,
+        rejected_at: row.rejected_at ?? null,
+        rejected_reason: row.rejected_reason ?? null,
+        rejected_by_user_id: row.rejected_by_user_id ?? null,
         disc_results: discRow
             ? {
                   d_pct: discRow.d_pct,
@@ -273,6 +285,10 @@ export async function createCandidate(
             disc_results: null,
             profile_details: null,
             interviews: [],
+            stage_before_hold: row.stage_before_hold ?? null,
+            rejected_at: row.rejected_at ?? null,
+            rejected_reason: row.rejected_reason ?? null,
+            rejected_by_user_id: row.rejected_by_user_id ?? null,
             created_at: row.created_at ?? '',
             updated_at: row.updated_at ?? '',
         };
@@ -311,8 +327,43 @@ export async function updateCandidateStatus(
     if (newStatus === 'licensed') {
         return markCandidateLicensed(candidateId);
     }
+    if (newStatus === 'rejected') {
+        return {
+            error: 'Rejection requires a reason. Use rejectCandidate(id, reason, userId) instead of updateCandidateStatus.',
+        };
+    }
 
     const { error } = await supabase.from('candidates').update({ status: newStatus }).eq('id', candidateId);
+    if (error) return { error: error.message };
+    return { error: null };
+}
+
+/**
+ * Reject a candidate with a reason. Writes status='rejected', rejected_reason,
+ * and rejected_by_user_id atomically; the DB trigger trg_stamp_rejected_at
+ * auto-stamps rejected_at on the status transition. The caller must have the
+ * `reject_candidate` capability (enforced at UI + RLS layers).
+ */
+export async function rejectCandidate(
+    candidateId: string,
+    reason: string,
+    rejectedByUserId: string,
+): Promise<{ error: string | null }> {
+    const trimmedReason = reason.trim();
+    if (!trimmedReason) {
+        return { error: 'A rejection reason is required.' };
+    }
+    if (!rejectedByUserId) {
+        return { error: 'Not authenticated.' };
+    }
+    const { error } = await supabase
+        .from('candidates')
+        .update({
+            status: 'rejected',
+            rejected_reason: trimmedReason,
+            rejected_by_user_id: rejectedByUserId,
+        })
+        .eq('id', candidateId);
     if (error) return { error: error.message };
     return { error: null };
 }
@@ -493,6 +544,52 @@ export async function addCandidateActivity(
         .insert({ candidate_id: candidateId, user_id: userId, type, outcome: outcome || null, note });
     if (error) return { error: error.message };
     return { error: null };
+}
+
+/**
+ * Phase G: activate a licensed candidate to an active agent. Calls the
+ * activate-agent edge function which wraps fn_activate_agent (atomic DB flip)
+ * + auth.admin app_metadata update. Readiness gates are server-enforced.
+ *
+ * Returns { error } on any failure path; on success returns { error: null,
+ * userId, warning }. `warning` is populated when the DB flip succeeded but
+ * auth.users.app_metadata could not be updated (rare) — the caller should
+ * surface this as a "sign-out and back in to refresh your role" hint.
+ */
+export async function activateAgent(
+    candidateId: string,
+): Promise<{ error: string | null; userId?: string; warning?: string }> {
+    try {
+        const {
+            data: { session },
+        } = await supabase.auth.getSession();
+        if (!session?.access_token) {
+            return { error: 'Not authenticated' };
+        }
+        const supabaseUrl = process.env.EXPO_PUBLIC_SUPABASE_URL || '';
+        const response = await fetch(`${supabaseUrl}/functions/v1/activate-agent`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                Authorization: `Bearer ${session.access_token}`,
+            },
+            body: JSON.stringify({ candidate_id: candidateId }),
+        });
+
+        const data = await response.json().catch(() => ({}));
+        if (!response.ok) {
+            return { error: (data?.error as string) || `Activation failed (HTTP ${response.status})` };
+        }
+
+        return {
+            error: null,
+            userId: data.user_id as string | undefined,
+            warning: data.warning as string | undefined,
+        };
+    } catch (err: unknown) {
+        captureError(err, { fn: 'activateAgent' });
+        return { error: err instanceof Error ? err.message : 'Activation failed' };
+    }
 }
 
 /**
