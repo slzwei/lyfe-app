@@ -7,11 +7,13 @@ import CandidateDetailScreen from '@/app/(tabs)/candidates/[candidateId]';
 import { useAuth } from '@/contexts/AuthContext';
 import { useTheme } from '@/contexts/ThemeContext';
 import { Colors } from '@/constants/Colors';
-import { fetchCandidate } from '@/lib/recruitment';
+import { fetchCandidate, fetchMilestones, fetchPaperAttempts, fetchPrepCourseBookings } from '@/lib/recruitment';
 import { fetchCandidateRoadmap } from '@/lib/roadmap';
 import { useContactOutcome } from '@/hooks/useContactOutcome';
 import { useDocumentManager } from '@/hooks/useDocumentManager';
 import { useInterviewScheduler } from '@/hooks/useInterviewScheduler';
+
+import { CandidateProgressionProvider } from '@/contexts/CandidateProgressionContext';
 
 jest.mock('@/lib/supabase');
 jest.mock('@/contexts/AuthContext');
@@ -21,6 +23,14 @@ jest.mock('@/lib/roadmap');
 jest.mock('@/hooks/useContactOutcome');
 jest.mock('@/hooks/useDocumentManager');
 jest.mock('@/hooks/useInterviewScheduler');
+
+function renderScreen() {
+    return render(
+        <CandidateProgressionProvider candidateId="cand-1">
+            <CandidateDetailScreen />
+        </CandidateProgressionProvider>,
+    );
+}
 
 // Mock child components — sheets and complex UI that aren't under test
 jest.mock('@/components/ScreenHeader', () => {
@@ -55,6 +65,9 @@ jest.mock('@/components/roadmap/ProgressSummaryCard', () => {
     return () => <Text>Roadmap Progress</Text>;
 });
 jest.mock('@/components/roadmap/UnlockConfirmSheet', () => () => null);
+jest.mock('@/components/candidates/MilestoneMarkSheet', () => () => null);
+jest.mock('@/components/candidates/PrepCourseMarkSheet', () => () => null);
+jest.mock('@/components/CalendarPicker', () => () => null);
 jest.mock('react-native-reanimated', () => ({
     useSharedValue: () => ({ value: 0 }),
     useAnimatedStyle: () => ({}),
@@ -72,6 +85,13 @@ const mockBack = jest.fn();
 jest.mock('expo-router', () => ({
     ...jest.requireActual('expo-router'),
     useLocalSearchParams: () => ({ candidateId: 'cand-1' }),
+    usePathname: () => '/candidates/cand-1',
+    // useFocusEffect requires a navigation container; stub it to just invoke
+    // the callback once, like a regular effect.
+    useFocusEffect: (cb: () => void | (() => void)) => {
+        const React = require('react');
+        React.useEffect(() => cb(), [cb]);
+    },
 }));
 jest.mock('@/hooks/useTypedRouter', () => ({
     useTypedRouter: () => ({ push: mockPush, replace: jest.fn(), back: mockBack }),
@@ -151,6 +171,9 @@ function defaultHookMocks() {
     });
     (fetchCandidate as jest.Mock).mockResolvedValue({ data: MOCK_CANDIDATE, error: null });
     (fetchCandidateRoadmap as jest.Mock).mockResolvedValue({ data: [], error: null });
+    (fetchPaperAttempts as jest.Mock).mockResolvedValue({ data: [], error: null });
+    (fetchMilestones as jest.Mock).mockResolvedValue({ data: [], error: null });
+    (fetchPrepCourseBookings as jest.Mock).mockResolvedValue({ data: [], error: null });
     (useContactOutcome as jest.Mock).mockReturnValue({
         pendingType: null,
         showConfirmSheet: false,
@@ -179,6 +202,7 @@ function defaultHookMocks() {
         setShowAddDoc: jest.fn(),
         setAddDocCustomLabel: jest.fn(),
         handleViewDocument: jest.fn(),
+        openPdfViewer: jest.fn(),
         handleDeleteDocument: jest.fn(),
         handleSelectLabel: jest.fn(),
         pickAndUploadDocument: jest.fn(),
@@ -228,13 +252,13 @@ describe('CandidateDetailScreen', () => {
 
     it('shows loading state while fetching', () => {
         (fetchCandidate as jest.Mock).mockReturnValue(new Promise(() => {}));
-        const { getAllByText } = render(<CandidateDetailScreen />);
+        const { getAllByText } = renderScreen();
         expect(getAllByText('Loading...').length).toBeGreaterThanOrEqual(1);
     });
 
     it('shows not-found when candidate is null', async () => {
         (fetchCandidate as jest.Mock).mockResolvedValue({ data: null, error: 'Not found' });
-        const { getByText } = render(<CandidateDetailScreen />);
+        const { getByText } = renderScreen();
         await waitFor(() => {
             expect(getByText('Not found')).toBeTruthy();
             expect(getByText('Go Back')).toBeTruthy();
@@ -244,21 +268,21 @@ describe('CandidateDetailScreen', () => {
     // ── Hero section ──
 
     it('renders candidate name in hero and header', async () => {
-        const { getAllByText } = render(<CandidateDetailScreen />);
+        const { getAllByText } = renderScreen();
         await waitFor(() => {
             expect(getAllByText('Jane Smith').length).toBeGreaterThanOrEqual(1);
         });
     });
 
     it('renders phone number', async () => {
-        const { getByText } = render(<CandidateDetailScreen />);
+        const { getByText } = renderScreen();
         await waitFor(() => {
             expect(getByText('+6598765432')).toBeTruthy();
         });
     });
 
     it('renders email when present', async () => {
-        const { getByText } = render(<CandidateDetailScreen />);
+        const { getByText } = renderScreen();
         await waitFor(() => {
             expect(getByText('jane@example.com')).toBeTruthy();
         });
@@ -269,28 +293,28 @@ describe('CandidateDetailScreen', () => {
             data: { ...MOCK_CANDIDATE, email: null },
             error: null,
         });
-        const { queryByText } = render(<CandidateDetailScreen />);
+        const { queryByText } = renderScreen();
         await waitFor(() => {
             expect(queryByText('jane@example.com')).toBeNull();
         });
     });
 
     it('renders status label', async () => {
-        const { getByText } = render(<CandidateDetailScreen />);
+        const { getByText } = renderScreen();
         await waitFor(() => {
             expect(getByText('Applied')).toBeTruthy();
         });
     });
 
     it('renders assigned manager name', async () => {
-        const { getByText } = render(<CandidateDetailScreen />);
+        const { getByText } = renderScreen();
         await waitFor(() => {
             expect(getByText('Manager Alice')).toBeTruthy();
         });
     });
 
     it('renders days in pipeline', async () => {
-        const { getByText } = render(<CandidateDetailScreen />);
+        const { getByText } = renderScreen();
         const days = Math.floor((Date.now() - new Date('2026-03-01').getTime()) / 86400000);
         await waitFor(() => {
             expect(getByText(`${days}d in pipeline`)).toBeTruthy();
@@ -300,7 +324,7 @@ describe('CandidateDetailScreen', () => {
     // ── Quick actions ──
 
     it('renders quick actions bar', async () => {
-        const { getByText } = render(<CandidateDetailScreen />);
+        const { getByText } = renderScreen();
         await waitFor(() => {
             expect(getByText('Quick Actions')).toBeTruthy();
         });
@@ -309,14 +333,14 @@ describe('CandidateDetailScreen', () => {
     // ── Onboarding checklist ──
 
     it('renders onboarding checklist section', async () => {
-        const { getByText } = render(<CandidateDetailScreen />);
+        const { getByText } = renderScreen();
         await waitFor(() => {
             expect(getByText('Onboarding')).toBeTruthy();
         });
     });
 
     it('shows unchecked items for minimal candidate', async () => {
-        const { getByText } = render(<CandidateDetailScreen />);
+        const { getByText } = renderScreen();
         await waitFor(() => {
             expect(getByText('Profile submitted')).toBeTruthy();
             expect(getByText('DISC completed')).toBeTruthy();
@@ -331,7 +355,7 @@ describe('CandidateDetailScreen', () => {
             data: { ...MOCK_CANDIDATE, profile_details: { ...MOCK_PROFILE, completed: true } },
             error: null,
         });
-        const { getByText } = render(<CandidateDetailScreen />);
+        const { getByText } = renderScreen();
         await waitFor(() => {
             expect(getByText('Profile submitted')).toBeTruthy();
         });
@@ -342,7 +366,7 @@ describe('CandidateDetailScreen', () => {
             data: { ...MOCK_CANDIDATE, disc_results: MOCK_DISC },
             error: null,
         });
-        const { getByText } = render(<CandidateDetailScreen />);
+        const { getByText } = renderScreen();
         await waitFor(() => {
             expect(getByText('DISC completed')).toBeTruthy();
         });
@@ -374,6 +398,7 @@ describe('CandidateDetailScreen', () => {
             setShowAddDoc: jest.fn(),
             setAddDocCustomLabel: jest.fn(),
             handleViewDocument: jest.fn(),
+            openPdfViewer: jest.fn(),
             handleDeleteDocument: jest.fn(),
             handleSelectLabel: jest.fn(),
             pickAndUploadDocument: jest.fn(),
@@ -385,7 +410,7 @@ describe('CandidateDetailScreen', () => {
             error: null,
         });
 
-        const { getByText } = render(<CandidateDetailScreen />);
+        const { getByText } = renderScreen();
         await waitFor(() => {
             expect(getByText('3/7')).toBeTruthy();
         });
@@ -398,7 +423,7 @@ describe('CandidateDetailScreen', () => {
             data: { ...MOCK_CANDIDATE, profile_details: MOCK_PROFILE },
             error: null,
         });
-        const { getByText } = render(<CandidateDetailScreen />);
+        const { getByText } = renderScreen();
         await waitFor(() => {
             expect(getByText('Personal Details')).toBeTruthy();
             expect(getByText('Singaporean')).toBeTruthy();
@@ -413,7 +438,7 @@ describe('CandidateDetailScreen', () => {
             data: { ...MOCK_CANDIDATE, profile_details: MOCK_PROFILE },
             error: null,
         });
-        const { getByText } = render(<CandidateDetailScreen />);
+        const { getByText } = renderScreen();
         await waitFor(() => {
             expect(getByText('李小红')).toBeTruthy();
             expect(getByText('Jenny')).toBeTruthy();
@@ -425,14 +450,14 @@ describe('CandidateDetailScreen', () => {
             data: { ...MOCK_CANDIDATE, profile_details: MOCK_PROFILE },
             error: null,
         });
-        const { getByText } = render(<CandidateDetailScreen />);
+        const { getByText } = renderScreen();
         await waitFor(() => {
             expect(getByText('Blk 123 Orchard Road #04-05 S(238888)')).toBeTruthy();
         });
     });
 
     it('hides personal details when profile is null', async () => {
-        const { queryByText } = render(<CandidateDetailScreen />);
+        const { queryByText } = renderScreen();
         await waitFor(() => {
             expect(queryByText('Personal Details')).toBeNull();
         });
@@ -445,7 +470,7 @@ describe('CandidateDetailScreen', () => {
             data: { ...MOCK_CANDIDATE, profile_details: MOCK_PROFILE },
             error: null,
         });
-        const { getByText } = render(<CandidateDetailScreen />);
+        const { getByText } = renderScreen();
         await waitFor(() => {
             expect(getByText('Employment Details')).toBeTruthy();
             expect(getByText('Financial Advisor')).toBeTruthy();
@@ -460,7 +485,7 @@ describe('CandidateDetailScreen', () => {
             data: { ...MOCK_CANDIDATE, profile_details: MOCK_PROFILE },
             error: null,
         });
-        const { getByText } = render(<CandidateDetailScreen />);
+        const { getByText } = renderScreen();
         await waitFor(() => {
             expect(getByText('Emergency Contact')).toBeTruthy();
             expect(getByText('John Smith')).toBeTruthy();
@@ -475,7 +500,7 @@ describe('CandidateDetailScreen', () => {
             data: { ...MOCK_CANDIDATE, profile_details: MOCK_PROFILE },
             error: null,
         });
-        const { getByText } = render(<CandidateDetailScreen />);
+        const { getByText } = renderScreen();
         await waitFor(() => {
             expect(getByText('Education')).toBeTruthy();
             expect(getByText('NUS')).toBeTruthy();
@@ -491,7 +516,7 @@ describe('CandidateDetailScreen', () => {
             data: { ...MOCK_CANDIDATE, profile_details: MOCK_PROFILE },
             error: null,
         });
-        const { getByText } = render(<CandidateDetailScreen />);
+        const { getByText } = renderScreen();
         await waitFor(() => {
             expect(getByText('Employment History')).toBeTruthy();
             expect(getByText('DBS Bank')).toBeTruthy();
@@ -507,7 +532,7 @@ describe('CandidateDetailScreen', () => {
             data: { ...MOCK_CANDIDATE, profile_details: MOCK_PROFILE },
             error: null,
         });
-        const { getByText } = render(<CandidateDetailScreen />);
+        const { getByText } = renderScreen();
         await waitFor(() => {
             expect(getByText('Skills & Languages')).toBeTruthy();
             expect(getByText('English')).toBeTruthy();
@@ -524,7 +549,7 @@ describe('CandidateDetailScreen', () => {
             data: { ...MOCK_CANDIDATE, disc_results: MOCK_DISC },
             error: null,
         });
-        const { getByText } = render(<CandidateDetailScreen />);
+        const { getByText } = renderScreen();
         await waitFor(() => {
             expect(getByText('DISC Profile')).toBeTruthy();
             expect(getByText('Di')).toBeTruthy();
@@ -534,7 +559,7 @@ describe('CandidateDetailScreen', () => {
     });
 
     it('hides DISC section when no results', async () => {
-        const { queryByText } = render(<CandidateDetailScreen />);
+        const { queryByText } = renderScreen();
         await waitFor(() => {
             expect(queryByText('DISC Profile')).toBeNull();
         });
@@ -543,7 +568,7 @@ describe('CandidateDetailScreen', () => {
     // ── Documents ──
 
     it('renders documents section', async () => {
-        const { getByText } = render(<CandidateDetailScreen />);
+        const { getByText } = renderScreen();
         await waitFor(() => {
             expect(getByText('Documents')).toBeTruthy();
             expect(getByText('Document List')).toBeTruthy();
@@ -553,7 +578,7 @@ describe('CandidateDetailScreen', () => {
     // ── Interviews ──
 
     it('shows empty state when no interviews', async () => {
-        const { getByText } = render(<CandidateDetailScreen />);
+        const { getByText } = renderScreen();
         await waitFor(() => {
             expect(getByText('Interviews')).toBeTruthy();
             expect(getByText('No interviews yet')).toBeTruthy();
@@ -597,7 +622,7 @@ describe('CandidateDetailScreen', () => {
             },
             error: null,
         });
-        const { getByText } = render(<CandidateDetailScreen />);
+        const { getByText } = renderScreen();
         await waitFor(() => {
             expect(getByText('Interview 1')).toBeTruthy();
             expect(getByText('Interview 2')).toBeTruthy();
@@ -607,7 +632,7 @@ describe('CandidateDetailScreen', () => {
     // ── Contact activity ──
 
     it('shows empty contact activity state', async () => {
-        const { getByText } = render(<CandidateDetailScreen />);
+        const { getByText } = renderScreen();
         await waitFor(() => {
             expect(getByText('Contact Activity')).toBeTruthy();
             expect(getByText('No calls or messages logged yet')).toBeTruthy();
@@ -617,7 +642,7 @@ describe('CandidateDetailScreen', () => {
     // ── Notes ──
 
     it('renders notes when present', async () => {
-        const { getByText } = render(<CandidateDetailScreen />);
+        const { getByText } = renderScreen();
         await waitFor(() => {
             expect(getByText('Notes')).toBeTruthy();
             expect(getByText('Promising candidate')).toBeTruthy();
@@ -629,7 +654,7 @@ describe('CandidateDetailScreen', () => {
             data: { ...MOCK_CANDIDATE, notes: null },
             error: null,
         });
-        const { queryByText } = render(<CandidateDetailScreen />);
+        const { queryByText } = renderScreen();
         await waitFor(() => {
             expect(queryByText('Notes')).toBeNull();
         });
@@ -642,7 +667,7 @@ describe('CandidateDetailScreen', () => {
             data: { ...MOCK_CANDIDATE, status: 'interview_scheduled' },
             error: null,
         });
-        const { getByText } = render(<CandidateDetailScreen />);
+        const { getByText } = renderScreen();
         await waitFor(() => {
             expect(getByText('Interview')).toBeTruthy();
         });
@@ -653,7 +678,7 @@ describe('CandidateDetailScreen', () => {
             data: { ...MOCK_CANDIDATE, status: 'approved' },
             error: null,
         });
-        const { getAllByText } = render(<CandidateDetailScreen />);
+        const { getAllByText } = renderScreen();
         await waitFor(() => {
             expect(getAllByText('Approved').length).toBeGreaterThanOrEqual(1);
         });
@@ -666,7 +691,7 @@ describe('CandidateDetailScreen', () => {
             data: [{ id: 'prog-1', slug: 'sproutlyfe', title: 'SproutLYFE', isLocked: false, modules: [] }],
             error: null,
         });
-        const { getByText } = render(<CandidateDetailScreen />);
+        const { getByText } = renderScreen();
         await waitFor(() => {
             expect(getByText('Training Progress')).toBeTruthy();
             expect(getByText('Roadmap Progress')).toBeTruthy();
@@ -681,9 +706,113 @@ describe('CandidateDetailScreen', () => {
             data: [{ id: 'prog-1', slug: 'sproutlyfe', title: 'SproutLYFE', isLocked: false, modules: [] }],
             error: null,
         });
-        const { queryByText } = render(<CandidateDetailScreen />);
+        const { queryByText } = renderScreen();
         await waitFor(() => {
             expect(queryByText('Training Progress')).toBeNull();
         });
+    });
+
+    // ── LicensedReadinessBanner visibility matrix ──
+
+    // Helper for a paper ATTEMPT (new attempts-only model).
+    function paper(code: string, result: 'passed' | 'failed' | null = 'passed') {
+        return {
+            id: `att-${code}-${result ?? 'sch'}`,
+            candidate_id: 'cand-1',
+            paper_code: code,
+            exam_at: '2026-04-10T02:00:00Z',
+            cost: 120,
+            result,
+            logged_by_user_id: null,
+            created_at: '2026-04-01T00:00:00Z',
+            updated_at: '2026-04-01T00:00:00Z',
+        };
+    }
+
+    function rnf(status: 'not_started' | 'lodged_to_mas' | 'issued'): any {
+        return {
+            id: 'ms-rnf',
+            candidate_id: 'cand-1',
+            milestone_code: 'rnf',
+            status,
+            scheduled_date: null,
+            scheduled_end_date: null,
+            completed_date: null,
+            reference_number: status === 'issued' ? 'RNF-2026-001' : null,
+            verified_by_user_id: null,
+            note: null,
+            created_at: '2026-04-01T00:00:00Z',
+            updated_at: '2026-04-01T00:00:00Z',
+        };
+    }
+
+    it('hides licensed banner when papers are incomplete', async () => {
+        // Only 3 of 4 requirements satisfied.
+        (fetchPaperAttempts as jest.Mock).mockResolvedValue({
+            data: [paper('M9'), paper('M9A'), paper('M5')],
+            error: null,
+        });
+        (fetchMilestones as jest.Mock).mockResolvedValue({ data: [rnf('issued')], error: null });
+
+        const { queryByTestId } = renderScreen();
+        await waitFor(() => expect(queryByTestId('papers-section-row-life_1')).toBeTruthy());
+        expect(queryByTestId('licensed-readiness-banner')).toBeNull();
+    });
+
+    it('hides licensed banner when RNF is not issued', async () => {
+        (fetchPaperAttempts as jest.Mock).mockResolvedValue({
+            data: [paper('M9'), paper('M9A'), paper('M5'), paper('HI')],
+            error: null,
+        });
+        (fetchMilestones as jest.Mock).mockResolvedValue({ data: [rnf('lodged_to_mas')], error: null });
+
+        const { queryByTestId } = renderScreen();
+        await waitFor(() => expect(queryByTestId('papers-section-row-life_1')).toBeTruthy());
+        expect(queryByTestId('licensed-readiness-banner')).toBeNull();
+    });
+
+    it('hides licensed banner when candidate is already licensed', async () => {
+        (fetchCandidate as jest.Mock).mockResolvedValue({
+            data: { ...MOCK_CANDIDATE, status: 'licensed' },
+            error: null,
+        });
+        (fetchPaperAttempts as jest.Mock).mockResolvedValue({
+            data: [paper('M9'), paper('M9A'), paper('M5'), paper('HI')],
+            error: null,
+        });
+        (fetchMilestones as jest.Mock).mockResolvedValue({ data: [rnf('issued')], error: null });
+
+        const { queryByTestId } = renderScreen();
+        await waitFor(() => expect(queryByTestId('papers-section-row-life_1')).toBeTruthy());
+        expect(queryByTestId('licensed-readiness-banner')).toBeNull();
+    });
+
+    it('shows licensed banner when all prerequisites are met and status is pre-licensed', async () => {
+        (fetchCandidate as jest.Mock).mockResolvedValue({
+            data: { ...MOCK_CANDIDATE, status: 'exam_prep' },
+            error: null,
+        });
+        (fetchPaperAttempts as jest.Mock).mockResolvedValue({
+            data: [paper('M9'), paper('M9A'), paper('M5'), paper('HI')],
+            error: null,
+        });
+        (fetchMilestones as jest.Mock).mockResolvedValue({ data: [rnf('issued')], error: null });
+
+        const { queryByTestId } = renderScreen();
+        await waitFor(() => expect(queryByTestId('licensed-readiness-banner')).toBeTruthy());
+    });
+
+    it('hides licensed banner for roles without verify+manage capability', async () => {
+        (useAuth as jest.Mock).mockReturnValue({
+            user: { id: 'agent-1', role: 'agent', full_name: 'Agent Bob' },
+        });
+        (fetchPaperAttempts as jest.Mock).mockResolvedValue({
+            data: [paper('M9'), paper('M9A'), paper('M5'), paper('HI')],
+            error: null,
+        });
+        (fetchMilestones as jest.Mock).mockResolvedValue({ data: [rnf('issued')], error: null });
+
+        const { queryByTestId } = renderScreen();
+        await waitFor(() => expect(queryByTestId('licensed-readiness-banner')).toBeNull());
     });
 });

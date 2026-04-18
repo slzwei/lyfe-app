@@ -5,6 +5,7 @@ import type { CandidateStatus, Interview, RecruitmentCandidate } from '@/types/r
 import { applyPageRange, resolvePage } from '../pagination';
 import { captureError } from '../sentry';
 import { supabase } from '../supabase';
+import { markCandidateLicensed } from './progression';
 
 export interface CreateCandidateInput {
     name: string;
@@ -288,14 +289,30 @@ export async function createCandidate(
 }
 
 /**
- * Update a candidate's status.
+ * Update a candidate's status, with transition guards:
+ *  - `active_agent` is NEVER set via this path — only the `activate-agent`
+ *    edge function (Phase G) can flip it, because it atomically updates
+ *    users.role + MKTR sync + converted_to_agent_at in one transaction.
+ *  - `licensed` delegates to `markCandidateLicensed` so the papers-passed +
+ *    RNF-issued readiness check runs server-side against fresh data.
+ *  - `eapp_done` is accepted as a click target but the DB BEFORE-UPDATE
+ *    trigger `trg_auto_advance_eapp_done` rewrites it to `exam_prep`;
+ *    callers must re-fetch to see the server-authoritative status.
  */
 export async function updateCandidateStatus(
     candidateId: string,
     newStatus: CandidateStatus,
 ): Promise<{ error: string | null }> {
-    const { error } = await supabase.from('candidates').update({ status: newStatus }).eq('id', candidateId);
+    if (newStatus === 'active_agent') {
+        return {
+            error: 'Active agent status can only be set by activating the agent. Use the activate-agent action instead.',
+        };
+    }
+    if (newStatus === 'licensed') {
+        return markCandidateLicensed(candidateId);
+    }
 
+    const { error } = await supabase.from('candidates').update({ status: newStatus }).eq('id', candidateId);
     if (error) return { error: error.message };
     return { error: null };
 }

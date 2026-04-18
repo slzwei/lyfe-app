@@ -3,30 +3,54 @@ import { AddDocumentSheet, DocumentList, type GeneratedPdf } from '@/components/
 import HeroSection from '@/components/candidates/HeroSection';
 import InterviewSchedulerSheet from '@/components/candidates/InterviewSchedulerSheet';
 import InterviewCard from '@/components/InterviewCard';
+import LicensedReadinessBanner from '@/components/candidates/LicensedReadinessBanner';
 import LoadingState from '@/components/LoadingState';
+import MilestoneMarkSheet from '@/components/candidates/MilestoneMarkSheet';
+import MilestonesSection from '@/components/candidates/MilestonesSection';
 import NoteSheet from '@/components/candidates/NoteSheet';
 import OnboardingChecklist from '@/components/candidates/OnboardingChecklist';
+import PapersSection from '@/components/candidates/PapersSection';
 import PdfViewerModal from '@/components/candidates/PdfViewerModal';
+import PrepCourseMarkSheet from '@/components/candidates/PrepCourseMarkSheet';
+import PrepCourseSection from '@/components/candidates/PrepCourseSection';
 import ProgressSummaryCard from '@/components/roadmap/ProgressSummaryCard';
 import QuickActionsBar from '@/components/candidates/QuickActionsBar';
 import ScreenHeader from '@/components/ScreenHeader';
 import SectionCard, { DetailRow } from '@/components/candidates/SectionCard';
 import UnlockConfirmSheet from '@/components/roadmap/UnlockConfirmSheet';
 import { useAuth } from '@/contexts/AuthContext';
+import { useCandidateProgressionContext } from '@/contexts/CandidateProgressionContext';
 import { useTheme } from '@/contexts/ThemeContext';
 import { useContactOutcome } from '@/hooks/useContactOutcome';
 import { useDocumentManager } from '@/hooks/useDocumentManager';
 import { useInterviewScheduler } from '@/hooks/useInterviewScheduler';
-import { addCandidateActivity, fetchCandidate, getGeneratedPdfUrl } from '@/lib/recruitment';
+import {
+    addCandidateActivity,
+    fetchCandidate,
+    getGeneratedPdfUrl,
+    markCandidateLicensed,
+    upsertMilestone,
+    upsertPrepCourseBooking,
+} from '@/lib/recruitment';
+import { canManageMilestones, canVerifyPapers } from '@/types/shared/roles';
 import { fetchCandidateRoadmap, unlockProgrammeForCandidate } from '@/lib/roadmap';
-import type { CandidateActivity, CandidateStatus, Interview, RecruitmentCandidate } from '@/types/recruitment';
+import type {
+    CandidateActivity,
+    CandidateStatus,
+    Interview,
+    MilestoneCode,
+    MilestoneStatus,
+    PaperRequirement,
+    PrepCourseCode,
+    RecruitmentCandidate,
+} from '@/types/recruitment';
 import { CANDIDATE_STATUS_CONFIG } from '@/types/recruitment';
 import type { ProgrammeWithModules } from '@/types/roadmap';
 import { Ionicons } from '@expo/vector-icons';
-import { useLocalSearchParams } from 'expo-router';
+import { useFocusEffect, useLocalSearchParams, usePathname } from 'expo-router';
 import { useTypedRouter } from '@/hooks/useTypedRouter';
 import { useSheetAnimation } from '@/hooks/useSheetAnimation';
-import React, { useCallback, useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import {
     ActionSheetIOS,
     Alert,
@@ -63,6 +87,7 @@ export default function CandidateDetailScreen() {
     const { colors } = useTheme();
     const { user } = useAuth();
     const router = useTypedRouter();
+    const pathname = usePathname();
 
     const [candidate, setCandidate] = useState<RecruitmentCandidate | null>(null);
     const [isLoading, setIsLoading] = useState(true);
@@ -71,8 +96,40 @@ export default function CandidateDetailScreen() {
     const [showNoteSheet, setShowNoteSheet] = useState(false);
     const [noteSheetText, setNoteSheetText] = useState('');
 
+    // Papers — tapping a row pushes the attempts screen. Add/edit happens
+    // there via a single modal, avoiding nested-modal complexity.
+
+    // Milestones mark sheet state
+    const [markingMilestone, setMarkingMilestone] = useState<MilestoneCode | null>(null);
+    const [markingMilestoneLabel, setMarkingMilestoneLabel] = useState('');
+    const [markMsStatus, setMarkMsStatus] = useState<MilestoneStatus>('not_started');
+    const [markMsScheduledAt, setMarkMsScheduledAt] = useState<Date | null>(null);
+    const [markMsScheduledEndAt, setMarkMsScheduledEndAt] = useState<Date | null>(null);
+    const [markMsReferenceNumber, setMarkMsReferenceNumber] = useState('');
+    const [markMsNote, setMarkMsNote] = useState('');
+    const [isMarkingMs, setIsMarkingMs] = useState(false);
+    const [markMsError, setMarkMsError] = useState<string | null>(null);
+
+    // Prep-course mark sheet state
+    const [markingPrepCourse, setMarkingPrepCourse] = useState<PrepCourseCode | null>(null);
+    const [markingPrepCourseLabel, setMarkingPrepCourseLabel] = useState('');
+    const [markPcBookedAt, setMarkPcBookedAt] = useState<Date | null>(null);
+    const [markPcBookedEndAt, setMarkPcBookedEndAt] = useState<Date | null>(null);
+    const [markPcAttended, setMarkPcAttended] = useState(false);
+    const [markPcNote, setMarkPcNote] = useState('');
+    const [isMarkingPc, setIsMarkingPc] = useState(false);
+    const [markPcError, setMarkPcError] = useState<string | null>(null);
+
+    // Licensed-readiness banner state
+    const [isMarkingLicensed, setIsMarkingLicensed] = useState(false);
+    const [licensedError, setLicensedError] = useState<string | null>(null);
+
     const role = user?.role ?? '';
     const canMarkComplete = role === 'admin' || role === 'pa' || role === 'manager' || role === 'director';
+    const canConfirmLicensed =
+        canVerifyPapers(role as Parameters<typeof canVerifyPapers>[0]) &&
+        canManageMilestones(role as Parameters<typeof canManageMilestones>[0]);
+    const progression = useCandidateProgressionContext();
     const [programmes, setProgrammes] = useState<ProgrammeWithModules[]>([]);
     const [showUnlockSheet, setShowUnlockSheet] = useState(false);
     const [isUnlocking, setIsUnlocking] = useState(false);
@@ -187,16 +244,22 @@ export default function CandidateDetailScreen() {
     const noteSheetY = useSharedValue(screenH);
     const scheduleSheetY = useSharedValue(screenH);
     const addDocSheetY = useSharedValue(screenH);
+    const milestoneSheetY = useSharedValue(screenH);
+    const prepCourseSheetY = useSharedValue(screenH);
 
     const confirmSheetVisible = useSheetAnimation(showConfirmSheet, confirmSheetY);
     const noteSheetVisible = useSheetAnimation(showNoteSheet, noteSheetY);
     const scheduleSheetVisible = useSheetAnimation(showScheduleSheet, scheduleSheetY);
     const addDocSheetVisible = useSheetAnimation(showAddDoc, addDocSheetY);
+    const milestoneSheetVisible = useSheetAnimation(!!markingMilestone, milestoneSheetY);
+    const prepCourseSheetVisible = useSheetAnimation(!!markingPrepCourse, prepCourseSheetY);
 
     const confirmSheetStyle = useAnimatedStyle(() => ({ transform: [{ translateY: confirmSheetY.value }] }));
     const noteSheetStyle = useAnimatedStyle(() => ({ transform: [{ translateY: noteSheetY.value }] }));
     const scheduleSheetStyle = useAnimatedStyle(() => ({ transform: [{ translateY: scheduleSheetY.value }] }));
     const addDocSheetStyle = useAnimatedStyle(() => ({ transform: [{ translateY: addDocSheetY.value }] }));
+    const milestoneSheetStyle = useAnimatedStyle(() => ({ transform: [{ translateY: milestoneSheetY.value }] }));
+    const prepCourseSheetStyle = useAnimatedStyle(() => ({ transform: [{ translateY: prepCourseSheetY.value }] }));
 
     // ── Data loading ──
     const loadCandidate = useCallback(async () => {
@@ -215,6 +278,18 @@ export default function CandidateDetailScreen() {
         if (candidateId) docManager.loadDocuments();
     }, [candidateId]); // eslint-disable-line react-hooks/exhaustive-deps
 
+    // Re-fetch docs + roadmap on focus. Progression is shared via
+    // CandidateProgressionContext, so writes from pushed screens already
+    // propagate — no refresh needed here.
+    useFocusEffect(
+        useCallback(() => {
+            if (!candidateId) return;
+            docManager.loadDocuments();
+            loadRoadmap();
+            // eslint-disable-next-line react-hooks/exhaustive-deps
+        }, [candidateId]),
+    );
+
     const loadRoadmap = useCallback(async () => {
         if (!candidateId || !canMarkComplete) return;
         const { data } = await fetchCandidateRoadmap(candidateId);
@@ -228,15 +303,7 @@ export default function CandidateDetailScreen() {
     const handleViewGeneratedPdf = useCallback(
         async (path: string, title: string) => {
             const url = await getGeneratedPdfUrl(path);
-            if (url)
-                docManager.handleViewDocument({
-                    id: path,
-                    candidate_id: '',
-                    label: title,
-                    file_name: '',
-                    file_url: url,
-                    created_at: '',
-                });
+            if (url) docManager.openPdfViewer(url, title);
         },
         [docManager],
     );
@@ -260,13 +327,40 @@ export default function CandidateDetailScreen() {
         setShowNoteSheet(false);
     };
 
+    const applyStatusChange = useCallback(
+        async (key: CandidateStatus) => {
+            if (!candidate) return;
+            const { updateCandidateStatus } = await import('@/lib/recruitment');
+            const { error: updateErr } = await updateCandidateStatus(candidate.id, key);
+            if (updateErr) {
+                Alert.alert('Error', updateErr);
+                return;
+            }
+            // eapp_done is rewritten to exam_prep by a DB trigger — re-fetch to
+            // reflect the server-authoritative status rather than the click value.
+            if (key === 'eapp_done') {
+                await loadCandidate();
+            } else {
+                setCandidate((prev) => (prev ? { ...prev, status: key } : prev));
+            }
+        },
+        [candidate, loadCandidate],
+    );
+
     const handleStatusPress = () => {
         if (!candidate) return;
-        const statuses = Object.entries(CANDIDATE_STATUS_CONFIG) as [
-            CandidateStatus,
-            (typeof CANDIDATE_STATUS_CONFIG)[CandidateStatus],
-        ][];
-        const options = statuses.sort(([, a], [, b]) => a.order - b.order).map(([, v]) => v.label);
+        // active_agent / licensed are not valid direct transitions:
+        //  - active_agent flips atomically via activate-agent edge function (Phase G)
+        //  - licensed goes through the LicensedReadinessBanner which re-verifies papers + RNF
+        const statuses = (
+            Object.entries(CANDIDATE_STATUS_CONFIG) as [
+                CandidateStatus,
+                (typeof CANDIDATE_STATUS_CONFIG)[CandidateStatus],
+            ][]
+        )
+            .filter(([key]) => key !== 'active_agent' && key !== 'licensed')
+            .sort(([, a], [, b]) => a.order - b.order);
+        const options = statuses.map(([, v]) => v.label);
         options.push('Cancel');
 
         if (Platform.OS === 'ios') {
@@ -274,35 +368,168 @@ export default function CandidateDetailScreen() {
                 { options, cancelButtonIndex: options.length - 1, title: 'Change Status' },
                 (idx) => {
                     if (idx < statuses.length) {
-                        const [key] = statuses.sort(([, a], [, b]) => a.order - b.order)[idx];
-                        import('@/lib/recruitment').then(({ updateCandidateStatus }) =>
-                            updateCandidateStatus(candidate.id, key).then(({ error: e }) => {
-                                if (e) Alert.alert('Error', e);
-                                else setCandidate((prev) => (prev ? { ...prev, status: key } : prev));
-                            }),
-                        );
+                        const [key] = statuses[idx];
+                        void applyStatusChange(key);
                     }
                 },
             );
         } else {
             Alert.alert('Change Status', undefined, [
-                ...statuses
-                    .sort(([, a], [, b]) => a.order - b.order)
-                    .map(([key, v]) => ({
-                        text: v.label,
-                        onPress: () => {
-                            import('@/lib/recruitment').then(({ updateCandidateStatus }) =>
-                                updateCandidateStatus(candidate.id, key).then(({ error: e }) => {
-                                    if (e) Alert.alert('Error', e);
-                                    else setCandidate((prev) => (prev ? { ...prev, status: key } : prev));
-                                }),
-                            );
-                        },
-                    })),
+                ...statuses.map(([key, v]) => ({
+                    text: v.label,
+                    onPress: () => {
+                        void applyStatusChange(key);
+                    },
+                })),
                 { text: 'Cancel', style: 'cancel' },
             ]);
         }
     };
+
+    const openPaperAttempts = useCallback(
+        (req: PaperRequirement) => {
+            if (!candidateId) return;
+            // Push within the CURRENT tab's stack so Back returns to this
+            // detail page rather than jumping tabs. pathname is e.g.
+            //   /candidates/<id>              (candidates tab)
+            //   /team/candidate/<id>          (team tab)
+            //   /pa/candidate/<id>            (pa tab)
+            //   /home/candidate/<id>          (home tab)
+            // Replace the final <id> segment with papers/<id>/<code>.
+            const base = pathname.replace(/\/[^/]+$/, '');
+            router.push(`${base}/papers/${candidateId}/${req.code}` as Parameters<typeof router.push>[0]);
+        },
+        [candidateId, pathname, router],
+    );
+
+    const openMarkMilestone = useCallback(
+        (code: MilestoneCode, label: string) => {
+            const current = progression.milestoneByCode[code];
+            setMarkingMilestone(code);
+            setMarkingMilestoneLabel(label);
+            setMarkMsStatus(current?.status ?? 'not_started');
+            setMarkMsScheduledAt(current?.scheduled_date ? new Date(current.scheduled_date) : null);
+            setMarkMsScheduledEndAt(current?.scheduled_end_date ? new Date(current.scheduled_end_date) : null);
+            setMarkMsReferenceNumber(current?.reference_number ?? '');
+            setMarkMsNote(current?.note ?? '');
+            setMarkMsError(null);
+        },
+        [progression.milestoneByCode],
+    );
+
+    const dismissMarkMilestone = useCallback(() => {
+        if (isMarkingMs) return;
+        setMarkingMilestone(null);
+        setMarkMsError(null);
+    }, [isMarkingMs]);
+
+    const handleSaveMilestone = useCallback(async () => {
+        if (!candidateId || !markingMilestone) return;
+        setIsMarkingMs(true);
+        setMarkMsError(null);
+        const { error: upsertErr } = await upsertMilestone(
+            candidateId,
+            markingMilestone,
+            {
+                status: markMsStatus,
+                scheduledDate:
+                    markMsStatus === 'scheduled' && markMsScheduledAt ? markMsScheduledAt.toISOString() : null,
+                scheduledEndDate:
+                    markMsStatus === 'scheduled' && markMsScheduledEndAt ? markMsScheduledEndAt.toISOString() : null,
+                referenceNumber:
+                    markingMilestone === 'rnf' && markMsStatus === 'issued' ? markMsReferenceNumber.trim() : null,
+                note: markMsNote.trim() || null,
+            },
+            user?.id,
+        );
+        if (upsertErr) {
+            setIsMarkingMs(false);
+            setMarkMsError(upsertErr);
+            return;
+        }
+        await progression.refresh();
+        setIsMarkingMs(false);
+        setMarkingMilestone(null);
+    }, [
+        candidateId,
+        markingMilestone,
+        markMsStatus,
+        markMsScheduledAt,
+        markMsScheduledEndAt,
+        markMsReferenceNumber,
+        markMsNote,
+        user?.id,
+        progression,
+    ]);
+
+    const openMarkPrepCourse = useCallback(
+        (code: PrepCourseCode, label: string) => {
+            const current = progression.prepCourseByCode[code];
+            setMarkingPrepCourse(code);
+            setMarkingPrepCourseLabel(label);
+            setMarkPcBookedAt(current?.booked_date ? new Date(current.booked_date) : null);
+            setMarkPcBookedEndAt(current?.booked_end_date ? new Date(current.booked_end_date) : null);
+            setMarkPcAttended(current?.attended ?? false);
+            setMarkPcNote(current?.note ?? '');
+            setMarkPcError(null);
+        },
+        [progression.prepCourseByCode],
+    );
+
+    const dismissMarkPrepCourse = useCallback(() => {
+        if (isMarkingPc) return;
+        setMarkingPrepCourse(null);
+        setMarkPcError(null);
+    }, [isMarkingPc]);
+
+    const handleSavePrepCourse = useCallback(async () => {
+        if (!candidateId || !markingPrepCourse) return;
+        setIsMarkingPc(true);
+        setMarkPcError(null);
+        const { error: upsertErr } = await upsertPrepCourseBooking(
+            candidateId,
+            markingPrepCourse,
+            {
+                bookedDate: markPcBookedAt ? markPcBookedAt.toISOString() : null,
+                bookedEndDate: markPcBookedEndAt ? markPcBookedEndAt.toISOString() : null,
+                attended: markPcAttended,
+                note: markPcNote.trim() || null,
+            },
+            user?.id,
+        );
+        if (upsertErr) {
+            setIsMarkingPc(false);
+            setMarkPcError(upsertErr);
+            return;
+        }
+        await progression.refresh();
+        setIsMarkingPc(false);
+        setMarkingPrepCourse(null);
+    }, [
+        candidateId,
+        markingPrepCourse,
+        markPcBookedAt,
+        markPcBookedEndAt,
+        markPcAttended,
+        markPcNote,
+        user?.id,
+        progression,
+    ]);
+
+    const handleConfirmLicensed = useCallback(async () => {
+        if (!candidate || !canConfirmLicensed) return;
+        setIsMarkingLicensed(true);
+        setLicensedError(null);
+        const { error: updateErr } = await markCandidateLicensed(candidate.id);
+        if (updateErr) {
+            setIsMarkingLicensed(false);
+            setLicensedError(updateErr);
+            return;
+        }
+        setCandidate((prev) => (prev ? { ...prev, status: 'licensed' } : prev));
+        await progression.refresh();
+        setIsMarkingLicensed(false);
+    }, [candidate, canConfirmLicensed, progression]);
 
     const handleUnlockConfirm = useCallback(async () => {
         if (!canMarkComplete || !user?.id || !candidateId) return;
@@ -337,9 +564,19 @@ export default function CandidateDetailScreen() {
                     <Text style={[styles.notFoundText, { color: colors.textSecondary }]}>
                         {error || 'Candidate not found'}
                     </Text>
-                    <TouchableOpacity onPress={() => router.back()}>
-                        <Text style={{ color: colors.accent, fontWeight: '600' }}>Go Back</Text>
-                    </TouchableOpacity>
+                    <View style={{ flexDirection: 'row', gap: 20 }}>
+                        <TouchableOpacity
+                            onPress={() => {
+                                setIsLoading(true);
+                                loadCandidate();
+                            }}
+                        >
+                            <Text style={{ color: colors.accent, fontWeight: '600' }}>Retry</Text>
+                        </TouchableOpacity>
+                        <TouchableOpacity onPress={() => router.back()}>
+                            <Text style={{ color: colors.accent, fontWeight: '600' }}>Go Back</Text>
+                        </TouchableOpacity>
+                    </View>
                 </View>
             </SafeAreaView>
         );
@@ -584,6 +821,41 @@ export default function CandidateDetailScreen() {
                     </SectionCard>
                 )}
 
+                {/* ── Papers / Milestones / Prep Courses (staff only) ── */}
+                {canMarkComplete && (
+                    <>
+                        {canConfirmLicensed &&
+                            progression.allPapersPassed &&
+                            progression.rnfIssued &&
+                            candidate.status !== 'licensed' &&
+                            candidate.status !== 'active_agent' && (
+                                <LicensedReadinessBanner
+                                    candidateName={candidate.name}
+                                    rnfReferenceNumber={progression.milestoneByCode.rnf?.reference_number ?? null}
+                                    isConfirming={isMarkingLicensed}
+                                    error={licensedError}
+                                    onConfirm={handleConfirmLicensed}
+                                    colors={colors}
+                                />
+                            )}
+                        <PapersSection
+                            requirements={progression.paperRequirements}
+                            colors={colors}
+                            onMark={openPaperAttempts}
+                        />
+                        <MilestonesSection
+                            milestoneByCode={progression.milestoneByCode}
+                            colors={colors}
+                            onMark={openMarkMilestone}
+                        />
+                        <PrepCourseSection
+                            prepCourseByCode={progression.prepCourseByCode}
+                            colors={colors}
+                            onMark={openMarkPrepCourse}
+                        />
+                    </>
+                )}
+
                 {/* ── Documents ── */}
                 <SectionCard
                     title="Documents"
@@ -689,7 +961,13 @@ export default function CandidateDetailScreen() {
                     <SectionCard title="Training Progress" icon="school-outline" colors={colors}>
                         <ProgressSummaryCard
                             programmes={programmes}
-                            onViewFull={() => router.push(`/(tabs)/candidates/progress/${candidateId}`)}
+                            onViewFull={() => {
+                                // Same path-aware push as openPaperAttempts so
+                                // back returns to this detail page in the
+                                // current tab (not a jump to candidates tab).
+                                const base = pathname.replace(/\/[^/]+$/, '');
+                                router.push(`${base}/progress/${candidateId}` as Parameters<typeof router.push>[0]);
+                            }}
                             colors={colors}
                         />
                         {programmes.some((prog) => prog.slug === 'sproutlyfe' && prog.isLocked) && (
@@ -807,6 +1085,46 @@ export default function CandidateDetailScreen() {
                 onConfirm={handleUnlockConfirm}
                 onCancel={() => setShowUnlockSheet(false)}
                 colors={colors}
+            />
+            <MilestoneMarkSheet
+                visible={milestoneSheetVisible}
+                colors={colors}
+                animatedStyle={milestoneSheetStyle}
+                milestoneCode={markingMilestone}
+                milestoneLabel={markingMilestoneLabel}
+                selectedStatus={markMsStatus}
+                scheduledAt={markMsScheduledAt}
+                scheduledEndAt={markMsScheduledEndAt}
+                referenceNumber={markMsReferenceNumber}
+                noteText={markMsNote}
+                isSaving={isMarkingMs}
+                error={markMsError}
+                onStatusChange={setMarkMsStatus}
+                onScheduledAtChange={setMarkMsScheduledAt}
+                onScheduledEndAtChange={setMarkMsScheduledEndAt}
+                onReferenceNumberChange={setMarkMsReferenceNumber}
+                onNoteTextChange={setMarkMsNote}
+                onSave={handleSaveMilestone}
+                onDismiss={dismissMarkMilestone}
+            />
+            <PrepCourseMarkSheet
+                visible={prepCourseSheetVisible}
+                colors={colors}
+                animatedStyle={prepCourseSheetStyle}
+                courseCode={markingPrepCourse}
+                courseLabel={markingPrepCourseLabel}
+                bookedAt={markPcBookedAt}
+                bookedEndAt={markPcBookedEndAt}
+                attended={markPcAttended}
+                noteText={markPcNote}
+                isSaving={isMarkingPc}
+                error={markPcError}
+                onBookedAtChange={setMarkPcBookedAt}
+                onBookedEndAtChange={setMarkPcBookedEndAt}
+                onAttendedChange={setMarkPcAttended}
+                onNoteTextChange={setMarkPcNote}
+                onSave={handleSavePrepCourse}
+                onDismiss={dismissMarkPrepCourse}
             />
         </SafeAreaView>
     );

@@ -20,7 +20,7 @@ function deriveChecklist(candidate: RecruitmentCandidate, documents: CandidateDo
     const { profile_details, disc_results, interviews, status } = candidate;
     const hasResume = documents.some((d) => d.label === 'Resume');
     const hasCompletedInterview = interviews.some((i) => i.status === 'completed');
-    const approvedStatuses = ['approved', 'exam_prep', 'licensed', 'active_agent'];
+    const approvedStatuses = ['approved', 'eapp_done', 'exam_prep', 'licensed', 'active_agent'];
     const licensedStatuses = ['licensed', 'active_agent'];
 
     return [

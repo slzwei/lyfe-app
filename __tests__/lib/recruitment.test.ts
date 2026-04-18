@@ -273,6 +273,25 @@ describe('updateCandidateStatus', () => {
         const result = await updateCandidateStatus('cand-1', 'invalid' as any);
         expect(result.error).toBe('Invalid status');
     });
+
+    it('refuses active_agent — must go through activate-agent edge function', async () => {
+        const result = await updateCandidateStatus('cand-1', 'active_agent');
+        expect(result.error).toMatch(/activate/i);
+        // Guard should fire before any DB call.
+        expect(mockSupa.from).not.toHaveBeenCalled();
+    });
+
+    it('delegates licensed to the papers+RNF readiness guard', async () => {
+        // Not ready — no paper completions exist.
+        mockSupa.__getChain('candidate_paper_completions').__resolveWith({ data: [], error: null });
+        mockSupa.__getChain('candidate_milestones').__resolveWith({ data: [], error: null });
+
+        const result = await updateCandidateStatus('cand-1', 'licensed');
+
+        expect(result.error).toMatch(/paper/i);
+        // No UPDATE on candidates should have happened.
+        expect(mockSupa.from).not.toHaveBeenCalledWith('candidates');
+    });
 });
 
 // ── addCandidateActivity ──

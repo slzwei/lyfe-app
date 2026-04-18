@@ -26,5 +26,20 @@ export {
     uploadCandidateDocument,
     deleteCandidateDocument,
     getGeneratedPdfUrl,
+    getCandidateDocumentUrl,
 } from './documents';
 export { fetchPAManagerIds, fetchPAManagers, fetchPACandidateCount, fetchPAInterviewCount } from './pa-helpers';
+export {
+    fetchPaperAttempts,
+    fetchMilestones,
+    fetchPrepCourseBookings,
+    checkAllPapersPassed,
+    upsertPaperAttempt,
+    deletePaperAttempt,
+    upsertMilestone,
+    upsertPrepCourseBooking,
+    markCandidateLicensed,
+    type PaperAttemptPatch,
+    type MilestonePatch,
+    type PrepCourseBookingPatch,
+} from './progression';

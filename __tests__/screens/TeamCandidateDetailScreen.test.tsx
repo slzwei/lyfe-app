@@ -18,6 +18,8 @@ import { useContactOutcome } from '@/hooks/useContactOutcome';
 import { useDocumentManager } from '@/hooks/useDocumentManager';
 import { useInterviewScheduler } from '@/hooks/useInterviewScheduler';
 
+import { CandidateProgressionProvider } from '@/contexts/CandidateProgressionContext';
+
 jest.mock('@/lib/supabase');
 jest.mock('@/contexts/AuthContext');
 jest.mock('@/contexts/ThemeContext');
@@ -26,6 +28,21 @@ jest.mock('@/lib/roadmap');
 jest.mock('@/hooks/useContactOutcome');
 jest.mock('@/hooks/useDocumentManager');
 jest.mock('@/hooks/useInterviewScheduler');
+
+function renderTeamScreen() {
+    return render(
+        <CandidateProgressionProvider candidateId="cand-1">
+            <TeamCandidateDetailScreen />
+        </CandidateProgressionProvider>,
+    );
+}
+function renderCandidateScreen() {
+    return render(
+        <CandidateProgressionProvider candidateId="cand-1">
+            <CandidateDetailScreen />
+        </CandidateProgressionProvider>,
+    );
+}
 
 jest.mock('@/components/ScreenHeader', () => {
     const { Text } = require('react-native');
@@ -95,6 +112,11 @@ jest.mock('expo-router', () => ({
     ...jest.requireActual('expo-router'),
     useLocalSearchParams: () => ({ candidateId: 'cand-1' }),
     useSegments: () => ['(tabs)', 'team'],
+    usePathname: () => '/team/candidate/cand-1',
+    useFocusEffect: (cb: () => void | (() => void)) => {
+        const React = require('react');
+        React.useEffect(() => cb(), [cb]);
+    },
 }));
 jest.mock('@/hooks/useTypedRouter', () => ({
     useTypedRouter: () => ({ push: jest.fn(), replace: jest.fn(), back: jest.fn() }),
@@ -138,6 +160,10 @@ beforeEach(() => {
     });
     (fetchCandidate as jest.Mock).mockResolvedValue({ data: MOCK_CANDIDATE, error: null });
     (fetchCandidateRoadmap as jest.Mock).mockResolvedValue({ data: [], error: null });
+    const recruitment = require('@/lib/recruitment');
+    recruitment.fetchPaperAttempts.mockResolvedValue({ data: [], error: null });
+    recruitment.fetchMilestones.mockResolvedValue({ data: [], error: null });
+    recruitment.fetchPrepCourseBookings.mockResolvedValue({ data: [], error: null });
     (useContactOutcome as jest.Mock).mockReturnValue({
         pendingType: null,
         showConfirmSheet: false,
@@ -166,6 +192,7 @@ beforeEach(() => {
         setShowAddDoc: jest.fn(),
         setAddDocCustomLabel: jest.fn(),
         handleViewDocument: jest.fn(),
+        openPdfViewer: jest.fn(),
         handleDeleteDocument: jest.fn(),
         handleSelectLabel: jest.fn(),
         pickAndUploadDocument: jest.fn(),
@@ -211,28 +238,28 @@ describe('TeamCandidateDetailScreen', () => {
     });
 
     it('renders candidate name via HeroSection', async () => {
-        const { getAllByText } = render(<TeamCandidateDetailScreen />);
+        const { getAllByText } = renderTeamScreen();
         await waitFor(() => {
             expect(getAllByText('Jane Smith').length).toBeGreaterThanOrEqual(1);
         });
     });
 
     it('renders candidate phone', async () => {
-        const { getByText } = render(<TeamCandidateDetailScreen />);
+        const { getByText } = renderTeamScreen();
         await waitFor(() => {
             expect(getByText('+6598765432')).toBeTruthy();
         });
     });
 
     it('renders candidate email', async () => {
-        const { getByText } = render(<TeamCandidateDetailScreen />);
+        const { getByText } = renderTeamScreen();
         await waitFor(() => {
             expect(getByText('jane@example.com')).toBeTruthy();
         });
     });
 
     it('renders manager name', async () => {
-        const { getByText } = render(<TeamCandidateDetailScreen />);
+        const { getByText } = renderTeamScreen();
         await waitFor(() => {
             expect(getByText('Manager Alice')).toBeTruthy();
         });
@@ -240,14 +267,14 @@ describe('TeamCandidateDetailScreen', () => {
 
     it('shows not found when candidate is missing', async () => {
         (fetchCandidate as jest.Mock).mockResolvedValue({ data: null, error: 'Not found' });
-        const { getAllByText } = render(<TeamCandidateDetailScreen />);
+        const { getAllByText } = renderTeamScreen();
         await waitFor(() => {
             expect(getAllByText(/not found/i).length).toBeGreaterThanOrEqual(1);
         });
     });
 
     it('renders notes when present', async () => {
-        const { getByText } = render(<TeamCandidateDetailScreen />);
+        const { getByText } = renderTeamScreen();
         await waitFor(() => {
             expect(getByText('Promising candidate')).toBeTruthy();
         });

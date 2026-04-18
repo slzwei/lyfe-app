@@ -41,6 +41,7 @@ jest.mock('expo-router', () => ({
     ...jest.requireActual('expo-router'),
     useLocalSearchParams: () => mockSearchParams,
     useSegments: () => mockSegments,
+    usePathname: () => '/candidates/cand-1',
     useRouter: () => ({ push: mockPush, replace: mockReplace, back: mockBack }),
     useFocusEffect: (cb: () => void) => {
         const React = require('react');
@@ -111,6 +112,12 @@ describe('Candidate Detail Screen Variants', () => {
                 fetchCandidate: jest.fn().mockResolvedValue({ data: MOCK_CANDIDATE, error: null }),
                 addCandidateActivity: jest.fn(),
                 getGeneratedPdfUrl: jest.fn(),
+                fetchPaperAttempts: jest.fn().mockResolvedValue({ data: [], error: null }),
+                fetchMilestones: jest.fn().mockResolvedValue({ data: [], error: null }),
+                fetchPrepCourseBookings: jest.fn().mockResolvedValue({ data: [], error: null }),
+                upsertMilestone: jest.fn(),
+                upsertPrepCourseBooking: jest.fn(),
+                markCandidateLicensed: jest.fn(),
             }));
             jest.mock('@/lib/roadmap', () => ({
                 fetchCandidateRoadmap: jest.fn().mockResolvedValue({ data: [], error: null }),
@@ -146,6 +153,7 @@ describe('Candidate Detail Screen Variants', () => {
                     setShowAddDoc: jest.fn(),
                     setAddDocCustomLabel: jest.fn(),
                     handleViewDocument: jest.fn(),
+                    openPdfViewer: jest.fn(),
                     handleDeleteDocument: jest.fn(),
                     handleSelectLabel: jest.fn(),
                     pickAndUploadDocument: jest.fn(),
@@ -243,22 +251,31 @@ describe('Candidate Detail Screen Variants', () => {
             NewScreen = require('@/app/(tabs)/candidates/[candidateId]').default;
         });
 
+        function renderNewScreen() {
+            const { CandidateProgressionProvider } = require('@/contexts/CandidateProgressionContext');
+            return render(
+                <CandidateProgressionProvider candidateId="cand-1">
+                    <NewScreen />
+                </CandidateProgressionProvider>,
+            );
+        }
+
         it('renders the HeroSection component (unique to NEW screen)', async () => {
-            const { getByTestId } = render(<NewScreen />);
+            const { getByTestId } = renderNewScreen();
             await waitFor(() => {
                 expect(getByTestId('hero-section')).toBeTruthy();
             });
         });
 
         it('renders OnboardingChecklist (unique to NEW screen)', async () => {
-            const { getByTestId } = render(<NewScreen />);
+            const { getByTestId } = renderNewScreen();
             await waitFor(() => {
                 expect(getByTestId('onboarding-checklist')).toBeTruthy();
             });
         });
 
         it('renders QuickActionsBar (unique to NEW screen)', async () => {
-            const { getByTestId } = render(<NewScreen />);
+            const { getByTestId } = renderNewScreen();
             await waitFor(() => {
                 expect(getByTestId('quick-actions-bar')).toBeTruthy();
             });
@@ -267,17 +284,18 @@ describe('Candidate Detail Screen Variants', () => {
         it('navigates to progress route within candidates tab', async () => {
             // Mock programmes to show training progress
             const { fetchCandidateRoadmap } = require('@/lib/roadmap');
-            fetchCandidateRoadmap.mockResolvedValueOnce({
+            fetchCandidateRoadmap.mockResolvedValue({
                 data: [{ id: 'prog-1', slug: 'seedlyfe', title: 'SeedLYFE', isLocked: false, modules: [] }],
                 error: null,
             });
 
-            const { getByTestId } = render(<NewScreen />);
+            const { getByTestId } = renderNewScreen();
             await waitFor(() => {
                 expect(getByTestId('view-full-progress')).toBeTruthy();
             });
             fireEvent.press(getByTestId('view-full-progress'));
-            expect(mockPush).toHaveBeenCalledWith('/(tabs)/candidates/progress/cand-1');
+            // usePathname is mocked to '/candidates/cand-1', so base = '/candidates'
+            expect(mockPush).toHaveBeenCalledWith('/candidates/progress/cand-1');
         });
     });
 });
