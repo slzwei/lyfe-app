@@ -23,7 +23,13 @@ export type Capability =
     | 'view_admin'
     | 'view_team'
     | 'view_leads'
-    | 'view_candidates';
+    | 'view_candidates'
+    | 'verify_papers'
+    | 'manage_milestones'
+    | 'schedule_bdm'
+    | 'activate_agent'
+    | 'put_on_hold'
+    | 'reject_candidate';
 
 export const ROLE_CAPABILITIES: Record<UserRole, Capability[]> = {
     admin: [
@@ -38,6 +44,12 @@ export const ROLE_CAPABILITIES: Record<UserRole, Capability[]> = {
         'view_team',
         'view_leads',
         'view_candidates',
+        'verify_papers',
+        'manage_milestones',
+        'schedule_bdm',
+        'activate_agent',
+        'put_on_hold',
+        'reject_candidate',
     ],
     director: [
         'hold_agents',
@@ -49,6 +61,12 @@ export const ROLE_CAPABILITIES: Record<UserRole, Capability[]> = {
         'view_team',
         'view_leads',
         'view_candidates',
+        'verify_papers',
+        'manage_milestones',
+        'schedule_bdm',
+        'activate_agent',
+        'put_on_hold',
+        'reject_candidate',
     ],
     manager: [
         'hold_agents',
@@ -60,9 +78,25 @@ export const ROLE_CAPABILITIES: Record<UserRole, Capability[]> = {
         'view_team',
         'view_leads',
         'view_candidates',
+        'verify_papers',
+        'manage_milestones',
+        'schedule_bdm',
+        'activate_agent',
+        'put_on_hold',
+        'reject_candidate',
     ],
     agent: ['view_leads'],
-    pa: ['create_candidates', 'schedule_interviews', 'view_candidates'],
+    pa: [
+        'create_candidates',
+        'schedule_interviews',
+        'view_candidates',
+        'verify_papers',
+        'manage_milestones',
+        'schedule_bdm',
+        'activate_agent',
+        'put_on_hold',
+        'reject_candidate',
+    ],
     candidate: [],
 };
 
@@ -108,4 +142,28 @@ export function canViewTeam(role: UserRole): boolean {
 
 export function canToggleViewMode(role: UserRole): boolean {
     return hasCapability(role, 'hold_agents') && hasCapability(role, 'view_leads');
+}
+
+export function canVerifyPapers(role: UserRole): boolean {
+    return hasCapability(role, 'verify_papers');
+}
+
+export function canManageMilestones(role: UserRole): boolean {
+    return hasCapability(role, 'manage_milestones');
+}
+
+export function canScheduleBdm(role: UserRole): boolean {
+    return hasCapability(role, 'schedule_bdm');
+}
+
+export function canActivateAgent(role: UserRole): boolean {
+    return hasCapability(role, 'activate_agent');
+}
+
+export function canPutOnHold(role: UserRole): boolean {
+    return hasCapability(role, 'put_on_hold');
+}
+
+export function canRejectCandidate(role: UserRole): boolean {
+    return hasCapability(role, 'reject_candidate');
 }

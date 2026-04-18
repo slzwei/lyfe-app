@@ -2280,9 +2280,12 @@ export type Database = {
                 | 'interview_scheduled'
                 | 'interviewed'
                 | 'approved'
+                | 'eapp_done'
                 | 'exam_prep'
                 | 'licensed'
-                | 'active_agent';
+                | 'active_agent'
+                | 'on_hold'
+                | 'rejected';
             event_type: 'team_meeting' | 'training' | 'agency_event' | 'roadshow' | 'other' | 'exam';
             interview_status: 'scheduled' | 'completed' | 'cancelled' | 'rescheduled';
             interview_type: 'zoom' | 'in_person';
@@ -2305,9 +2308,12 @@ export type Database = {
                 | 'interview_scheduled'
                 | 'interviewed'
                 | 'approved'
+                | 'eapp_done'
                 | 'exam_prep'
                 | 'licensed'
-                | 'active_agent';
+                | 'active_agent'
+                | 'on_hold'
+                | 'rejected';
             module_item_type: 'material' | 'pre_quiz' | 'quiz' | 'exam' | 'attendance';
             product_interest: 'life' | 'health' | 'ilp' | 'general';
             roadshow_activity_type: 'sitdown' | 'pitch' | 'case_closed' | 'check_in' | 'departure';
@@ -2437,9 +2443,12 @@ export const Constants = {
                 'interview_scheduled',
                 'interviewed',
                 'approved',
+                'eapp_done',
                 'exam_prep',
                 'licensed',
                 'active_agent',
+                'on_hold',
+                'rejected',
             ],
             event_type: ['team_meeting', 'training', 'agency_event', 'roadshow', 'other', 'exam'],
             interview_status: ['scheduled', 'completed', 'cancelled', 'rescheduled'],
@@ -2464,9 +2473,12 @@ export const Constants = {
                 'interview_scheduled',
                 'interviewed',
                 'approved',
+                'eapp_done',
                 'exam_prep',
                 'licensed',
                 'active_agent',
+                'on_hold',
+                'rejected',
             ],
             module_item_type: ['material', 'pre_quiz', 'quiz', 'exam', 'attendance'],
             product_interest: ['life', 'health', 'ilp', 'general'],

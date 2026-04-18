@@ -52,6 +52,7 @@ export const DOCUMENT_LABELS = [
     'M5',
     'M9',
     'M9A',
+    'CM_LIP',
     'HI',
     'M8',
     'M8A',

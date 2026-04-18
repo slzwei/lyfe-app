@@ -126,6 +126,66 @@ export type Database = {
                     },
                 ];
             };
+            candidate_milestones: {
+                Row: {
+                    candidate_id: string;
+                    completed_date: string | null;
+                    created_at: string;
+                    id: string;
+                    milestone_code: string;
+                    note: string | null;
+                    reference_number: string | null;
+                    scheduled_date: string | null;
+                    scheduled_end_date: string | null;
+                    status: string;
+                    updated_at: string;
+                    verified_by_user_id: string | null;
+                };
+                Insert: {
+                    candidate_id: string;
+                    completed_date?: string | null;
+                    created_at?: string;
+                    id?: string;
+                    milestone_code: string;
+                    note?: string | null;
+                    reference_number?: string | null;
+                    scheduled_date?: string | null;
+                    scheduled_end_date?: string | null;
+                    status?: string;
+                    updated_at?: string;
+                    verified_by_user_id?: string | null;
+                };
+                Update: {
+                    candidate_id?: string;
+                    completed_date?: string | null;
+                    created_at?: string;
+                    id?: string;
+                    milestone_code?: string;
+                    note?: string | null;
+                    reference_number?: string | null;
+                    scheduled_date?: string | null;
+                    scheduled_end_date?: string | null;
+                    status?: string;
+                    updated_at?: string;
+                    verified_by_user_id?: string | null;
+                };
+                Relationships: [
+                    {
+                        foreignKeyName: 'candidate_milestones_candidate_id_fkey';
+                        columns: ['candidate_id'];
+                        isOneToOne: false;
+                        referencedRelation: 'candidates';
+                        referencedColumns: ['id'];
+                    },
+                    {
+                        foreignKeyName: 'candidate_milestones_verified_by_user_id_fkey';
+                        columns: ['verified_by_user_id'];
+                        isOneToOne: false;
+                        referencedRelation: 'users';
+                        referencedColumns: ['id'];
+                    },
+                ];
+            };
             candidate_module_item_progress: {
                 Row: {
                     attempt_count: number;
@@ -247,6 +307,111 @@ export type Database = {
                         columns: ['module_id'];
                         isOneToOne: false;
                         referencedRelation: 'roadmap_modules';
+                        referencedColumns: ['id'];
+                    },
+                ];
+            };
+            candidate_paper_attempts: {
+                Row: {
+                    candidate_id: string;
+                    cost: number | null;
+                    created_at: string;
+                    exam_at: string | null;
+                    id: string;
+                    logged_by_user_id: string | null;
+                    paper_code: string;
+                    result: string | null;
+                    updated_at: string;
+                };
+                Insert: {
+                    candidate_id: string;
+                    cost?: number | null;
+                    created_at?: string;
+                    exam_at?: string | null;
+                    id?: string;
+                    logged_by_user_id?: string | null;
+                    paper_code: string;
+                    result?: string | null;
+                    updated_at?: string;
+                };
+                Update: {
+                    candidate_id?: string;
+                    cost?: number | null;
+                    created_at?: string;
+                    exam_at?: string | null;
+                    id?: string;
+                    logged_by_user_id?: string | null;
+                    paper_code?: string;
+                    result?: string | null;
+                    updated_at?: string;
+                };
+                Relationships: [
+                    {
+                        foreignKeyName: 'candidate_paper_attempts_candidate_id_fkey';
+                        columns: ['candidate_id'];
+                        isOneToOne: false;
+                        referencedRelation: 'candidates';
+                        referencedColumns: ['id'];
+                    },
+                    {
+                        foreignKeyName: 'candidate_paper_attempts_logged_by_user_id_fkey';
+                        columns: ['logged_by_user_id'];
+                        isOneToOne: false;
+                        referencedRelation: 'users';
+                        referencedColumns: ['id'];
+                    },
+                ];
+            };
+            candidate_prep_course_bookings: {
+                Row: {
+                    attended: boolean;
+                    booked_by_user_id: string | null;
+                    booked_date: string | null;
+                    booked_end_date: string | null;
+                    candidate_id: string;
+                    course_code: string;
+                    created_at: string;
+                    id: string;
+                    note: string | null;
+                    updated_at: string;
+                };
+                Insert: {
+                    attended?: boolean;
+                    booked_by_user_id?: string | null;
+                    booked_date?: string | null;
+                    booked_end_date?: string | null;
+                    candidate_id: string;
+                    course_code: string;
+                    created_at?: string;
+                    id?: string;
+                    note?: string | null;
+                    updated_at?: string;
+                };
+                Update: {
+                    attended?: boolean;
+                    booked_by_user_id?: string | null;
+                    booked_date?: string | null;
+                    booked_end_date?: string | null;
+                    candidate_id?: string;
+                    course_code?: string;
+                    created_at?: string;
+                    id?: string;
+                    note?: string | null;
+                    updated_at?: string;
+                };
+                Relationships: [
+                    {
+                        foreignKeyName: 'candidate_prep_course_bookings_booked_by_user_id_fkey';
+                        columns: ['booked_by_user_id'];
+                        isOneToOne: false;
+                        referencedRelation: 'users';
+                        referencedColumns: ['id'];
+                    },
+                    {
+                        foreignKeyName: 'candidate_prep_course_bookings_candidate_id_fkey';
+                        columns: ['candidate_id'];
+                        isOneToOne: false;
+                        referencedRelation: 'candidates';
                         referencedColumns: ['id'];
                     },
                 ];
@@ -2198,6 +2363,10 @@ export type Database = {
                 Args: { p_invitation_id: string };
                 Returns: undefined;
             };
+            fn_all_papers_passed: {
+                Args: { c: string };
+                Returns: boolean;
+            };
             get_exam_questions: {
                 Args: { p_paper_id: string };
                 Returns: {
@@ -2295,9 +2464,12 @@ export type Database = {
                 | 'interview_scheduled'
                 | 'interviewed'
                 | 'approved'
+                | 'eapp_done'
                 | 'exam_prep'
                 | 'licensed'
-                | 'active_agent';
+                | 'active_agent'
+                | 'on_hold'
+                | 'rejected';
             event_type: 'team_meeting' | 'training' | 'agency_event' | 'roadshow' | 'other' | 'exam';
             interview_status: 'scheduled' | 'completed' | 'cancelled' | 'rescheduled';
             interview_type: 'zoom' | 'in_person';
@@ -2320,9 +2492,12 @@ export type Database = {
                 | 'interview_scheduled'
                 | 'interviewed'
                 | 'approved'
+                | 'eapp_done'
                 | 'exam_prep'
                 | 'licensed'
-                | 'active_agent';
+                | 'active_agent'
+                | 'on_hold'
+                | 'rejected';
             module_item_type: 'material' | 'pre_quiz' | 'quiz' | 'exam' | 'attendance';
             product_interest: 'life' | 'health' | 'ilp' | 'general';
             roadshow_activity_type: 'sitdown' | 'pitch' | 'case_closed' | 'check_in' | 'departure';
@@ -2452,9 +2627,12 @@ export const Constants = {
                 'interview_scheduled',
                 'interviewed',
                 'approved',
+                'eapp_done',
                 'exam_prep',
                 'licensed',
                 'active_agent',
+                'on_hold',
+                'rejected',
             ],
             event_type: ['team_meeting', 'training', 'agency_event', 'roadshow', 'other', 'exam'],
             interview_status: ['scheduled', 'completed', 'cancelled', 'rescheduled'],
@@ -2479,9 +2657,12 @@ export const Constants = {
                 'interview_scheduled',
                 'interviewed',
                 'approved',
+                'eapp_done',
                 'exam_prep',
                 'licensed',
                 'active_agent',
+                'on_hold',
+                'rejected',
             ],
             module_item_type: ['material', 'pre_quiz', 'quiz', 'exam', 'attendance'],
             product_interest: ['life', 'health', 'ilp', 'general'],

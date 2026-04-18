@@ -738,10 +738,7 @@ export type Database = {
                     event_type: Database['public']['Enums']['event_type'];
                     external_attendees: Json;
                     id: string;
-                    latitude: number | null;
                     location: string | null;
-                    location_radius_meters: number;
-                    longitude: number | null;
                     start_time: string;
                     title: string;
                     updated_at: string | null;
@@ -755,10 +752,7 @@ export type Database = {
                     event_type?: Database['public']['Enums']['event_type'];
                     external_attendees?: Json;
                     id?: string;
-                    latitude?: number | null;
                     location?: string | null;
-                    location_radius_meters?: number;
-                    longitude?: number | null;
                     start_time: string;
                     title: string;
                     updated_at?: string | null;
@@ -772,10 +766,7 @@ export type Database = {
                     event_type?: Database['public']['Enums']['event_type'];
                     external_attendees?: Json;
                     id?: string;
-                    latitude?: number | null;
                     location?: string | null;
-                    location_radius_meters?: number;
-                    longitude?: number | null;
                     start_time?: string;
                     title?: string;
                     updated_at?: string | null;
@@ -2063,12 +2054,10 @@ export type Database = {
                     email: string | null;
                     email_verified: boolean | null;
                     external_id: string | null;
-                    face_registered_at: string | null;
                     full_name: string;
                     id: string;
                     is_active: boolean | null;
                     last_login_at: string | null;
-                    last_seen_at: string | null;
                     lifecycle_stage: Database['public']['Enums']['lifecycle_stage'] | null;
                     notification_preferences: Json | null;
                     onboarding_complete: boolean | null;
@@ -2085,12 +2074,10 @@ export type Database = {
                     email?: string | null;
                     email_verified?: boolean | null;
                     external_id?: string | null;
-                    face_registered_at?: string | null;
                     full_name: string;
                     id: string;
                     is_active?: boolean | null;
                     last_login_at?: string | null;
-                    last_seen_at?: string | null;
                     lifecycle_stage?: Database['public']['Enums']['lifecycle_stage'] | null;
                     notification_preferences?: Json | null;
                     onboarding_complete?: boolean | null;
@@ -2107,12 +2094,10 @@ export type Database = {
                     email?: string | null;
                     email_verified?: boolean | null;
                     external_id?: string | null;
-                    face_registered_at?: string | null;
                     full_name?: string;
                     id?: string;
                     is_active?: boolean | null;
                     last_login_at?: string | null;
-                    last_seen_at?: string | null;
                     lifecycle_stage?: Database['public']['Enums']['lifecycle_stage'] | null;
                     notification_preferences?: Json | null;
                     onboarding_complete?: boolean | null;
@@ -2295,9 +2280,12 @@ export type Database = {
                 | 'interview_scheduled'
                 | 'interviewed'
                 | 'approved'
+                | 'eapp_done'
                 | 'exam_prep'
                 | 'licensed'
-                | 'active_agent';
+                | 'active_agent'
+                | 'on_hold'
+                | 'rejected';
             event_type: 'team_meeting' | 'training' | 'agency_event' | 'roadshow' | 'other' | 'exam';
             interview_status: 'scheduled' | 'completed' | 'cancelled' | 'rescheduled';
             interview_type: 'zoom' | 'in_person';
@@ -2320,9 +2308,12 @@ export type Database = {
                 | 'interview_scheduled'
                 | 'interviewed'
                 | 'approved'
+                | 'eapp_done'
                 | 'exam_prep'
                 | 'licensed'
-                | 'active_agent';
+                | 'active_agent'
+                | 'on_hold'
+                | 'rejected';
             module_item_type: 'material' | 'pre_quiz' | 'quiz' | 'exam' | 'attendance';
             product_interest: 'life' | 'health' | 'ilp' | 'general';
             roadshow_activity_type: 'sitdown' | 'pitch' | 'case_closed' | 'check_in' | 'departure';
@@ -2452,9 +2443,12 @@ export const Constants = {
                 'interview_scheduled',
                 'interviewed',
                 'approved',
+                'eapp_done',
                 'exam_prep',
                 'licensed',
                 'active_agent',
+                'on_hold',
+                'rejected',
             ],
             event_type: ['team_meeting', 'training', 'agency_event', 'roadshow', 'other', 'exam'],
             interview_status: ['scheduled', 'completed', 'cancelled', 'rescheduled'],
@@ -2479,9 +2473,12 @@ export const Constants = {
                 'interview_scheduled',
                 'interviewed',
                 'approved',
+                'eapp_done',
                 'exam_prep',
                 'licensed',
                 'active_agent',
+                'on_hold',
+                'rejected',
             ],
             module_item_type: ['material', 'pre_quiz', 'quiz', 'exam', 'attendance'],
             product_interest: ['life', 'health', 'ilp', 'general'],

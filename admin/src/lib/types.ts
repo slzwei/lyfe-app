@@ -31,9 +31,12 @@ export const LIFECYCLE_STAGES = [
     'interview_scheduled',
     'interviewed',
     'approved',
+    'eapp_done',
     'exam_prep',
     'licensed',
     'active_agent',
+    'on_hold',
+    'rejected',
 ] as const;
 export const LEAD_STATUSES = ['new', 'contacted', 'qualified', 'proposed', 'won', 'lost'] as const;
 export const LEAD_SOURCES = ['referral', 'walk_in', 'online', 'event', 'cold_call', 'other'] as const;
@@ -43,9 +46,12 @@ export const CANDIDATE_STATUSES = [
     'interview_scheduled',
     'interviewed',
     'approved',
+    'eapp_done',
     'exam_prep',
     'licensed',
     'active_agent',
+    'on_hold',
+    'rejected',
 ] as const;
 export const EVENT_TYPES = ['team_meeting', 'training', 'agency_event', 'roadshow', 'exam', 'other'] as const;
 export const LEAD_ACTIVITY_TYPES = [
@@ -227,9 +233,12 @@ export const CANDIDATE_STATUS_LABELS: Record<(typeof CANDIDATE_STATUSES)[number]
     interview_scheduled: 'Interview Scheduled',
     interviewed: 'Interviewed',
     approved: 'Approved',
+    eapp_done: 'eApp Done',
     exam_prep: 'Exam Prep',
     licensed: 'Licensed',
     active_agent: 'Active Agent',
+    on_hold: 'On Hold',
+    rejected: 'Rejected',
 };
 
 export const EVENT_TYPE_LABELS: Record<(typeof EVENT_TYPES)[number], string> = {

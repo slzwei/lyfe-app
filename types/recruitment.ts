@@ -24,8 +24,18 @@ export type {
     CandidateProfileDetails,
     CandidateDiscResults,
     RecruitmentCandidate,
+    PaperCode,
+    CandidatePaperAttempt,
+    PaperRequirementCode,
+    PaperRequirementStatus,
+    PaperRequirement,
+    MilestoneCode,
+    MilestoneStatus,
+    CandidateMilestone,
+    PrepCourseCode,
+    CandidatePrepCourseBooking,
 } from './shared/recruitment';
-export { DOCUMENT_LABELS } from './shared/recruitment';
+export { DOCUMENT_LABELS, PAPER_CODES, MILESTONE_CODES, PREP_COURSE_CODES } from './shared/recruitment';
 
 export interface CandidateStatusConfig {
     label: string;
@@ -39,9 +49,12 @@ export const CANDIDATE_STATUS_CONFIG: Record<CandidateStatus, CandidateStatusCon
     interview_scheduled: { label: 'Interview', color: '#EAB308', icon: 'calendar', order: 1 },
     interviewed: { label: 'Interviewed', color: '#AF52DE', icon: 'checkmark-circle', order: 2 },
     approved: { label: 'Approved', color: '#34C759', icon: 'shield-checkmark', order: 3 },
+    eapp_done: { label: 'eApp Done', color: '#34C759', icon: 'shield-checkmark', order: 3 },
     exam_prep: { label: 'Exam Prep', color: '#FF3B30', icon: 'school', order: 4 },
     licensed: { label: 'Licensed', color: '#007AFF', icon: 'ribbon', order: 5 },
     active_agent: { label: 'Active Agent', color: '#FF7600', icon: 'star', order: 6 },
+    on_hold: { label: 'On Hold', color: '#8E8E93', icon: 'pause-circle', order: 7 },
+    rejected: { label: 'Rejected', color: '#FF3B30', icon: 'close-circle', order: 8 },
 };
 
 export const CANDIDATE_STATUSES = (
