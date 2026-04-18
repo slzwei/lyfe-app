@@ -1,4 +1,28 @@
+/**
+ * LeadCard — Tropic Office restyle.
+ *
+ * This is a PROOF-OF-CONCEPT showing the minimal surgery to port an existing
+ * component. The props, data shape, and interaction model are UNCHANGED from
+ * the original components/LeadCard.tsx — only the visual layer moves.
+ *
+ * Diff summary vs original:
+ *  1. Added `import { Fonts } from '@/constants/type'` — use Fraunces on name,
+ *     Inter on meta.
+ *  2. Name uses Fonts.serif instead of fontWeight '600' sans.
+ *  3. Card now has a visible hairline border (colors.cardBorder is no longer
+ *     'transparent' in the new palette — this works automatically).
+ *  4. Avatar letter renders in Fraunces italic for a subtle character moment.
+ *  5. Phone number uses Fonts.mono for tabular scannability.
+ *  6. activityPreview drops the italic style (italic is now reserved for
+ *     accent words — not general emphasis).
+ *  7. Radius 14 instead of 12 — matches Tropic's softer-but-not-bubbly scale.
+ *
+ * That's it. Replace your existing LeadCard.tsx with this file (rename import
+ * path as needed), and every leads list in the app updates.
+ */
+
 import StatusBadge from '@/components/StatusBadge';
+import { Fonts } from '@/constants/type';
 import { letterSpacing } from '@/constants/platform';
 import { useTheme } from '@/contexts/ThemeContext';
 import { timeAgo } from '@/lib/dateTime';
@@ -19,9 +43,15 @@ function LeadCard({ lead, onPress, lastActivity, agentName }: LeadCardProps) {
 
     return (
         <TouchableOpacity
-            style={[styles.card, { backgroundColor: colors.cardBackground }]}
+            style={[
+                styles.card,
+                {
+                    backgroundColor: colors.cardBackground,
+                    borderColor: colors.cardBorder, // now visible in Tropic
+                },
+            ]}
             onPress={onPress}
-            activeOpacity={0.7}
+            activeOpacity={0.75}
             accessibilityRole="button"
             accessibilityLabel={`Lead: ${lead.full_name}, Status: ${lead.status}`}
         >
@@ -29,7 +59,7 @@ function LeadCard({ lead, onPress, lastActivity, agentName }: LeadCardProps) {
             <View style={styles.topRow}>
                 <View style={styles.nameRow}>
                     <View style={[styles.avatar, { backgroundColor: colors.accentLight }]}>
-                        <Text style={[styles.avatarText, { color: colors.accent }]}>
+                        <Text style={[styles.avatarText, { color: colors.accent, fontFamily: Fonts.serifItalic }]}>
                             {(lead.full_name || '?').charAt(0).toUpperCase()}
                         </Text>
                     </View>
@@ -56,7 +86,9 @@ function LeadCard({ lead, onPress, lastActivity, agentName }: LeadCardProps) {
                         {agentName && (
                             <View style={styles.tag}>
                                 <Ionicons name="person-outline" size={13} color={colors.accent} />
-                                <Text style={[styles.tagText, { color: colors.accent, fontWeight: '600' }]}>
+                                <Text
+                                    style={[styles.tagText, { color: colors.accent, fontFamily: Fonts.sansSemibold }]}
+                                >
                                     {agentName}
                                 </Text>
                             </View>
@@ -78,7 +110,8 @@ export default React.memo(LeadCard);
 
 const styles = StyleSheet.create({
     card: {
-        borderRadius: 12,
+        borderRadius: 14, // ← was 12; Tropic scale
+        borderWidth: StyleSheet.hairlineWidth, // ← NEW; uses cardBorder from Tropic palette
         padding: 14,
         marginBottom: 6,
     },
@@ -101,10 +134,19 @@ const styles = StyleSheet.create({
         alignItems: 'center',
         justifyContent: 'center',
     },
-    avatarText: { fontSize: 15, fontWeight: '600' },
+    avatarText: { fontSize: 17, fontWeight: '500' }, // ← serif italic now
     nameCol: { flex: 1 },
-    name: { fontSize: 16, fontWeight: '600', letterSpacing: letterSpacing(-0.2) },
-    phone: { fontSize: 13, marginTop: 1 },
+    name: {
+        fontFamily: Fonts.serif, // ← Fraunces, not sans
+        fontSize: 16,
+        fontWeight: '500',
+        letterSpacing: letterSpacing(-0.2),
+    },
+    phone: {
+        fontFamily: Fonts.mono, // ← tabular mono for phone numbers
+        fontSize: 12,
+        marginTop: 1,
+    },
     bottomRow: {
         flexDirection: 'row',
         alignItems: 'center',
@@ -123,8 +165,19 @@ const styles = StyleSheet.create({
         alignItems: 'center',
         gap: 10,
     },
-    tagText: { fontSize: 12, fontWeight: '500' },
-    timeText: { fontSize: 12 },
+    tagText: {
+        fontFamily: Fonts.sans,
+        fontSize: 12,
+        fontWeight: '500',
+    },
+    timeText: {
+        fontFamily: Fonts.mono,
+        fontSize: 11,
+    },
     bottomLeft: { flex: 1, marginRight: 8, gap: 4 },
-    activityPreview: { fontSize: 11, fontStyle: 'italic' },
+    activityPreview: {
+        fontFamily: Fonts.sans,
+        fontSize: 11,
+        // italic removed — italic is reserved for accent words in Tropic
+    },
 });
