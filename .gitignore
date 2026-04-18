@@ -56,3 +56,12 @@ graphify-out/
 
 # editor swap files
 *.swp
+
+# Supabase CLI local state (regenerated on every `supabase db ...` call)
+supabase/.temp/
+
+# Claude Code per-project session state
+.claude/
+
+# env backups
+*.bak
