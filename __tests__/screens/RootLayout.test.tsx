@@ -40,6 +40,10 @@ jest.mock('@/components/AppErrorBoundary', () => {
     return ({ children }: any) => children;
 });
 
+jest.mock('@/hooks/useLastSeen', () => ({
+    useLastSeen: jest.fn(),
+}));
+
 // Mock fonts as loaded
 jest.mock('expo-font', () => ({
     useFonts: jest.fn(() => [true, null]),

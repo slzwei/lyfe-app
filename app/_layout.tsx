@@ -12,6 +12,7 @@ import { NetworkProvider } from '@/contexts/NetworkContext';
 import { ThemeProvider, useTheme } from '@/contexts/ThemeContext';
 import { NotificationProvider } from '@/contexts/NotificationContext';
 import { ViewModeProvider } from '@/contexts/ViewModeContext';
+import { useLastSeen } from '@/hooks/useLastSeen';
 import { initSentry, navigationIntegration, Sentry } from '@/lib/sentry';
 import { KeyboardProvider } from 'react-native-keyboard-controller';
 
@@ -32,6 +33,8 @@ function AuthGate({ children }: { children: React.ReactNode }) {
     const { isAuthenticated, isLoading, invitationStatus, user } = useAuth();
     const segments = useSegments();
     const router = useRouter();
+
+    useLastSeen();
 
     useEffect(() => {
         if (isLoading) return;
