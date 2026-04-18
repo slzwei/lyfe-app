@@ -1,7 +1,8 @@
+import { Fonts } from '@/constants/type';
+import { letterSpacing } from '@/constants/platform';
 import { CANDIDATE_STATUS_CONFIG } from '@/types/recruitment';
 import type { RecruitmentCandidate } from '@/types/recruitment';
 import type { ThemeColors } from '@/types/theme';
-import { Ionicons } from '@expo/vector-icons';
 import React from 'react';
 import { StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 
@@ -9,6 +10,11 @@ interface Props {
     candidate: RecruitmentCandidate;
     colors: ThemeColors;
     onStatusPress: () => void;
+}
+
+// 6-char hex color + 40% alpha suffix.
+function alphaBorder(hex: string): string {
+    return hex.length === 7 ? `${hex}66` : hex;
 }
 
 export default function HeroSection({ candidate, colors, onStatusPress }: Props) {
@@ -22,127 +28,134 @@ export default function HeroSection({ candidate, colors, onStatusPress }: Props)
         .slice(0, 2);
 
     return (
-        <View style={[styles.container, { backgroundColor: colors.cardBackground }]}>
-            <View style={[styles.avatar, { backgroundColor: colors.accentLight }]}>
-                <Text style={[styles.avatarText, { color: colors.accent }]}>{initials}</Text>
-            </View>
-
-            <Text style={[styles.name, { color: colors.textPrimary }]}>{candidate.name}</Text>
-
-            <View style={styles.contactRow}>
-                <View style={styles.contactItem}>
-                    <Ionicons name="call-outline" size={13} color={colors.textTertiary} />
-                    <Text style={[styles.contactText, { color: colors.textSecondary }]}>{candidate.phone}</Text>
+        <View style={styles.container}>
+            <View style={styles.topRow}>
+                <View style={[styles.initials, { backgroundColor: colors.accentLight }]}>
+                    <Text style={[styles.initialsText, { color: colors.accent }]}>{initials}</Text>
                 </View>
-                {candidate.email && (
-                    <View style={styles.contactItem}>
-                        <Ionicons name="mail-outline" size={13} color={colors.textTertiary} />
-                        <Text style={[styles.contactText, { color: colors.textSecondary }]} numberOfLines={1}>
-                            {candidate.email}
-                        </Text>
-                    </View>
-                )}
+                <Text style={[styles.name, { color: colors.textPrimary }]} numberOfLines={2}>
+                    {candidate.name}
+                </Text>
             </View>
 
             <TouchableOpacity
                 onPress={onStatusPress}
-                style={[styles.statusPill, { backgroundColor: statusConfig.color + '1A' }]}
                 activeOpacity={0.7}
+                style={[styles.statusTag, { borderColor: alphaBorder(statusConfig.color) }]}
             >
-                <View style={[styles.statusDot, { backgroundColor: statusConfig.color }]} />
-                <Text style={[styles.statusText, { color: statusConfig.color }]}>{statusConfig.label}</Text>
-                <Ionicons name="chevron-down" size={14} color={statusConfig.color} />
+                <Text style={[styles.statusLabel, { color: statusConfig.color }]}>{statusConfig.label}</Text>
+                <Text style={[styles.statusCaret, { color: statusConfig.color }]}>{'›'}</Text>
             </TouchableOpacity>
 
-            <View style={styles.metaRow}>
+            <View style={styles.metaGrid}>
                 <View style={styles.metaItem}>
-                    <Ionicons name="person-outline" size={13} color={colors.textTertiary} />
-                    <Text style={[styles.metaText, { color: colors.textTertiary }]}>
-                        {candidate.assigned_manager_name}
+                    <Text style={[styles.metaLabel, { color: colors.textTertiary }]}>PHONE</Text>
+                    <Text style={[styles.metaValue, { color: colors.textPrimary }]} numberOfLines={1}>
+                        {candidate.phone}
                     </Text>
                 </View>
                 <View style={styles.metaItem}>
-                    <Ionicons name="time-outline" size={13} color={colors.textTertiary} />
-                    <Text style={[styles.metaText, { color: colors.textTertiary }]}>
-                        {daysSinceCreated}d in pipeline
+                    <Text style={[styles.metaLabel, { color: colors.textTertiary }]}>EMAIL</Text>
+                    <Text style={[styles.metaValue, { color: colors.textPrimary }]} numberOfLines={1}>
+                        {candidate.email || '—'}
+                    </Text>
+                </View>
+                <View style={styles.metaItem}>
+                    <Text style={[styles.metaLabel, { color: colors.textTertiary }]}>MANAGER</Text>
+                    <Text style={[styles.metaValue, { color: colors.textPrimary }]} numberOfLines={1}>
+                        {candidate.assigned_manager_name || '—'}
+                    </Text>
+                </View>
+                <View style={styles.metaItem}>
+                    <Text style={[styles.metaLabel, { color: colors.textTertiary }]}>IN PIPELINE</Text>
+                    <Text style={[styles.metaValue, { color: colors.textPrimary }]} numberOfLines={1}>
+                        {daysSinceCreated}d
                     </Text>
                 </View>
             </View>
+
+            <View style={[styles.rule, { backgroundColor: colors.cardBorder }]} />
         </View>
     );
 }
 
 const styles = StyleSheet.create({
     container: {
-        alignItems: 'center',
-        paddingVertical: 24,
-        paddingHorizontal: 16,
-        marginHorizontal: 16,
-        marginTop: 8,
-        borderRadius: 16,
+        paddingHorizontal: 20,
+        paddingTop: 12,
     },
-    avatar: {
-        width: 72,
-        height: 72,
-        borderRadius: 36,
+    topRow: {
+        flexDirection: 'row',
+        alignItems: 'flex-start',
+        gap: 14,
+        marginBottom: 16,
+    },
+    initials: {
+        width: 48,
+        height: 48,
+        borderRadius: 8,
         alignItems: 'center',
         justifyContent: 'center',
-        marginBottom: 12,
     },
-    avatarText: {
-        fontSize: 24,
-        fontWeight: '800',
+    initialsText: {
+        fontFamily: Fonts.serifItalic,
+        fontSize: 22,
+        lineHeight: 26,
     },
     name: {
-        fontSize: 22,
-        fontWeight: '800',
-        marginBottom: 6,
-    },
-    contactRow: {
-        flexDirection: 'row',
-        flexWrap: 'wrap',
-        justifyContent: 'center',
-        gap: 12,
-        marginBottom: 14,
-    },
-    contactItem: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        gap: 4,
-    },
-    contactText: {
-        fontSize: 13,
+        flex: 1,
+        fontFamily: Fonts.serif,
+        fontSize: 34,
         fontWeight: '500',
+        lineHeight: 38,
+        letterSpacing: letterSpacing(-0.8),
     },
-    statusPill: {
+    statusTag: {
+        alignSelf: 'flex-start',
         flexDirection: 'row',
         alignItems: 'center',
         gap: 6,
-        paddingHorizontal: 14,
-        paddingVertical: 7,
-        borderRadius: 20,
-        marginBottom: 14,
+        borderWidth: 1,
+        paddingHorizontal: 10,
+        paddingVertical: 4,
+        marginBottom: 24,
     },
-    statusDot: {
-        width: 8,
-        height: 8,
-        borderRadius: 4,
+    statusLabel: {
+        fontFamily: Fonts.sansSemibold,
+        fontSize: 11,
+        fontWeight: '600',
+        letterSpacing: letterSpacing(1),
+        textTransform: 'uppercase',
     },
-    statusText: {
+    statusCaret: {
+        fontFamily: Fonts.serif,
         fontSize: 14,
-        fontWeight: '700',
+        lineHeight: 14,
     },
-    metaRow: {
+    metaGrid: {
         flexDirection: 'row',
-        gap: 16,
+        flexWrap: 'wrap',
+        marginBottom: 20,
     },
     metaItem: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        gap: 4,
+        width: '50%',
+        paddingRight: 8,
+        marginBottom: 14,
     },
-    metaText: {
-        fontSize: 12,
+    metaLabel: {
+        fontFamily: Fonts.mono,
+        fontSize: 10,
+        letterSpacing: letterSpacing(1),
+        textTransform: 'uppercase',
+        marginBottom: 4,
+    },
+    metaValue: {
+        fontFamily: Fonts.sans,
+        fontSize: 14,
         fontWeight: '500',
+        lineHeight: 18,
+    },
+    rule: {
+        height: 1,
     },
 });

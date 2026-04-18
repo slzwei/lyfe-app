@@ -861,12 +861,12 @@ export default function CandidateDetailScreen() {
                 <HeroSection candidate={candidate} colors={colors} onStatusPress={handleStatusPress} />
 
                 {/* ── Quick Actions ── */}
-                <View style={{ paddingHorizontal: 16, marginTop: 12 }}>
+                <View style={{ paddingHorizontal: 20, marginTop: 28 }}>
                     <QuickActionsBar actions={quickActions} colors={colors} />
                 </View>
 
                 {/* ── Onboarding Checklist ── */}
-                <View style={{ marginTop: 12 }}>
+                <View style={{ marginTop: 28 }}>
                     <OnboardingChecklist candidate={candidate} documents={documents} colors={colors} />
                 </View>
 

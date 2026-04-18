@@ -1,27 +1,44 @@
+import { Fonts } from '@/constants/type';
+import { letterSpacing } from '@/constants/platform';
 import type { ThemeColors } from '@/types/theme';
-import { Ionicons } from '@expo/vector-icons';
 import React from 'react';
 import { StyleSheet, Text, View } from 'react-native';
 
 interface Props {
     title: string;
-    icon?: keyof typeof Ionicons.glyphMap;
+    // TODO: Tropic SectionCard no longer renders an icon. Prop preserved so
+    // existing callers compile; safe to remove once all callsites drop it.
+    icon?: string;
     badge?: string;
     colors: ThemeColors;
     children: React.ReactNode;
 }
 
-export default function SectionCard({ title, icon, badge, colors, children }: Props) {
+// Two-word titles split into roman + italic (the brand gesture at heading
+// level). Single-word titles stay roman.
+function splitTitle(title: string): { roman: string; italic?: string } {
+    const words = title.trim().split(/\s+/);
+    if (words.length < 2) return { roman: title.trim() };
+    return {
+        roman: words.slice(0, -1).join(' '),
+        italic: words[words.length - 1],
+    };
+}
+
+export default function SectionCard({ title, badge, colors, children }: Props) {
+    const { roman, italic } = splitTitle(title);
     return (
-        <View style={[styles.card, { backgroundColor: colors.cardBackground }]}>
-            <View style={styles.header}>
-                <View style={styles.headerLeft}>
-                    {icon && <Ionicons name={icon} size={16} color={colors.accent} />}
-                    <Text style={[styles.title, { color: colors.textPrimary }]}>{title}</Text>
-                </View>
+        <View style={styles.container}>
+            <View style={styles.headerRow}>
+                <Text style={[styles.heading, { color: colors.textPrimary }]}>
+                    {italic ? `${roman} ` : roman}
+                    {italic && <Text style={[styles.headingItalic, { color: colors.accent }]}>{italic}</Text>}
+                </Text>
                 {badge && <Text style={[styles.badge, { color: colors.textTertiary }]}>{badge}</Text>}
             </View>
-            {children}
+            <View style={[styles.body, { borderTopColor: colors.cardBorder, borderBottomColor: colors.cardBorder }]}>
+                {children}
+            </View>
         </View>
     );
 }
@@ -37,7 +54,7 @@ export function DetailRow({
 }) {
     if (value == null || value === '') return null;
     return (
-        <View style={styles.detailRow}>
+        <View style={[styles.detailRow, { borderBottomColor: colors.cardBorder }]}>
             <Text style={[styles.detailLabel, { color: colors.textTertiary }]}>{label}</Text>
             <Text style={[styles.detailValue, { color: colors.textPrimary }]} selectable>
                 {value}
@@ -47,43 +64,53 @@ export function DetailRow({
 }
 
 const styles = StyleSheet.create({
-    card: {
-        borderRadius: 16,
-        padding: 16,
-        marginHorizontal: 16,
-        marginBottom: 12,
+    container: {
+        paddingHorizontal: 20,
+        marginTop: 28,
     },
-    header: {
+    headerRow: {
         flexDirection: 'row',
         alignItems: 'center',
         justifyContent: 'space-between',
         marginBottom: 12,
+        gap: 12,
     },
-    headerLeft: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        gap: 8,
+    heading: {
+        flex: 1,
+        fontFamily: Fonts.serif,
+        fontSize: 20,
+        fontWeight: '500',
+        lineHeight: 24,
+        letterSpacing: letterSpacing(-0.3),
     },
-    title: {
-        fontSize: 15,
-        fontWeight: '700',
+    headingItalic: {
+        fontFamily: Fonts.serifItalic,
     },
     badge: {
-        fontSize: 13,
-        fontWeight: '500',
+        fontFamily: Fonts.mono,
+        fontSize: 11,
+        lineHeight: 14,
+    },
+    body: {
+        borderTopWidth: 1,
+        borderBottomWidth: 1,
+        paddingVertical: 20,
     },
     detailRow: {
-        flexDirection: 'row',
-        paddingVertical: 8,
+        paddingVertical: 12,
+        borderBottomWidth: StyleSheet.hairlineWidth,
     },
     detailLabel: {
-        width: 110,
-        fontSize: 13,
-        fontWeight: '500',
+        fontFamily: Fonts.mono,
+        fontSize: 10,
+        lineHeight: 12,
+        letterSpacing: letterSpacing(1),
+        textTransform: 'uppercase',
+        marginBottom: 4,
     },
     detailValue: {
-        flex: 1,
-        fontSize: 13,
-        fontWeight: '500',
+        fontFamily: Fonts.serif,
+        fontSize: 16,
+        lineHeight: 22,
     },
 });
