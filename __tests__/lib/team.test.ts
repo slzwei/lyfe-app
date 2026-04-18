@@ -116,6 +116,43 @@ describe('fetchTeamMembers', () => {
         const result = await fetchTeamMembers('mgr-1', 'manager');
         expect(result.data[0].isActive).toBe(true);
     });
+
+    it('director: scopes to own managers + those managers agents', async () => {
+        const usersChain = mockSupa.__getChain('users');
+        mockResolve(usersChain, { data: [USER_AGENT], error: null });
+
+        const leadsChain = mockSupa.__getChain('leads');
+        mockResolve(leadsChain, { data: [], error: null });
+
+        const result = await fetchTeamMembers('dir-1', 'director');
+        expect(result.error).toBeNull();
+        expect(result.data.length).toBeGreaterThan(0);
+
+        const calls = usersChain.__calls;
+        // Pre-query 1: managers reporting to director
+        expect(calls).toContainEqual({ method: 'eq', args: ['reports_to', 'dir-1'] });
+        expect(calls).toContainEqual({ method: 'eq', args: ['role', 'manager'] });
+        // Pre-query 2: agents reporting to those managers
+        expect(calls.some((c: { method: string }) => c.method === 'in')).toBe(true);
+    });
+
+    it('director: returns empty when no managers report to them', async () => {
+        const usersChain = mockSupa.__getChain('users');
+        mockResolve(usersChain, { data: [], error: null });
+
+        const result = await fetchTeamMembers('dir-1', 'director');
+        expect(result.data).toEqual([]);
+        expect(result.error).toBeNull();
+    });
+
+    it('director: propagates error from manager-lookup query', async () => {
+        const usersChain = mockSupa.__getChain('users');
+        mockResolve(usersChain, { data: null, error: { message: 'RLS denied' } });
+
+        const result = await fetchTeamMembers('dir-1', 'director');
+        expect(result.error).toBe('RLS denied');
+        expect(result.data).toEqual([]);
+    });
 });
 
 // ── fetchTeamMember ──

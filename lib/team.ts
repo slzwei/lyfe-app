@@ -25,8 +25,9 @@ export interface TeamMember {
 
 /**
  * Fetch team members visible to a user based on role hierarchy.
- * Director → sees managers + agents
+ * Director → sees managers reporting to them + those managers' agents
  * Manager  → sees agents who report to them
+ * Admin    → sees all managers + agents
  */
 export async function fetchTeamMembers(
     userId: string,
@@ -39,11 +40,31 @@ export async function fetchTeamMembers(
             .in('role', ['manager', 'agent'])
             .order('full_name', { ascending: true });
 
-        // Manager only sees their direct reports
         if (userRole === 'manager') {
+            // Manager: only their direct reports
             query = query.eq('reports_to', userId);
+        } else if (userRole === 'director') {
+            // Director: only managers reporting to them + agents reporting to those managers
+            const { data: directReports, error: reportsErr } = await supabase
+                .from('users')
+                .select('id')
+                .eq('role', 'manager')
+                .eq('reports_to', userId);
+            if (reportsErr) return { data: [], error: reportsErr.message };
+
+            const managerIds = ((directReports || []) as { id: string }[]).map((r) => r.id);
+            if (managerIds.length === 0) return { data: [], error: null };
+
+            const { data: agentRows, error: agentsErr } = await supabase
+                .from('users')
+                .select('id')
+                .in('reports_to', managerIds);
+            if (agentsErr) return { data: [], error: agentsErr.message };
+
+            const agentIds = ((agentRows || []) as { id: string }[]).map((r) => r.id);
+            query = query.in('id', [...managerIds, ...agentIds]);
         }
-        // Director/Admin sees all managers + agents (no extra filter needed)
+        // Admin: no filter — sees all managers + agents
 
         const { data: users, error } = await query;
         if (error) return { data: [], error: error.message };
