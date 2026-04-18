@@ -6,7 +6,7 @@ import { useAuth } from '@/contexts/AuthContext';
 import { useAttendeePicker } from '@/hooks/useAttendeePicker';
 import { useRoadshowConfig } from '@/hooks/useRoadshowConfig';
 import { useTimePicker } from '@/hooks/useTimePicker';
-import { dateDiffDays, dateRange, isValidDate, todayStr } from '@/lib/dateTime';
+import { dateDiffDays, dateRange, isValidDate, todayLocalStr } from '@/lib/dateTime';
 import { createEvent, fetchEventById, updateEvent } from '@/lib/events';
 import { createRoadshowBulk, fetchRoadshowConfig, saveRoadshowConfig, type RoadshowConfigInput } from '@/lib/roadshow';
 import { supabase } from '@/lib/supabase';
@@ -24,7 +24,7 @@ export function useEventForm() {
 
     const [title, setTitle] = useState('');
     const [eventType, setEventType] = useState<EventType>('team_meeting');
-    const [eventDate, setEventDate] = useState(todayStr());
+    const [eventDate, setEventDate] = useState(todayLocalStr());
     const [showDatePicker, setShowDatePicker] = useState<'single' | 'range' | null>(null);
     const [location, setLocation] = useState('');
     // Precise venue coordinates — null means the location is TBC and

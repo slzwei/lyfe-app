@@ -8,7 +8,6 @@ import {
     formatDateTime,
     formatMonthYear,
     todayLocalStr,
-    todayStr,
     isValidDate,
     dateDiffDays,
     dateRange,
@@ -118,17 +117,11 @@ describe('formatMonthYear', () => {
     });
 });
 
-// ── todayLocalStr & todayStr ──
+// ── todayLocalStr ──
 
 describe('todayLocalStr', () => {
     it('returns YYYY-MM-DD format', () => {
         expect(todayLocalStr()).toMatch(/^\d{4}-\d{2}-\d{2}$/);
-    });
-});
-
-describe('todayStr', () => {
-    it('returns YYYY-MM-DD format', () => {
-        expect(todayStr()).toMatch(/^\d{4}-\d{2}-\d{2}$/);
     });
 });
 

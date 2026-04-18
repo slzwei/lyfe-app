@@ -3,7 +3,7 @@
  * Manages date range, cost, slots, grace period, and suggested targets.
  */
 import { type Dispatch, type SetStateAction, useCallback, useState } from 'react';
-import { todayStr } from '@/lib/dateTime';
+import { todayLocalStr } from '@/lib/dateTime';
 import type { RoadshowConfig } from '@/types/event';
 
 interface RoadshowConfigState {
@@ -29,8 +29,8 @@ interface RoadshowConfigState {
 }
 
 export function useRoadshowConfig(): RoadshowConfigState {
-    const [rsStartDate, setRsStartDate] = useState(todayStr());
-    const [rsEndDate, setRsEndDate] = useState(todayStr());
+    const [rsStartDate, setRsStartDate] = useState(todayLocalStr());
+    const [rsEndDate, setRsEndDate] = useState(todayLocalStr());
     const [rsWeeklyCost, setRsWeeklyCost] = useState('');
     const [rsSlots, setRsSlots] = useState(3);
     const [rsGrace, setRsGrace] = useState(15);

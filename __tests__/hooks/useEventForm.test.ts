@@ -26,7 +26,6 @@ jest.mock('@/lib/roadshow', () => ({
 }));
 
 jest.mock('@/lib/dateTime', () => ({
-    todayStr: () => '2026-03-09',
     todayLocalStr: () => '2026-03-09',
     isValidDate: (d: string) => /^\d{4}-\d{2}-\d{2}$/.test(d),
     dateDiffDays: (a: string, b: string) => {

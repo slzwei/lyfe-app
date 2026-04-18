@@ -60,14 +60,9 @@ export function formatMonthYear(iso: string): string {
     return new Date(iso).toLocaleDateString('en-SG', { month: 'short', year: 'numeric' });
 }
 
-/** Today as YYYY-MM-DD using locale-safe method */
+/** Today as YYYY-MM-DD in the device's local timezone */
 export function todayLocalStr(): string {
     return new Date().toLocaleDateString('en-CA');
-}
-
-/** Today as YYYY-MM-DD (ISO split) */
-export function todayStr(): string {
-    return new Date().toISOString().split('T')[0];
 }
 
 /** Validates YYYY-MM-DD */
