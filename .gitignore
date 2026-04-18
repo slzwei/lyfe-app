@@ -42,6 +42,7 @@ admin/.env.local
 # build artifacts
 *.apk
 *.aab
+build/
 
 # generated native folders
 /ios
@@ -49,3 +50,9 @@ admin/.env.local
 .mcp.json
 coverage/
 p.md
+
+# graphify output
+graphify-out/
+
+# editor swap files
+*.swp
