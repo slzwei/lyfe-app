@@ -1,3 +1,4 @@
+import { Fonts } from '@/constants/type';
 import { formatDateShort, formatTime } from '@/lib/dateTime';
 import { EVENT_TYPE_CONFIG } from '@/constants/displayConfigs';
 import type { AgencyEvent } from '@/types/event';
@@ -77,16 +78,16 @@ const styles = StyleSheet.create({
         justifyContent: 'space-between',
         marginBottom: 16,
     },
-    sectionTitle: { fontSize: 18, fontWeight: '700', marginBottom: 0 },
-    seeAllText: { fontSize: 14, fontWeight: '600' },
+    sectionTitle: { fontFamily: Fonts.serif, fontSize: 18, fontWeight: '500', marginBottom: 0 },
+    seeAllText: { fontFamily: Fonts.sansSemibold, fontSize: 14, fontWeight: '600' },
     loader: { paddingVertical: 16 },
-    emptyText: { fontSize: 14, textAlign: 'center', paddingVertical: 8 },
+    emptyText: { fontFamily: Fonts.sans, fontSize: 14, textAlign: 'center', paddingVertical: 8 },
     eventRow: { flexDirection: 'row', alignItems: 'stretch', gap: 12, marginBottom: 14 },
     eventStripe: { width: 4, borderRadius: 2 },
     eventContent: { flex: 1 },
-    eventTitle: { fontSize: 15, fontWeight: '600', marginBottom: 2 },
-    eventMeta: { fontSize: 12, marginBottom: 2 },
-    eventLocation: { fontSize: 12, fontWeight: '600' },
+    eventTitle: { fontFamily: Fonts.serif, fontSize: 15, fontWeight: '500', marginBottom: 2 },
+    eventMeta: { fontFamily: Fonts.mono, fontSize: 11, marginBottom: 2 },
+    eventLocation: { fontFamily: Fonts.sansSemibold, fontSize: 12, fontWeight: '600' },
 });
 
 export default React.memo(UpcomingEventsCard);

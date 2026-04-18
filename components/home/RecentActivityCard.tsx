@@ -1,3 +1,4 @@
+import { Fonts } from '@/constants/type';
 import type { ThemeColors } from '@/types/theme';
 import type { IconName } from '@/types/ui';
 import { Ionicons } from '@expo/vector-icons';
@@ -76,10 +77,10 @@ const styles = StyleSheet.create({
         justifyContent: 'space-between',
         marginBottom: 16,
     },
-    sectionTitle: { fontSize: 18, fontWeight: '700', marginBottom: 0 },
-    seeAllText: { fontSize: 14, fontWeight: '600' },
+    sectionTitle: { fontFamily: Fonts.serif, fontSize: 18, fontWeight: '500', marginBottom: 0 },
+    seeAllText: { fontFamily: Fonts.sansSemibold, fontSize: 14, fontWeight: '600' },
     activityFeed: { gap: 16 },
-    emptyText: { fontSize: 14, textAlign: 'center', paddingVertical: 8 },
+    emptyText: { fontFamily: Fonts.sans, fontSize: 14, textAlign: 'center', paddingVertical: 8 },
     activityRow: {
         flexDirection: 'row',
         alignItems: 'center',
@@ -93,9 +94,9 @@ const styles = StyleSheet.create({
         justifyContent: 'center',
     },
     activityContent: { flex: 1 },
-    activityLeadName: { fontSize: 15, fontWeight: '700', marginBottom: 2 },
-    activityDetail: { fontSize: 13, fontWeight: '400' },
-    activityTime: { fontSize: 12, alignSelf: 'flex-start', marginTop: 2 },
+    activityLeadName: { fontFamily: Fonts.serif, fontSize: 15, fontWeight: '500', marginBottom: 2 },
+    activityDetail: { fontFamily: Fonts.sans, fontSize: 13, fontWeight: '400' },
+    activityTime: { fontFamily: Fonts.mono, fontSize: 11, alignSelf: 'flex-start', marginTop: 2 },
 });
 
 export default React.memo(RecentActivityCard);

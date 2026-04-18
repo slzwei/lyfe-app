@@ -1,3 +1,4 @@
+import { Fonts } from '@/constants/type';
 import { STATUS_CONFIG, type LeadStatus } from '@/types/lead';
 import type { ThemeColors } from '@/types/theme';
 import React, { useMemo } from 'react';
@@ -66,7 +67,7 @@ const styles = StyleSheet.create({
         shadowRadius: 12,
         elevation: 2,
     },
-    sectionTitle: { fontSize: 18, fontWeight: '700', marginBottom: 12 },
+    sectionTitle: { fontFamily: Fonts.serif, fontSize: 18, fontWeight: '500', marginBottom: 12 },
     pipelineWrapper: {
         borderRadius: 10,
         padding: 4,
@@ -98,8 +99,8 @@ const styles = StyleSheet.create({
         height: 6,
         borderRadius: 3,
     },
-    legendLabel: { fontSize: 12, fontWeight: '500' },
-    legendCount: { fontSize: 13, fontWeight: '700' },
+    legendLabel: { fontFamily: Fonts.sans, fontSize: 12, fontWeight: '500' },
+    legendCount: { fontFamily: Fonts.monoMedium, fontSize: 13, fontWeight: '500' },
 });
 
 export default React.memo(LeadPipelineCard);

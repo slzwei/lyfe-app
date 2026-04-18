@@ -1,4 +1,5 @@
 import { letterSpacing } from '@/constants/platform';
+import { Fonts } from '@/constants/type';
 import { biometricMeta, type BiometryType } from '@/lib/biometrics';
 import type { ThemeColors } from '@/types/theme';
 import { Ionicons } from '@expo/vector-icons';
@@ -78,13 +79,15 @@ const styles = StyleSheet.create({
         marginBottom: 20,
     },
     title: {
+        fontFamily: Fonts.serif,
         fontSize: 22,
-        fontWeight: '700',
+        fontWeight: '500',
         marginBottom: 10,
         textAlign: 'center',
         letterSpacing: letterSpacing(-0.3),
     },
     subtitle: {
+        fontFamily: Fonts.sans,
         fontSize: 15,
         textAlign: 'center',
         lineHeight: 22,
@@ -101,6 +104,7 @@ const styles = StyleSheet.create({
         marginBottom: 12,
     },
     enableBtnText: {
+        fontFamily: Fonts.sansSemibold,
         fontSize: 16,
         fontWeight: '600',
     },
@@ -108,6 +112,7 @@ const styles = StyleSheet.create({
         padding: 12,
     },
     dismissText: {
+        fontFamily: Fonts.sansMedium,
         fontSize: 15,
         fontWeight: '500',
     },

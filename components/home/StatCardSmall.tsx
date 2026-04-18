@@ -1,3 +1,4 @@
+import { Fonts } from '@/constants/type';
 import type { ThemeColors } from '@/types/theme';
 import React, { memo } from 'react';
 import { StyleSheet, Text, View } from 'react-native';
@@ -32,6 +33,6 @@ const styles = StyleSheet.create({
         shadowRadius: 8,
         elevation: 1,
     },
-    statValueSmall: { fontSize: 22, fontWeight: '700', marginBottom: 2 },
-    statLabelSmall: { fontSize: 13, fontWeight: '500' },
+    statValueSmall: { fontFamily: Fonts.serif, fontSize: 22, fontWeight: '500', marginBottom: 2 },
+    statLabelSmall: { fontFamily: Fonts.sans, fontSize: 13, fontWeight: '500' },
 });
