@@ -7,9 +7,15 @@ import { useEffect, useRef } from 'react';
  * pipeline updates. Fires onUpdate whenever any candidate-related data changes
  * (candidate_profiles, disc_responses, disc_results, invitations, candidates).
  *
- * Gated on user.id so the subscription only fires once the session is
- * restored. progress_signals RLS limits SELECT to the authenticated role —
- * subscribing anonymously loops on TIMED_OUT forever.
+ * progress_signals RLS allows SELECT for any authenticated role, but the
+ * realtime server needs the user's JWT on the channel to authenticate the
+ * postgres_changes subscription. On first boot, supabase-js sometimes hasn't
+ * propagated the restored-session JWT to its internal realtime client by the
+ * time `user.id` flips truthy in AuthContext — the channel then joins with
+ * just the anon key and the realtime server responds with TIMED_OUT in a
+ * loop. Fix: fetch the session explicitly, call realtime.setAuth(), THEN
+ * subscribe. Channel name includes user.id so stale server-side topics from
+ * a previous session don't collide.
  */
 export function useCandidateRealtime(onUpdate: () => void) {
     const { user } = useAuth();
@@ -21,9 +27,13 @@ export function useCandidateRealtime(onUpdate: () => void) {
     useEffect(() => {
         if (!user?.id) return;
 
+        let cancelled = false;
+        let channel: ReturnType<typeof supabase.channel> | null = null;
+        const userId = user.id;
+
         const subscribe = () =>
             supabase
-                .channel('candidate-progress')
+                .channel(`candidate-progress:${userId}`)
                 .on(
                     'postgres_changes',
                     {
@@ -46,17 +56,32 @@ export function useCandidateRealtime(onUpdate: () => void) {
                         if (__DEV__) console.warn(`[useCandidateRealtime] ${status}, reconnecting in ${delay}ms`);
                         const erroredChannel = channel;
                         retryTimeoutRef.current = setTimeout(() => {
-                            supabase.removeChannel(erroredChannel);
-                            channel = subscribe();
+                            if (erroredChannel) supabase.removeChannel(erroredChannel);
+                            if (!cancelled) channel = subscribe();
                         }, delay);
                     }
                 });
 
-        let channel = subscribe();
+        // Ensure realtime has the current JWT before joining the topic.
+        (async () => {
+            const {
+                data: { session },
+            } = await supabase.auth.getSession();
+            if (cancelled) return;
+            if (session?.access_token) {
+                try {
+                    await supabase.realtime.setAuth(session.access_token);
+                } catch (e) {
+                    if (__DEV__) console.warn('[useCandidateRealtime] setAuth failed', e);
+                }
+            }
+            if (!cancelled) channel = subscribe();
+        })();
 
         return () => {
+            cancelled = true;
             clearTimeout(retryTimeoutRef.current);
-            supabase.removeChannel(channel);
+            if (channel) supabase.removeChannel(channel);
         };
     }, [user?.id]);
 }

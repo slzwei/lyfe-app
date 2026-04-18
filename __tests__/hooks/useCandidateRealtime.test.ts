@@ -9,6 +9,8 @@ let subscribeCallback: ((status: string) => void) | null = null;
 let postgresCallback: (() => void) | null = null;
 
 const mockRemoveChannel = jest.fn();
+const mockSetAuth = jest.fn();
+const mockGetSession = jest.fn();
 const mockChannel = {
     on: jest.fn().mockImplementation((_event: string, _filter: any, cb: () => void) => {
         postgresCallback = cb;
@@ -24,6 +26,12 @@ jest.mock('@/lib/supabase', () => ({
     supabase: {
         channel: jest.fn(() => mockChannel),
         removeChannel: (...args: any[]) => mockRemoveChannel(...args),
+        auth: {
+            getSession: (...args: any[]) => mockGetSession(...args),
+        },
+        realtime: {
+            setAuth: (...args: any[]) => mockSetAuth(...args),
+        },
     },
 }));
 
@@ -31,11 +39,21 @@ jest.mock('@/contexts/AuthContext', () => ({
     useAuth: jest.fn(() => ({ user: { id: 'user-1' } })),
 }));
 
+/** Flush the async subscribe path: getSession → setAuth → channel.subscribe. */
+async function flushSubscribe() {
+    await act(async () => {
+        await Promise.resolve();
+        await Promise.resolve();
+    });
+}
+
 beforeEach(() => {
     jest.clearAllMocks();
     jest.useFakeTimers();
     subscribeCallback = null;
     postgresCallback = null;
+    mockGetSession.mockResolvedValue({ data: { session: { access_token: 'tok' } } });
+    mockSetAuth.mockResolvedValue(undefined);
 });
 
 afterEach(() => {
@@ -53,12 +71,14 @@ describe('useCandidateRealtime', () => {
         expect(supabase.channel).not.toHaveBeenCalled();
     });
 
-    it('subscribes to progress_signals on mount', () => {
+    it('subscribes to progress_signals after setting realtime auth', async () => {
         const onUpdate = jest.fn();
         renderHook(() => useCandidateRealtime(onUpdate));
+        await flushSubscribe();
 
         const { supabase } = require('@/lib/supabase');
-        expect(supabase.channel).toHaveBeenCalledWith('candidate-progress');
+        expect(mockSetAuth).toHaveBeenCalledWith('tok');
+        expect(supabase.channel).toHaveBeenCalledWith('candidate-progress:user-1');
         expect(mockChannel.on).toHaveBeenCalledWith(
             'postgres_changes',
             expect.objectContaining({ table: 'progress_signals' }),
@@ -67,11 +87,21 @@ describe('useCandidateRealtime', () => {
         expect(mockChannel.subscribe).toHaveBeenCalled();
     });
 
-    it('calls onUpdate when progress signal received', () => {
+    it('skips setAuth when session has no access_token but still subscribes', async () => {
+        mockGetSession.mockResolvedValue({ data: { session: null } });
         const onUpdate = jest.fn();
         renderHook(() => useCandidateRealtime(onUpdate));
+        await flushSubscribe();
 
-        // Simulate a postgres change event
+        expect(mockSetAuth).not.toHaveBeenCalled();
+        expect(mockChannel.subscribe).toHaveBeenCalled();
+    });
+
+    it('calls onUpdate when progress signal received', async () => {
+        const onUpdate = jest.fn();
+        renderHook(() => useCandidateRealtime(onUpdate));
+        await flushSubscribe();
+
         act(() => {
             postgresCallback?.();
         });
@@ -79,38 +109,36 @@ describe('useCandidateRealtime', () => {
         expect(onUpdate).toHaveBeenCalledTimes(1);
     });
 
-    it('removes channel on unmount', () => {
+    it('removes channel on unmount', async () => {
         const onUpdate = jest.fn();
         const { unmount } = renderHook(() => useCandidateRealtime(onUpdate));
+        await flushSubscribe();
 
         unmount();
 
         expect(mockRemoveChannel).toHaveBeenCalledWith(mockChannel);
     });
 
-    it('retries with exponential backoff on CHANNEL_ERROR', () => {
+    it('retries with exponential backoff on CHANNEL_ERROR', async () => {
         const onUpdate = jest.fn();
         renderHook(() => useCandidateRealtime(onUpdate));
+        await flushSubscribe();
 
-        // Simulate channel error
         act(() => {
             subscribeCallback?.('CHANNEL_ERROR');
         });
 
-        // First retry after 1s (2^0 * 1000)
         expect(mockRemoveChannel).not.toHaveBeenCalled();
         act(() => {
             jest.advanceTimersByTime(1000);
         });
         expect(mockRemoveChannel).toHaveBeenCalledTimes(1);
 
-        // Reset for second error
         mockRemoveChannel.mockClear();
         act(() => {
             subscribeCallback?.('CHANNEL_ERROR');
         });
 
-        // Second retry after 2s (2^1 * 1000)
         act(() => {
             jest.advanceTimersByTime(1000);
         });
@@ -121,19 +149,17 @@ describe('useCandidateRealtime', () => {
         expect(mockRemoveChannel).toHaveBeenCalledTimes(1);
     });
 
-    it('clears retry timeout on unmount', () => {
+    it('clears retry timeout on unmount', async () => {
         const onUpdate = jest.fn();
         const { unmount } = renderHook(() => useCandidateRealtime(onUpdate));
+        await flushSubscribe();
 
-        // Trigger a retry
         act(() => {
             subscribeCallback?.('TIMED_OUT');
         });
 
-        // Unmount before timeout fires
         unmount();
 
-        // Advance past all timeouts — removeChannel should only be called once (from cleanup)
         act(() => {
             jest.advanceTimersByTime(30000);
         });
@@ -141,11 +167,11 @@ describe('useCandidateRealtime', () => {
         expect(mockRemoveChannel).toHaveBeenCalledTimes(1);
     });
 
-    it('resets retry count on successful subscription', () => {
+    it('resets retry count on successful subscription', async () => {
         const onUpdate = jest.fn();
         renderHook(() => useCandidateRealtime(onUpdate));
+        await flushSubscribe();
 
-        // Trigger errors to increment retry count
         act(() => {
             subscribeCallback?.('CHANNEL_ERROR');
         });
@@ -153,12 +179,10 @@ describe('useCandidateRealtime', () => {
             jest.advanceTimersByTime(1000);
         });
 
-        // Now simulate successful subscription
         act(() => {
             subscribeCallback?.('SUBSCRIBED');
         });
 
-        // Next error should use 1s delay (retry count reset)
         mockRemoveChannel.mockClear();
         act(() => {
             subscribeCallback?.('CHANNEL_ERROR');
