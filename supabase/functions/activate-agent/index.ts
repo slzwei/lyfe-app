@@ -14,9 +14,12 @@
  * Body: { candidate_id: string }
  * Returns: { ok: true, user_id, candidate_id } on success.
  *
- * Note: MKTR agent sync is intentionally NOT called from here. The MKTR sync
- * path (sync-agent-to-mktr) is not deployed as an edge function as of Phase G.
- * When it lands, add a fire-and-forget invocation after the DB + auth flip.
+ * Note: MKTR agent sync is intentionally NOT called from here. MKTR pulls
+ * from us, not the other way around — MKTR's admin endpoint
+ * `POST /api/lyfe/agents/sync` invokes `syncAgentsFromLyfe()` which fetches
+ * active agents via our `mktr-agents` edge function and upserts locally.
+ * Newly activated agents are picked up on MKTR's next sync (periodic or
+ * admin-triggered); there's no push-from-lyfe path to add here.
  */
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 

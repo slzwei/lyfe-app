@@ -19,7 +19,6 @@ export {
     fetchAssignableManagers,
     reassignCandidate,
     addCandidateActivity,
-    syncAgentToMKTR,
 } from './candidates';
 export { getInviteUrl } from './invite-url';
 export { scheduleInterview, updateInterview, deleteInterview } from './interviews';

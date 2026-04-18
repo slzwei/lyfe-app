@@ -16,7 +16,6 @@ import {
     scheduleInterview,
     updateInterview,
     deleteInterview,
-    syncAgentToMKTR,
     fetchCandidateDocuments,
     uploadCandidateDocument,
     deleteCandidateDocument,
@@ -494,61 +493,6 @@ describe('deleteInterview', () => {
 
         const result = await deleteInterview('iv-1');
         expect(result.error).toBeNull();
-    });
-});
-
-// ── syncAgentToMKTR ──
-
-describe('syncAgentToMKTR', () => {
-    it('returns error when no email', async () => {
-        const result = await syncAgentToMKTR({ email: null, name: 'Jane', phone: '+65123' });
-        expect(result.success).toBe(false);
-        expect(result.error).toBe('No email address');
-    });
-
-    it('returns error when no session', async () => {
-        mockSupa.auth.getSession.mockResolvedValue({ data: { session: null } });
-
-        const result = await syncAgentToMKTR({ email: 'jane@example.com', name: 'Jane', phone: '+65123' });
-        expect(result.success).toBe(false);
-        expect(result.error).toBe('No active session');
-
-        // Restore
-        mockSupa.auth.getSession.mockResolvedValue({ data: { session: { access_token: 'mock-token' } } });
-    });
-
-    it('calls edge function and returns success', async () => {
-        mockFetch.mockResolvedValue({
-            ok: true,
-            json: () => Promise.resolve({ success: true }),
-        });
-
-        const result = await syncAgentToMKTR({ email: 'jane@example.com', name: 'Jane', phone: '+65123' });
-        expect(result.success).toBe(true);
-        expect(mockFetch).toHaveBeenCalledWith(
-            expect.stringContaining('/functions/v1/sync-agent-to-mktr'),
-            expect.objectContaining({ method: 'POST' }),
-        );
-    });
-
-    it('returns error on HTTP failure', async () => {
-        mockFetch.mockResolvedValue({
-            ok: false,
-            status: 500,
-            json: () => Promise.resolve({ error: 'Internal error' }),
-        });
-
-        const result = await syncAgentToMKTR({ email: 'jane@example.com', name: 'Jane', phone: '+65123' });
-        expect(result.success).toBe(false);
-        expect(result.error).toBe('Internal error');
-    });
-
-    it('handles fetch exception gracefully', async () => {
-        mockFetch.mockRejectedValue(new Error('Network down'));
-
-        const result = await syncAgentToMKTR({ email: 'jane@example.com', name: 'Jane', phone: '+65123' });
-        expect(result.success).toBe(false);
-        expect(result.error).toBe('Network down');
     });
 });
 
