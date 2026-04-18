@@ -13,7 +13,8 @@ import { checkFaceRegistration, registerFace, verifyFace } from '@/lib/faceVerif
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import React, { useCallback, useEffect, useState } from 'react';
-import { ActivityIndicator, Platform, Pressable, SafeAreaView, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { ActivityIndicator, Platform, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import { useCameraDevice, useCameraPermission } from 'react-native-vision-camera';
 
 type DevMode = 'register' | 'verify';

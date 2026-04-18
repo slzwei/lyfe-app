@@ -2,7 +2,8 @@ import { useTheme } from '@/contexts/ThemeContext';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import React from 'react';
-import { SafeAreaView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 
 export default function WelcomeScreen() {
     const { colors } = useTheme();
@@ -19,9 +20,7 @@ export default function WelcomeScreen() {
 
                 <Text style={[styles.title, { color: colors.textPrimary }]}>Welcome to Lyfe</Text>
 
-                <Text style={[styles.tagline, { color: colors.textSecondary }]}>
-                    Your insurance career starts here
-                </Text>
+                <Text style={[styles.tagline, { color: colors.textSecondary }]}>Your insurance career starts here</Text>
 
                 <View style={styles.spacer} />
 
