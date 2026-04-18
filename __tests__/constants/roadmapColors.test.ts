@@ -43,9 +43,9 @@ describe('SEEDLING_PALETTE', () => {
     });
 
     it('has specific known values', () => {
-        expect(SEEDLING_PALETTE.light).toBe('#78b84a');
-        expect(SEEDLING_PALETTE.dark).toBe('#3a9438');
-        expect(SEEDLING_PALETTE.darkest).toBe('#2d5c2d');
+        expect(SEEDLING_PALETTE.light).toBe('#9FB585');
+        expect(SEEDLING_PALETTE.dark).toBe('#5E6F51');
+        expect(SEEDLING_PALETTE.darkest).toBe('#3D4A32');
     });
 });
 
@@ -93,8 +93,8 @@ describe('SPROUT_PALETTE', () => {
     });
 
     it('has specific known values', () => {
-        expect(SPROUT_PALETTE.leafPrimary).toBe('#6DAF3E');
-        expect(SPROUT_PALETTE.stem).toBe('#5C7A4A');
+        expect(SPROUT_PALETTE.leafPrimary).toBe('#7A8C6B');
+        expect(SPROUT_PALETTE.stem).toBe('#5E6F51');
         expect(SPROUT_PALETTE.soilDark).toBe('#6D563A');
     });
 
@@ -130,16 +130,16 @@ describe('Colors.light roadmap module type colors', () => {
         expect(isHex(Colors.light.roadmapResource)).toBe(true);
     });
 
-    it('uses iOS system blue for training', () => {
-        expect(Colors.light.roadmapTraining).toBe('#007AFF');
+    it('uses Tropic dusty slate-blue for training', () => {
+        expect(Colors.light.roadmapTraining).toBe('#5C7A9E');
     });
 
-    it('uses iOS system orange for exam', () => {
-        expect(Colors.light.roadmapExam).toBe('#FF9500');
+    it('uses Tropic terracotta for exam', () => {
+        expect(Colors.light.roadmapExam).toBe('#D6552B');
     });
 
-    it('uses iOS system green for resource', () => {
-        expect(Colors.light.roadmapResource).toBe('#34C759');
+    it('uses Tropic sage for resource', () => {
+        expect(Colors.light.roadmapResource).toBe('#7A8C6B');
     });
 
     it('all three type colors are distinct', () => {
@@ -177,16 +177,16 @@ describe('Colors.dark roadmap module type colors', () => {
         expect(isHex(Colors.dark.roadmapResource)).toBe(true);
     });
 
-    it('uses iOS dark system blue for training', () => {
-        expect(Colors.dark.roadmapTraining).toBe('#0A84FF');
+    it('uses Tropic dark blue for training', () => {
+        expect(Colors.dark.roadmapTraining).toBe('#87A3C4');
     });
 
-    it('uses iOS dark system orange for exam', () => {
-        expect(Colors.dark.roadmapExam).toBe('#FF9F0A');
+    it('uses Tropic dark terracotta for exam', () => {
+        expect(Colors.dark.roadmapExam).toBe('#E27A4E');
     });
 
-    it('uses iOS dark system green for resource', () => {
-        expect(Colors.dark.roadmapResource).toBe('#30D158');
+    it('uses Tropic dark sage for resource', () => {
+        expect(Colors.dark.roadmapResource).toBe('#9CAE8C');
     });
 
     it('all three dark type colors are distinct', () => {
