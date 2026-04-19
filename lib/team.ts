@@ -29,6 +29,14 @@ export interface ReassignableManager {
     role: 'manager' | 'director';
 }
 
+export interface AgentForReassign {
+    id: string;
+    fullName: string;
+    email: string | null;
+    currentManagerId: string | null;
+    currentManagerName: string | null;
+}
+
 // ── Team Members ─────────────────────────────────────────────
 
 /**
@@ -245,6 +253,42 @@ export async function reassignAgent(
     } catch (err) {
         captureError(err, { fn: 'reassignAgent' });
         return { error: err instanceof Error ? err.message : 'Unknown error reassigning agent' };
+    }
+}
+
+/**
+ * Return every active agent together with their current upline — for the
+ * reassign-agents picker screen. PAs can't SELECT users directly via RLS so
+ * this wraps a SECURITY DEFINER RPC that enforces the reassign_agents
+ * capability on the caller.
+ */
+export async function fetchAgentsForReassign(): Promise<{
+    data: AgentForReassign[];
+    error: string | null;
+}> {
+    try {
+        const { data, error } = await supabase.rpc('list_agents_for_reassign');
+        if (error) return { data: [], error: error.message };
+        const rows = (data || []) as {
+            id: string;
+            full_name: string;
+            email: string | null;
+            reports_to: string | null;
+            reports_to_name: string | null;
+        }[];
+        return {
+            data: rows.map((r) => ({
+                id: r.id,
+                fullName: r.full_name,
+                email: r.email,
+                currentManagerId: r.reports_to,
+                currentManagerName: r.reports_to_name,
+            })),
+            error: null,
+        };
+    } catch (err) {
+        captureError(err, { fn: 'fetchAgentsForReassign' });
+        return { data: [], error: err instanceof Error ? err.message : 'Unknown error fetching agents' };
     }
 }
 
