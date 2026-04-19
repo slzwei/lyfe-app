@@ -109,9 +109,9 @@ Deno.serve(async (req) => {
                 return jsonResponse({ error: 'Target manager not found or inactive' }, 400);
             }
 
-            const validRoles = ['manager', 'director', 'admin'];
+            const validRoles = ['manager', 'director'];
             if (!validRoles.includes(targetUser.role)) {
-                return jsonResponse({ error: 'Target user is not a manager/director/admin' }, 403);
+                return jsonResponse({ error: 'Target user is not a manager or director' }, 403);
             }
 
             // If caller is PA, verify they are assigned to this manager

@@ -28,14 +28,15 @@ export type Capability =
     | 'manage_milestones'
     | 'activate_agent'
     | 'put_on_hold'
-    | 'reject_candidate';
+    | 'reject_candidate'
+    | 'reassign_agents';
 
 export const ROLE_CAPABILITIES: Record<UserRole, Capability[]> = {
     admin: [
-        'hold_agents',
         'reassign_leads',
         'reassign_leads_globally',
         'reassign_candidates',
+        'reassign_agents',
         'invite_agents',
         'create_candidates',
         'schedule_interviews',
@@ -53,6 +54,7 @@ export const ROLE_CAPABILITIES: Record<UserRole, Capability[]> = {
         'hold_agents',
         'reassign_leads',
         'reassign_candidates',
+        'reassign_agents',
         'invite_agents',
         'create_candidates',
         'schedule_interviews',
@@ -91,6 +93,7 @@ export const ROLE_CAPABILITIES: Record<UserRole, Capability[]> = {
         'activate_agent',
         'put_on_hold',
         'reject_candidate',
+        'reassign_agents',
     ],
     candidate: [],
 };
@@ -157,4 +160,8 @@ export function canPutOnHold(role: UserRole): boolean {
 
 export function canRejectCandidate(role: UserRole): boolean {
     return hasCapability(role, 'reject_candidate');
+}
+
+export function canReassignAgents(role: UserRole): boolean {
+    return hasCapability(role, 'reassign_agents');
 }

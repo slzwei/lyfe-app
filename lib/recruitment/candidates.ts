@@ -426,12 +426,31 @@ export async function reassignCandidate(
     userId: string,
 ): Promise<{ error: string | null }> {
     try {
-        // Get old manager name for activity log
+        // Get old manager id for activity log
         const { data: candidate } = await supabase
             .from('candidates')
             .select('assigned_manager_id')
             .eq('id', candidateId)
             .single();
+
+        // Fetch both old + new manager rows in one query — used for both role validation
+        // of the new manager and name resolution for the activity log.
+        const ids = [candidate?.assigned_manager_id, newManagerId].filter(Boolean) as string[];
+        const { data: users } = await supabase
+            .from('users')
+            .select('id, full_name, role, is_active')
+            .in('id', ids);
+
+        // Only managers and directors can hold candidates — reject admin/pa/agent/candidate.
+        const newManager = (users || []).find(
+            (u: { id: string; role: string; is_active: boolean }) => u.id === newManagerId,
+        );
+        if (!newManager || !newManager.is_active) {
+            return { error: 'Target manager not found or inactive' };
+        }
+        if (!['manager', 'director'].includes(newManager.role)) {
+            return { error: 'Target user is not a manager or director' };
+        }
 
         const { error } = await supabase
             .from('candidates')
@@ -440,10 +459,9 @@ export async function reassignCandidate(
 
         if (error) return { error: error.message };
 
-        // Get names for activity log
-        const ids = [candidate?.assigned_manager_id, newManagerId].filter(Boolean) as string[];
-        const { data: users } = await supabase.from('users').select('id, full_name').in('id', ids);
-        const nameMap = new Map((users || []).map((u: { id: string; full_name: string }) => [u.id, u.full_name]));
+        const nameMap = new Map(
+            (users || []).map((u: { id: string; full_name: string }) => [u.id, u.full_name]),
+        );
 
         await supabase.from('candidate_activities').insert({
             candidate_id: candidateId,

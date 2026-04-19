@@ -16,6 +16,7 @@ import ViewModeCard from '@/components/profile/ViewModeCard';
 import { useAuth } from '@/contexts/AuthContext';
 import { useTheme } from '@/contexts/ThemeContext';
 import { useViewMode, type ViewMode } from '@/contexts/ViewModeContext';
+import { canReassignAgents } from '@/constants/Roles';
 import { getBiometryType, type BiometryType } from '@/lib/biometrics';
 import { pickAndUploadAvatar, removeAvatar, takeAndUploadAvatar } from '@/lib/storage';
 import type { AssignedManager } from '@/types/recruitment';
@@ -170,6 +171,10 @@ export default function ProfileScreen() {
             router.push('/(tabs)/profile/terms');
             return;
         }
+        if (key === 'reassign-agents') {
+            router.push('/(tabs)/profile/reassign-agents');
+            return;
+        }
     };
 
     const handleSaveProfile = () =>
@@ -256,6 +261,23 @@ export default function ProfileScreen() {
                     faceRegisteredAt={user?.face_registered_at ?? null}
                     onFaceRegisterPress={() => router.push('/(tabs)/profile/face-register')}
                 />
+
+                {/* Team Tools — only for roles with reassign_agents capability */}
+                {canReassignAgents(user?.role ?? 'candidate') && (
+                    <SettingsListCard
+                        colors={colors}
+                        title="TEAM TOOLS"
+                        rows={[
+                            {
+                                key: 'reassign-agents',
+                                icon: 'swap-horizontal-outline',
+                                label: 'Reassign Agents',
+                                subtitle: 'Move an agent to a different manager',
+                            },
+                        ]}
+                        onPress={handleSettingsPress}
+                    />
+                )}
 
                 {/* General Settings */}
                 <SettingsListCard

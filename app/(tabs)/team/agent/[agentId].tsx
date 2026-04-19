@@ -1,15 +1,24 @@
 import LeadCard from '@/components/LeadCard';
 import LoadingState from '@/components/LoadingState';
 import ScreenHeader from '@/components/ScreenHeader';
+import ReassignAgentSheet from '@/components/team/ReassignAgentSheet';
 import { useTheme } from '@/contexts/ThemeContext';
-import { fetchTeamMember, type TeamMember } from '@/lib/team';
-import { LEAD_STATUSES, STATUS_CONFIG, type Lead, type LeadStatus } from '@/types/lead';
+import { useAuth } from '@/contexts/AuthContext';
+import {
+    fetchReassignableManagers,
+    fetchTeamMember,
+    reassignAgent,
+    type ReassignableManager,
+    type TeamMember,
+} from '@/lib/team';
+import { canReassignAgents } from '@/constants/Roles';
+import { LEAD_STATUSES, STATUS_CONFIG, type Lead } from '@/types/lead';
 import { letterSpacing } from '@/constants/platform';
 import { Ionicons } from '@expo/vector-icons';
 import { useLocalSearchParams } from 'expo-router';
 import { useTypedRouter } from '@/hooks/useTypedRouter';
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
-import { Linking, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { Alert, Linking, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { formatMonthYear } from '@/lib/dateTime';
 
@@ -18,11 +27,20 @@ const AVATAR_COLOR_KEYS = ['statusProposed', 'accent', 'danger', 'warning', 'sta
 export default function AgentDetailScreen() {
     const { colors } = useTheme();
     const router = useTypedRouter();
+    const { profile } = useAuth();
     const { agentId } = useLocalSearchParams<{ agentId: string }>();
 
     const [agent, setAgent] = useState<TeamMember | null>(null);
     const [agentLeads, setAgentLeads] = useState<Lead[]>([]);
     const [isLoading, setIsLoading] = useState(true);
+
+    // ── Reassign state ──
+    const [reassignVisible, setReassignVisible] = useState(false);
+    const [reassignManagers, setReassignManagers] = useState<ReassignableManager[]>([]);
+    const [reassignLoading, setReassignLoading] = useState(false);
+    const [reassignSubmitting, setReassignSubmitting] = useState(false);
+
+    const callerCanReassign = canReassignAgents(profile?.role ?? 'candidate');
 
     const loadAgent = useCallback(async () => {
         if (!agentId) return;
@@ -33,6 +51,42 @@ export default function AgentDetailScreen() {
         }
         setIsLoading(false);
     }, [agentId]);
+
+    const handleOpenReassign = useCallback(async () => {
+        if (!agent) return;
+        setReassignVisible(true);
+        setReassignLoading(true);
+        const { data, error } = await fetchReassignableManagers(agent.currentManagerId);
+        if (error) {
+            Alert.alert('Could not load managers', error);
+            setReassignVisible(false);
+            setReassignLoading(false);
+            return;
+        }
+        setReassignManagers(data);
+        setReassignLoading(false);
+    }, [agent]);
+
+    const handleReassignSelect = useCallback(
+        async (manager: ReassignableManager | null) => {
+            if (!agent) return;
+            setReassignSubmitting(true);
+            const { error } = await reassignAgent(agent.id, manager?.id ?? null);
+            setReassignSubmitting(false);
+            if (error) {
+                Alert.alert('Reassignment failed', error);
+                return;
+            }
+            setReassignVisible(false);
+            // Refresh to show the new upline
+            await loadAgent();
+            Alert.alert(
+                'Reassigned',
+                manager ? `${agent.name} now reports to ${manager.fullName}.` : `${agent.name} is now unassigned.`,
+            );
+        },
+        [agent, loadAgent],
+    );
 
     useEffect(() => {
         loadAgent();
@@ -164,6 +218,9 @@ export default function AgentDetailScreen() {
                             <Text style={[styles.joinDate, { color: colors.textTertiary }]}>
                                 Member since {formatMonthYear(agent.joinedDate)}
                             </Text>
+                            <Text style={[styles.joinDate, { color: colors.textTertiary }]}>
+                                Upline: {agent.currentManagerName ?? 'Unassigned'}
+                            </Text>
                         </View>
                     </View>
 
@@ -196,6 +253,24 @@ export default function AgentDetailScreen() {
                             </TouchableOpacity>
                         )}
                     </View>
+                    {callerCanReassign && (
+                        <TouchableOpacity
+                            style={[
+                                styles.reassignBtn,
+                                {
+                                    backgroundColor: colors.cardBackground,
+                                    borderColor: colors.border,
+                                },
+                            ]}
+                            onPress={handleOpenReassign}
+                            activeOpacity={0.8}
+                            accessibilityRole="button"
+                            accessibilityLabel="Reassign agent to a different manager"
+                        >
+                            <Ionicons name="swap-horizontal" size={18} color={colors.textPrimary} />
+                            <Text style={[styles.actionBtnText, { color: colors.textPrimary }]}>Reassign</Text>
+                        </TouchableOpacity>
+                    )}
                 </View>
 
                 {/* ── Performance Stats ── */}
@@ -316,6 +391,18 @@ export default function AgentDetailScreen() {
                 {/* Bottom spacer */}
                 <View style={{ height: 32 }} />
             </ScrollView>
+
+            <ReassignAgentSheet
+                visible={reassignVisible}
+                agentName={agent.name}
+                currentManagerName={agent.currentManagerName}
+                managers={reassignManagers}
+                loading={reassignLoading}
+                submitting={reassignSubmitting}
+                colors={colors}
+                onSelect={handleReassignSelect}
+                onClose={() => setReassignVisible(false)}
+            />
         </SafeAreaView>
     );
 }
@@ -404,6 +491,16 @@ const styles = StyleSheet.create({
         gap: 8,
         paddingVertical: 11,
         borderRadius: 12,
+    },
+    reassignBtn: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'center',
+        gap: 8,
+        paddingVertical: 11,
+        borderRadius: 12,
+        borderWidth: 1,
+        marginTop: 10,
     },
     actionBtnText: {
         fontSize: 15,

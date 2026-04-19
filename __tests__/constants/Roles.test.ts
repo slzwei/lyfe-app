@@ -68,10 +68,10 @@ describe('hasCapability', () => {
 // ── Backward-compatible permission wrappers ──
 
 describe('permission wrappers', () => {
-    it('canHoldAgents returns true for manager/director/admin', () => {
-        expect(canHoldAgents('admin')).toBe(true);
-        expect(canHoldAgents('director')).toBe(true);
+    it('canHoldAgents is limited to manager and director', () => {
         expect(canHoldAgents('manager')).toBe(true);
+        expect(canHoldAgents('director')).toBe(true);
+        expect(canHoldAgents('admin')).toBe(false);
         expect(canHoldAgents('agent')).toBe(false);
         expect(canHoldAgents('pa')).toBe(false);
         expect(canHoldAgents('candidate')).toBe(false);
@@ -116,11 +116,20 @@ describe('permission wrappers', () => {
     it('canToggleViewMode returns true only for roles with both hold_agents and view_leads', () => {
         expect(canToggleViewMode('manager')).toBe(true);
         expect(canToggleViewMode('director')).toBe(true);
-        // admin has both hold_agents and view_leads
-        expect(canToggleViewMode('admin')).toBe(true);
+        // admin does NOT hold agents, so the manager/agent view toggle does not apply
+        expect(canToggleViewMode('admin')).toBe(false);
         expect(canToggleViewMode('agent')).toBe(false);
         expect(canToggleViewMode('pa')).toBe(false);
         expect(canToggleViewMode('candidate')).toBe(false);
+    });
+
+    it('reassign_agents is granted to admin/director/pa (distinct from hold_agents)', () => {
+        expect(hasCapability('admin', 'reassign_agents')).toBe(true);
+        expect(hasCapability('director', 'reassign_agents')).toBe(true);
+        expect(hasCapability('pa', 'reassign_agents')).toBe(true);
+        expect(hasCapability('manager', 'reassign_agents')).toBe(false);
+        expect(hasCapability('agent', 'reassign_agents')).toBe(false);
+        expect(hasCapability('candidate', 'reassign_agents')).toBe(false);
     });
 });
 

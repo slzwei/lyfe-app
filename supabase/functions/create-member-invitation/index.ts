@@ -177,8 +177,8 @@ Deno.serve(async (req) => {
             if (!targetUser || !targetUser.is_active) {
                 return jsonResponse({ error: 'Target manager not found or inactive' }, 400);
             }
-            if (!['manager', 'director', 'admin'].includes(targetUser.role)) {
-                return jsonResponse({ error: 'Target user is not a manager/director/admin' }, 403);
+            if (!['manager', 'director'].includes(targetUser.role)) {
+                return jsonResponse({ error: 'Target user is not a manager or director' }, 403);
             }
         }
 
