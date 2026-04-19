@@ -19,6 +19,14 @@ export interface TeamMember {
     leadsCount: number;
     wonCount: number;
     conversionRate: number;
+    currentManagerId: string | null;
+    currentManagerName: string | null;
+}
+
+export interface ReassignableManager {
+    id: string;
+    fullName: string;
+    role: 'manager' | 'director';
 }
 
 // ── Team Members ─────────────────────────────────────────────
@@ -135,7 +143,7 @@ export async function fetchTeamMember(
         const [userResult, leadsResult] = await Promise.all([
             supabase
                 .from('users')
-                .select('id, full_name, role, phone, email, avatar_url, is_active, created_at')
+                .select('id, full_name, role, phone, email, avatar_url, is_active, created_at, reports_to')
                 .eq('id', memberId)
                 .single(),
             supabase
@@ -153,6 +161,17 @@ export async function fetchTeamMember(
         if (userError) return { member: null, leads: [], error: userError.message };
         if (leadsError) return { member: null, leads: [], error: leadsError.message };
 
+        // Resolve current manager name if any
+        let currentManagerName: string | null = null;
+        if (user.reports_to) {
+            const { data: mgr } = await supabase
+                .from('users')
+                .select('full_name')
+                .eq('id', user.reports_to)
+                .single();
+            currentManagerName = (mgr as { full_name: string } | null)?.full_name ?? null;
+        }
+
         const leadsList = (memberLeads || []) as Lead[];
         const wonCount = leadsList.filter((l) => l.status === 'won').length;
 
@@ -168,12 +187,64 @@ export async function fetchTeamMember(
             leadsCount: leadsList.length,
             wonCount,
             conversionRate: leadsList.length > 0 ? Math.round((wonCount / leadsList.length) * 100) : 0,
+            currentManagerId: user.reports_to ?? null,
+            currentManagerName,
         };
 
         return { member, leads: leadsList, error: null };
     } catch (err) {
         captureError(err, { fn: 'getTeamMemberDetail' });
         return { member: null, leads: [], error: err instanceof Error ? err.message : 'Unknown error fetching member' };
+    }
+}
+
+/**
+ * Fetch the list of active managers/directors that an agent can be reassigned to.
+ * Optionally excludes the current manager id so the picker doesn't offer a no-op.
+ */
+export async function fetchReassignableManagers(
+    excludeId?: string | null,
+): Promise<{ data: ReassignableManager[]; error: string | null }> {
+    try {
+        const { data, error } = await supabase
+            .from('users')
+            .select('id, full_name, role')
+            .in('role', ['manager', 'director'])
+            .eq('is_active', true)
+            .order('full_name', { ascending: true });
+        if (error) return { data: [], error: error.message };
+
+        const rows = (data || []) as { id: string; full_name: string; role: 'manager' | 'director' }[];
+        const filtered = excludeId ? rows.filter((r) => r.id !== excludeId) : rows;
+        return {
+            data: filtered.map((r) => ({ id: r.id, fullName: r.full_name, role: r.role })),
+            error: null,
+        };
+    } catch (err) {
+        captureError(err, { fn: 'fetchReassignableManagers' });
+        return { data: [], error: err instanceof Error ? err.message : 'Unknown error fetching managers' };
+    }
+}
+
+/**
+ * Reassign an agent's upline. Uses the SECURITY DEFINER RPC so callers with
+ * the reassign_agents capability (admin/director/pa) can perform the update
+ * without direct RLS UPDATE rights on the users table.
+ */
+export async function reassignAgent(
+    agentId: string,
+    newManagerId: string | null,
+): Promise<{ error: string | null }> {
+    try {
+        const { error } = await supabase.rpc('reassign_agent_upline', {
+            p_agent_id: agentId,
+            p_new_manager_id: newManagerId,
+        });
+        if (error) return { error: error.message };
+        return { error: null };
+    } catch (err) {
+        captureError(err, { fn: 'reassignAgent' });
+        return { error: err instanceof Error ? err.message : 'Unknown error reassigning agent' };
     }
 }
 
