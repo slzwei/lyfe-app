@@ -11,6 +11,11 @@ import { fetchTeamMember } from '@/lib/team';
 jest.mock('@/lib/supabase');
 jest.mock('@/contexts/ThemeContext');
 jest.mock('@/lib/team');
+jest.mock('@/contexts/AuthContext', () => ({
+    useAuth: () => ({
+        profile: { id: 'admin-1', role: 'admin', full_name: 'Test Admin' },
+    }),
+}));
 
 jest.mock('@/components/ScreenHeader', () => {
     const { Text } = require('react-native');
@@ -55,6 +60,8 @@ const MOCK_AGENT = {
     leadsCount: 10,
     wonCount: 3,
     conversionRate: 30,
+    currentManagerId: null,
+    currentManagerName: null,
 };
 
 const MOCK_LEADS = [

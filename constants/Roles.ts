@@ -17,6 +17,7 @@ export {
     canHoldAgents,
     canReassignLeads,
     canReassignLeadsGlobally,
+    canReassignAgents,
     canInviteAgents,
     canCreateCandidates,
     canScheduleInterviews,
