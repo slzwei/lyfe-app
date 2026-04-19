@@ -152,6 +152,7 @@ Tab Group (tabs/)
 | reassign_leads | Y | Y | Y | N | N | N |
 | reassign_leads_globally | Y | N | N | N | N | N |
 | reassign_candidates | Y | Y | Y | N | N | N |
+| reassign_agents | Y | Y | N | N | Y | N |
 | invite_agents | Y | Y | Y | N | N | N |
 | create_candidates | Y | Y | Y | N | Y | N |
 | schedule_interviews | Y | Y | Y | N | Y | N |

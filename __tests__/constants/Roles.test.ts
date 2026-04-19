@@ -122,6 +122,15 @@ describe('permission wrappers', () => {
         expect(canToggleViewMode('pa')).toBe(false);
         expect(canToggleViewMode('candidate')).toBe(false);
     });
+
+    it('reassign_agents is granted to admin/director/pa (distinct from hold_agents)', () => {
+        expect(hasCapability('admin', 'reassign_agents')).toBe(true);
+        expect(hasCapability('director', 'reassign_agents')).toBe(true);
+        expect(hasCapability('pa', 'reassign_agents')).toBe(true);
+        expect(hasCapability('manager', 'reassign_agents')).toBe(false);
+        expect(hasCapability('agent', 'reassign_agents')).toBe(false);
+        expect(hasCapability('candidate', 'reassign_agents')).toBe(false);
+    });
 });
 
 // ── getVisibleTabs ──
