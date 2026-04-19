@@ -649,25 +649,18 @@ describe('fetchAssignableManagers', () => {
 
 describe('reassignCandidate', () => {
     it('reassigns candidate and logs activity', async () => {
-        // First call: fetch old candidate
-        const candidatesChain1 = mockSupa.__getChain('candidates');
-        mockResolve(candidatesChain1, { data: { assigned_manager_id: 'mgr-1' }, error: null });
+        const candidatesChain = mockSupa.__getChain('candidates');
+        mockResolve(candidatesChain, { data: { assigned_manager_id: 'mgr-1' }, error: null });
 
-        // Second call: update candidate
-        const candidatesChain2 = mockSupa.__getChain('candidates');
-        mockResolve(candidatesChain2, { error: null });
-
-        // Third call: fetch names for activity log
         const usersChain = mockSupa.__getChain('users');
         mockResolve(usersChain, {
             data: [
-                { id: 'mgr-1', full_name: 'Old Manager' },
-                { id: 'mgr-2', full_name: 'New Manager' },
+                { id: 'mgr-1', full_name: 'Old Manager', role: 'manager', is_active: true },
+                { id: 'mgr-2', full_name: 'New Manager', role: 'manager', is_active: true },
             ],
             error: null,
         });
 
-        // Fourth call: insert activity
         const activitiesChain = mockSupa.__getChain('candidate_activities');
         mockResolve(activitiesChain, { error: null });
 
@@ -676,14 +669,46 @@ describe('reassignCandidate', () => {
     });
 
     it('returns error on update failure', async () => {
-        const candidatesChain1 = mockSupa.__getChain('candidates');
-        mockResolve(candidatesChain1, { data: { assigned_manager_id: 'mgr-1' }, error: null });
+        // Last candidates resolve wins — update surfaces as failure
+        const candidatesChain = mockSupa.__getChain('candidates');
+        mockResolve(candidatesChain, { error: { message: 'Update failed' } });
 
-        const candidatesChain2 = mockSupa.__getChain('candidates');
-        mockResolve(candidatesChain2, { error: { message: 'Update failed' } });
+        const usersChain = mockSupa.__getChain('users');
+        mockResolve(usersChain, {
+            data: [{ id: 'mgr-2', full_name: 'New Manager', role: 'manager', is_active: true }],
+            error: null,
+        });
 
         const result = await reassignCandidate('cand-1', 'mgr-2', 'admin-1');
         expect(result.error).toBe('Update failed');
+    });
+
+    it('rejects reassignment to an admin (violates hold_agents rule)', async () => {
+        const candidatesChain = mockSupa.__getChain('candidates');
+        mockResolve(candidatesChain, { data: { assigned_manager_id: 'mgr-1' }, error: null });
+
+        const usersChain = mockSupa.__getChain('users');
+        mockResolve(usersChain, {
+            data: [{ id: 'admin-2', full_name: 'Some Admin', role: 'admin', is_active: true }],
+            error: null,
+        });
+
+        const result = await reassignCandidate('cand-1', 'admin-2', 'admin-1');
+        expect(result.error).toBe('Target user is not a manager or director');
+    });
+
+    it('rejects reassignment to an inactive manager', async () => {
+        const candidatesChain = mockSupa.__getChain('candidates');
+        mockResolve(candidatesChain, { data: { assigned_manager_id: 'mgr-1' }, error: null });
+
+        const usersChain = mockSupa.__getChain('users');
+        mockResolve(usersChain, {
+            data: [{ id: 'mgr-2', full_name: 'Inactive Mgr', role: 'manager', is_active: false }],
+            error: null,
+        });
+
+        const result = await reassignCandidate('cand-1', 'mgr-2', 'admin-1');
+        expect(result.error).toBe('Target manager not found or inactive');
     });
 });
 

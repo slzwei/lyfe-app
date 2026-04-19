@@ -32,7 +32,6 @@ export type Capability =
 
 export const ROLE_CAPABILITIES: Record<UserRole, Capability[]> = {
     admin: [
-        'hold_agents',
         'reassign_leads',
         'reassign_leads_globally',
         'reassign_candidates',

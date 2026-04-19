@@ -148,7 +148,7 @@ Tab Group (tabs/)
 
 | Capability | admin | director | manager | agent | pa | candidate |
 |------------|-------|----------|---------|-------|----|-----------|
-| hold_agents | Y | Y | Y | N | N | N |
+| hold_agents | N | Y | Y | N | N | N |
 | reassign_leads | Y | Y | Y | N | N | N |
 | reassign_leads_globally | Y | N | N | N | N | N |
 | reassign_candidates | Y | Y | Y | N | N | N |
