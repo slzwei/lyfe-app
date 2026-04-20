@@ -668,7 +668,7 @@ export type Database = {
             };
             candidates: {
                 Row: {
-                    assigned_manager_id: string;
+                    assigned_manager_id: string | null;
                     converted_to_agent_at: string | null;
                     created_at: string | null;
                     created_by_id: string;
@@ -690,7 +690,7 @@ export type Database = {
                     updated_at: string | null;
                 };
                 Insert: {
-                    assigned_manager_id: string;
+                    assigned_manager_id?: string | null;
                     converted_to_agent_at?: string | null;
                     created_at?: string | null;
                     created_by_id: string;
@@ -712,7 +712,7 @@ export type Database = {
                     updated_at?: string | null;
                 };
                 Update: {
-                    assigned_manager_id?: string;
+                    assigned_manager_id?: string | null;
                     converted_to_agent_at?: string | null;
                     created_at?: string | null;
                     created_by_id?: string;
@@ -921,6 +921,102 @@ export type Database = {
                     time_taken_seconds?: number | null;
                     total?: number | null;
                     user_id?: string;
+                };
+                Relationships: [];
+            };
+            emock_tutorial_progress: {
+                Row: {
+                    answered_at: string;
+                    chapter_key: string;
+                    id: string;
+                    is_correct: boolean;
+                    module_id: string;
+                    question_key: string;
+                    selected_letter: string;
+                    user_id: string;
+                };
+                Insert: {
+                    answered_at?: string;
+                    chapter_key: string;
+                    id?: string;
+                    is_correct: boolean;
+                    module_id: string;
+                    question_key: string;
+                    selected_letter: string;
+                    user_id: string;
+                };
+                Update: {
+                    answered_at?: string;
+                    chapter_key?: string;
+                    id?: string;
+                    is_correct?: boolean;
+                    module_id?: string;
+                    question_key?: string;
+                    selected_letter?: string;
+                    user_id?: string;
+                };
+                Relationships: [];
+            };
+            enneagram_responses: {
+                Row: {
+                    created_at: string;
+                    id: string;
+                    responses: Json;
+                    updated_at: string;
+                    user_id: string;
+                };
+                Insert: {
+                    created_at?: string;
+                    id?: string;
+                    responses?: Json;
+                    updated_at?: string;
+                    user_id: string;
+                };
+                Update: {
+                    created_at?: string;
+                    id?: string;
+                    responses?: Json;
+                    updated_at?: string;
+                    user_id?: string;
+                };
+                Relationships: [];
+            };
+            enneagram_results: {
+                Row: {
+                    created_at: string;
+                    duration_seconds: number | null;
+                    id: string;
+                    primary_type: number;
+                    results_email: string | null;
+                    scores: Json;
+                    total: number;
+                    updated_at: string;
+                    user_id: string;
+                    wing_type: number | null;
+                };
+                Insert: {
+                    created_at?: string;
+                    duration_seconds?: number | null;
+                    id?: string;
+                    primary_type: number;
+                    results_email?: string | null;
+                    scores: Json;
+                    total?: number;
+                    updated_at?: string;
+                    user_id: string;
+                    wing_type?: number | null;
+                };
+                Update: {
+                    created_at?: string;
+                    duration_seconds?: number | null;
+                    id?: string;
+                    primary_type?: number;
+                    results_email?: string | null;
+                    scores?: Json;
+                    total?: number;
+                    updated_at?: string;
+                    user_id?: string;
+                    wing_type?: number | null;
                 };
                 Relationships: [];
             };
@@ -1315,6 +1411,7 @@ export type Database = {
                     created_at: string;
                     disc_pdf_path: string | null;
                     email: string;
+                    enneagram_pdf_path: string | null;
                     expires_at: string;
                     id: string;
                     invited_by: string;
@@ -1336,6 +1433,7 @@ export type Database = {
                     created_at?: string;
                     disc_pdf_path?: string | null;
                     email: string;
+                    enneagram_pdf_path?: string | null;
                     expires_at?: string;
                     id?: string;
                     invited_by: string;
@@ -1357,6 +1455,7 @@ export type Database = {
                     created_at?: string;
                     disc_pdf_path?: string | null;
                     email?: string;
+                    enneagram_pdf_path?: string | null;
                     expires_at?: string;
                     id?: string;
                     invited_by?: string;
@@ -2480,6 +2579,16 @@ export type Database = {
                   }
                 | { Args: { p_is_manager: boolean; p_user_id: string }; Returns: Json };
             get_team_member_ids: { Args: { superior_id: string }; Returns: string[] };
+            list_agents_for_reassign: {
+                Args: never;
+                Returns: {
+                    email: string;
+                    full_name: string;
+                    id: string;
+                    reports_to: string;
+                    reports_to_name: string;
+                }[];
+            };
             normalize_sg_phone: { Args: { raw_phone: string }; Returns: string };
             notify_insert: {
                 Args: {
@@ -2489,6 +2598,10 @@ export type Database = {
                     p_type: string;
                     p_user_id: string;
                 };
+                Returns: undefined;
+            };
+            reassign_agent_upline: {
+                Args: { p_agent_id: string; p_new_manager_id: string };
                 Returns: undefined;
             };
             redact_audit_data: {

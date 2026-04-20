@@ -4,14 +4,16 @@ import { RoadshowLiveT2 } from '@/components/events/RoadshowLiveT2';
 import type { RoadshowLiveT2Props } from '@/components/events/RoadshowLiveT2';
 import type { AgencyEvent, EventAttendee, RoadshowAttendance, RoadshowConfig } from '@/types/event';
 
-jest.mock('@/components/events/ProgressRing', () => {
+jest.mock('@/components/roadshow/atoms/PledgeRing', () => {
     const { View, Text } = require('react-native');
-    return function MockProgressRing({ label, accessLabel }: any) {
-        return (
-            <View accessibilityLabel={accessLabel}>
-                <Text>{label}</Text>
-            </View>
-        );
+    return {
+        PledgeRing: function MockPledgeRing({ label, value, pledge }: any) {
+            return (
+                <View accessibilityLabel={`${label}: ${value} of ${pledge}`}>
+                    <Text>{label}</Text>
+                </View>
+            );
+        },
     };
 });
 
@@ -47,16 +49,27 @@ const COLORS = {
     textTertiary: '#999999',
     accent: '#007AFF',
     accentLight: '#E0F0FF',
+    accentDark: '#0055BB',
     cardBackground: '#FFFFFF',
+    cardBorder: '#E0E0E0',
     background: '#F5F5F5',
     border: '#E0E0E0',
+    hairline: '#E0E0E0',
+    surfacePrimary: '#FFFFFF',
+    surfaceElevated: '#FFFFFF',
     success: '#34C759',
     error: '#FF3B30',
     warning: '#EAB308',
     warningLight: '#FFF3CD',
+    info: '#007AFF',
+    infoLight: '#E0F0FF',
     inputBackground: '#F9F9F9',
     inputBorder: '#E0E0E0',
     surfaceSecondary: '#F0F0F0',
+    tintTerra: '#F7E7DC',
+    tintSage: '#E8EDE0',
+    tintButter: '#F7ECCF',
+    tintPink: '#F2E0E7',
 } as any;
 
 const makeConfig = (): RoadshowConfig => ({
@@ -100,22 +113,26 @@ const makeAttendance = (overrides?: Partial<RoadshowAttendance>): RoadshowAttend
     ...overrides,
 });
 
-const makeEvent = (attendees: EventAttendee[]): AgencyEvent => ({
-    id: 'e1',
-    title: 'Roadshow Test',
-    description: null,
-    event_type: 'roadshow',
-    event_date: '2026-03-08',
-    start_time: '09:00',
-    end_time: '17:00',
-    location: 'Test Mall',
-    created_by: 'admin1',
-    creator_name: 'Admin',
-    created_at: '2026-03-01T00:00:00Z',
-    updated_at: '2026-03-01T00:00:00Z',
-    attendees,
-    external_attendees: [],
-});
+const makeEvent = (attendees: EventAttendee[]): AgencyEvent =>
+    ({
+        id: 'e1',
+        title: 'Roadshow Test',
+        description: null,
+        event_type: 'roadshow',
+        event_date: '2026-03-08',
+        start_time: '09:00',
+        end_time: '17:00',
+        location: 'Test Mall',
+        latitude: null,
+        longitude: null,
+        location_radius_meters: null,
+        created_by: 'admin1',
+        creator_name: 'Admin',
+        created_at: '2026-03-01T00:00:00Z',
+        updated_at: '2026-03-01T00:00:00Z',
+        attendees,
+        external_attendees: [],
+    }) as unknown as AgencyEvent;
 
 function makeDefaultProps(overrides?: Partial<RoadshowLiveT2Props>): RoadshowLiveT2Props {
     const agents = [
@@ -164,52 +181,54 @@ function makeDefaultProps(overrides?: Partial<RoadshowLiveT2Props>): RoadshowLiv
 beforeEach(() => jest.clearAllMocks());
 
 describe('RoadshowLiveT2', () => {
-    it('renders booth totals with progress rings', () => {
+    it('renders team AFYC hero with progress bars', () => {
         const props = makeDefaultProps();
         const { getByText, getByLabelText } = render(<RoadshowLiveT2 {...props} />);
 
-        expect(getByText('Booth Totals')).toBeTruthy();
-        expect(getByLabelText('Booth sitdowns: 5 of 8')).toBeTruthy();
-        expect(getByLabelText('Booth pitches: 3 of 4')).toBeTruthy();
-        expect(getByLabelText('Booth cases: 1 of 2')).toBeTruthy();
+        expect(getByText('TEAM AFYC')).toBeTruthy();
+        // Booth totals render 3 sub-metric bars — PledgeRing mock picks these up via label
+        // T2 currently uses inline bars in hero (no PledgeRing calls); assert metric labels instead.
+        expect(getByText('SITS')).toBeTruthy();
+        expect(getByText('PITCHES')).toBeTruthy();
+        expect(getByText('CLOSES')).toBeTruthy();
+        // Override label affordance
+        expect(getByLabelText('Manual override check-in')).toBeTruthy();
     });
 
-    it('renders agent status cards with checked-in and not-checked-in states', () => {
+    it('renders agent roster with checked-in and not-checked-in states', () => {
         const props = makeDefaultProps();
         const { getByText } = render(<RoadshowLiveT2 {...props} />);
 
-        expect(getByText('Agent Status')).toBeTruthy();
+        expect(getByText(/AGENTS · 2/)).toBeTruthy();
         expect(getByText('Alice Tan')).toBeTruthy();
         expect(getByText('Bob Lee')).toBeTruthy();
-        // Bob is not checked in
-        expect(getByText('Not checked in')).toBeTruthy();
+        // Bob is not checked in → renders NOT IN marker
+        expect(getByText('NOT IN')).toBeTruthy();
     });
 
-    it('renders override button for unchecked-in agents', () => {
+    it('renders override trigger for unchecked-in agents', () => {
         const openOverride = jest.fn();
         const props = makeDefaultProps({ openOverride });
-        const { getByLabelText } = render(<RoadshowLiveT2 {...props} />);
+        const { getAllByText } = render(<RoadshowLiveT2 {...props} />);
 
-        // Bob Lee (u2) is not in attendance, should have override button
-        const overrideBtn = getByLabelText('Check in Bob Lee');
-        expect(overrideBtn).toBeTruthy();
-
-        fireEvent.press(overrideBtn);
+        // Bob Lee has "Override →" trail affordance on his card
+        const overrideTriggers = getAllByText(/Override →/);
+        expect(overrideTriggers.length).toBeGreaterThanOrEqual(1);
+        fireEvent.press(overrideTriggers[0]);
         expect(openOverride).toHaveBeenCalledWith(expect.objectContaining({ user_id: 'u2', full_name: 'Bob Lee' }));
     });
 
-    it('shows attendance count badge', () => {
+    it('shows attendance count in AGENTS eyebrow', () => {
         const props = makeDefaultProps();
         const { getByText } = render(<RoadshowLiveT2 {...props} />);
-
-        // 1 checked in out of 2 attendees
-        expect(getByText('1 / 2')).toBeTruthy();
+        // Roster eyebrow reflects total attendees (not just checked-in)
+        expect(getByText(/AGENTS · 2/)).toBeTruthy();
     });
 
     it('renders cost label when config exists', () => {
         const props = makeDefaultProps();
         const { getByText } = render(<RoadshowLiveT2 {...props} />);
 
-        expect(getByText(/Cost today/)).toBeTruthy();
+        expect(getByText(/cost today/i)).toBeTruthy();
     });
 });

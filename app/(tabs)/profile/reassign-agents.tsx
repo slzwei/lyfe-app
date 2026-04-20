@@ -18,7 +18,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 
 export default function ReassignAgentsScreen() {
     const { colors } = useTheme();
-    const { profile } = useAuth();
+    const { user } = useAuth();
 
     const [agents, setAgents] = useState<AgentForReassign[]>([]);
     const [loading, setLoading] = useState(true);
@@ -30,7 +30,7 @@ export default function ReassignAgentsScreen() {
     const [managersLoading, setManagersLoading] = useState(false);
     const [submitting, setSubmitting] = useState(false);
 
-    const allowed = canReassignAgents(profile?.role ?? 'candidate');
+    const allowed = canReassignAgents(user?.role ?? 'candidate');
 
     const load = useCallback(async () => {
         const { data, error: fetchErr } = await fetchAgentsForReassign();

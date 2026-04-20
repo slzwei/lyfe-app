@@ -298,24 +298,26 @@ describe('PledgeSheet', () => {
 
     beforeEach(() => jest.clearAllMocks());
 
-    it('renders title when visible', () => {
+    it('renders editorial title when visible', () => {
         const PledgeSheet = getPledgeSheet();
         const { getByText } = render(<PledgeSheet {...makeProps()} />);
-        expect(getByText('Your Pledge for Today')).toBeTruthy();
+        // Editorial serif title split across text nodes — assert pieces
+        expect(getByText(/Your/)).toBeTruthy();
+        expect(getByText('pledge')).toBeTruthy();
     });
 
     it('does not render content when hidden', () => {
         const PledgeSheet = getPledgeSheet();
         const { queryByText } = render(<PledgeSheet {...makeProps({ showPledgeSheet: false })} />);
-        expect(queryByText('Your Pledge for Today')).toBeNull();
+        expect(queryByText('pledge')).toBeNull();
     });
 
     it('shows stepper labels and current values', () => {
         const PledgeSheet = getPledgeSheet();
         const { getByText } = render(<PledgeSheet {...makeProps()} />);
-        expect(getByText('Sitdowns today')).toBeTruthy();
-        expect(getByText('Pitches today')).toBeTruthy();
-        expect(getByText('Cases to close')).toBeTruthy();
+        expect(getByText('Sit-downs')).toBeTruthy();
+        expect(getByText('Pitches')).toBeTruthy();
+        expect(getByText('Cases')).toBeTruthy();
         expect(getByText('3')).toBeTruthy();
         expect(getByText('2')).toBeTruthy();
         expect(getByText('1')).toBeTruthy();
@@ -325,9 +327,8 @@ describe('PledgeSheet', () => {
         const setPledgeSitdowns = jest.fn();
         const PledgeSheet = getPledgeSheet();
         const { getByLabelText } = render(<PledgeSheet {...makeProps({ setPledgeSitdowns })} />);
-        fireEvent.press(getByLabelText('Increase Sitdowns today'));
+        fireEvent.press(getByLabelText('Increase Sit-downs'));
         expect(setPledgeSitdowns).toHaveBeenCalledTimes(1);
-        // The setter is called with an updater function
         const updater = setPledgeSitdowns.mock.calls[0][0];
         expect(typeof updater).toBe('function');
         expect(updater(5)).toBe(6);
@@ -337,7 +338,7 @@ describe('PledgeSheet', () => {
         const setPledgeSitdowns = jest.fn();
         const PledgeSheet = getPledgeSheet();
         const { getByLabelText } = render(<PledgeSheet {...makeProps({ setPledgeSitdowns })} />);
-        fireEvent.press(getByLabelText('Decrease Sitdowns today'));
+        fireEvent.press(getByLabelText('Decrease Sit-downs'));
         expect(setPledgeSitdowns).toHaveBeenCalledTimes(1);
         const updater = setPledgeSitdowns.mock.calls[0][0];
         expect(updater(0)).toBe(0);
@@ -348,7 +349,7 @@ describe('PledgeSheet', () => {
         const setPledgePitches = jest.fn();
         const PledgeSheet = getPledgeSheet();
         const { getByLabelText } = render(<PledgeSheet {...makeProps({ setPledgePitches })} />);
-        fireEvent.press(getByLabelText('Increase Pitches today'));
+        fireEvent.press(getByLabelText('Increase Pitches'));
         const updater = setPledgePitches.mock.calls[0][0];
         expect(updater(2)).toBe(3);
     });
@@ -357,7 +358,7 @@ describe('PledgeSheet', () => {
         const setPledgeClosed = jest.fn();
         const PledgeSheet = getPledgeSheet();
         const { getByLabelText } = render(<PledgeSheet {...makeProps({ setPledgeClosed })} />);
-        fireEvent.press(getByLabelText('Decrease Cases to close'));
+        fireEvent.press(getByLabelText('Decrease Cases'));
         const updater = setPledgeClosed.mock.calls[0][0];
         expect(updater(1)).toBe(0);
     });
@@ -366,16 +367,15 @@ describe('PledgeSheet', () => {
         const handleConfirmPledge = jest.fn();
         const PledgeSheet = getPledgeSheet();
         const { getByText } = render(<PledgeSheet {...makeProps({ handleConfirmPledge })} />);
-        fireEvent.press(getByText('Confirm & Pledge'));
+        fireEvent.press(getByText('Continue to face check'));
         expect(handleConfirmPledge).toHaveBeenCalledTimes(1);
     });
 
-    it('disables confirm button when checkingIn is true', () => {
-        const handleConfirmPledge = jest.fn();
+    it('hides CTA label when checkingIn is true', () => {
         const PledgeSheet = getPledgeSheet();
-        // When checkingIn, the button text is replaced by a spinner
-        const { queryByText } = render(<PledgeSheet {...makeProps({ checkingIn: true, handleConfirmPledge })} />);
-        expect(queryByText('Confirm & Pledge')).toBeNull();
+        const { queryByText } = render(<PledgeSheet {...makeProps({ checkingIn: true })} />);
+        // Spinner replaces the text
+        expect(queryByText('Continue to face check')).toBeNull();
     });
 
     it('shows error banner when checkinError is set', () => {
@@ -390,18 +390,13 @@ describe('PledgeSheet', () => {
         expect(queryByText('Network error')).toBeNull();
     });
 
-    it('calls setShowPledgeSheet(false) on close button press', () => {
-        const setShowPledgeSheet = jest.fn();
+    it('shows AFYC target label', () => {
         const PledgeSheet = getPledgeSheet();
-        const { getByText } = render(<PledgeSheet {...makeProps({ setShowPledgeSheet })} />);
-        // The close button has an Ionicons "close" icon; the header also has the title.
-        // The onRequestClose callback fires setShowPledgeSheet(false).
-        // Press the close TouchableOpacity — it's in the header row.
-        // We can find it by pressing any touchable near the title.
-        expect(getByText('Your Pledge for Today')).toBeTruthy();
+        const { getByText } = render(<PledgeSheet {...makeProps()} />);
+        expect(getByText('AFYC target')).toBeTruthy();
     });
 
-    it('shows AFYC target input with current value', () => {
+    it('shows AFYC input with current value', () => {
         const PledgeSheet = getPledgeSheet();
         const { getByDisplayValue } = render(<PledgeSheet {...makeProps()} />);
         expect(getByDisplayValue('2000')).toBeTruthy();
@@ -436,8 +431,10 @@ describe('ActivityConfirmSheet', () => {
     it('renders sitdown confirmation when confirmActivity is sitdown', () => {
         const ActivityConfirmSheet = getSheet();
         const { getByText } = render(<ActivityConfirmSheet {...makeProps()} />);
-        expect(getByText('Log Sitdown?')).toBeTruthy();
-        expect(getByText('2 logged so far today')).toBeTruthy();
+        // Title "Sit-down logged" — RNTL concatenates nested Text children
+        expect(getByText('Sit-down logged')).toBeTruthy();
+        // Subtitle is "<line> Your ring just nudged up." for sitdowns
+        expect(getByText(/One conversation in the books/)).toBeTruthy();
     });
 
     it('renders pitch confirmation when confirmActivity is pitch', () => {
@@ -447,15 +444,15 @@ describe('ActivityConfirmSheet', () => {
                 {...makeProps({ confirmActivity: 'pitch', myCounts: { sitdowns: 0, pitches: 0, closed: 0, afyc: 0 } })}
             />,
         );
-        expect(getByText('Log Pitch?')).toBeTruthy();
-        expect(getByText('First one today')).toBeTruthy();
+        expect(getByText('Pitch logged')).toBeTruthy();
+        expect(getByText(/Plan walked through/)).toBeTruthy();
     });
 
     it('is hidden when confirmActivity is null', () => {
         const ActivityConfirmSheet = getSheet();
         const { queryByText } = render(<ActivityConfirmSheet {...makeProps({ confirmActivity: null })} />);
-        expect(queryByText('Log Sitdown?')).toBeNull();
-        expect(queryByText('Log Pitch?')).toBeNull();
+        expect(queryByText('Sit-down logged')).toBeNull();
+        expect(queryByText('Pitch logged')).toBeNull();
     });
 
     it('calls handleLogActivity and setConfirmActivity on confirm press', () => {
@@ -465,7 +462,8 @@ describe('ActivityConfirmSheet', () => {
         const { getByText } = render(
             <ActivityConfirmSheet {...makeProps({ handleLogActivity, setConfirmActivity })} />,
         );
-        fireEvent.press(getByText('Log Sitdown'));
+        // CTA renamed to "Done" in v2
+        fireEvent.press(getByText('Done'));
         expect(handleLogActivity).toHaveBeenCalledWith('sitdown');
         expect(setConfirmActivity).toHaveBeenCalledWith(null);
     });
@@ -478,7 +476,7 @@ describe('ActivityConfirmSheet', () => {
         expect(setConfirmActivity).toHaveBeenCalledWith(null);
     });
 
-    it('shows count subtitle for pitch with existing count', () => {
+    it('renders subtitle line regardless of count', () => {
         const ActivityConfirmSheet = getSheet();
         const { getByText } = render(
             <ActivityConfirmSheet
@@ -488,7 +486,7 @@ describe('ActivityConfirmSheet', () => {
                 })}
             />,
         );
-        expect(getByText('5 logged so far today')).toBeTruthy();
+        expect(getByText(/Plan walked through/)).toBeTruthy();
     });
 
     it('renders WheelPicker components for time selection', () => {
@@ -497,10 +495,10 @@ describe('ActivityConfirmSheet', () => {
         expect(getAllByTestId('wheel-picker').length).toBe(3);
     });
 
-    it('shows Time label', () => {
+    it('shows TIME label', () => {
         const ActivityConfirmSheet = getSheet();
         const { getByText } = render(<ActivityConfirmSheet {...makeProps()} />);
-        expect(getByText('Time')).toBeTruthy();
+        expect(getByText('TIME')).toBeTruthy();
     });
 });
 
@@ -530,66 +528,56 @@ describe('AfycSheet', () => {
 
     beforeEach(() => jest.clearAllMocks());
 
-    it('renders title when visible', () => {
+    it('renders editorial title when visible', () => {
         const AfycSheet = getSheet();
-        const { getAllByText } = render(<AfycSheet {...makeProps()} />);
-        // Title and button both say "Log Case Closed"
-        expect(getAllByText('Log Case Closed').length).toBeGreaterThanOrEqual(1);
+        const { getByText } = render(<AfycSheet {...makeProps()} />);
+        // "A close. Nicely done." with italic "close" accent
+        expect(getByText(/Nicely done/)).toBeTruthy();
     });
 
     it('is hidden when showAfycSheet is false', () => {
         const AfycSheet = getSheet();
         const { queryByText } = render(<AfycSheet {...makeProps({ showAfycSheet: false })} />);
-        expect(queryByText('Log Case Closed')).toBeNull();
+        expect(queryByText(/Nicely done/)).toBeNull();
     });
 
-    it('shows AFYC Amount label and input value', () => {
+    it('shows AFYC label and current amount', () => {
         const AfycSheet = getSheet();
-        const { getByText, getByDisplayValue } = render(<AfycSheet {...makeProps()} />);
-        expect(getByText('AFYC Amount ($)')).toBeTruthy();
-        expect(getByDisplayValue('1500')).toBeTruthy();
+        const { getByText } = render(<AfycSheet {...makeProps()} />);
+        expect(getByText('AFYC')).toBeTruthy();
+        // Displays $1,500 formatted
+        expect(getByText(/1,500/)).toBeTruthy();
     });
 
     it('calls handleLogCaseClosed on confirm press', () => {
         const handleLogCaseClosed = jest.fn();
         const AfycSheet = getSheet();
-        const { getAllByText } = render(<AfycSheet {...makeProps({ handleLogCaseClosed })} />);
-        // There are two "Log Case Closed" texts: title and button
-        // The button is a TouchableOpacity; press it
-        const buttons = getAllByText('Log Case Closed');
-        fireEvent.press(buttons[buttons.length - 1]);
+        const { getByText } = render(<AfycSheet {...makeProps({ handleLogCaseClosed })} />);
+        fireEvent.press(getByText('Log the close'));
         expect(handleLogCaseClosed).toHaveBeenCalledTimes(1);
     });
 
-    it('disables confirm button when loggingActivity is true', () => {
-        const handleLogCaseClosed = jest.fn();
+    it('hides confirm label when loggingActivity is true', () => {
         const AfycSheet = getSheet();
-        const { getAllByText } = render(<AfycSheet {...makeProps({ loggingActivity: true, handleLogCaseClosed })} />);
-        // When logging, the button text is replaced by spinner, so only title remains
-        const matches = getAllByText('Log Case Closed');
-        expect(matches.length).toBe(1); // only the title
+        const { queryByText } = render(<AfycSheet {...makeProps({ loggingActivity: true })} />);
+        expect(queryByText('Log the close')).toBeNull();
     });
 
-    it('calls skip AFYC handler when skip link pressed', () => {
-        const handleLogCaseClosed = jest.fn();
-        const setAfycInput = jest.fn();
-        const AfycSheet = getSheet();
-        const { getByText } = render(<AfycSheet {...makeProps({ handleLogCaseClosed, setAfycInput })} />);
-        fireEvent.press(getByText(/Skip AFYC/));
-        expect(setAfycInput).toHaveBeenCalledWith('0');
-        expect(handleLogCaseClosed).toHaveBeenCalledTimes(1);
-    });
-
-    it('renders WheelPicker components for time selection', () => {
-        const AfycSheet = getSheet();
-        const { getAllByTestId } = render(<AfycSheet {...makeProps()} />);
-        expect(getAllByTestId('wheel-picker').length).toBe(3);
-    });
-
-    it('shows Time label', () => {
+    it('shows quick-pick amounts', () => {
         const AfycSheet = getSheet();
         const { getByText } = render(<AfycSheet {...makeProps()} />);
-        expect(getByText('Time')).toBeTruthy();
+        // Prototype quick picks: 1000, 1800, 2400, 3600, 6000
+        expect(getByText('$1,000')).toBeTruthy();
+        expect(getByText('$2,400')).toBeTruthy();
+        expect(getByText('$6,000')).toBeTruthy();
+    });
+
+    it('sets afyc when quick pick tapped', () => {
+        const setAfycInput = jest.fn();
+        const AfycSheet = getSheet();
+        const { getByText } = render(<AfycSheet {...makeProps({ setAfycInput })} />);
+        fireEvent.press(getByText('$2,400'));
+        expect(setAfycInput).toHaveBeenCalledWith('2400');
     });
 });
 
@@ -633,30 +621,31 @@ describe('ManagerOverrideSheet', () => {
 
     beforeEach(() => jest.clearAllMocks());
 
-    it('renders title with target attendee name', () => {
+    it('renders editorial title referencing Override check-in', () => {
         const ManagerOverrideSheet = getSheet();
         const { getByText } = render(<ManagerOverrideSheet {...makeProps()} />);
-        expect(getByText('Check in for John Agent')).toBeTruthy();
+        expect(getByText(/Override/)).toBeTruthy();
+        expect(getByText('check-in')).toBeTruthy();
     });
 
     it('is hidden when overrideTarget is null', () => {
         const ManagerOverrideSheet = getSheet();
         const { queryByText } = render(<ManagerOverrideSheet {...makeProps({ overrideTarget: null })} />);
-        expect(queryByText('Check in for John Agent')).toBeNull();
+        expect(queryByText(/Override/)).toBeNull();
     });
 
-    it('shows recorded-by message with manager name', () => {
+    it('shows override-by note with manager name', () => {
         const ManagerOverrideSheet = getSheet();
         const { getByText } = render(<ManagerOverrideSheet {...makeProps()} />);
-        expect(getByText('Recorded as override by Manager Lee')).toBeTruthy();
+        expect(getByText(/Recorded as override by Manager Lee/)).toBeTruthy();
     });
 
-    it('shows pledge stepper labels', () => {
+    it('shows pledge stepper labels (uppercased per new stepper design)', () => {
         const ManagerOverrideSheet = getSheet();
         const { getByText } = render(<ManagerOverrideSheet {...makeProps()} />);
-        expect(getByText('Sitdowns')).toBeTruthy();
-        expect(getByText('Pitches')).toBeTruthy();
-        expect(getByText('Cases')).toBeTruthy();
+        expect(getByText('SITDOWNS')).toBeTruthy();
+        expect(getByText('PITCHES')).toBeTruthy();
+        expect(getByText('CLOSES')).toBeTruthy();
     });
 
     it('shows pledge stepper values', () => {
@@ -683,18 +672,14 @@ describe('ManagerOverrideSheet', () => {
         const handleConfirmOverride = jest.fn();
         const ManagerOverrideSheet = getSheet();
         const { getByText } = render(<ManagerOverrideSheet {...makeProps({ handleConfirmOverride })} />);
-        fireEvent.press(getByText('Confirm Override Check-in'));
+        fireEvent.press(getByText('Confirm override'));
         expect(handleConfirmOverride).toHaveBeenCalledTimes(1);
     });
 
-    it('disables confirm button when overrideSubmitting is true', () => {
-        const handleConfirmOverride = jest.fn();
+    it('hides confirm label when overrideSubmitting is true', () => {
         const ManagerOverrideSheet = getSheet();
-        const { queryByText } = render(
-            <ManagerOverrideSheet {...makeProps({ overrideSubmitting: true, handleConfirmOverride })} />,
-        );
-        // Button text replaced by spinner
-        expect(queryByText('Confirm Override Check-in')).toBeNull();
+        const { queryByText } = render(<ManagerOverrideSheet {...makeProps({ overrideSubmitting: true })} />);
+        expect(queryByText('Confirm override')).toBeNull();
     });
 
     it('shows error banner when overrideError is set', () => {
@@ -709,15 +694,15 @@ describe('ManagerOverrideSheet', () => {
         expect(queryByText('Failed to check in')).toBeNull();
     });
 
-    it('shows late reason input field', () => {
+    it('shows late reason field label', () => {
         const ManagerOverrideSheet = getSheet();
         const { getByText } = render(<ManagerOverrideSheet {...makeProps()} />);
-        expect(getByText('Late reason (optional)')).toBeTruthy();
+        expect(getByText('LATE REASON (OPTIONAL)')).toBeTruthy();
     });
 
-    it('shows pledge on their behalf section header', () => {
+    it('shows pledge-on-behalf section header', () => {
         const ManagerOverrideSheet = getSheet();
         const { getByText } = render(<ManagerOverrideSheet {...makeProps()} />);
-        expect(getByText('Pledge on their behalf')).toBeTruthy();
+        expect(getByText('PLEDGE ON THEIR BEHALF')).toBeTruthy();
     });
 });

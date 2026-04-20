@@ -41,9 +41,12 @@ describe('RoadshowSettingsForm', () => {
     // -------------------------------------------------------------------------
     // 1. Title
     // -------------------------------------------------------------------------
-    it('renders title "Roadshow Settings"', () => {
-        const { getByText } = render(<RoadshowSettingsForm {...makeProps()} />);
-        expect(getByText('Roadshow Settings')).toBeTruthy();
+    it('renders the form with Roadshow Settings a11y label', () => {
+        // Visible header moved up to the parent screen's "ROADSHOW CONFIG"
+        // eyebrow — this component renders flat. A11y label preserves the
+        // legacy semantic name for consumers that care.
+        const { getByLabelText } = render(<RoadshowSettingsForm {...makeProps()} />);
+        expect(getByLabelText('Roadshow Settings')).toBeTruthy();
     });
 
     // -------------------------------------------------------------------------
@@ -370,12 +373,17 @@ describe('RoadshowSettingsForm', () => {
     // Section labels are present
     // -------------------------------------------------------------------------
     it('renders stepper section labels', () => {
-        const { getByText } = render(<RoadshowSettingsForm {...makeProps()} />);
-        expect(getByText('Agents per slot / day')).toBeTruthy();
-        expect(getByText('Grace period (minutes)')).toBeTruthy();
-        expect(getByText('Suggested Daily Targets')).toBeTruthy();
-        expect(getByText('Sitdowns')).toBeTruthy();
-        expect(getByText('Pitches')).toBeTruthy();
-        expect(getByText('Cases Closed')).toBeTruthy();
+        const { getByText, getByLabelText } = render(<RoadshowSettingsForm {...makeProps()} />);
+        // NumberStepper labels render uppercased per design tokens
+        expect(getByText('SLOTS / DAY')).toBeTruthy();
+        expect(getByText('GRACE (MIN)')).toBeTruthy();
+        expect(getByText('SUGGESTED DAILY TARGETS')).toBeTruthy();
+        expect(getByText('SITDOWNS')).toBeTruthy();
+        expect(getByText('PITCHES')).toBeTruthy();
+        expect(getByText('CLOSED')).toBeTruthy();
+        // A11y labels preserve original semantic names for tests that care
+        expect(getByLabelText('Increase agents per slot')).toBeTruthy();
+        expect(getByLabelText('Increase grace period')).toBeTruthy();
+        expect(getByLabelText('Increase Cases Closed target')).toBeTruthy();
     });
 });

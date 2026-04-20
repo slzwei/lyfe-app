@@ -11,7 +11,7 @@ interface UseActivityLogParams {
     myAttendance: RoadshowAttendance | null;
     activities: RoadshowActivity[];
     setActivities: React.Dispatch<React.SetStateAction<RoadshowActivity[]>>;
-    onMilestone: () => void;
+    onMilestone: (kind?: 'sit' | 'pitch' | 'case') => void;
 }
 
 export function useActivityLog({
@@ -77,7 +77,7 @@ export function useActivityLog({
             const pledgedTarget =
                 type === 'sitdown' ? (myAttendance?.pledged_sitdowns ?? 0) : (myAttendance?.pledged_pitches ?? 0);
             if (pledgedTarget > 0 && currentCount + 1 === pledgedTarget) {
-                onMilestone();
+                onMilestone(type === 'sitdown' ? 'sit' : 'pitch');
             }
 
             // Optimistic update
@@ -137,7 +137,7 @@ export function useActivityLog({
         setActivities((prev) => [optimistic, ...prev]);
         setShowAfycSheet(false);
         setAfycInput('');
-        onMilestone();
+        onMilestone('case');
 
         const { error: ccError } = await logRoadshowActivity(eventId!, userId!, 'case_closed', amount, loggedAt);
         if (ccError) {
@@ -172,22 +172,6 @@ export function useActivityLog({
         ]);
     };
 
-    const handleReturnToBooth = async () => {
-        const tempId = `opt_ret_${Date.now()}`;
-        const optimistic: RoadshowActivity = {
-            id: tempId,
-            event_id: eventId!,
-            user_id: userId!,
-            full_name: userFullName ?? 'Me',
-            type: 'check_in',
-            afyc_amount: null,
-            logged_at: new Date().toISOString(),
-        };
-        setActivities((prev) => [optimistic, ...prev]);
-        const { error: retError } = await logRoadshowActivity(eventId!, userId!, 'check_in');
-        if (retError) setActivities((prev) => prev.filter((a) => a.id !== tempId));
-    };
-
     return {
         logDebounce,
         confirmActivity,
@@ -209,6 +193,5 @@ export function useActivityLog({
         handleLogActivity,
         handleLogCaseClosed,
         handleLogDeparture,
-        handleReturnToBooth,
     };
 }

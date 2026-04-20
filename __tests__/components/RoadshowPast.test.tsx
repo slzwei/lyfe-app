@@ -11,7 +11,7 @@ jest.mock('@/components/Avatar', () => {
 });
 
 jest.mock('@/lib/dateTime', () => ({
-    formatCheckinTime: jest.fn((iso: string) => '9:05 AM'),
+    formatCheckinTime: jest.fn((_iso: string) => '9:05 AM'),
 }));
 
 const COLORS = {
@@ -20,14 +20,23 @@ const COLORS = {
     textTertiary: '#999999',
     accent: '#007AFF',
     accentLight: '#E0F0FF',
+    accentDark: '#0055BB',
     cardBackground: '#FFFFFF',
+    cardBorder: '#E0E0E0',
     background: '#F5F5F5',
     border: '#E0E0E0',
+    hairline: '#E0E0E0',
+    surfacePrimary: '#FFFFFF',
+    surfaceElevated: '#FFFFFF',
     success: '#34C759',
     error: '#FF3B30',
     warning: '#EAB308',
     warningLight: '#FFF3CD',
     successLight: '#D1FAE5',
+    tintTerra: '#F7E7DC',
+    tintSage: '#E8EDE0',
+    tintButter: '#F7ECCF',
+    tintPink: '#F2E0E7',
 } as any;
 
 const makeAttendance = (overrides?: Partial<RoadshowAttendance>): RoadshowAttendance => ({
@@ -66,7 +75,7 @@ const defaultCounts = () => ({ sitdowns: 3, pitches: 1, closed: 1, afyc: 1500 })
 beforeEach(() => jest.clearAllMocks());
 
 describe('RoadshowPast', () => {
-    it('renders attendance list with agent names', () => {
+    it('renders leaderboard with agent names', () => {
         const att = [makeAttendance(), makeAttendance({ id: 'att-2', user_id: 'u2', full_name: 'Bob Lee' })];
         const { getAllByText, getByText } = render(
             <RoadshowPast
@@ -78,14 +87,16 @@ describe('RoadshowPast', () => {
             />,
         );
 
-        expect(getByText('Attendance')).toBeTruthy();
-        expect(getByText('2/3')).toBeTruthy();
-        // Names appear in both attendance and results table, so use getAllByText
+        // Editorial leaderboard eyebrow
+        expect(getByText(/LEADERBOARD/)).toBeTruthy();
+        // Ranked row renders both agents
         expect(getAllByText('Alice Tan').length).toBeGreaterThanOrEqual(1);
         expect(getAllByText('Bob Lee').length).toBeGreaterThanOrEqual(1);
+        // Attendance ratio in eyebrow row
+        expect(getByText(/2\/3/)).toBeTruthy();
     });
 
-    it('renders results table with totals row', () => {
+    it('renders leaderboard stats per agent', () => {
         const att = [makeAttendance()];
         const { getByText, getAllByText } = render(
             <RoadshowPast
@@ -97,14 +108,14 @@ describe('RoadshowPast', () => {
             />,
         );
 
-        expect(getByText('Results vs Pledges')).toBeTruthy();
-        expect(getByText('TOTAL')).toBeTruthy();
-        // sitdowns 3/4 appears for agent row and total row — use getAllByText
-        expect(getAllByText('3/4').length).toBeGreaterThanOrEqual(1);
+        // Ranked row renders "3 sits · 1 pitch · 1 close"
+        expect(getByText(/3 sits/)).toBeTruthy();
+        // Dollar amount renders in leaderboard trail AND hero stat
+        expect(getAllByText(/1,500/).length).toBeGreaterThanOrEqual(1);
     });
 
     it('renders cost summary when config exists', () => {
-        const { getByText } = render(
+        const { getByText, getAllByText } = render(
             <RoadshowPast
                 colors={COLORS}
                 roadshowConfig={makeConfig()}
@@ -114,14 +125,15 @@ describe('RoadshowPast', () => {
             />,
         );
 
-        expect(getByText('Cost Summary')).toBeTruthy();
-        expect(getByText('$700.00')).toBeTruthy();
-        expect(getByText('$140.00')).toBeTruthy();
+        expect(getByText('COST SUMMARY')).toBeTruthy();
+        expect(getByText('$700')).toBeTruthy();
+        // $140 shows in both hero "cost $140" and cost summary row
+        expect(getAllByText('$140').length).toBeGreaterThanOrEqual(1);
         expect(getByText('$28.00')).toBeTruthy();
     });
 
-    it('handles empty attendance', () => {
-        const { getByText, queryByText } = render(
+    it('handles empty attendance gracefully', () => {
+        const { getByText } = render(
             <RoadshowPast
                 colors={COLORS}
                 roadshowConfig={makeConfig()}
@@ -131,7 +143,7 @@ describe('RoadshowPast', () => {
             />,
         );
 
-        expect(getByText('0/3')).toBeTruthy();
-        expect(queryByText('TOTAL')).toBeNull();
+        expect(getByText(/0\/3/)).toBeTruthy();
+        expect(getByText('No one checked in.')).toBeTruthy();
     });
 });

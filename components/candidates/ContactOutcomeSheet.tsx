@@ -1,5 +1,6 @@
 import type { ThemeColors } from '@/types/theme';
 import type { CandidateOutcome } from '@/types/recruitment';
+import { formatSgPhone } from '@/lib/phone';
 import { Ionicons } from '@expo/vector-icons';
 import React from 'react';
 import { KeyboardAvoidingView, Modal, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
@@ -81,7 +82,7 @@ export default function ContactOutcomeSheet({
                                     {pendingType === 'whatsapp' ? 'Did you message them?' : 'How did the call go?'}
                                 </Text>
                                 <Text style={[sheetStyles.subtitle, { color: colors.textSecondary }]}>
-                                    {candidateName} · {candidatePhone}
+                                    {candidateName} · {formatSgPhone(candidatePhone)}
                                 </Text>
 
                                 {pendingType === 'call' ? (

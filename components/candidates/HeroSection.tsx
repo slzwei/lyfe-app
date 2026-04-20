@@ -1,5 +1,6 @@
 import { Fonts } from '@/constants/type';
 import { letterSpacing } from '@/constants/platform';
+import { formatSgPhone } from '@/lib/phone';
 import { CANDIDATE_STATUS_CONFIG } from '@/types/recruitment';
 import type { RecruitmentCandidate } from '@/types/recruitment';
 import type { ThemeColors } from '@/types/theme';
@@ -51,14 +52,12 @@ export default function HeroSection({ candidate, colors, onStatusPress }: Props)
                 <View style={styles.metaItem}>
                     <Text style={[styles.metaLabel, { color: colors.textTertiary }]}>PHONE</Text>
                     <Text style={[styles.metaValue, { color: colors.textPrimary }]} numberOfLines={1}>
-                        {candidate.phone}
+                        {formatSgPhone(candidate.phone)}
                     </Text>
                 </View>
                 <View style={styles.metaItem}>
                     <Text style={[styles.metaLabel, { color: colors.textTertiary }]}>EMAIL</Text>
-                    <Text style={[styles.metaValue, { color: colors.textPrimary }]} numberOfLines={1}>
-                        {candidate.email || '—'}
-                    </Text>
+                    <Text style={[styles.metaValue, { color: colors.textPrimary }]}>{candidate.email || '—'}</Text>
                 </View>
                 <View style={styles.metaItem}>
                     <Text style={[styles.metaLabel, { color: colors.textTertiary }]}>MANAGER</Text>

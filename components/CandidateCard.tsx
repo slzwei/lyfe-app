@@ -1,6 +1,6 @@
 import { letterSpacing } from '@/constants/platform';
 import { useTheme } from '@/contexts/ThemeContext';
-import { timeAgo } from '@/lib/dateTime';
+import { formatSgPhone } from '@/lib/phone';
 import { CANDIDATE_STATUS_CONFIG, type RecruitmentCandidate } from '@/types/recruitment';
 import { Ionicons } from '@expo/vector-icons';
 import React from 'react';
@@ -11,11 +11,28 @@ interface CandidateCardProps {
     onPress: () => void;
 }
 
+function daysInPipeline(createdAt: string): string {
+    const days = Math.max(0, Math.floor((Date.now() - new Date(createdAt).getTime()) / 86400000));
+    return days === 0 ? 'Today' : `${days}d ago`;
+}
+
+function relativeAgo(iso: string): string {
+    const diff = Math.max(0, Date.now() - new Date(iso).getTime());
+    const minutes = Math.floor(diff / 60000);
+    if (minutes < 1) return 'Just now';
+    if (minutes < 60) return `${minutes}m ago`;
+    const hours = Math.floor(minutes / 60);
+    if (hours < 24) return `${hours}h ago`;
+    const days = Math.floor(hours / 24);
+    return `${days}d ago`;
+}
+
 function CandidateCard({ candidate, onPress }: CandidateCardProps) {
     const { colors } = useTheme();
     const statusConfig = CANDIDATE_STATUS_CONFIG[candidate.status];
 
-    const timeAgoStr = timeAgo(candidate.updated_at);
+    const createdStr = daysInPipeline(candidate.created_at);
+    const lastChangeStr = relativeAgo(candidate.updated_at);
     const interviewCount = candidate.interviews.length;
 
     return (
@@ -37,11 +54,16 @@ function CandidateCard({ candidate, onPress }: CandidateCardProps) {
                     <Text style={[styles.name, { color: colors.textPrimary }]} numberOfLines={1}>
                         {candidate.name}
                     </Text>
-                    <Text style={[styles.phone, { color: colors.textTertiary }]}>{candidate.phone}</Text>
+                    <Text style={[styles.phone, { color: colors.textTertiary }]}>{formatSgPhone(candidate.phone)}</Text>
                 </View>
 
-                <View style={[styles.statusBadge, { backgroundColor: statusConfig.color + '14' }]}>
-                    <Text style={[styles.statusText, { color: statusConfig.color }]}>{statusConfig.label}</Text>
+                <View style={styles.statusCol}>
+                    <View style={[styles.statusBadge, { backgroundColor: statusConfig.color + '14' }]}>
+                        <Text style={[styles.statusText, { color: statusConfig.color }]}>{statusConfig.label}</Text>
+                    </View>
+                    <Text style={[styles.lastChange, { color: colors.textTertiary }]}>
+                        Last change: {lastChangeStr}
+                    </Text>
                 </View>
             </View>
 
@@ -62,7 +84,7 @@ function CandidateCard({ candidate, onPress }: CandidateCardProps) {
                         </Text>
                     </View>
                 )}
-                <Text style={[styles.metaText, { color: colors.textTertiary }]}>{timeAgoStr}</Text>
+                <Text style={[styles.metaText, { color: colors.textTertiary }]}>Created: {createdStr}</Text>
             </View>
         </TouchableOpacity>
     );
@@ -104,6 +126,9 @@ const styles = StyleSheet.create({
         fontSize: 13,
         marginTop: 1,
     },
+    statusCol: {
+        alignItems: 'flex-end',
+    },
     statusBadge: {
         paddingHorizontal: 10,
         paddingVertical: 4,
@@ -112,6 +137,10 @@ const styles = StyleSheet.create({
     statusText: {
         fontSize: 12,
         fontWeight: '600',
+    },
+    lastChange: {
+        fontSize: 11,
+        marginTop: 4,
     },
     meta: {
         flexDirection: 'row',

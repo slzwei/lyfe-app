@@ -4,16 +4,22 @@ import { RoadshowLiveT1 } from '@/components/events/RoadshowLiveT1';
 import type { RoadshowLiveT1Props } from '@/components/events/RoadshowLiveT1';
 import type { RoadshowAttendance, RoadshowConfig } from '@/types/event';
 
-jest.mock('@/components/events/ProgressRing', () => {
+jest.mock('@/components/roadshow/atoms/PledgeRing', () => {
     const { View, Text } = require('react-native');
-    return function MockProgressRing({ label, accessLabel }: any) {
-        return (
-            <View accessibilityLabel={accessLabel}>
-                <Text>{label}</Text>
-            </View>
-        );
+    return {
+        PledgeRing: function MockPledgeRing({ label, value, pledge }: any) {
+            return (
+                <View accessibilityLabel={`${label}: ${value} of ${pledge}`}>
+                    <Text>{label}</Text>
+                </View>
+            );
+        },
     };
 });
+
+jest.mock('@/components/roadshow/atoms/ShimmerOverlay', () => ({
+    ShimmerOverlay: () => null,
+}));
 
 jest.mock('@/components/WheelPicker', () => {
     const { View } = require('react-native');
@@ -53,16 +59,27 @@ const COLORS = {
     textTertiary: '#999999',
     accent: '#007AFF',
     accentLight: '#E0F0FF',
+    accentDark: '#0055BB',
     cardBackground: '#FFFFFF',
+    cardBorder: '#E0E0E0',
     background: '#F5F5F5',
     border: '#E0E0E0',
+    hairline: '#E0E0E0',
+    surfacePrimary: '#FFFFFF',
+    surfaceElevated: '#FFFFFF',
     success: '#34C759',
     error: '#FF3B30',
     warning: '#EAB308',
     warningLight: '#FFF3CD',
+    info: '#007AFF',
+    infoLight: '#E0F0FF',
     inputBackground: '#F9F9F9',
     inputBorder: '#E0E0E0',
     surfaceSecondary: '#F0F0F0',
+    tintTerra: '#F7E7DC',
+    tintSage: '#E8EDE0',
+    tintButter: '#F7ECCF',
+    tintPink: '#F2E0E7',
 } as any;
 
 const makeConfig = (): RoadshowConfig => ({
@@ -153,10 +170,12 @@ beforeEach(() => jest.clearAllMocks());
 describe('RoadshowLiveT1', () => {
     it('renders check-in card when not checked in', () => {
         const props = makeDefaultProps({ hasCheckedIn: false });
-        const { getByLabelText, getByText } = render(<RoadshowLiveT1 {...props} />);
+        const { getByText } = render(<RoadshowLiveT1 {...props} />);
 
-        expect(getByLabelText('Check In Now')).toBeTruthy();
-        expect(getByText(/Booth opens/)).toBeTruthy();
+        // Prototype copy: dark bar "Check yourself in" + subtitle
+        expect(getByText('Check yourself in')).toBeTruthy();
+        // Boot-info row renders when roadshowConfig exists
+        expect(getByText(/Opens/i)).toBeTruthy();
     });
 
     it('renders progress rings when checked in', () => {
@@ -166,11 +185,11 @@ describe('RoadshowLiveT1', () => {
             myAttendance: myAtt,
             myCounts: { sitdowns: 2, pitches: 1, closed: 0, afyc: 500 },
         });
-        const { getByText, getByLabelText } = render(<RoadshowLiveT1 {...props} />);
+        const { getByLabelText } = render(<RoadshowLiveT1 {...props} />);
 
-        expect(getByText('Your Progress')).toBeTruthy();
-        expect(getByLabelText('Sitdowns: 2 of 4')).toBeTruthy();
-        expect(getByLabelText('Pitches: 1 of 2')).toBeTruthy();
+        expect(getByLabelText('sitdowns: 2 of 4')).toBeTruthy();
+        expect(getByLabelText('pitches: 1 of 2')).toBeTruthy();
+        expect(getByLabelText('cases: 0 of 1')).toBeTruthy();
     });
 
     it('renders activity logging buttons when checked in', () => {
@@ -182,18 +201,18 @@ describe('RoadshowLiveT1', () => {
         });
         const { getByLabelText } = render(<RoadshowLiveT1 {...props} />);
 
-        expect(getByLabelText('Log Sitdown, current count 3')).toBeTruthy();
+        expect(getByLabelText('Log Sit-down, current count 3')).toBeTruthy();
         expect(getByLabelText('Log Pitch, current count 1')).toBeTruthy();
-        expect(getByLabelText('Log Case Closed, current count 0')).toBeTruthy();
-        expect(getByLabelText('Leave Roadshow')).toBeTruthy();
+        expect(getByLabelText('Log Close, current count 0')).toBeTruthy();
+        expect(getByLabelText('Log departure')).toBeTruthy();
     });
 
-    it('calls handleOpenCheckin when check-in button pressed', () => {
+    it('calls handleOpenCheckin when check-in bar pressed', () => {
         const handleOpenCheckin = jest.fn();
         const props = makeDefaultProps({ hasCheckedIn: false, handleOpenCheckin });
-        const { getByLabelText } = render(<RoadshowLiveT1 {...props} />);
+        const { getByText } = render(<RoadshowLiveT1 {...props} />);
 
-        fireEvent.press(getByLabelText('Check In Now'));
+        fireEvent.press(getByText('Check yourself in'));
         expect(handleOpenCheckin).toHaveBeenCalledTimes(1);
     });
 
@@ -201,9 +220,8 @@ describe('RoadshowLiveT1', () => {
         const props = makeDefaultProps({ showPledgeSheet: true });
         const { getByText } = render(<RoadshowLiveT1 {...props} />);
 
-        expect(getByText('Your Pledge for Today')).toBeTruthy();
-        expect(getByText('Sitdowns today')).toBeTruthy();
-        expect(getByText('Pitches today')).toBeTruthy();
-        expect(getByText('Cases to close')).toBeTruthy();
+        // Editorial title split across multiple nodes — assert substrings
+        expect(getByText(/Your/)).toBeTruthy();
+        expect(getByText('pledge')).toBeTruthy();
     });
 });

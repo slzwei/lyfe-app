@@ -2,18 +2,20 @@ import ErrorBanner from '@/components/ErrorBanner';
 import EventCard from '@/components/events/EventCard';
 import InlineCalendar from '@/components/events/InlineCalendar';
 import LoadingState from '@/components/LoadingState';
-import ScreenHeader from '@/components/ScreenHeader';
+import { DarkHeroCard } from '@/components/roadshow/atoms/DarkHeroCard';
+import { EventStatusPill } from '@/components/roadshow/atoms/EventStatusPill';
+import { getRoadshowColors } from '@/constants/roadshow/tokens';
+import { RoadshowType, TropicFonts } from '@/constants/roadshow/typography';
 import { useAuth } from '@/contexts/AuthContext';
 import { useTheme } from '@/contexts/ThemeContext';
 import { fetchAllEvents, fetchEvents } from '@/lib/events';
-import { toDateStr } from '@/lib/dateTime';
+import { toDateStr, isEventLive } from '@/lib/dateTime';
 import type { AgencyEvent } from '@/types/event';
-import { Ionicons } from '@expo/vector-icons';
 import { useFocusEffect, useNavigation, useRouter } from 'expo-router';
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { NativeScrollEvent, NativeSyntheticEvent } from 'react-native';
-import { RefreshControl, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
-import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
+import { Pressable, RefreshControl, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 
 // ── Helpers ────────────────────────────────────────────────────
 
@@ -29,6 +31,18 @@ function formatSectionHeader(dateStr: string, todayStr: string): { label: string
     if (dateStr === todayStr) return { label: 'TODAY', dateDisplay };
     if (dateStr === toDateStr(tomorrow)) return { label: 'TOMORROW', dateDisplay };
     return { label: d.toLocaleDateString('en-SG', { weekday: 'long' }).toUpperCase(), dateDisplay };
+}
+
+function formatMonthYear(date: Date): string {
+    return date.toLocaleDateString('en-SG', { month: 'short', year: 'numeric' }).toUpperCase();
+}
+
+function getIsoWeek(date: Date): number {
+    const d = new Date(Date.UTC(date.getFullYear(), date.getMonth(), date.getDate()));
+    const dayNum = d.getUTCDay() || 7;
+    d.setUTCDate(d.getUTCDate() + 4 - dayNum);
+    const yearStart = new Date(Date.UTC(d.getUTCFullYear(), 0, 1));
+    return Math.ceil(((d.getTime() - yearStart.getTime()) / 86_400_000 + 1) / 7);
 }
 
 /** Add N days to a YYYY-MM-DD string */
@@ -54,13 +68,19 @@ function buildSectionDates(eventDatesSet: Set<string>, selectedDate: string): st
     return Array.from(dates).sort();
 }
 
+function splitTitle(title: string): { place: string; sub?: string } {
+    const m = title.trim().match(/^(.+?)[,·]\s*(.+)$/);
+    if (m) return { place: m[1], sub: m[2].replace(/\.$/, '') };
+    return { place: title.trim() };
+}
+
 // ── Main Screen ────────────────────────────────────────────────
 export default function EventsScreen() {
-    const { colors } = useTheme();
+    const { colors, resolved } = useTheme();
+    const stage = getRoadshowColors(resolved);
     const { user } = useAuth();
     const router = useRouter();
     const navigation = useNavigation();
-    const { bottom } = useSafeAreaInsets();
 
     const scrollToTodayRef = useRef<(() => void) | null>(null);
 
@@ -133,8 +153,6 @@ export default function EventsScreen() {
         }
     }, []);
 
-    // Called by each section's onLayout — records offset and fulfils pending scroll.
-    // Re-scrolls if the target section's y just changed (new mount or shifted position).
     const handleSectionLayout = useCallback((date: string, y: number) => {
         const prev = sectionOffsets.current.get(date);
         sectionOffsets.current.set(date, y);
@@ -144,8 +162,6 @@ export default function EventsScreen() {
         }
     }, []);
 
-    // Tracks whether the list is being dragged by the user, so we can sync the
-    // calendar pill from scroll position without the effect below fighting back.
     const isUserScrolling = useRef(false);
     const userScrollTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
@@ -181,8 +197,6 @@ export default function EventsScreen() {
     }, []);
 
     const handleScrollEndDrag = useCallback(() => {
-        // Fallback clear for slow drags that produce no momentum.
-        // Cancelled by handleMomentumScrollBegin as soon as momentum kicks in.
         userScrollTimer.current = setTimeout(() => {
             isUserScrolling.current = false;
             userScrollTimer.current = null;
@@ -204,7 +218,6 @@ export default function EventsScreen() {
         isUserScrolling.current = false;
     }, []);
 
-    // Scroll to selected date when it changes (unless the user is the one scrolling).
     const prevSelectedDate = useRef(selectedDate);
     useEffect(() => {
         if (prevSelectedDate.current === selectedDate) return;
@@ -212,24 +225,25 @@ export default function EventsScreen() {
         if (isUserScrolling.current) return;
 
         pendingScroll.current = { date: selectedDate, animated: true };
-        // Fast path — cached offsets are still valid when the section didn't shift.
         scrollToDate(selectedDate);
-        // Slow path — handleSectionLayout re-scrolls for new or moved sections.
-        // Grace period so late-firing onLayout events can still correct the scroll.
         const timeout = setTimeout(() => {
             pendingScroll.current = null;
         }, 500);
         return () => clearTimeout(timeout);
     }, [selectedDate, scrollToDate]);
 
+    // ── Live roadshow banner ───────────────────────────────────
+    const liveRoadshow = useMemo(
+        () => allEvents.find((e) => e.event_type === 'roadshow' && isEventLive(e.event_date, e.start_time, e.end_time)),
+        [allEvents],
+    );
+
     // ── Section data ───────────────────────────────────────────
     const eventDates = useMemo(() => new Set(allEvents.map((e) => e.event_date)), [allEvents]);
 
-    // Build sections: event dates + selected date + context days
     const allSections = useMemo(() => {
         const sectionDates = buildSectionDates(eventDates, selectedDate);
 
-        // Group events by date
         const eventsByDate = new Map<string, AgencyEvent[]>();
         for (const ev of allEvents) {
             const arr = eventsByDate.get(ev.event_date);
@@ -243,9 +257,6 @@ export default function EventsScreen() {
         });
     }, [allEvents, eventDates, selectedDate]);
 
-    // Initial scroll to selectedDate (today) once sections mount — otherwise
-    // the list opens on the earliest past event section at the top of the list.
-    // Non-animated so the user never sees the list at the wrong position.
     const didInitialScrollRef = useRef(false);
     useEffect(() => {
         if (didInitialScrollRef.current) return;
@@ -260,10 +271,66 @@ export default function EventsScreen() {
         return () => clearTimeout(timeout);
     }, [isLoading, allSections.length, selectedDate, scrollToDate]);
 
+    const now = new Date();
+    const eyebrowText = `${formatMonthYear(now)} · WK ${getIsoWeek(now)}`;
+
+    const renderEditorialHeader = () => (
+        <View style={styles.editorialHeader}>
+            <View style={styles.editorialTextCol}>
+                <Text style={[RoadshowType.eyebrow, { color: colors.textTertiary }]}>{eyebrowText}</Text>
+                <Text style={[styles.editorialTitle, { color: colors.textPrimary }]}>
+                    Events, <Text style={[styles.editorialItalic, { color: colors.accent }]}>roadshows</Text>.
+                </Text>
+            </View>
+            {canCreateEvents ? (
+                <Pressable
+                    testID="events-create-button"
+                    onPress={() => router.push('/(tabs)/events/create')}
+                    style={({ pressed }) => [
+                        styles.newPill,
+                        { borderColor: colors.accent, opacity: pressed ? 0.7 : 1 },
+                    ]}
+                    accessibilityLabel="Create event"
+                >
+                    <Text style={[styles.newPillText, { color: colors.accent }]}>+ New</Text>
+                </Pressable>
+            ) : null}
+        </View>
+    );
+
+    const renderLiveBanner = () => {
+        if (!liveRoadshow) return null;
+        const { place, sub } = splitTitle(liveRoadshow.title);
+        return (
+            <Pressable
+                onPress={() => router.push(`/(tabs)/events/${liveRoadshow.id}`)}
+                style={styles.liveBannerWrap}
+                accessibilityLabel={`Open live roadshow ${liveRoadshow.title}`}
+            >
+                <DarkHeroCard glow="terra" glowSize="md">
+                    <EventStatusPill status="live" />
+                    <Text style={[styles.liveTitle, { color: '#F4EEE1' }]}>
+                        {place}
+                        {sub ? (
+                            <>
+                                ,{'\n'}
+                                <Text style={[styles.liveTitleItalic, { color: stage.live }]}>{sub}</Text>.
+                            </>
+                        ) : null}
+                    </Text>
+                    <Text style={[styles.liveMeta, { color: 'rgba(244,238,225,0.6)' }]}>
+                        {liveRoadshow.start_time}
+                        {liveRoadshow.end_time ? ` – ${liveRoadshow.end_time}` : ''} · tap to open
+                    </Text>
+                </DarkHeroCard>
+            </Pressable>
+        );
+    };
+
     if (isLoading) {
         return (
             <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]} edges={['top']}>
-                <ScreenHeader title="Events" />
+                {renderEditorialHeader()}
                 <LoadingState />
             </SafeAreaView>
         );
@@ -271,9 +338,11 @@ export default function EventsScreen() {
 
     return (
         <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]} edges={['top']}>
-            <ScreenHeader title="Events" />
+            {renderEditorialHeader()}
 
             {eventError && <ErrorBanner message={eventError} onRetry={loadEvents} />}
+
+            {renderLiveBanner()}
 
             <InlineCalendar
                 selectedDate={selectedDate}
@@ -308,11 +377,10 @@ export default function EventsScreen() {
                             key={section.date}
                             onLayout={(e) => handleSectionLayout(section.date, e.nativeEvent.layout.y)}
                         >
-                            {/* Section header — compact for empty dates, normal for dates with events */}
                             <View
                                 style={[
                                     isEmpty ? styles.sectionHeaderCompact : styles.sectionHeader,
-                                    { borderBottomColor: colors.border },
+                                    { borderBottomColor: colors.hairline },
                                 ]}
                                 accessibilityRole="header"
                             >
@@ -332,7 +400,6 @@ export default function EventsScreen() {
                                 )}
                             </View>
 
-                            {/* Event cards */}
                             {section.events.map((event) => (
                                 <View key={event.id} testID={`events-card-${event.id}`} style={styles.eventCardWrap}>
                                     <EventCard
@@ -346,18 +413,6 @@ export default function EventsScreen() {
                     );
                 })}
             </ScrollView>
-
-            {canCreateEvents && (
-                <TouchableOpacity
-                    testID="events-create-button"
-                    style={[styles.fab, { backgroundColor: colors.accent, bottom: 28 + bottom }]}
-                    onPress={() => router.push('/(tabs)/events/create')}
-                    activeOpacity={0.85}
-                    accessibilityLabel="Create event"
-                >
-                    <Ionicons name="add" size={28} color={colors.textInverse} />
-                </TouchableOpacity>
-            )}
         </SafeAreaView>
     );
 }
@@ -366,11 +421,57 @@ const styles = StyleSheet.create({
     container: { flex: 1 },
     listContent: { paddingBottom: 100 },
 
+    editorialHeader: {
+        flexDirection: 'row',
+        justifyContent: 'space-between',
+        alignItems: 'flex-end',
+        paddingHorizontal: 20,
+        paddingTop: 12,
+        paddingBottom: 8,
+        gap: 12,
+    },
+    editorialTextCol: { flex: 1, gap: 4 },
+    editorialTitle: {
+        fontSize: 30,
+        fontFamily: TropicFonts.serif,
+        fontWeight: '400',
+        letterSpacing: -0.7,
+        lineHeight: 32,
+    },
+    editorialItalic: { fontFamily: TropicFonts.serifItalic, fontWeight: '500' },
+    newPill: {
+        paddingHorizontal: 11,
+        paddingVertical: 6,
+        borderRadius: 14,
+        borderWidth: 1,
+    },
+    newPillText: { fontSize: 11, fontFamily: TropicFonts.uiSemiBold },
+
+    liveBannerWrap: {
+        paddingHorizontal: 18,
+        paddingTop: 4,
+        paddingBottom: 8,
+    },
+    liveTitle: {
+        fontSize: 22,
+        fontFamily: TropicFonts.serif,
+        fontWeight: '500',
+        letterSpacing: -0.3,
+        lineHeight: 26,
+        marginTop: 4,
+    },
+    liveTitleItalic: { fontFamily: TropicFonts.serifItalic, fontWeight: '500' },
+    liveMeta: {
+        fontSize: 11.5,
+        fontFamily: TropicFonts.ui,
+        marginTop: 4,
+    },
+
     sectionHeader: {
         flexDirection: 'row',
         alignItems: 'baseline',
         gap: 8,
-        paddingHorizontal: 16,
+        paddingHorizontal: 20,
         paddingTop: 20,
         paddingBottom: 8,
         borderBottomWidth: StyleSheet.hairlineWidth,
@@ -379,43 +480,28 @@ const styles = StyleSheet.create({
         flexDirection: 'row',
         alignItems: 'baseline',
         gap: 8,
-        paddingHorizontal: 16,
+        paddingHorizontal: 20,
         paddingTop: 12,
         paddingBottom: 12,
         borderBottomWidth: StyleSheet.hairlineWidth,
     },
     sectionLabel: {
-        fontSize: 13,
-        fontWeight: '800',
-        letterSpacing: 0.3,
+        fontSize: 15,
+        fontFamily: TropicFonts.serif,
+        fontWeight: '500',
+        letterSpacing: -0.2,
     },
     sectionDate: {
-        fontSize: 13,
-        fontWeight: '500',
+        fontSize: 12,
+        fontFamily: TropicFonts.ui,
     },
     noEventsInline: {
-        fontSize: 13,
-        fontWeight: '500',
+        fontSize: 11,
+        fontFamily: TropicFonts.ui,
         marginLeft: 'auto',
-        color: '#999',
     },
     eventCardWrap: {
         paddingHorizontal: 16,
         paddingTop: 8,
-    },
-
-    fab: {
-        position: 'absolute',
-        right: 20,
-        width: 56,
-        height: 56,
-        borderRadius: 28,
-        alignItems: 'center',
-        justifyContent: 'center',
-        shadowColor: '#000',
-        shadowOffset: { width: 0, height: 4 },
-        shadowOpacity: 0.2,
-        shadowRadius: 8,
-        elevation: 6,
     },
 });

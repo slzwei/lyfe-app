@@ -1,5 +1,6 @@
 import { useTheme } from '@/contexts/ThemeContext';
 import { timeAgo } from '@/lib/dateTime';
+import { formatSgPhone } from '@/lib/phone';
 import { ACTIVITY_ICONS, type LeadActivity } from '@/types/lead';
 import { Ionicons } from '@expo/vector-icons';
 import React from 'react';
@@ -25,10 +26,14 @@ function getActivityDescription(activity: LeadActivity): string {
             const to = activity.metadata?.to_agent_name || 'another agent';
             return `Reassigned to ${to}`;
         }
-        case 'call':
-            return activity.metadata?.phone ? `Called ${activity.metadata.phone}` : 'Phone call logged';
-        case 'whatsapp':
-            return activity.metadata?.phone ? `Sent WhatsApp to ${activity.metadata.phone}` : 'WhatsApp message sent';
+        case 'call': {
+            const phone = typeof activity.metadata?.phone === 'string' ? activity.metadata.phone : null;
+            return phone ? `Called ${formatSgPhone(phone)}` : 'Phone call logged';
+        }
+        case 'whatsapp': {
+            const phone = typeof activity.metadata?.phone === 'string' ? activity.metadata.phone : null;
+            return phone ? `Sent WhatsApp to ${formatSgPhone(phone)}` : 'WhatsApp message sent';
+        }
         case 'email':
             return 'Email sent';
         case 'meeting':

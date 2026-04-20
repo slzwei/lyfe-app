@@ -3,7 +3,7 @@
  */
 import type { ExamQuestion } from '@/types/exam';
 import type { EnneagramType, EnneagramResults } from '@/constants/enneagram';
-import { ENNEAGRAM_TYPES } from '@/constants/enneagram';
+import { ENNEAGRAM_TYPES, ENNEAGRAM_TYPE_INFO } from '@/constants/enneagram';
 
 /**
  * Parse the Enneagram type mapping from a question's `explanation` JSON field.
@@ -106,11 +106,16 @@ export function isEnneagramResults(val: unknown): val is EnneagramResults {
 
 /**
  * Get a human-readable label for the result.
- * e.g. "Type 4w5 — The Individualist"
+ * e.g. "Type 5w6 — Investigator with a Loyalist wing"
  */
 export function getEnneagramLabel(primaryType: EnneagramType, wing: EnneagramType | null): string {
+    const primaryName = shortTypeName(primaryType);
     if (wing != null) {
-        return `Type ${primaryType}w${wing}`;
+        return `Type ${primaryType}w${wing} — ${primaryName} with a ${shortTypeName(wing)} wing`;
     }
-    return `Type ${primaryType}`;
+    return `Type ${primaryType} — ${primaryName}`;
+}
+
+function shortTypeName(t: EnneagramType): string {
+    return ENNEAGRAM_TYPE_INFO[t].name.replace(/^The\s+/, '');
 }

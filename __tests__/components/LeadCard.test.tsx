@@ -51,13 +51,14 @@ describe('LeadCard', () => {
 
     it('renders phone number', () => {
         const { getByText } = render(<LeadCard lead={MOCK_LEAD} onPress={onPress} />);
-        expect(getByText('+6591234567')).toBeTruthy();
+        // Phone rendered via formatSgPhone (+65 + space-separated groups)
+        expect(getByText('+65 9123 4567')).toBeTruthy();
     });
 
     it('does not render phone when null', () => {
         const lead = { ...MOCK_LEAD, phone: null };
         const { queryByText } = render(<LeadCard lead={lead} onPress={onPress} />);
-        expect(queryByText('+6591234567')).toBeNull();
+        expect(queryByText('+65 9123 4567')).toBeNull();
     });
 
     it('renders product interest label', () => {

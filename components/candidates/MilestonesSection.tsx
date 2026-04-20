@@ -114,18 +114,25 @@ export default function MilestonesSection({ milestoneByCode, colors, onMark }: P
                         <View style={styles.row}>
                             <View style={styles.nodeCol}>
                                 {meta.node === 'filled' && (
-                                    <View style={[styles.nodeFilled, { backgroundColor: meta.color }]} />
+                                    <View style={[styles.node, { backgroundColor: meta.color }]} />
                                 )}
                                 {meta.node === 'hollow' && (
                                     <View
                                         style={[
-                                            styles.nodeHollow,
+                                            styles.node,
+                                            styles.nodeRing,
                                             { borderColor: meta.color, backgroundColor: colors.background },
                                         ]}
                                     />
                                 )}
                                 {meta.node === 'empty' && (
-                                    <View style={[styles.nodeEmpty, { backgroundColor: colors.cardBorder }]} />
+                                    <View
+                                        style={[
+                                            styles.node,
+                                            styles.nodeRing,
+                                            { borderColor: colors.textTertiary, backgroundColor: colors.background },
+                                        ]}
+                                    />
                                 )}
                             </View>
                             <View style={styles.rowBody}>
@@ -170,7 +177,7 @@ export default function MilestonesSection({ milestoneByCode, colors, onMark }: P
 }
 
 const RAIL_LEFT = 11;
-const NODE_SIZE = 12;
+const NODE_SIZE = 14;
 
 const styles = StyleSheet.create({
     container: {
@@ -224,22 +231,13 @@ const styles = StyleSheet.create({
         alignItems: 'center',
         paddingTop: 4,
     },
-    nodeFilled: {
+    node: {
         width: NODE_SIZE,
         height: NODE_SIZE,
         borderRadius: NODE_SIZE / 2,
     },
-    nodeHollow: {
-        width: NODE_SIZE,
-        height: NODE_SIZE,
-        borderRadius: NODE_SIZE / 2,
+    nodeRing: {
         borderWidth: 2,
-    },
-    nodeEmpty: {
-        width: 6,
-        height: 6,
-        borderRadius: 3,
-        marginTop: 3,
     },
     rowBody: {
         flex: 1,

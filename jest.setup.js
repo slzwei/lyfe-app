@@ -227,3 +227,24 @@ jest.mock('@react-native-async-storage/async-storage', () => ({
     setItem: jest.fn(),
     removeItem: jest.fn(),
 }));
+
+// Mock ThemeContext so components using useTheme() render without needing a
+// ThemeProvider wrapper in each test. Uses jest.fn so individual tests can
+// call `(useTheme as jest.Mock).mockReturnValue(...)` to override if needed.
+// Tests that need the real impl call `jest.unmock('@/contexts/ThemeContext')`.
+jest.mock('@/contexts/ThemeContext', () => {
+    const React = require('react');
+    const { View } = require('react-native');
+    const { Colors } = jest.requireActual('@/constants/Colors');
+    const defaultTheme = {
+        mode: 'light',
+        resolved: 'light',
+        colors: Colors.light,
+        setMode: jest.fn(),
+        isDark: false,
+    };
+    return {
+        ThemeProvider: ({ children }) => React.createElement(View, null, children),
+        useTheme: jest.fn(() => defaultTheme),
+    };
+});

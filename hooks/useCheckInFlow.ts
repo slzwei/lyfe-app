@@ -43,6 +43,9 @@ export function useCheckInFlow({
     const [checkingIn, setCheckingIn] = useState(false);
     const [checkinError, setCheckinError] = useState<string | null>(null);
     const [faceCaptureVisible, setFaceCaptureVisible] = useState(false);
+    // Distinguishes first-time check-in (writes attendance row) from
+    // return-to-booth after a departure (logs check_in activity only).
+    const [flowMode, setFlowMode] = useState<'initial' | 'return'>('initial');
 
     // Tracks whether the current face-capture session actually wrote an
     // attendance row. Read by handleFaceDismiss so we only refresh the event
@@ -57,8 +60,42 @@ export function useCheckInFlow({
             setPledgePitches(roadshowConfig.suggested_pitches);
             setPledgeClosed(roadshowConfig.suggested_closed);
         }
+        setFlowMode('initial');
         setShowPledgeSheet(true);
     }, [roadshowConfig]);
+
+    // Return-to-booth flow: agent has already checked in (pledged), left,
+    // and now wants to come back. Runs the same proximity + face gates as
+    // initial check-in but skips the pledge sheet (pledge stays as-is) and
+    // only writes a `check_in` activity (no attendance row mutation).
+    const handleOpenReturn = useCallback(async () => {
+        if (checkingIn) return;
+        setCheckingIn(true);
+        setCheckinError(null);
+
+        const proximity = await checkEventProximity(eventId!);
+        if (!proximity.ok) {
+            setCheckingIn(false);
+            Alert.alert('Out of range', proximity.message);
+            return;
+        }
+
+        if (!faceRegisteredAt) {
+            setCheckingIn(false);
+            Alert.alert('Face Not Registered', 'Your Lyfe ID must be registered before returning to the booth.', [
+                { text: 'Cancel', style: 'cancel' },
+                {
+                    text: 'Register Now',
+                    onPress: () => router.push('/(tabs)/profile/face-register'),
+                },
+            ]);
+            return;
+        }
+
+        captureSucceededRef.current = false;
+        setFlowMode('return');
+        setFaceCaptureVisible(true);
+    }, [checkingIn, eventId, faceRegisteredAt, router]);
 
     // Phase 1: pre-flight guards. Runs proximity, already-checked-in, and
     // face-registration gates. If all pass, closes the pledge sheet and opens
@@ -165,6 +202,14 @@ export function useCheckInFlow({
                 };
             }
 
+            // ── Return-to-booth flow: log check_in activity, skip attendance write ──
+            if (flowMode === 'return') {
+                const { error: retError } = await logRoadshowActivity(eventId!, userId!, 'check_in');
+                if (retError) throw new Error(`Return failed: ${retError}`);
+                captureSucceededRef.current = true;
+                return { ok: true };
+            }
+
             // Idempotent attendance check — on a retry after a partial-success
             // (verify passed, log succeeded, post-log throw), the previous run
             // already wrote the row. Skip the second write to avoid a
@@ -232,7 +277,7 @@ export function useCheckInFlow({
 
             return { ok: true };
         },
-        [eventId, userId, userFullName, lateReason, pledgeSitdowns, pledgePitches, pledgeClosed, pledgeAfyc],
+        [flowMode, eventId, userId, userFullName, lateReason, pledgeSitdowns, pledgePitches, pledgeClosed, pledgeAfyc],
     );
 
     // Called by FaceCaptureFlow on Done (success) or Cancel (fail). Clears
@@ -243,6 +288,7 @@ export function useCheckInFlow({
         captureSucceededRef.current = false;
         setFaceCaptureVisible(false);
         setCheckingIn(false);
+        setFlowMode('initial');
         if (succeeded) onCheckedIn();
     }, [onCheckedIn]);
 
@@ -264,6 +310,7 @@ export function useCheckInFlow({
         checkingIn,
         checkinError,
         handleOpenCheckin,
+        handleOpenReturn,
         handleConfirmPledge,
         faceCaptureVisible,
         handleFacePhotoCaptured,

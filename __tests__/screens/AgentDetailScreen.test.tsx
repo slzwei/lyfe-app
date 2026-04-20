@@ -8,6 +8,8 @@ import { useTheme } from '@/contexts/ThemeContext';
 import { Colors } from '@/constants/Colors';
 import { fetchTeamMember } from '@/lib/team';
 
+import AgentDetailScreen from '@/app/(tabs)/team/agent/[agentId]';
+
 jest.mock('@/lib/supabase');
 jest.mock('@/contexts/ThemeContext');
 jest.mock('@/lib/team');
@@ -45,8 +47,6 @@ jest.mock('@/components/LeadCard', () => {
 jest.mock('@/lib/dateTime', () => ({
     formatMonthYear: (date: string) => 'March 2026',
 }));
-
-import AgentDetailScreen from '@/app/(tabs)/team/agent/[agentId]';
 
 const MOCK_AGENT = {
     id: 'agent-1',

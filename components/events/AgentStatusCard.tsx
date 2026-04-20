@@ -1,12 +1,14 @@
 import Avatar from '@/components/Avatar';
-import { type ActivityCounts, PITCH_COLOR, CASE_CLOSED_COLOR } from '@/components/events/roadshowTokens';
-import { getAvatarColor, ROADSHOW_PINK } from '@/constants/ui';
-import { formatCheckinTime } from '@/lib/dateTime';
-import type { AgencyEvent, EventAttendee, RoadshowAttendance } from '@/types/event';
+import { type ActivityCounts } from '@/components/events/roadshowTokens';
+import { EventStatusPill } from '@/components/roadshow/atoms/EventStatusPill';
 import type { Colors } from '@/constants/Colors';
-import { Ionicons } from '@expo/vector-icons';
+import { getRoadshowColors } from '@/constants/roadshow/tokens';
+import { RoadshowType, TropicFonts } from '@/constants/roadshow/typography';
+import { getAvatarColor } from '@/constants/ui';
+import { useTheme } from '@/contexts/ThemeContext';
+import type { AgencyEvent, EventAttendee, RoadshowAttendance } from '@/types/event';
 import React from 'react';
-import { StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { Pressable, StyleSheet, Text, View } from 'react-native';
 
 export interface AgentStatusCardProps {
     colors: typeof Colors.light;
@@ -14,208 +16,156 @@ export interface AgentStatusCardProps {
     attendance: RoadshowAttendance[];
     activityCounts: (userId: string) => ActivityCounts;
     openOverride: (agent: EventAttendee) => void;
+    currentUserId?: string;
 }
 
-function AgentStatusCardInner({ colors, event, attendance, activityCounts, openOverride }: AgentStatusCardProps) {
+function AgentStatusCardInner({
+    colors,
+    event,
+    attendance,
+    activityCounts,
+    openOverride,
+    currentUserId,
+}: AgentStatusCardProps) {
+    const { resolved } = useTheme();
+    const stage = getRoadshowColors(resolved);
+
     return (
-        <View style={[styles.card, { backgroundColor: colors.cardBackground }]}>
-            <View style={styles.sectionHeaderRow}>
-                <Text style={[styles.cardTitle, { color: colors.textPrimary }]}>Agent Status</Text>
-                <Text style={[styles.countBadge, { color: colors.textTertiary }]}>
-                    {attendance.length} / {event.attendees.length}
+        <View style={styles.wrap}>
+            <View style={styles.eyebrowRow}>
+                <Text style={[RoadshowType.eyebrow, { color: colors.textTertiary }]}>
+                    AGENTS · {event.attendees.length}
                 </Text>
             </View>
-            {event.attendees.map((agent) => {
-                const att = attendance.find((a) => a.user_id === agent.user_id);
-                const counts = activityCounts(agent.user_id);
-                const ac = getAvatarColor(agent.full_name ?? '?');
-                return (
-                    <View key={agent.id} style={[styles.agentCard, { backgroundColor: colors.surfaceSecondary }]}>
-                        <View style={styles.agentHeader}>
-                            <Avatar
-                                name={agent.full_name ?? '?'}
-                                avatarUrl={null}
-                                size={32}
-                                backgroundColor={ac + '18'}
-                                textColor={ac}
-                            />
-                            <Text style={[styles.agentName, { color: colors.textPrimary }]}>{agent.full_name}</Text>
-                            {!att && (
-                                <TouchableOpacity
-                                    style={[styles.overrideBtn, { borderColor: ROADSHOW_PINK }]}
-                                    onPress={() => openOverride(agent)}
-                                    accessibilityLabel={`Check in ${agent.full_name}`}
-                                >
-                                    <Ionicons name="add" size={16} color={ROADSHOW_PINK} />
-                                </TouchableOpacity>
-                            )}
-                        </View>
-                        {att ? (
-                            <>
-                                <View style={styles.agentCheckinRow}>
-                                    <Ionicons
-                                        name={att.is_late ? 'warning' : 'checkmark-circle'}
-                                        size={14}
-                                        color={att.is_late ? colors.warning : colors.accent}
-                                    />
+
+            <View style={styles.list}>
+                {event.attendees.map((agent, i) => {
+                    const att = attendance.find((a) => a.user_id === agent.user_id);
+                    const counts = activityCounts(agent.user_id);
+                    const ac = getAvatarColor(agent.full_name ?? '?');
+                    const status: 'on' | 'late' | 'out' = !att ? 'out' : att.is_late ? 'late' : 'on';
+                    const isSelf = currentUserId === agent.user_id;
+
+                    const borderColor = status === 'late' ? stage.late + '66' : colors.cardBorder;
+                    const bg = status === 'out' ? colors.cardBackground : colors.surfaceElevated;
+
+                    return (
+                        <Pressable
+                            key={agent.id}
+                            onPress={() => {
+                                if (status === 'out') openOverride(agent);
+                            }}
+                            style={[
+                                styles.card,
+                                {
+                                    backgroundColor: bg,
+                                    borderColor,
+                                    opacity: status === 'out' ? 0.75 : 1,
+                                },
+                            ]}
+                        >
+                            <View style={styles.topRow}>
+                                <Avatar
+                                    name={agent.full_name ?? '?'}
+                                    avatarUrl={null}
+                                    size={32}
+                                    backgroundColor={ac + '22'}
+                                    textColor={ac}
+                                />
+                                <View style={styles.nameCol}>
+                                    <View style={styles.nameRow}>
+                                        <Text
+                                            style={[RoadshowType.statMd, { color: colors.textPrimary }]}
+                                            numberOfLines={1}
+                                        >
+                                            {agent.full_name ?? '—'}
+                                        </Text>
+                                        {isSelf ? (
+                                            <Text
+                                                style={[
+                                                    RoadshowType.eyebrowSm,
+                                                    { color: stage.live, letterSpacing: 0.8 },
+                                                ]}
+                                            >
+                                                YOU
+                                            </Text>
+                                        ) : null}
+                                        {status === 'on' ? <EventStatusPill status="on" compact /> : null}
+                                        {status === 'late' ? <EventStatusPill status="late" compact /> : null}
+                                        {status === 'out' ? (
+                                            <Text
+                                                style={[
+                                                    RoadshowType.eyebrowSm,
+                                                    { color: colors.textTertiary, letterSpacing: 1 },
+                                                ]}
+                                            >
+                                                NOT IN
+                                            </Text>
+                                        ) : null}
+                                    </View>
                                     <Text
-                                        style={{
-                                            color: att.is_late ? colors.warning : colors.accent,
-                                            fontSize: 13,
-                                        }}
+                                        style={[RoadshowType.caption, { color: colors.textTertiary, marginTop: 2 }]}
+                                        numberOfLines={1}
                                     >
-                                        {formatCheckinTime(att.checked_in_at)} ·{' '}
-                                        {att.is_late ? `Late ${att.minutes_late} min` : 'On time'}
+                                        {att && att.minutes_late > 0 && status === 'late'
+                                            ? `${att.minutes_late} min late`
+                                            : (att?.late_reason ?? 'on booth')}
                                     </Text>
-                                    {att.checked_in_by && (
-                                        <Text style={{ color: colors.textTertiary, fontSize: 11 }}>(override)</Text>
-                                    )}
                                 </View>
-                                {att.late_reason && (
+                                {status !== 'out' ? (
                                     <Text
-                                        style={{
-                                            color: colors.textTertiary,
-                                            fontSize: 12,
-                                            marginTop: 2,
-                                            marginLeft: 18,
-                                        }}
-                                    >
-                                        "{att.late_reason}"
-                                    </Text>
-                                )}
-                                <View style={[styles.agentStatsTable, { marginTop: 10 }]}>
-                                    <View
                                         style={[
-                                            styles.agentStatsBand,
-                                            {
-                                                borderColor: colors.border,
-                                                backgroundColor: colors.surfaceSecondary,
-                                            },
+                                            RoadshowType.statMd,
+                                            { color: stage.closes, fontVariant: ['tabular-nums'] },
                                         ]}
                                     >
-                                        <Text style={[styles.agentBandLabel, { color: colors.textTertiary }]}>
-                                            TARGET
+                                        ${counts.afyc.toLocaleString()}
+                                    </Text>
+                                ) : (
+                                    <Pressable
+                                        onPress={(e) => {
+                                            e?.stopPropagation?.();
+                                            openOverride(agent);
+                                        }}
+                                        hitSlop={8}
+                                    >
+                                        <Text
+                                            style={[
+                                                RoadshowType.caption,
+                                                {
+                                                    color: stage.live,
+                                                    fontFamily: TropicFonts.uiSemiBold,
+                                                },
+                                            ]}
+                                        >
+                                            Override →
                                         </Text>
-                                        <View style={styles.agentBandRow}>
-                                            <View style={styles.agentBandCol}>
-                                                <Text style={[styles.agentBandNum, { color: colors.textSecondary }]}>
-                                                    {att.pledged_sitdowns}
-                                                </Text>
-                                                <Text style={styles.agentBandCaption}>Sitdowns</Text>
-                                            </View>
-                                            <View style={styles.agentBandCol}>
-                                                <Text style={[styles.agentBandNum, { color: colors.textSecondary }]}>
-                                                    {att.pledged_pitches}
-                                                </Text>
-                                                <Text style={styles.agentBandCaption}>Pitches</Text>
-                                            </View>
-                                            <View style={styles.agentBandCol}>
-                                                <Text style={[styles.agentBandNum, { color: colors.textSecondary }]}>
-                                                    {att.pledged_closed}
-                                                </Text>
-                                                <Text style={styles.agentBandCaption}>Cases</Text>
-                                            </View>
-                                            <View style={styles.agentBandCol}>
-                                                <Text style={[styles.agentBandNum, { color: colors.textSecondary }]}>
-                                                    $
-                                                    {att.pledged_afyc >= 1000
-                                                        ? `${(att.pledged_afyc / 1000).toFixed(0)}k`
-                                                        : att.pledged_afyc > 0
-                                                          ? att.pledged_afyc
-                                                          : '\u2014'}
-                                                </Text>
-                                                <Text style={styles.agentBandCaption}>AFYC</Text>
-                                            </View>
-                                        </View>
-                                    </View>
-                                    <View style={styles.agentStatsBand}>
-                                        <Text style={[styles.agentBandLabel, { color: colors.textSecondary }]}>
-                                            ACTUAL
-                                        </Text>
-                                        <View style={styles.agentBandRow}>
-                                            <View style={styles.agentBandCol}>
-                                                <Text
-                                                    style={[
-                                                        styles.agentActualNum,
-                                                        {
-                                                            color:
-                                                                counts.sitdowns >= att.pledged_sitdowns &&
-                                                                att.pledged_sitdowns > 0
-                                                                    ? PITCH_COLOR
-                                                                    : colors.textPrimary,
-                                                        },
-                                                    ]}
-                                                >
-                                                    {counts.sitdowns}
-                                                </Text>
-                                                <Text style={styles.agentBandCaption}>Sitdowns</Text>
-                                            </View>
-                                            <View style={styles.agentBandCol}>
-                                                <Text
-                                                    style={[
-                                                        styles.agentActualNum,
-                                                        {
-                                                            color:
-                                                                counts.pitches >= att.pledged_pitches &&
-                                                                att.pledged_pitches > 0
-                                                                    ? PITCH_COLOR
-                                                                    : colors.textPrimary,
-                                                        },
-                                                    ]}
-                                                >
-                                                    {counts.pitches}
-                                                </Text>
-                                                <Text style={styles.agentBandCaption}>Pitches</Text>
-                                            </View>
-                                            <View style={styles.agentBandCol}>
-                                                <Text
-                                                    style={[
-                                                        styles.agentActualNum,
-                                                        {
-                                                            color:
-                                                                counts.closed >= att.pledged_closed &&
-                                                                att.pledged_closed > 0
-                                                                    ? PITCH_COLOR
-                                                                    : colors.textPrimary,
-                                                        },
-                                                    ]}
-                                                >
-                                                    {counts.closed}
-                                                </Text>
-                                                <Text style={styles.agentBandCaption}>Cases</Text>
-                                            </View>
-                                            <View style={styles.agentBandCol}>
-                                                <Text
-                                                    style={[
-                                                        styles.agentActualNum,
-                                                        {
-                                                            color:
-                                                                counts.afyc >= att.pledged_afyc && att.pledged_afyc > 0
-                                                                    ? CASE_CLOSED_COLOR
-                                                                    : colors.textPrimary,
-                                                        },
-                                                    ]}
-                                                >
-                                                    $
-                                                    {counts.afyc >= 1000
-                                                        ? `${(counts.afyc / 1000).toFixed(0)}k`
-                                                        : counts.afyc}
-                                                </Text>
-                                                <Text style={styles.agentBandCaption}>AFYC</Text>
-                                            </View>
-                                        </View>
-                                    </View>
-                                </View>
-                            </>
-                        ) : (
-                            <View style={styles.agentCheckinRow}>
-                                <Ionicons name="remove-circle-outline" size={14} color={colors.textTertiary} />
-                                <Text style={{ color: colors.textTertiary, fontSize: 13 }}>Not checked in</Text>
+                                    </Pressable>
+                                )}
                             </View>
-                        )}
-                    </View>
-                );
-            })}
+
+                            {status !== 'out' ? (
+                                <View style={styles.metricStrip}>
+                                    <Metric letter="S" value={counts.sitdowns} color={stage.sitdowns} />
+                                    <Metric letter="P" value={counts.pitches} color={stage.pitches} />
+                                    <Metric letter="C" value={counts.closed} color={stage.closes} />
+                                </View>
+                            ) : null}
+                        </Pressable>
+                    );
+                })}
+            </View>
+        </View>
+    );
+}
+
+function Metric({ letter, value, color }: { letter: string; value: number; color: string }) {
+    return (
+        <View style={styles.metricCell}>
+            <View style={[styles.metricChip, { backgroundColor: color + '22' }]}>
+                <Text style={[styles.metricLetter, { color }]}>{letter}</Text>
+            </View>
+            <Text style={[RoadshowType.statMd, styles.metricValue]}>{value}</Text>
         </View>
     );
 }
@@ -223,34 +173,39 @@ function AgentStatusCardInner({ colors, event, attendance, activityCounts, openO
 export const AgentStatusCard = React.memo(AgentStatusCardInner);
 
 const styles = StyleSheet.create({
-    card: { borderRadius: 16, padding: 16, gap: 12 },
-    cardTitle: { fontSize: 15, fontWeight: '700' },
-    sectionHeaderRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
-    countBadge: { fontSize: 13, fontWeight: '600' },
-    agentCard: { borderRadius: 12, padding: 12, gap: 6 },
-    agentHeader: { flexDirection: 'row', alignItems: 'center', gap: 8 },
-    agentName: { flex: 1, fontSize: 15, fontWeight: '600' },
-    agentCheckinRow: { flexDirection: 'row', alignItems: 'center', gap: 6 },
-    agentStatsTable: { gap: 8 },
-    agentStatsBand: {
-        borderRadius: 8,
-        borderWidth: 1,
-        borderColor: 'transparent',
-        paddingHorizontal: 10,
-        paddingVertical: 8,
+    wrap: { gap: 8 },
+    eyebrowRow: {
+        flexDirection: 'row',
+        justifyContent: 'space-between',
+        alignItems: 'baseline',
+        paddingHorizontal: 2,
     },
-    agentBandLabel: { fontSize: 10, fontWeight: '700', letterSpacing: 0.8, marginBottom: 6 },
-    agentBandRow: { flexDirection: 'row' },
-    agentBandCol: { flex: 1, alignItems: 'center', gap: 2 },
-    agentBandNum: { fontSize: 16, fontWeight: '700', textAlign: 'center' },
-    agentBandCaption: { fontSize: 10, color: '#8E8E93', textAlign: 'center' },
-    agentActualNum: { fontSize: 22, fontWeight: '800', textAlign: 'center' },
-    overrideBtn: {
-        width: 30,
-        height: 30,
+    list: { gap: 8 },
+
+    card: {
+        padding: 14,
+        borderRadius: 14,
+        borderWidth: 1,
+        gap: 8,
+    },
+
+    topRow: { flexDirection: 'row', alignItems: 'center', gap: 10 },
+    nameCol: { flex: 1, minWidth: 0 },
+    nameRow: { flexDirection: 'row', alignItems: 'center', gap: 6, flexWrap: 'wrap' },
+
+    metricStrip: {
+        flexDirection: 'row',
+        gap: 16,
+        paddingLeft: 42,
+    },
+    metricCell: { flexDirection: 'row', alignItems: 'center', gap: 6 },
+    metricChip: {
+        width: 16,
+        height: 16,
         borderRadius: 8,
         alignItems: 'center',
         justifyContent: 'center',
-        borderWidth: 1.5,
     },
+    metricLetter: { fontSize: 9, fontFamily: TropicFonts.uiBold },
+    metricValue: { fontSize: 13, fontVariant: ['tabular-nums'] },
 });
