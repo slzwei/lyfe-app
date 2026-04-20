@@ -22,9 +22,11 @@ function requireEnv(key: string): string {
     return val;
 }
 
+// Uses SNS-scoped IAM user (lyfe-sns-sms), separate from AWS_* which is used by
+// verify-face (rekognition). Kept distinct so a rotation on one does not break the other.
 const aws = new AwsClient({
-    accessKeyId: requireEnv('AWS_ACCESS_KEY_ID'),
-    secretAccessKey: requireEnv('AWS_SECRET_ACCESS_KEY'),
+    accessKeyId: requireEnv('SNS_AWS_ACCESS_KEY_ID'),
+    secretAccessKey: requireEnv('SNS_AWS_SECRET_ACCESS_KEY'),
     region: 'ap-southeast-1',
     service: 'sns',
 });

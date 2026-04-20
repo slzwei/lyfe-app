@@ -1,58 +1,55 @@
+import { Fonts } from '@/constants/type';
 import { useTheme } from '@/contexts/ThemeContext';
 import { useFonts } from 'expo-font';
 import React from 'react';
-import { Platform, StyleSheet, Text, type TextStyle } from 'react-native';
+import { StyleSheet, Text, type TextStyle } from 'react-native';
 
 interface LyfeLogoProps {
     size?: 'sm' | 'md' | 'lg';
     color?: string;
+    /** Render the inked period after "lyfe" — default true for brand consistency */
+    withPeriod?: boolean;
 }
 
-const isAndroid = Platform.OS === 'android';
-
-// Android clips Pacifico descenders (e.g. "y") at tight lineHeights.
-// Bump lineHeight on Android to give descenders room.
+// Tropic wordmark sizing — Fraunces has normal metrics, no Android clipping workaround needed
 const SIZES: Record<string, TextStyle> = {
-    sm: { fontSize: 20, lineHeight: isAndroid ? 34 : 28 },
-    md: { fontSize: 32, lineHeight: isAndroid ? 48 : 40 },
-    lg: { fontSize: 48, lineHeight: isAndroid ? 90 : 72 },
+    sm: { fontSize: 20, lineHeight: 24 },
+    md: { fontSize: 32, lineHeight: 36 },
+    lg: { fontSize: 48, lineHeight: 52 },
 };
 
 /**
- * The Lyfe logo — rendered in Pacifico (cursive) font.
- * One deterministic version used everywhere.
+ * Lyfe wordmark — Tropic Office style.
+ *
+ * Replaces the Pacifico cursive with a confident serif treatment:
+ *   "ly" (regular roman) + "fe" (italic) + "." (terracotta period)
+ *
+ * The italic "fe" is the brand gesture — carry this pattern into section
+ * headings where ONE italic accent word sits next to roman text.
  */
-export default function LyfeLogo({ size = 'md', color }: LyfeLogoProps) {
+export default function LyfeLogo({ size = 'md', color, withPeriod = true }: LyfeLogoProps) {
     const { colors } = useTheme();
     const [fontsLoaded] = useFonts({
-        Pacifico: require('@/assets/fonts/Pacifico-Regular.ttf'),
+        Fraunces: require('@/assets/fonts/Fraunces-Regular.ttf'),
+        'Fraunces-Italic': require('@/assets/fonts/Fraunces-Italic.ttf'),
     });
 
     if (!fontsLoaded) return null;
 
-    // Android's text layout measures Pacifico advance widths too narrowly,
-    // clipping the trailing cursive "e". A non-breaking space forces the
-    // text measurement wider without visually changing the logo.
-    const label = isAndroid ? 'Lyfe\u00A0' : 'Lyfe';
+    const baseColor = color || colors.textPrimary;
+    const accentColor = color || colors.accent;
 
     return (
-        <Text
-            style={[
-                styles.logo,
-                SIZES[size],
-                {
-                    color: color || colors.accent,
-                    fontFamily: 'Pacifico',
-                },
-            ]}
-        >
-            {label}
+        <Text style={[styles.logo, SIZES[size], { color: baseColor }]} allowFontScaling={false}>
+            <Text style={{ fontFamily: Fonts.serif, fontWeight: '500' }}>ly</Text>
+            <Text style={{ fontFamily: Fonts.serifItalic, fontWeight: '500', color: accentColor }}>fe</Text>
+            {withPeriod && <Text style={{ color: accentColor, fontFamily: Fonts.serif }}>.</Text>}
         </Text>
     );
 }
 
 const styles = StyleSheet.create({
     logo: {
-        letterSpacing: 1,
+        letterSpacing: -0.5,
     },
 });

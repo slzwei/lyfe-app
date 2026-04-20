@@ -317,7 +317,8 @@ describe('CandidateDetailScreen', () => {
         const { getByText } = renderScreen();
         const days = Math.floor((Date.now() - new Date('2026-03-01').getTime()) / 86400000);
         await waitFor(() => {
-            expect(getByText(`${days}d in pipeline`)).toBeTruthy();
+            expect(getByText('IN PIPELINE')).toBeTruthy();
+            expect(getByText(`${days}d`)).toBeTruthy();
         });
     });
 

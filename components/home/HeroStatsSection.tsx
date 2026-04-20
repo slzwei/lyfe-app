@@ -1,4 +1,5 @@
-import { displayWeight, letterSpacing } from '@/constants/platform';
+import { letterSpacing } from '@/constants/platform';
+import { Fonts } from '@/constants/type';
 import StatCardSmall from '@/components/home/StatCardSmall';
 import type { ThemeColors } from '@/types/theme';
 import type { LeadPipelineStats, ManagerDashboardStats } from '@/lib/leads';
@@ -164,12 +165,13 @@ const styles = StyleSheet.create({
         transform: [{ rotate: '15deg' }],
     },
     heroStatValue: {
+        fontFamily: Fonts.serif,
         fontSize: 40,
-        fontWeight: displayWeight('800'),
+        fontWeight: '500',
         marginBottom: 4,
         letterSpacing: letterSpacing(-1),
     },
-    heroStatLabel: { fontSize: 15, fontWeight: '500' },
+    heroStatLabel: { fontFamily: Fonts.sans, fontSize: 15, fontWeight: '500' },
     statsColumn: {
         flex: 1,
         gap: 12,

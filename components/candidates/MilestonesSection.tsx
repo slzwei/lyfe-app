@@ -1,9 +1,9 @@
+import { Fonts } from '@/constants/type';
+import { letterSpacing } from '@/constants/platform';
 import type { CandidateMilestone, MilestoneCode, MilestoneStatus } from '@/types/recruitment';
 import type { ThemeColors } from '@/types/theme';
-import { Ionicons } from '@expo/vector-icons';
 import React from 'react';
 import { StyleSheet, Text, TouchableOpacity, View } from 'react-native';
-import SectionCard from './SectionCard';
 
 interface Props {
     milestoneByCode: Record<MilestoneCode, CandidateMilestone | null>;
@@ -23,36 +23,34 @@ const DISPLAY_ORDER: { code: MilestoneCode; label: string; hint?: string }[] = [
     { code: 'sales_authority', label: 'Sales Authority' },
 ];
 
-function statusMeta(status: MilestoneStatus, colors: ThemeColors) {
+type NodeState = 'filled' | 'hollow' | 'empty';
+
+function statusMeta(status: MilestoneStatus, colors: ThemeColors): { label: string; color: string; node: NodeState } {
     switch (status) {
         case 'completed':
         case 'issued':
             return {
                 label: status === 'issued' ? 'Issued' : 'Completed',
                 color: colors.success,
-                bg: colors.successLight,
-                icon: 'checkmark-circle' as const,
+                node: 'filled',
             };
         case 'scheduled':
             return {
                 label: 'Scheduled',
                 color: colors.warning,
-                bg: colors.warningLight,
-                icon: 'calendar-outline' as const,
+                node: 'hollow',
             };
         case 'lodged_to_mas':
             return {
                 label: 'Lodged to MAS',
                 color: colors.accent,
-                bg: colors.surfaceSecondary,
-                icon: 'paper-plane-outline' as const,
+                node: 'hollow',
             };
         default:
             return {
                 label: 'Not Started',
                 color: colors.textTertiary,
-                bg: colors.surfaceSecondary,
-                icon: 'ellipse-outline' as const,
+                node: 'empty',
             };
     }
 }
@@ -69,9 +67,6 @@ function formatDate(iso: string | null): string | null {
 function buildDetail(milestone: CandidateMilestone | null): string | null {
     if (!milestone) return null;
     const parts: string[] = [];
-    if (milestone.milestone_code === 'rnf' && milestone.reference_number) {
-        parts.push(`Ref ${milestone.reference_number}`);
-    }
     if (milestone.scheduled_date && milestone.status === 'scheduled') {
         const d = formatDate(milestone.scheduled_date);
         if (d) parts.push(`Scheduled ${d}`);
@@ -83,86 +78,204 @@ function buildDetail(milestone: CandidateMilestone | null): string | null {
     return parts.length > 0 ? parts.join(' · ') : null;
 }
 
+const pad2 = (n: number): string => String(n).padStart(2, '0');
+
 export default function MilestonesSection({ milestoneByCode, colors, onMark }: Props) {
     const completedCount = DISPLAY_ORDER.filter((d) => {
         const s = milestoneByCode[d.code]?.status;
         return s === 'completed' || s === 'issued';
     }).length;
+    const counter = `${pad2(completedCount)}/${pad2(DISPLAY_ORDER.length)}`;
     const interactive = !!onMark;
 
     return (
-        <SectionCard
-            title="Milestones"
-            icon="flag-outline"
-            badge={`${completedCount}/${DISPLAY_ORDER.length}`}
-            colors={colors}
-        >
-            {DISPLAY_ORDER.map((def, index) => {
-                const milestone = milestoneByCode[def.code];
-                const status: MilestoneStatus = milestone?.status ?? 'not_started';
-                const meta = statusMeta(status, colors);
-                const detail = buildDetail(milestone);
+        <View style={styles.container}>
+            <View style={styles.headerRow}>
+                <Text style={[styles.heading, { color: colors.textPrimary }]}>
+                    {'Pipeline '}
+                    <Text style={[styles.headingItalic, { color: colors.accent }]}>milestones</Text>
+                </Text>
+                <Text style={[styles.counter, { color: colors.textTertiary }]}>{counter}</Text>
+            </View>
 
-                const body = (
-                    <View style={styles.rowMain}>
-                        <Ionicons name={meta.icon} size={20} color={meta.color} />
-                        <View style={{ flex: 1 }}>
-                            <Text style={[styles.label, { color: colors.textPrimary }]}>
-                                {def.label}
-                                {def.hint && (
-                                    <Text style={[styles.hint, { color: colors.textTertiary }]}>{`  ${def.hint}`}</Text>
+            <View style={[styles.list, { borderTopColor: colors.cardBorder, borderBottomColor: colors.cardBorder }]}>
+                <View style={[styles.rail, { backgroundColor: colors.accent }]} pointerEvents="none" />
+                {DISPLAY_ORDER.map((def) => {
+                    const milestone = milestoneByCode[def.code];
+                    const status: MilestoneStatus = milestone?.status ?? 'not_started';
+                    const meta = statusMeta(status, colors);
+                    const detail = buildDetail(milestone);
+                    const refNum =
+                        milestone?.milestone_code === 'rnf' && milestone?.reference_number
+                            ? milestone.reference_number
+                            : null;
+
+                    const body = (
+                        <View style={styles.row}>
+                            <View style={styles.nodeCol}>
+                                {meta.node === 'filled' && (
+                                    <View style={[styles.nodeFilled, { backgroundColor: meta.color }]} />
                                 )}
-                            </Text>
-                            {detail && <Text style={[styles.detail, { color: colors.textTertiary }]}>{detail}</Text>}
+                                {meta.node === 'hollow' && (
+                                    <View
+                                        style={[
+                                            styles.nodeHollow,
+                                            { borderColor: meta.color, backgroundColor: colors.background },
+                                        ]}
+                                    />
+                                )}
+                                {meta.node === 'empty' && (
+                                    <View style={[styles.nodeEmpty, { backgroundColor: colors.cardBorder }]} />
+                                )}
+                            </View>
+                            <View style={styles.rowBody}>
+                                <Text style={[styles.label, { color: colors.textPrimary }]}>
+                                    {def.label}
+                                    {def.hint && (
+                                        <Text
+                                            style={[styles.hint, { color: colors.textTertiary }]}
+                                        >{`  ${def.hint}`}</Text>
+                                    )}
+                                </Text>
+                                {detail && (
+                                    <Text style={[styles.detail, { color: colors.textSecondary }]}>{detail}</Text>
+                                )}
+                                {refNum && (
+                                    <Text
+                                        style={[styles.refNum, { color: colors.textTertiary }]}
+                                    >{`Ref ${refNum}`}</Text>
+                                )}
+                            </View>
+                            <Text style={[styles.status, { color: meta.color }]}>{meta.label}</Text>
                         </View>
-                        <View style={[styles.pill, { backgroundColor: meta.bg }]}>
-                            <Text style={[styles.pillText, { color: meta.color }]}>{meta.label}</Text>
-                        </View>
-                        {interactive && (
-                            <Ionicons
-                                name="chevron-forward"
-                                size={16}
-                                color={colors.textTertiary}
-                                style={{ marginLeft: 4 }}
-                            />
-                        )}
-                    </View>
-                );
-
-                const rowStyle = [
-                    styles.row,
-                    index > 0 && { borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: colors.border },
-                ];
-
-                if (interactive) {
-                    return (
-                        <TouchableOpacity
-                            key={def.code}
-                            style={rowStyle}
-                            onPress={() => onMark?.(def.code, def.label)}
-                            activeOpacity={0.7}
-                            testID={`milestones-section-row-${def.code}`}
-                        >
-                            {body}
-                        </TouchableOpacity>
                     );
-                }
-                return (
-                    <View key={def.code} style={rowStyle}>
-                        {body}
-                    </View>
-                );
-            })}
-        </SectionCard>
+
+                    if (interactive) {
+                        return (
+                            <TouchableOpacity
+                                key={def.code}
+                                activeOpacity={0.7}
+                                onPress={() => onMark?.(def.code, def.label)}
+                                testID={`milestones-section-row-${def.code}`}
+                            >
+                                {body}
+                            </TouchableOpacity>
+                        );
+                    }
+                    return <View key={def.code}>{body}</View>;
+                })}
+            </View>
+        </View>
     );
 }
 
+const RAIL_LEFT = 11;
+const NODE_SIZE = 12;
+
 const styles = StyleSheet.create({
-    row: { paddingVertical: 10 },
-    rowMain: { flexDirection: 'row', alignItems: 'center', gap: 10 },
-    label: { fontSize: 14, fontWeight: '600' },
-    hint: { fontSize: 11, fontWeight: '500' },
-    detail: { fontSize: 12, fontWeight: '500', marginTop: 2 },
-    pill: { paddingHorizontal: 8, paddingVertical: 3, borderRadius: 10 },
-    pillText: { fontSize: 11, fontWeight: '700' },
+    container: {
+        paddingHorizontal: 20,
+        marginTop: 28,
+    },
+    headerRow: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'space-between',
+        marginBottom: 12,
+        gap: 12,
+    },
+    heading: {
+        flex: 1,
+        fontFamily: Fonts.serif,
+        fontSize: 20,
+        fontWeight: '500',
+        lineHeight: 24,
+        letterSpacing: letterSpacing(-0.3),
+    },
+    headingItalic: {
+        fontFamily: Fonts.serifItalic,
+    },
+    counter: {
+        fontFamily: Fonts.mono,
+        fontSize: 11,
+        lineHeight: 14,
+    },
+    list: {
+        position: 'relative',
+        borderTopWidth: 1,
+        borderBottomWidth: 1,
+        paddingVertical: 20,
+    },
+    rail: {
+        position: 'absolute',
+        left: RAIL_LEFT,
+        top: 28,
+        bottom: 28,
+        width: 2,
+    },
+    row: {
+        flexDirection: 'row',
+        alignItems: 'flex-start',
+        paddingVertical: 10,
+        gap: 10,
+    },
+    nodeCol: {
+        width: 24,
+        alignItems: 'center',
+        paddingTop: 4,
+    },
+    nodeFilled: {
+        width: NODE_SIZE,
+        height: NODE_SIZE,
+        borderRadius: NODE_SIZE / 2,
+    },
+    nodeHollow: {
+        width: NODE_SIZE,
+        height: NODE_SIZE,
+        borderRadius: NODE_SIZE / 2,
+        borderWidth: 2,
+    },
+    nodeEmpty: {
+        width: 6,
+        height: 6,
+        borderRadius: 3,
+        marginTop: 3,
+    },
+    rowBody: {
+        flex: 1,
+    },
+    label: {
+        fontFamily: Fonts.serif,
+        fontSize: 16,
+        fontWeight: '500',
+        lineHeight: 20,
+        letterSpacing: letterSpacing(-0.2),
+    },
+    hint: {
+        fontFamily: Fonts.sans,
+        fontSize: 11,
+        fontWeight: '500',
+    },
+    detail: {
+        fontFamily: Fonts.sans,
+        fontSize: 12,
+        fontWeight: '400',
+        lineHeight: 16,
+        marginTop: 2,
+    },
+    refNum: {
+        fontFamily: Fonts.mono,
+        fontSize: 11,
+        lineHeight: 14,
+        marginTop: 3,
+    },
+    status: {
+        fontFamily: Fonts.mono,
+        fontSize: 10,
+        lineHeight: 14,
+        letterSpacing: letterSpacing(1),
+        textTransform: 'uppercase',
+        marginTop: 4,
+        marginLeft: 4,
+    },
 });

@@ -1,9 +1,10 @@
+import { Fonts } from '@/constants/type';
+import { letterSpacing } from '@/constants/platform';
 import type { PaperRequirement, PaperRequirementStatus } from '@/types/recruitment';
 import type { ThemeColors } from '@/types/theme';
 import { Ionicons } from '@expo/vector-icons';
 import React from 'react';
 import { StyleSheet, Text, TouchableOpacity, View } from 'react-native';
-import SectionCard from './SectionCard';
 
 interface Props {
     requirements: PaperRequirement[];
@@ -11,31 +12,16 @@ interface Props {
     onMark?: (requirement: PaperRequirement) => void;
 }
 
-function statusMeta(status: PaperRequirementStatus, colors: ThemeColors) {
+function statusMeta(status: PaperRequirementStatus, colors: ThemeColors): { label: string; color: string } {
     switch (status) {
         case 'passed':
-            return {
-                label: 'Passed',
-                color: colors.success,
-                bg: colors.successLight,
-                icon: 'checkmark-circle' as const,
-            };
+            return { label: 'Passed', color: colors.success };
         case 'failed':
-            return { label: 'Failed', color: colors.danger, bg: colors.dangerLight, icon: 'close-circle' as const };
+            return { label: 'Failed', color: colors.danger };
         case 'scheduled':
-            return {
-                label: 'Scheduled',
-                color: colors.warning,
-                bg: colors.warningLight,
-                icon: 'calendar-outline' as const,
-            };
+            return { label: 'Scheduled', color: colors.warning };
         default:
-            return {
-                label: 'Not Started',
-                color: colors.textTertiary,
-                bg: colors.surfaceSecondary,
-                icon: 'ellipse-outline' as const,
-            };
+            return { label: 'Not Started', color: colors.textTertiary };
     }
 }
 
@@ -52,94 +38,174 @@ function formatShortDate(iso: string | null): string | null {
     }
 }
 
-function buildSubtitle(req: PaperRequirement): string {
+// Subtitle = copy WITHOUT the leading paper code. Paper code is returned
+// separately so it can be typeset in Fonts.mono at the end of the line.
+function buildSubtitleParts(req: PaperRequirement): { subtitle: string; code?: string } {
     const attemptCount = req.attempts.length;
     const plural = attemptCount === 1 ? '' : 's';
 
     if (req.status === 'passed' && req.passedAttempt) {
         const when = formatShortDate(req.passedAttempt.exam_at);
-        return when
-            ? `${req.passedAttempt.paper_code} · passed ${when} · ${attemptCount} attempt${plural}`
-            : `${req.passedAttempt.paper_code} · ${attemptCount} attempt${plural}`;
+        const subtitle = when
+            ? `passed ${when} · ${attemptCount} attempt${plural}`
+            : `${attemptCount} attempt${plural}`;
+        return { subtitle, code: req.passedAttempt.paper_code };
     }
     if (req.status === 'failed' && req.latest) {
         const when = formatShortDate(req.latest.exam_at);
-        return when
-            ? `${req.latest.paper_code} · latest ${when} — retake needed`
-            : `${req.latest.paper_code} · retake needed`;
+        const subtitle = when ? `latest ${when} — retake needed` : 'retake needed';
+        return { subtitle, code: req.latest.paper_code };
     }
     if (req.status === 'scheduled' && req.latest) {
         const when = formatShortDate(req.latest.exam_at);
         const cost = req.latest.cost != null ? ` · S$${Number(req.latest.cost).toFixed(0)}` : '';
-        return when ? `${req.latest.paper_code} · ${when}${cost}` : `${req.latest.paper_code}${cost}`;
+        const subtitle = when ? `${when}${cost}` : cost.replace(/^ · /, '');
+        return { subtitle, code: req.latest.paper_code };
     }
-    return req.acceptedPaperCodes.join(' or ');
+    return { subtitle: req.acceptedPaperCodes.join(' or ') };
 }
+
+const pad2 = (n: number): string => String(n).padStart(2, '0');
 
 export default function PapersSection({ requirements, colors, onMark }: Props) {
     const passedCount = requirements.filter((r) => r.satisfied).length;
+    const counter = `${pad2(passedCount)}/${pad2(requirements.length)}`;
     const interactive = !!onMark;
 
     return (
-        <SectionCard title="Papers" icon="book-outline" badge={`${passedCount}/${requirements.length}`} colors={colors}>
-            {requirements.map((req, index) => {
-                const meta = statusMeta(req.status, colors);
-                const subtitle = buildSubtitle(req);
+        <View style={styles.container}>
+            <View style={styles.headerRow}>
+                <Text style={[styles.heading, { color: colors.textPrimary }]}>
+                    {'Paper '}
+                    <Text style={[styles.headingItalic, { color: colors.accent }]}>requirements</Text>
+                </Text>
+                <Text style={[styles.counter, { color: colors.textTertiary }]}>{counter}</Text>
+            </View>
 
-                const body = (
-                    <View style={styles.rowMain}>
-                        <Ionicons name={meta.icon} size={20} color={meta.color} />
-                        <View style={{ flex: 1 }}>
-                            <Text style={[styles.label, { color: colors.textPrimary }]}>{req.label}</Text>
-                            <Text style={[styles.sublabel, { color: colors.textTertiary }]}>{subtitle}</Text>
+            <View style={[styles.list, { borderTopColor: colors.cardBorder, borderBottomColor: colors.cardBorder }]}>
+                {requirements.map((req) => {
+                    const meta = statusMeta(req.status, colors);
+                    const { subtitle, code } = buildSubtitleParts(req);
+
+                    const body = (
+                        <View style={styles.row}>
+                            <View style={[styles.spine, { backgroundColor: meta.color }]} />
+                            <View style={styles.rowBody}>
+                                <Text style={[styles.label, { color: colors.textPrimary }]}>{req.label}</Text>
+                                <Text style={[styles.subtitle, { color: colors.textSecondary }]}>
+                                    {subtitle}
+                                    {code && (
+                                        <Text style={[styles.code, { color: colors.textTertiary }]}>
+                                            {subtitle ? '  ' : ''}
+                                            {code}
+                                        </Text>
+                                    )}
+                                </Text>
+                            </View>
+                            <Text style={[styles.status, { color: meta.color }]}>{meta.label}</Text>
+                            {interactive && (
+                                <Ionicons
+                                    name="chevron-forward"
+                                    size={14}
+                                    color={colors.textTertiary}
+                                    style={styles.chevron}
+                                />
+                            )}
                         </View>
-                        <View style={[styles.pill, { backgroundColor: meta.bg }]}>
-                            <Text style={[styles.pillText, { color: meta.color }]}>{meta.label}</Text>
-                        </View>
-                        {interactive && (
-                            <Ionicons
-                                name="chevron-forward"
-                                size={16}
-                                color={colors.textTertiary}
-                                style={{ marginLeft: 4 }}
-                            />
-                        )}
-                    </View>
-                );
-
-                const rowStyle = [
-                    styles.row,
-                    index > 0 && { borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: colors.border },
-                ];
-
-                if (interactive) {
-                    return (
-                        <TouchableOpacity
-                            key={req.code}
-                            style={rowStyle}
-                            onPress={() => onMark?.(req)}
-                            activeOpacity={0.7}
-                            testID={`papers-section-row-${req.code}`}
-                        >
-                            {body}
-                        </TouchableOpacity>
                     );
-                }
-                return (
-                    <View key={req.code} style={rowStyle}>
-                        {body}
-                    </View>
-                );
-            })}
-        </SectionCard>
+
+                    if (interactive) {
+                        return (
+                            <TouchableOpacity
+                                key={req.code}
+                                activeOpacity={0.7}
+                                onPress={() => onMark?.(req)}
+                                testID={`papers-section-row-${req.code}`}
+                            >
+                                {body}
+                            </TouchableOpacity>
+                        );
+                    }
+                    return <View key={req.code}>{body}</View>;
+                })}
+            </View>
+        </View>
     );
 }
 
 const styles = StyleSheet.create({
-    row: { paddingVertical: 10 },
-    rowMain: { flexDirection: 'row', alignItems: 'center', gap: 10 },
-    label: { fontSize: 14, fontWeight: '600' },
-    sublabel: { fontSize: 12, fontWeight: '500', marginTop: 2 },
-    pill: { paddingHorizontal: 8, paddingVertical: 3, borderRadius: 10 },
-    pillText: { fontSize: 11, fontWeight: '700' },
+    container: {
+        paddingHorizontal: 20,
+        marginTop: 28,
+    },
+    headerRow: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'space-between',
+        marginBottom: 12,
+        gap: 12,
+    },
+    heading: {
+        flex: 1,
+        fontFamily: Fonts.serif,
+        fontSize: 20,
+        fontWeight: '500',
+        lineHeight: 24,
+        letterSpacing: letterSpacing(-0.3),
+    },
+    headingItalic: {
+        fontFamily: Fonts.serifItalic,
+    },
+    counter: {
+        fontFamily: Fonts.mono,
+        fontSize: 11,
+        lineHeight: 14,
+    },
+    list: {
+        borderTopWidth: 1,
+        borderBottomWidth: 1,
+        paddingVertical: 12,
+    },
+    row: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        paddingVertical: 12,
+        gap: 12,
+    },
+    spine: {
+        width: 4,
+        borderRadius: 2,
+        alignSelf: 'stretch',
+    },
+    rowBody: {
+        flex: 1,
+    },
+    label: {
+        fontFamily: Fonts.serif,
+        fontSize: 16,
+        fontWeight: '500',
+        lineHeight: 20,
+        letterSpacing: letterSpacing(-0.2),
+    },
+    subtitle: {
+        fontFamily: Fonts.sans,
+        fontSize: 12,
+        fontWeight: '400',
+        lineHeight: 16,
+        marginTop: 2,
+    },
+    code: {
+        fontFamily: Fonts.mono,
+        fontSize: 11,
+    },
+    status: {
+        fontFamily: Fonts.mono,
+        fontSize: 10,
+        lineHeight: 14,
+        letterSpacing: letterSpacing(1),
+        textTransform: 'uppercase',
+    },
+    chevron: {
+        marginLeft: 2,
+    },
 });

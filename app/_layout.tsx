@@ -105,7 +105,21 @@ function RootLayout() {
     }, [ref]);
 
     const [fontsLoaded, fontError] = useFonts({
-        Pacifico: require('../assets/fonts/Pacifico-Regular.ttf'),
+        // Editorial serif (Tropic Office)
+        Fraunces: require('../assets/fonts/Fraunces-Regular.ttf'),
+        'Fraunces-Italic': require('../assets/fonts/Fraunces-Italic.ttf'),
+
+        // Sans UI workhorse
+        Inter: require('../assets/fonts/Inter-Regular.ttf'),
+        'Inter-Medium': require('../assets/fonts/Inter-Medium.ttf'),
+        'Inter-SemiBold': require('../assets/fonts/Inter-SemiBold.ttf'),
+        'Inter-Bold': require('../assets/fonts/Inter-Bold.ttf'),
+
+        // Tabular mono
+        JetBrainsMono: require('../assets/fonts/JetBrainsMono-Regular.ttf'),
+        'JetBrainsMono-Medium': require('../assets/fonts/JetBrainsMono-Medium.ttf'),
+
+        // Retained for existing SpaceMono consumers (phased out as Tropic sweeps complete)
         SpaceMono: require('../assets/fonts/SpaceMono-Regular.ttf'),
     });
 

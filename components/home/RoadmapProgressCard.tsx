@@ -1,3 +1,4 @@
+import { Fonts } from '@/constants/type';
 import type { ProgrammeWithModules } from '@/types/roadmap';
 import type { ThemeColors } from '@/types/theme';
 import { Ionicons } from '@expo/vector-icons';
@@ -57,10 +58,11 @@ const styles = StyleSheet.create({
         justifyContent: 'space-between',
         marginBottom: 16,
     },
-    sectionTitle: { fontSize: 18, fontWeight: '700', marginBottom: 0 },
+    sectionTitle: { fontFamily: Fonts.serif, fontSize: 18, fontWeight: '500', marginBottom: 0 },
     progName: {
+        fontFamily: Fonts.serif,
         fontSize: 14,
-        fontWeight: '600',
+        fontWeight: '500',
         marginBottom: 10,
     },
     progressBarTrack: {
@@ -75,6 +77,7 @@ const styles = StyleSheet.create({
         borderRadius: 4,
     },
     progressLabel: {
+        fontFamily: Fonts.sans,
         fontSize: 13,
     },
 });
