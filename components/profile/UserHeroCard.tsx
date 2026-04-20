@@ -1,6 +1,7 @@
 import Avatar from '@/components/Avatar';
 import { letterSpacing } from '@/constants/platform';
 import { ROLE_LABELS } from '@/constants/ui';
+import { formatSgPhone } from '@/lib/phone';
 import { Ionicons } from '@expo/vector-icons';
 import React from 'react';
 import { ActivityIndicator, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
@@ -91,7 +92,9 @@ export default function UserHeroCard({
                 {phone && (
                     <View style={styles.contactRow}>
                         <Ionicons name="call-outline" size={16} color={colors.textTertiary} />
-                        <Text style={[styles.contactText, { color: colors.textSecondary }]}>{phone}</Text>
+                        <Text style={[styles.contactText, { color: colors.textSecondary }]}>
+                            {formatSgPhone(phone)}
+                        </Text>
                     </View>
                 )}
                 {email && (

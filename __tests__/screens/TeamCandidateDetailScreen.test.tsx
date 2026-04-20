@@ -139,6 +139,7 @@ const MOCK_CANDIDATE = {
     resume_url: null,
     profile_pdf_path: null,
     disc_pdf_path: null,
+    enneagram_pdf_path: null,
     disc_results: null,
     profile_details: null,
     interviews: [] as any[],

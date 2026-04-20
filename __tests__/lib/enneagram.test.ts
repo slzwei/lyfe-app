@@ -238,15 +238,15 @@ describe('computeEnneagramScores', () => {
 
 describe('getEnneagramLabel', () => {
     it('returns type with wing', () => {
-        expect(getEnneagramLabel(4, 5)).toBe('Type 4w5');
+        expect(getEnneagramLabel(4, 5)).toBe('Type 4w5 — Individualist with a Investigator wing');
     });
 
     it('returns type without wing', () => {
-        expect(getEnneagramLabel(7, null)).toBe('Type 7');
+        expect(getEnneagramLabel(7, null)).toBe('Type 7 — Enthusiast');
     });
 
     it('returns type 9 with wing 1', () => {
-        expect(getEnneagramLabel(9, 1)).toBe('Type 9w1');
+        expect(getEnneagramLabel(9, 1)).toBe('Type 9w1 — Peacemaker with a Reformer wing');
     });
 });
 

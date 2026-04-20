@@ -7,6 +7,7 @@ export default function EventsLayout() {
 
     return (
         <Stack
+            initialRouteName="index"
             screenOptions={{
                 headerShown: false,
                 contentStyle: { backgroundColor: colors.background },

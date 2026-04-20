@@ -111,6 +111,7 @@ const MOCK_CANDIDATE = {
     resume_url: null,
     profile_pdf_path: null,
     disc_pdf_path: null,
+    enneagram_pdf_path: null,
     disc_results: null,
     profile_details: null,
     interviews: [] as any[],
@@ -277,7 +278,8 @@ describe('CandidateDetailScreen', () => {
     it('renders phone number', async () => {
         const { getByText } = renderScreen();
         await waitFor(() => {
-            expect(getByText('+6598765432')).toBeTruthy();
+            // Phone rendered via formatSgPhone (+65 + space-separated groups)
+            expect(getByText('+65 9876 5432')).toBeTruthy();
         });
     });
 

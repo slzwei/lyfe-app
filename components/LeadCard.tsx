@@ -26,6 +26,7 @@ import { Fonts } from '@/constants/type';
 import { letterSpacing } from '@/constants/platform';
 import { useTheme } from '@/contexts/ThemeContext';
 import { timeAgo } from '@/lib/dateTime';
+import { formatSgPhone } from '@/lib/phone';
 import { PRODUCT_LABELS, type Lead } from '@/types/lead';
 import { Ionicons } from '@expo/vector-icons';
 import React from 'react';
@@ -67,7 +68,11 @@ function LeadCard({ lead, onPress, lastActivity, agentName }: LeadCardProps) {
                         <Text style={[styles.name, { color: colors.textPrimary }]} numberOfLines={1}>
                             {lead.full_name}
                         </Text>
-                        {lead.phone && <Text style={[styles.phone, { color: colors.textTertiary }]}>{lead.phone}</Text>}
+                        {lead.phone && (
+                            <Text style={[styles.phone, { color: colors.textTertiary }]}>
+                                {formatSgPhone(lead.phone)}
+                            </Text>
+                        )}
                     </View>
                 </View>
                 <StatusBadge status={lead.status} />

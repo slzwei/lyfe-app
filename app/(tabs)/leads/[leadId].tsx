@@ -17,6 +17,7 @@ import { useTheme } from '@/contexts/ThemeContext';
 import { useViewMode } from '@/contexts/ViewModeContext';
 import { useLeadDetail } from '@/hooks/useLeadDetail';
 import { timeAgo } from '@/lib/dateTime';
+import { formatSgPhone } from '@/lib/phone';
 import { PRODUCT_LABELS, SOURCE_LABELS } from '@/types/lead';
 import type { ThemeColors } from '@/types/theme';
 import type { IconName } from '@/types/ui';
@@ -191,12 +192,13 @@ export default function LeadDetailScreen() {
         setShowContactConfirm(false);
         if (!pc || outcome === 'skip') return;
 
+        const displayPhone = formatSgPhone(pc.phone);
         const description =
             pc.type === 'call'
                 ? outcome === 'reached'
-                    ? `Called ${pc.phone} — reached`
-                    : `Called ${pc.phone} — no answer`
-                : `Sent WhatsApp to ${pc.phone}`;
+                    ? `Called ${displayPhone} — reached`
+                    : `Called ${displayPhone} — no answer`
+                : `Sent WhatsApp to ${displayPhone}`;
 
         logActivity(pc.type, description, { phone: pc.phone, outcome });
 
@@ -256,7 +258,7 @@ export default function LeadDetailScreen() {
                                 <View style={styles.contactLine}>
                                     <Ionicons name="call-outline" size={13} color={colors.textTertiary} />
                                     <Text style={[styles.heroContact, { color: colors.textSecondary }]}>
-                                        {lead.phone}
+                                        {formatSgPhone(lead.phone)}
                                     </Text>
                                 </View>
                             )}

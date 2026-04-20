@@ -43,6 +43,7 @@ import {
     canRejectCandidate,
     canVerifyPapers,
 } from '@/types/shared/roles';
+import { formatSgPhone } from '@/lib/phone';
 import { fetchCandidateRoadmap, unlockProgrammeForCandidate } from '@/lib/roadmap';
 import type {
     CandidateActivity,
@@ -850,6 +851,15 @@ export default function CandidateDetailScreen() {
                   },
               ]
             : []),
+        ...(candidate.enneagram_pdf_path
+            ? [
+                  {
+                      label: 'Enneagram',
+                      title: 'Enneagram Report',
+                      onView: () => handleViewGeneratedPdf(candidate.enneagram_pdf_path!, 'Enneagram Report'),
+                  },
+              ]
+            : []),
     ];
 
     return (
@@ -899,7 +909,7 @@ export default function CandidateDetailScreen() {
                     <SectionCard title="Emergency Contact" icon="alert-circle-outline" colors={colors}>
                         <DetailRow label="Name" value={p.emergency_name} colors={colors} />
                         <DetailRow label="Relationship" value={p.emergency_relationship} colors={colors} />
-                        <DetailRow label="Phone" value={p.emergency_contact} colors={colors} />
+                        <DetailRow label="Phone" value={formatSgPhone(p.emergency_contact)} colors={colors} />
                     </SectionCard>
                 )}
 

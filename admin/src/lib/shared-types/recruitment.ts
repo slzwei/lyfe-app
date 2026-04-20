@@ -134,6 +134,7 @@ export interface RecruitmentCandidate {
     resume_url: string | null;
     profile_pdf_path: string | null;
     disc_pdf_path: string | null;
+    enneagram_pdf_path: string | null;
     disc_results: CandidateDiscResults | null;
     profile_details: CandidateProfileDetails | null;
     interviews: Interview[];

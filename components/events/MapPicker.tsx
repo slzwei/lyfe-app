@@ -67,6 +67,13 @@ export default function MapPicker({
     // the user pans multiple times in quick succession. Only the most
     // recent request's result is applied.
     const pendingGeocodeIdRef = useRef(0);
+    // True while the user has the search input focused. Industry-standard
+    // guard for map-over-search UIs (Google Maps, Apple Maps, Uber, Grab):
+    // once the user is typing, the map must NEVER programmatically replace
+    // the input text — those characters are theirs to own. We still update
+    // `selectedName` from reverse-geocode so Confirm gets the right value;
+    // we just don't touch the text field.
+    const searchFocusedRef = useRef(false);
     // Target coords of the most recent animateToRegion call. When the
     // matching onRegionChangeComplete arrives (region within tolerance of
     // the target), we know it's a programmatic move and must NOT reverse-
@@ -239,12 +246,17 @@ export default function MapPicker({
             if (myId !== pendingGeocodeIdRef.current) return; // stale
             if (name) {
                 setSelectedName(name);
-                autocompleteRef.current?.setAddressText(name);
+                // Focus gate: never overwrite text the user is typing.
+                // Internal `selectedName` still tracks the pin, so Confirm
+                // stays correct. Once the user blurs, future pans repopulate.
+                if (!searchFocusedRef.current) {
+                    autocompleteRef.current?.setAddressText(name);
+                }
             } else {
-                // Geocoder gave us nothing — clear both so Confirm's
-                // safety-net fallback can try again later if needed.
                 setSelectedName(null);
-                autocompleteRef.current?.setAddressText('');
+                if (!searchFocusedRef.current) {
+                    autocompleteRef.current?.setAddressText('');
+                }
             }
         },
         [resolveCoordName],
@@ -393,6 +405,14 @@ export default function MapPicker({
                             // Tap → select all so the user can replace the
                             // saved name in one go without backspacing.
                             selectTextOnFocus: true,
+                            // Focus gate: map-side reverse-geocode must not
+                            // overwrite text while the user is typing.
+                            onFocus: () => {
+                                searchFocusedRef.current = true;
+                            },
+                            onBlur: () => {
+                                searchFocusedRef.current = false;
+                            },
                         }}
                         styles={{
                             container: {

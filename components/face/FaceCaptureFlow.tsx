@@ -9,6 +9,7 @@
  * overlay and calls `onDismiss` when the user is done.
  */
 import { FaceTurnPrompt } from '@/components/face/FaceTurnPrompt';
+import { ShimmerOverlay } from '@/components/roadshow/atoms/ShimmerOverlay';
 import { TAB_BAR_HEIGHT, TAB_BAR_PADDING_BOTTOM, TAB_BAR_PADDING_TOP } from '@/constants/platform';
 import { useTheme } from '@/contexts/ThemeContext';
 import type { FaceQualityReason } from '@/lib/faceVerification';
@@ -25,9 +26,10 @@ import Animated, {
     useSharedValue,
     withDelay,
     withSpring,
+    withTiming,
 } from 'react-native-reanimated';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import Svg, { Circle as SvgCircle, Defs, Mask, Rect } from 'react-native-svg';
+import Svg, { Circle as SvgCircle, Defs, Ellipse as SvgEllipse, Mask, Path as SvgPath, Rect } from 'react-native-svg';
 import {
     Camera,
     type CameraRef,
@@ -76,29 +78,60 @@ const STEP_PROMPTS: Record<LivenessStep, string> = {
     done: 'Processing...',
 };
 
+// Prototype-style italic prompts shown inside the viewfinder oval.
+const VIEWFINDER_PROMPTS: Record<LivenessStep, string> = {
+    look_straight: 'Look straight ahead…',
+    turn_left: 'Turn your head left…',
+    turn_right: 'Turn right…',
+    done: '✓ Got it',
+};
+
 // ── Result overlays ────────────────────────────────────────
 
 function CheckedInOverlay({ onDismiss }: { onDismiss: () => void }) {
-    const scale = useSharedValue(0);
+    const cardScale = useSharedValue(0.88);
+    const cardOpacity = useSharedValue(0);
 
     useEffect(() => {
-        // Delay the pop-in so the brackets→ring→tick morph in FaceTurnPrompt
-        // has time to play before the overlay covers it.
-        scale.value = withDelay(MORPH_DELAY_MS, withSpring(1, { damping: 12, stiffness: 150 }));
-    }, [scale]);
+        // Delay the pop-in so the viewfinder morph has time to play before
+        // the overlay covers it.
+        cardScale.value = withDelay(MORPH_DELAY_MS, withSpring(1, { damping: 18, stiffness: 180 }));
+        cardOpacity.value = withDelay(MORPH_DELAY_MS, withTiming(1, { duration: 240 }));
+    }, [cardScale, cardOpacity]);
 
-    const circleStyle = useAnimatedStyle(() => ({
-        transform: [{ scale: scale.value }],
+    const cardStyle = useAnimatedStyle(() => ({
+        transform: [{ scale: cardScale.value }],
+        opacity: cardOpacity.value,
     }));
 
     return (
-        <Animated.View entering={FadeIn.delay(MORPH_DELAY_MS).duration(300)} style={styles.resultOverlay}>
-            <Animated.View style={[styles.successCircle, circleStyle]}>
-                <Ionicons name="checkmark" size={64} color="#FFFFFF" />
-            </Animated.View>
-            <Animated.View entering={FadeIn.delay(MORPH_DELAY_MS + 300).duration(300)}>
-                <Pressable style={styles.dismissButton} onPress={onDismiss}>
-                    <Text style={styles.dismissText}>Done</Text>
+        <Animated.View entering={FadeIn.delay(MORPH_DELAY_MS).duration(240)} style={styles.protoOverlay}>
+            <Animated.View style={[styles.protoCard, cardStyle]}>
+                <View
+                    style={[
+                        styles.protoIconRing,
+                        { backgroundColor: PROTO_COLORS.sage + '1E', borderColor: PROTO_COLORS.sage },
+                    ]}
+                >
+                    <Text style={[styles.protoIconGlyph, { color: PROTO_COLORS.sage }]}>✓</Text>
+                </View>
+                <Text style={styles.protoTitle}>
+                    <Text style={styles.protoTitleItalic}>Checked</Text> in.
+                </Text>
+                <Text style={styles.protoSub}>You're on the booth. Go get them.</Text>
+                <Pressable
+                    onPress={onDismiss}
+                    style={({ pressed }) => [
+                        styles.protoCta,
+                        {
+                            backgroundColor: pressed ? '#5E6F51' : PROTO_COLORS.sage,
+                            marginTop: 18,
+                        },
+                    ]}
+                    accessibilityLabel="Dismiss"
+                >
+                    <Text style={styles.protoCtaText}>Let's go</Text>
+                    <Text style={styles.protoCtaArrow}>→</Text>
                 </Pressable>
             </Animated.View>
         </Animated.View>
@@ -116,26 +149,51 @@ function FailedOverlay({
     title: string;
     subtitle?: string;
 }) {
+    const cardScale = useSharedValue(0.88);
+    const cardOpacity = useSharedValue(0);
+
+    useEffect(() => {
+        cardScale.value = withSpring(1, { damping: 18, stiffness: 180 });
+        cardOpacity.value = withTiming(1, { duration: 240 });
+    }, [cardScale, cardOpacity]);
+
+    const cardStyle = useAnimatedStyle(() => ({
+        transform: [{ scale: cardScale.value }],
+        opacity: cardOpacity.value,
+    }));
+
+    // Prototype accent for fail state: pink (muted rose, not angry red)
+    const pink = '#D88A93';
+    const pinkTint = '#F3D9DC';
+
     return (
-        <Animated.View entering={FadeIn.duration(200)} style={styles.resultOverlay}>
-            <Animated.View entering={ZoomIn.duration(300)} style={styles.failCircle}>
-                <Ionicons name="close" size={64} color="#FFFFFF" />
-            </Animated.View>
-            <Animated.Text entering={FadeIn.delay(300).duration(300)} style={styles.failText}>
-                {title}
-            </Animated.Text>
-            {subtitle && (
-                <Animated.Text entering={FadeIn.delay(400).duration(300)} style={styles.failSubtitle}>
-                    {subtitle}
-                </Animated.Text>
-            )}
-            <Animated.View entering={FadeIn.delay(500).duration(300)} style={styles.failButtons}>
-                <Pressable style={styles.retryButton} onPress={onRetry}>
-                    <Text style={styles.retryText}>Try Again</Text>
-                </Pressable>
-                <Pressable style={styles.dismissButton} onPress={onDismiss}>
-                    <Text style={styles.dismissText}>Cancel</Text>
-                </Pressable>
+        <Animated.View entering={FadeIn.duration(240)} style={styles.protoOverlay}>
+            <Animated.View style={[styles.protoCard, cardStyle]}>
+                <View style={[styles.protoIconRing, { backgroundColor: pinkTint, borderColor: pink }]}>
+                    <Text style={[styles.protoIconGlyph, { color: pink }]}>✕</Text>
+                </View>
+                <Text style={styles.protoTitle}>{title}</Text>
+                {subtitle ? <Text style={styles.protoSub}>{subtitle}</Text> : null}
+                <View style={styles.protoCtaCol}>
+                    <Pressable
+                        onPress={onRetry}
+                        style={({ pressed }) => [
+                            styles.protoCta,
+                            { backgroundColor: pressed ? PROTO_COLORS.terra + 'CC' : PROTO_COLORS.terra },
+                        ]}
+                        accessibilityLabel="Try again"
+                    >
+                        <Text style={styles.protoCtaText}>Try again</Text>
+                        <Text style={styles.protoCtaArrow}>↻</Text>
+                    </Pressable>
+                    <Pressable
+                        onPress={onDismiss}
+                        style={({ pressed }) => [styles.protoCtaGhost, { opacity: pressed ? 0.6 : 1 }]}
+                        accessibilityLabel="Cancel"
+                    >
+                        <Text style={[styles.protoGhostText, { color: PROTO_COLORS.muted }]}>Cancel</Text>
+                    </Pressable>
+                </View>
             </Animated.View>
         </Animated.View>
     );
@@ -206,6 +264,8 @@ export function FaceCaptureFlow({ mode, onPhotoCaptured, onDismiss, showDebug = 
     const stepRef = useRef<LivenessStep>('look_straight');
     const scanningRef = useRef(false);
     const captureCountRef = useRef(0);
+    // Counter used to throttle dev scan logs to 1 line every 10 captures.
+    const scanLogCounterRef = useRef(0);
     const straightPhotoRef = useRef<string | null>(null);
     stepRef.current = step;
 
@@ -332,7 +392,9 @@ export function FaceCaptureFlow({ mode, onPhotoCaptured, onDismiss, showDebug = 
 
                 const faces = await detectFaces(photoFile.filePath);
                 const t2 = Date.now();
-                if (__DEV__) {
+                // Throttle dev logs — every 10th capture is enough to gauge perf
+                // without drowning the console. Bump to 1 if you need per-tick detail.
+                if (__DEV__ && scanLogCounterRef.current++ % 10 === 0) {
                     console.log(`[FaceScan] capture=${t1 - t0}ms detect=${t2 - t1}ms total=${t2 - t0}ms`);
                 }
 
@@ -449,67 +511,149 @@ export function FaceCaptureFlow({ mode, onPhotoCaptured, onDismiss, showDebug = 
 
     const failTitle = mode === 'register' ? 'Registration Failed' : 'Verification Failed';
 
+    // ── Prototype status tick semantics ──
+    // Proximity: already passed by parent useCheckInFlow before this modal opens.
+    const proximityPassed = true;
+    // Liveness: progresses with captureCount (0→1→2→3). Sage when all 3 done.
+    const livenessPassed = captureCount >= 3;
+    const livenessText = livenessPassed ? '3/3 ok' : `${captureCount}/3 scanning…`;
+    // Match: Rekognition + optional re-proximity. Sage on showResult=pass.
+    const matchPassed = showResult === 'pass';
+    const matchText = matchPassed ? 'match ok' : processing ? 'verifying…' : livenessPassed ? 'queued' : 'queued';
+
+    const ovalBorder = livenessPassed ? PROTO_COLORS.sage : PROTO_COLORS.terra;
+
     return (
-        <View style={styles.container}>
+        <View style={{ flex: 1 }}>
+            {/* Backdrop — tap to cancel */}
+            <Pressable
+                style={StyleSheet.absoluteFill}
+                onPress={!processing && !showResult ? handleCancel : undefined}
+                accessibilityLabel="Dismiss face capture"
+            />
+            <View
+                pointerEvents="none"
+                style={[StyleSheet.absoluteFillObject, { backgroundColor: 'rgba(0,0,0,0.7)' }]}
+            />
+
+            {/* Bottom sheet shell — stays mounted through processing + result so
+                the Camera never remounts mid-flow. Overlays (Processing / Pass /
+                Fail) render ABOVE with their own backdrops and visually cover
+                the sheet. Unmounting + remounting the <Camera> on rapid
+                verification cycles leaks native resources on iOS and crashes
+                the app. */}
             {cameraMounted && (
-                <View style={styles.cameraContainer} onLayout={handleCameraLayout}>
-                    <Camera
-                        ref={cameraRef}
-                        style={StyleSheet.absoluteFill}
-                        device={device}
-                        isActive={cameraMounted}
-                        outputs={[photoOutput]}
-                    />
+                <View
+                    style={[
+                        styles.sheet,
+                        {
+                            backgroundColor: PROTO_COLORS.paper,
+                            paddingBottom: insets.bottom + 20,
+                        },
+                    ]}
+                >
+                    {/* Drag handle */}
+                    <View style={styles.handle} />
 
-                    {/* Circle mask: darkens everything outside the circular hole */}
-                    <CircleMaskOverlay
-                        width={cameraLayout.width}
-                        height={cameraLayout.height}
-                        borderColor={step === 'done' ? '#34C759' : displayFace ? '#FF9500' : '#FF3B30'}
-                    />
+                    {/* Eyebrow + title */}
+                    <Text style={styles.eyebrow}>STEP 2 / 3 · FACE</Text>
+                    <Text style={styles.title}>
+                        Hold still. <Text style={styles.titleItalic}>Turn your head</Text> when prompted.
+                    </Text>
 
-                    {/* Step dots — hide once a result is shown */}
-                    {!showResult && (
-                        <View style={styles.stepIndicator}>
-                            <View style={[styles.stepDot, captureCount >= 1 && styles.stepDotDone]} />
-                            <View style={[styles.stepDot, captureCount >= 2 && styles.stepDotDone]} />
-                            <View style={[styles.stepDot, captureCount >= 3 && styles.stepDotDone]} />
-                        </View>
-                    )}
+                    {/* Viewfinder: 3:4 aspect, dark bg, camera inside */}
+                    <View style={styles.viewfinder} onLayout={handleCameraLayout}>
+                        <Camera
+                            ref={cameraRef}
+                            style={StyleSheet.absoluteFill}
+                            device={device}
+                            isActive={cameraMounted}
+                            outputs={[photoOutput]}
+                        />
 
-                    {/* Face-turn prompt: animates based on current liveness step. Morphs
-                        brackets → ring once all 3 photos are captured, then ring → checkmark
-                        once the parent's onPhotoCaptured returns ok. Hidden on fail. */}
-                    {showResult !== 'fail' && (
-                        <View style={styles.promptContainer}>
-                            <FaceTurnPrompt
-                                direction={step === 'turn_left' ? 'left' : step === 'turn_right' ? 'right' : 'straight'}
-                                size={96}
-                                morphStage={
-                                    showResult === 'pass' ? 'tick' : step === 'done' || processing ? 'ring' : 'live'
-                                }
+                        {/* Oval vignette mask + dashed border */}
+                        {cameraLayout.width > 0 && cameraLayout.height > 0 && (
+                            <OvalVignette
+                                width={cameraLayout.width}
+                                height={cameraLayout.height}
+                                borderColor={ovalBorder}
                             />
-                            <Text style={styles.promptText}>{STEP_PROMPTS[step]}</Text>
-                        </View>
-                    )}
+                        )}
 
-                    {/* Dev debug overlay — hide once a result is shown */}
-                    {showDebug && !showResult && (
-                        <View style={styles.debugOverlay}>
-                            <Text style={styles.debugText}>Yaw: {displayYaw}°</Text>
-                            <Text style={styles.debugText}>Face: {displayFace ? 'YES' : 'NO'}</Text>
-                            <Text style={styles.debugText}>Step: {step}</Text>
-                        </View>
-                    )}
+                        {/* Scanning shimmer bar inside the oval */}
+                        {!livenessPassed && cameraLayout.width > 0 && (
+                            <View
+                                pointerEvents="none"
+                                style={[
+                                    styles.shimmerBand,
+                                    {
+                                        top: cameraLayout.height / 2 - 1,
+                                        left: cameraLayout.width * 0.13,
+                                        right: cameraLayout.width * 0.13,
+                                    },
+                                ]}
+                            >
+                                <ShimmerOverlay
+                                    color={PROTO_COLORS.terra}
+                                    intensity="cc"
+                                    durationMs={1400}
+                                    radius={0}
+                                />
+                            </View>
+                        )}
 
-                    {/* Cancel button — hidden during processing / result */}
-                    {!processing && !showResult && (
-                        <View style={styles.cancelButtonWrapper} pointerEvents="box-none">
-                            <Pressable style={styles.cancelButton} onPress={handleCancel}>
-                                <Text style={styles.cancelText}>Cancel</Text>
-                            </Pressable>
+                        {/* 4 corner crop marks */}
+                        <View pointerEvents="none" style={[styles.corner, styles.cornerTopLeft]} />
+                        <View pointerEvents="none" style={[styles.corner, styles.cornerTopRight]} />
+                        <View pointerEvents="none" style={[styles.corner, styles.cornerBottomLeft]} />
+                        <View pointerEvents="none" style={[styles.corner, styles.cornerBottomRight]} />
+
+                        {/* Italic prompt inside viewfinder */}
+                        <View style={styles.viewfinderPromptWrap} pointerEvents="none">
+                            <Text style={styles.viewfinderPrompt}>{VIEWFINDER_PROMPTS[step]}</Text>
                         </View>
-                    )}
+
+                        {/* Dev debug */}
+                        {showDebug ? (
+                            <View style={styles.debugOverlay}>
+                                <Text style={styles.debugText}>Yaw: {displayYaw}°</Text>
+                                <Text style={styles.debugText}>Face: {displayFace ? 'YES' : 'NO'}</Text>
+                                <Text style={styles.debugText}>Step: {step}</Text>
+                            </View>
+                        ) : null}
+                    </View>
+
+                    {/* 3 status ticks */}
+                    <View style={styles.tickRow}>
+                        <StatusTick label="Proximity" passed={proximityPassed} text="100m OK" />
+                        <StatusTick label="Liveness" passed={livenessPassed} text={livenessText} />
+                        <StatusTick label="Match" passed={matchPassed} text={matchText} />
+                    </View>
+
+                    {/* CTA (informational — scan auto-progresses) */}
+                    <View
+                        style={[
+                            styles.cta,
+                            {
+                                backgroundColor: livenessPassed ? PROTO_COLORS.terra : PROTO_COLORS.paperEl,
+                                borderColor: livenessPassed ? PROTO_COLORS.terra : PROTO_COLORS.rule,
+                            },
+                        ]}
+                    >
+                        <Text
+                            style={[
+                                styles.ctaText,
+                                {
+                                    color: livenessPassed ? PROTO_COLORS.paperEl : PROTO_COLORS.ink,
+                                },
+                            ]}
+                        >
+                            {livenessPassed ? 'Check me in' : 'Capturing…'}
+                        </Text>
+                        {livenessPassed ? (
+                            <Text style={[styles.ctaArrow, { color: PROTO_COLORS.paperEl }]}>→</Text>
+                        ) : null}
+                    </View>
                 </View>
             )}
 
@@ -528,6 +672,71 @@ export function FaceCaptureFlow({ mode, onPhotoCaptured, onDismiss, showDebug = 
     );
 }
 
+// ── Prototype tokens ──
+const PROTO_COLORS = {
+    paper: '#FAF5EA',
+    paperEl: '#FFFFFF',
+    ink: '#1B1A17',
+    muted: 'rgba(27,26,23,0.62)',
+    dim: 'rgba(27,26,23,0.42)',
+    faint: 'rgba(27,26,23,0.12)',
+    rule: 'rgba(27,26,23,0.09)',
+    hair: 'rgba(27,26,23,0.05)',
+    terra: '#C85A2F',
+    sage: '#7A8C6B',
+    cream: '#F4EEE1',
+};
+
+// ── Oval vignette mask (SVG rect-minus-ellipse with evenodd fill + dashed ellipse border) ──
+function OvalVignette({ width, height, borderColor }: { width: number; height: number; borderColor: string }) {
+    const ovalW = width * 0.62;
+    const ovalH = Math.min(ovalW * (4 / 3), height * 0.92);
+    const cx = width / 2;
+    const cy = height / 2;
+    const rx = ovalW / 2;
+    const ry = ovalH / 2;
+
+    // Outer rectangle, then ellipse path (fillRule evenodd carves the ellipse out)
+    const d = [
+        `M0 0 H${width} V${height} H0 Z`,
+        `M ${cx} ${cy - ry}`,
+        `A ${rx} ${ry} 0 1 0 ${cx} ${cy + ry}`,
+        `A ${rx} ${ry} 0 1 0 ${cx} ${cy - ry}`,
+        'Z',
+    ].join(' ');
+
+    return (
+        <Svg width={width} height={height} style={StyleSheet.absoluteFill} pointerEvents="none">
+            <SvgPath d={d} fill="rgba(0,0,0,0.55)" fillRule="evenodd" />
+            <SvgEllipse
+                cx={cx}
+                cy={cy}
+                rx={rx}
+                ry={ry}
+                stroke={borderColor}
+                strokeWidth={2}
+                strokeDasharray="6 4"
+                fill="none"
+            />
+        </Svg>
+    );
+}
+
+// ── Status tick (prototype's Proximity/Liveness/Match tile) ──
+function StatusTick({ label, passed, text }: { label: string; passed: boolean; text: string }) {
+    return (
+        <View style={styles.tick}>
+            <Text style={styles.tickLabel}>{label.toUpperCase()}</Text>
+            <View style={styles.tickStatus}>
+                <View style={[styles.tickDot, { backgroundColor: passed ? PROTO_COLORS.sage : PROTO_COLORS.faint }]} />
+                <Text style={[styles.tickText, { color: passed ? PROTO_COLORS.sage : PROTO_COLORS.muted }]}>
+                    {text}
+                </Text>
+            </View>
+        </View>
+    );
+}
+
 // ── Styles ─────────────────────────────────────────────────
 
 const styles = StyleSheet.create({
@@ -535,22 +744,278 @@ const styles = StyleSheet.create({
     permissionContainer: { justifyContent: 'center', alignItems: 'center', padding: 32 },
     permissionText: { color: '#FFFFFF', fontSize: 16, textAlign: 'center' },
     cameraContainer: { flex: 1 },
-    stepIndicator: {
+
+    // Bottom sheet shell (prototype RSFaceCapture)
+    sheet: {
         position: 'absolute',
-        top: 60,
+        bottom: 0,
+        left: 0,
+        right: 0,
+        paddingHorizontal: 20,
+        paddingTop: 14,
+        borderTopLeftRadius: 22,
+        borderTopRightRadius: 22,
+        shadowColor: '#000',
+        shadowOpacity: 0.25,
+        shadowRadius: 40,
+        shadowOffset: { width: 0, height: -10 },
+        elevation: 24,
+    },
+    handle: {
+        width: 40,
+        height: 4,
+        borderRadius: 3,
+        backgroundColor: PROTO_COLORS.faint,
         alignSelf: 'center',
+        marginBottom: 10,
+    },
+    eyebrow: {
+        fontFamily: 'Inter-SemiBold',
+        fontSize: 10.5,
+        letterSpacing: 1.2,
+        color: PROTO_COLORS.terra,
+    },
+    title: {
+        fontFamily: 'Fraunces',
+        fontWeight: '500',
+        fontSize: 22,
+        letterSpacing: -0.4,
+        lineHeight: 26,
+        marginTop: 4,
+        color: PROTO_COLORS.ink,
+    },
+    titleItalic: {
+        fontFamily: 'Fraunces-Italic',
+        fontWeight: '500',
+        color: PROTO_COLORS.terra,
+    },
+
+    // Viewfinder (3:4 dark container)
+    viewfinder: {
+        marginTop: 16,
+        aspectRatio: 3 / 4,
+        backgroundColor: '#111',
+        borderRadius: 20,
+        overflow: 'hidden',
+        position: 'relative',
+    },
+    shimmerBand: {
+        position: 'absolute',
+        height: 2,
+    },
+
+    // Corner crop marks — 18x18 L-brackets
+    corner: {
+        position: 'absolute',
+        width: 18,
+        height: 18,
+    },
+    cornerTopLeft: {
+        top: 8,
+        left: 8,
+        borderTopWidth: 2,
+        borderLeftWidth: 2,
+        borderColor: PROTO_COLORS.cream,
+    },
+    cornerTopRight: {
+        top: 8,
+        right: 8,
+        borderTopWidth: 2,
+        borderRightWidth: 2,
+        borderColor: PROTO_COLORS.cream,
+    },
+    cornerBottomLeft: {
+        bottom: 8,
+        left: 8,
+        borderBottomWidth: 2,
+        borderLeftWidth: 2,
+        borderColor: PROTO_COLORS.cream,
+    },
+    cornerBottomRight: {
+        bottom: 8,
+        right: 8,
+        borderBottomWidth: 2,
+        borderRightWidth: 2,
+        borderColor: PROTO_COLORS.cream,
+    },
+
+    // Viewfinder prompt (italic serif)
+    viewfinderPromptWrap: {
+        position: 'absolute',
+        left: 0,
+        right: 0,
+        bottom: 14,
+        alignItems: 'center',
+    },
+    viewfinderPrompt: {
+        fontFamily: 'Fraunces-Italic',
+        fontSize: 15,
+        color: PROTO_COLORS.cream,
+        textShadowColor: 'rgba(0,0,0,0.7)',
+        textShadowOffset: { width: 0, height: 1 },
+        textShadowRadius: 4,
+    },
+
+    // Status ticks row
+    tickRow: {
+        marginTop: 14,
         flexDirection: 'row',
-        gap: 10,
+        gap: 8,
     },
-    stepDot: {
-        width: 12,
-        height: 12,
-        borderRadius: 6,
-        backgroundColor: 'rgba(255,255,255,0.3)',
+    tick: {
+        flex: 1,
+        backgroundColor: PROTO_COLORS.paperEl,
         borderWidth: 1,
-        borderColor: '#FFFFFF',
+        borderColor: PROTO_COLORS.rule,
+        borderRadius: 10,
+        paddingVertical: 8,
+        paddingHorizontal: 10,
     },
-    stepDotDone: { backgroundColor: '#34C759', borderColor: '#34C759' },
+    tickLabel: {
+        fontFamily: 'Inter-SemiBold',
+        fontSize: 9.5,
+        letterSpacing: 0.7,
+        color: PROTO_COLORS.muted,
+    },
+    tickStatus: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 4,
+        marginTop: 2,
+    },
+    tickDot: {
+        width: 6,
+        height: 6,
+        borderRadius: 3,
+    },
+    tickText: {
+        fontFamily: 'Inter-SemiBold',
+        fontSize: 11,
+    },
+
+    // CTA (informational, follows prototype Check me in / Capturing pattern)
+    cta: {
+        marginTop: 14,
+        borderRadius: 14,
+        paddingVertical: 14,
+        borderWidth: 1,
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'center',
+        gap: 8,
+    },
+    ctaText: {
+        fontFamily: 'Fraunces',
+        fontWeight: '500',
+        fontSize: 16,
+        letterSpacing: -0.2,
+    },
+    ctaArrow: {
+        fontFamily: 'Fraunces-Italic',
+        fontSize: 16,
+        opacity: 0.85,
+    },
+
+    // ── Prototype-styled success/fail card overlays ──
+    protoOverlay: {
+        ...StyleSheet.absoluteFillObject,
+        backgroundColor: 'rgba(0,0,0,0.45)',
+        alignItems: 'center',
+        justifyContent: 'center',
+        padding: 24,
+    },
+    protoCard: {
+        width: '82%',
+        backgroundColor: PROTO_COLORS.paper,
+        borderRadius: 22,
+        paddingHorizontal: 26,
+        paddingTop: 28,
+        paddingBottom: 22,
+        alignItems: 'center',
+        shadowColor: '#000',
+        shadowOpacity: 0.3,
+        shadowRadius: 50,
+        shadowOffset: { width: 0, height: 20 },
+        elevation: 24,
+    },
+    protoIconRing: {
+        width: 72,
+        height: 72,
+        borderRadius: 36,
+        borderWidth: 1.5,
+        alignItems: 'center',
+        justifyContent: 'center',
+        marginBottom: 16,
+    },
+    protoIconGlyph: {
+        fontSize: 32,
+        lineHeight: 36,
+        fontFamily: 'Fraunces',
+        fontWeight: '500',
+    },
+    protoTitle: {
+        fontFamily: 'Fraunces',
+        fontWeight: '500',
+        fontSize: 24,
+        letterSpacing: -0.4,
+        lineHeight: 28,
+        color: PROTO_COLORS.ink,
+        textAlign: 'center',
+    },
+    protoTitleItalic: {
+        fontFamily: 'Fraunces-Italic',
+        fontWeight: '500',
+        color: PROTO_COLORS.sage,
+    },
+    protoSub: {
+        fontFamily: 'Fraunces-Italic',
+        fontSize: 14,
+        marginTop: 6,
+        color: PROTO_COLORS.muted,
+        textAlign: 'center',
+        lineHeight: 20,
+    },
+    protoCtaCol: {
+        width: '100%',
+        marginTop: 18,
+        gap: 8,
+    },
+    protoCta: {
+        width: '100%',
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'center',
+        paddingVertical: 14,
+        borderRadius: 14,
+        gap: 8,
+    },
+    protoCtaText: {
+        color: '#FFFFFF',
+        fontFamily: 'Fraunces',
+        fontWeight: '500',
+        fontSize: 16,
+        letterSpacing: -0.2,
+    },
+    protoCtaArrow: {
+        color: '#FFFFFF',
+        fontFamily: 'Fraunces-Italic',
+        fontSize: 16,
+        opacity: 0.85,
+    },
+    protoCtaGhost: {
+        width: '100%',
+        alignItems: 'center',
+        justifyContent: 'center',
+        paddingVertical: 12,
+    },
+    protoGhostText: {
+        fontFamily: 'Fraunces',
+        fontWeight: '500',
+        fontSize: 14,
+        letterSpacing: -0.2,
+    },
+
+    // (deprecated full-bleed styles kept below for legacy references — unused)
     promptContainer: {
         position: 'absolute',
         bottom: 80,

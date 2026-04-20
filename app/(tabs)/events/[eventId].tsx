@@ -1,5 +1,7 @@
-import Confetti, { CONFETTI_DURATION } from '@/components/Confetti';
+import { MilestoneConfetti, CONFETTI_DURATION, type MilestoneKind } from '@/components/roadshow/MilestoneConfetti';
 import ScreenHeader from '@/components/ScreenHeader';
+import { EventStatusPill } from '@/components/roadshow/atoms/EventStatusPill';
+import { TropicFonts } from '@/constants/roadshow/typography';
 import { FaceCaptureFlow } from '@/components/face/FaceCaptureFlow';
 import { useEventDetail } from '@/hooks/useEventDetail';
 import { useCheckInFlow } from '@/hooks/useCheckInFlow';
@@ -16,7 +18,7 @@ import { letterSpacing } from '@/constants/platform';
 import { EVENT_TYPE_CONFIG } from '@/constants/displayConfigs';
 import { EVENT_TYPE_LABELS } from '@/types/event';
 import { Ionicons } from '@expo/vector-icons';
-import { useLocalSearchParams } from 'expo-router';
+import { useLocalSearchParams, useSegments } from 'expo-router';
 import { useTypedRouter } from '@/hooks/useTypedRouter';
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import {
@@ -36,7 +38,6 @@ import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context'
 import { RoadshowUpcoming } from '@/components/events/RoadshowUpcoming';
 import { RoadshowLiveT1 } from '@/components/events/RoadshowLiveT1';
 import { RoadshowLiveT2 } from '@/components/events/RoadshowLiveT2';
-import { RoadshowLeaderboard, RoadshowActivityFeed } from '@/components/events/RoadshowShared';
 import { RoadshowPast } from '@/components/events/RoadshowPast';
 import { EventAttendees } from '@/components/events/EventAttendees';
 
@@ -90,9 +91,13 @@ function renderLocationRow(props: {
 export default function EventDetailScreen() {
     const { colors } = useTheme();
     const { user } = useAuth();
-    const { viewMode } = useViewMode();
+    const { viewMode, canToggle, setViewMode } = useViewMode();
     const router = useTypedRouter();
     const { eventId } = useLocalSearchParams<{ eventId: string }>();
+    const segments = useSegments();
+    const entryTab = segments[1] as string | undefined;
+    const backLabel =
+        entryTab === 'events' ? 'Events' : entryTab === 'home' ? 'Home' : entryTab === 'pa' ? 'Candidates' : 'Back';
     const insets = useSafeAreaInsets();
 
     // ── Hook: event detail (data loading, realtime) ──
@@ -108,16 +113,17 @@ export default function EventDetailScreen() {
         setActivities,
     } = useEventDetail(eventId, user?.id);
 
-    // ── Confetti (stays in screen — used by activity log's onMilestone) ──
-    const [confettiVisible, setConfettiVisible] = useState(false);
-    const [confettiKey, setConfettiKey] = useState(0);
-    const confettiTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+    // ── Milestone celebration (triggered by activity log's onMilestone) ──
+    const [milestoneVisible, setMilestoneVisible] = useState(false);
+    const [milestoneKind, setMilestoneKind] = useState<MilestoneKind>('case');
+    const milestoneTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-    const triggerConfetti = useCallback(() => {
-        if (confettiTimer.current) clearTimeout(confettiTimer.current);
-        setConfettiKey((k) => k + 1);
-        setConfettiVisible(true);
-        confettiTimer.current = setTimeout(() => setConfettiVisible(false), CONFETTI_DURATION + 400);
+    const triggerConfetti = useCallback((kind: MilestoneKind = 'case') => {
+        if (milestoneTimer.current) clearTimeout(milestoneTimer.current);
+        setMilestoneKind(kind);
+        setMilestoneVisible(true);
+        // Auto-dismiss after CONFETTI_DURATION if user doesn't tap
+        milestoneTimer.current = setTimeout(() => setMilestoneVisible(false), CONFETTI_DURATION + 1200);
     }, []);
 
     // ── Hook: check-in flow ──
@@ -137,6 +143,7 @@ export default function EventDetailScreen() {
         checkingIn,
         checkinError,
         handleOpenCheckin,
+        handleOpenReturn,
         handleConfirmPledge,
         faceCaptureVisible,
         handleFacePhotoCaptured,
@@ -171,7 +178,6 @@ export default function EventDetailScreen() {
         handleLogActivity,
         handleLogCaseClosed,
         handleLogDeparture,
-        handleReturnToBooth,
     } = useActivityLog({
         eventId,
         userId: user?.id,
@@ -381,35 +387,48 @@ export default function EventDetailScreen() {
     return (
         <View style={styles.container}>
             <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]} edges={['top']}>
-                <ScreenHeader
-                    title="Event Detail"
-                    showBack
-                    onBack={() => router.back()}
-                    rightAction={
-                        canEdit || canDelete ? (
-                            <View style={styles.headerActions}>
-                                {canEdit && (
-                                    <TouchableOpacity
-                                        onPress={() => router.push(`/(tabs)/events/create?eventId=${event.id}`)}
-                                        hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-                                        accessibilityLabel="Edit event"
-                                    >
-                                        <Ionicons name="pencil-outline" size={22} color={colors.accent} />
-                                    </TouchableOpacity>
-                                )}
-                                {canDelete && (
-                                    <TouchableOpacity
-                                        onPress={handleDelete}
-                                        hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-                                        accessibilityLabel="Delete event"
-                                    >
-                                        <Ionicons name="trash-outline" size={22} color={colors.danger} />
-                                    </TouchableOpacity>
-                                )}
-                            </View>
-                        ) : undefined
-                    }
-                />
+                {/* Minimal back row (RSBack pattern) */}
+                <View style={styles.backRow}>
+                    <TouchableOpacity
+                        onPress={() => router.back()}
+                        hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                        accessibilityLabel={`Back to ${backLabel}`}
+                    >
+                        <Text style={[styles.backLabel, { color: colors.textTertiary }]}>← {backLabel}</Text>
+                    </TouchableOpacity>
+                    <View style={styles.backRight}>
+                        {event.event_type === 'roadshow' ? (
+                            <EventStatusPill
+                                status={
+                                    getRoadshowStatus(event.event_date, event.start_time, event.end_time) === 'live'
+                                        ? 'live'
+                                        : getRoadshowStatus(event.event_date, event.start_time, event.end_time) ===
+                                            'past'
+                                          ? 'past'
+                                          : 'setup'
+                                }
+                            />
+                        ) : null}
+                        {canEdit && (
+                            <TouchableOpacity
+                                onPress={() => router.push(`/(tabs)/events/create?eventId=${event.id}`)}
+                                hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                                accessibilityLabel="Edit event"
+                            >
+                                <Ionicons name="pencil-outline" size={20} color={colors.accent} />
+                            </TouchableOpacity>
+                        )}
+                        {canDelete && (
+                            <TouchableOpacity
+                                onPress={handleDelete}
+                                hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                                accessibilityLabel="Delete event"
+                            >
+                                <Ionicons name="trash-outline" size={20} color={colors.danger} />
+                            </TouchableOpacity>
+                        )}
+                    </View>
+                </View>
 
                 <ScrollView
                     contentContainerStyle={styles.scrollContent}
@@ -422,49 +441,55 @@ export default function EventDetailScreen() {
                         />
                     }
                 >
-                    {/* Hero */}
-                    <View style={[styles.hero, { backgroundColor: colors.cardBackground }]}>
-                        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
-                            <View style={[styles.typePill, { backgroundColor: typeColor + '18' }]}>
-                                <View style={[styles.typeDot, { backgroundColor: typeColor }]} />
-                                <Text style={[styles.typePillText, { color: typeColor }]}>
-                                    {EVENT_TYPE_LABELS[event.event_type]}
-                                </Text>
+                    {/* Editorial hero */}
+                    <View style={styles.editorialHero}>
+                        <Text style={[styles.editorialEyebrow, { color: colors.textTertiary }]}>
+                            {formatDateLong(event.event_date).toUpperCase()} · {formatTime(event.start_time)}
+                            {event.end_time ? `–${formatTime(event.end_time)}` : ''}
+                        </Text>
+                        {(() => {
+                            const title = event.title.trim();
+                            const splitMatch =
+                                event.event_type === 'roadshow' ? title.match(/^(.+?)[,·]\s*(.+)$/) : null;
+                            if (splitMatch) {
+                                return (
+                                    <Text style={[styles.heroTitle, { color: colors.textPrimary }]}>
+                                        {splitMatch[1]},{'\n'}
+                                        <Text style={[styles.heroTitleItalic, { color: colors.accent }]}>
+                                            {splitMatch[2].replace(/\.$/, '')}
+                                        </Text>
+                                        .
+                                    </Text>
+                                );
+                            }
+                            return <Text style={[styles.heroTitle, { color: colors.textPrimary }]}>{title}</Text>;
+                        })()}
+                        {isLive && event.event_type !== 'roadshow' ? (
+                            <View
+                                style={[
+                                    styles.livePill,
+                                    {
+                                        backgroundColor: colors.statusLive + '18',
+                                        alignSelf: 'flex-start',
+                                        marginTop: 8,
+                                    },
+                                ]}
+                            >
+                                <Animated.View
+                                    style={[styles.liveDot, { backgroundColor: colors.statusLive, opacity: liveAnim }]}
+                                />
+                                <Text style={[styles.liveText, { color: colors.statusLive }]}>LIVE</Text>
                             </View>
-                            {isLive && (
-                                <View style={[styles.livePill, { backgroundColor: colors.statusLive + '18' }]}>
-                                    <Animated.View
-                                        style={[
-                                            styles.liveDot,
-                                            { backgroundColor: colors.statusLive, opacity: liveAnim },
-                                        ]}
-                                    />
-                                    <Text style={[styles.liveText, { color: colors.statusLive }]}>LIVE</Text>
-                                </View>
-                            )}
-                        </View>
-                        <Text style={[styles.heroTitle, { color: colors.textPrimary }]}>{event.title}</Text>
-                        <View style={styles.metaRow}>
-                            <Ionicons name="calendar-outline" size={16} color={colors.textTertiary} />
-                            <Text style={[styles.metaText, { color: colors.textSecondary }]}>
-                                {formatDateLong(event.event_date)}
-                            </Text>
-                        </View>
-                        <View style={styles.metaRow}>
-                            <Ionicons name="time-outline" size={16} color={colors.textTertiary} />
-                            <Text style={[styles.metaText, { color: colors.textSecondary }]}>
-                                {formatTime(event.start_time)}
-                                {event.end_time ? ` – ${formatTime(event.end_time)}` : ''}
-                            </Text>
-                        </View>
+                        ) : null}
                         {/* Location row — display-only. Editing happens on the
-                        Edit Event page (pencil icon in the header) so there's
-                        exactly one entry point for location changes. */}
-                        {renderLocationRow({
-                            location: event.location,
-                            pinned: event.latitude != null && event.longitude != null,
-                            colors,
-                        })}
+                        Edit Event page. */}
+                        <View style={{ marginTop: 12 }}>
+                            {renderLocationRow({
+                                location: event.location,
+                                pinned: event.latitude != null && event.longitude != null,
+                                colors,
+                            })}
+                        </View>
                     </View>
 
                     {/* Description */}
@@ -527,7 +552,7 @@ export default function EventDetailScreen() {
                             handleLogActivity={handleLogActivity}
                             handleLogCaseClosed={handleLogCaseClosed}
                             handleLogDeparture={handleLogDeparture}
-                            handleReturnToBooth={handleReturnToBooth}
+                            handleReturnToBooth={handleOpenReturn}
                         />
                     )}
 
@@ -558,11 +583,12 @@ export default function EventDetailScreen() {
                             openOverride={openOverride}
                             handleConfirmOverride={handleConfirmOverride}
                             userFullName={user?.full_name}
+                            userId={user?.id}
+                            viewMode={canToggle ? viewMode : undefined}
+                            onViewModeToggle={canToggle ? setViewMode : undefined}
+                            activities={activities}
                         />
                     )}
-
-                    {isLive && <RoadshowLeaderboard colors={colors} leaderboard={leaderboard} userId={user?.id} />}
-                    {isLive && <RoadshowActivityFeed colors={colors} activities={activities} />}
 
                     {isPast && (
                         <RoadshowPast
@@ -571,9 +597,10 @@ export default function EventDetailScreen() {
                             attendance={attendance}
                             activityCounts={activityCounts}
                             totalAttendees={event.attendees.length}
+                            userId={user?.id}
+                            activities={activities}
                         />
                     )}
-                    {isPast && <RoadshowActivityFeed colors={colors} activities={activities} />}
 
                     {/* Assigned Agents (upcoming + non-roadshow) */}
                     {(!isRoadshow || isUpcoming) && (
@@ -598,7 +625,11 @@ export default function EventDetailScreen() {
                     </View>
                 </ScrollView>
 
-                <Confetti visible={confettiVisible} confettiKey={confettiKey} />
+                <MilestoneConfetti
+                    visible={milestoneVisible}
+                    kind={milestoneKind}
+                    onDismiss={() => setMilestoneVisible(false)}
+                />
             </SafeAreaView>
             {faceCaptureVisible && (
                 <View style={StyleSheet.absoluteFill}>
@@ -620,6 +651,28 @@ const styles = StyleSheet.create({
     notFound: { flex: 1, alignItems: 'center', justifyContent: 'center', gap: 12 },
     notFoundText: { fontSize: 16 },
     hero: { borderRadius: 16, padding: 20, gap: 10 },
+    backRow: {
+        flexDirection: 'row',
+        justifyContent: 'space-between',
+        alignItems: 'center',
+        paddingHorizontal: 18,
+        paddingTop: 12,
+        paddingBottom: 4,
+    },
+    backLabel: { fontSize: 13, fontFamily: TropicFonts.uiMedium, letterSpacing: 0 },
+    backRight: { flexDirection: 'row', alignItems: 'center', gap: 14 },
+    editorialHero: {
+        paddingHorizontal: 20,
+        paddingTop: 14,
+        paddingBottom: 8,
+        gap: 6,
+    },
+    editorialEyebrow: {
+        fontSize: 10.5,
+        fontFamily: TropicFonts.uiSemiBold,
+        letterSpacing: 1.2,
+        textTransform: 'uppercase',
+    },
     typePill: {
         flexDirection: 'row',
         alignItems: 'center',
@@ -631,7 +684,14 @@ const styles = StyleSheet.create({
     },
     typeDot: { width: 6, height: 6, borderRadius: 3 },
     typePillText: { fontSize: 12, fontWeight: '700' },
-    heroTitle: { fontSize: 22, fontWeight: '800', letterSpacing: letterSpacing(-0.4), lineHeight: 28 },
+    heroTitle: {
+        fontSize: 30,
+        fontFamily: 'Fraunces',
+        fontWeight: '400',
+        letterSpacing: letterSpacing(-0.7),
+        lineHeight: 32,
+    },
+    heroTitleItalic: { fontFamily: 'Fraunces-Italic', fontWeight: '500' },
     metaRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
     metaText: { fontSize: 14, flex: 1 },
     metaSubtext: { fontSize: 11, marginTop: 2 },

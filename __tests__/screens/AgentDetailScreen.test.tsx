@@ -8,9 +8,16 @@ import { useTheme } from '@/contexts/ThemeContext';
 import { Colors } from '@/constants/Colors';
 import { fetchTeamMember } from '@/lib/team';
 
+import AgentDetailScreen from '@/app/(tabs)/team/agent/[agentId]';
+
 jest.mock('@/lib/supabase');
 jest.mock('@/contexts/ThemeContext');
 jest.mock('@/lib/team');
+jest.mock('@/contexts/AuthContext', () => ({
+    useAuth: () => ({
+        profile: { id: 'admin-1', role: 'admin', full_name: 'Test Admin' },
+    }),
+}));
 
 jest.mock('@/components/ScreenHeader', () => {
     const { Text } = require('react-native');
@@ -41,8 +48,6 @@ jest.mock('@/lib/dateTime', () => ({
     formatMonthYear: (date: string) => 'March 2026',
 }));
 
-import AgentDetailScreen from '@/app/(tabs)/team/agent/[agentId]';
-
 const MOCK_AGENT = {
     id: 'agent-1',
     name: 'Alice Tan',
@@ -55,6 +60,8 @@ const MOCK_AGENT = {
     leadsCount: 10,
     wonCount: 3,
     conversionRate: 30,
+    currentManagerId: null,
+    currentManagerName: null,
 };
 
 const MOCK_LEADS = [

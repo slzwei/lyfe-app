@@ -193,27 +193,13 @@ describe('useActivityLog', () => {
         expect(alertSpy).toHaveBeenCalledWith('Leave Roadshow?', expect.any(String), expect.any(Array));
     });
 
-    it('handleReturnToBooth logs check_in activity', async () => {
+    // Return-to-booth is no longer handled by useActivityLog — it now runs
+    // through useCheckInFlow's handleOpenReturn, which requires proximity +
+    // face verification before logging the check_in activity. See
+    // hooks/useCheckInFlow.ts and its integration tests for that flow.
+    it('does not expose handleReturnToBooth (moved to useCheckInFlow)', () => {
         const { result } = renderHook(() => useActivityLog(defaultParams));
-
-        await act(async () => {
-            await result.current.handleReturnToBooth();
-        });
-
-        expect(mockLogRoadshowActivity).toHaveBeenCalledWith('e1', 'user1', 'check_in');
-        expect(mockSetActivities).toHaveBeenCalled();
-    });
-
-    it('handleReturnToBooth removes optimistic update on error', async () => {
-        mockLogRoadshowActivity.mockResolvedValueOnce({ data: null, error: 'Network error' });
-        const { result } = renderHook(() => useActivityLog(defaultParams));
-
-        await act(async () => {
-            await result.current.handleReturnToBooth();
-        });
-
-        // setActivities called twice: once for optimistic add, once for removal
-        expect(mockSetActivities).toHaveBeenCalledTimes(2);
+        expect((result.current as Record<string, unknown>).handleReturnToBooth).toBeUndefined();
     });
 
     it('myCounts returns zeros when myAttendance is null', () => {

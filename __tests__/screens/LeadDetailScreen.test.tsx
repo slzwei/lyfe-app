@@ -216,7 +216,8 @@ describe('LeadDetailScreen', () => {
         await waitFor(() => {
             // Name appears in both header and card
             expect(getAllByText('John Doe').length).toBeGreaterThanOrEqual(1);
-            expect(getByText('+6591234567')).toBeTruthy();
+            // Phone rendered via formatSgPhone
+            expect(getByText('+65 9123 4567')).toBeTruthy();
             expect(getByText('john@example.com')).toBeTruthy();
             expect(getByTestId('status-badge')).toBeTruthy();
         });

@@ -381,13 +381,14 @@ describe('UserHeroCard', () => {
 
     it('renders phone and email when provided', () => {
         const { getByText } = render(<UserHeroCard {...defaultProps} />);
-        expect(getByText('+6591234567')).toBeTruthy();
+        // Phone is rendered via formatSgPhone (+65 + space-separated groups).
+        expect(getByText('+65 9123 4567')).toBeTruthy();
         expect(getByText('alice@example.com')).toBeTruthy();
     });
 
     it('does not render phone or email when not provided', () => {
         const { queryByText } = render(<UserHeroCard {...defaultProps} phone={null} email={null} />);
-        expect(queryByText('+6591234567')).toBeNull();
+        expect(queryByText('+65 9123 4567')).toBeNull();
         expect(queryByText('alice@example.com')).toBeNull();
     });
 
