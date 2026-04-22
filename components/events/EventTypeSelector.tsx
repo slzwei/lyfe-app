@@ -1,3 +1,4 @@
+import { TropicFonts } from '@/constants/roadshow/typography';
 import { useTheme } from '@/contexts/ThemeContext';
 import type { EventType } from '@/types/event';
 import { EVENT_TYPE_CONFIG } from '@/constants/displayConfigs';
@@ -49,8 +50,8 @@ export default function EventTypeSelector({ eventType, onSelect, disabled }: Eve
 
 const styles = StyleSheet.create({
     field: { marginBottom: 16 },
-    label: { fontSize: 13, fontWeight: '600', marginBottom: 6 },
+    label: { fontSize: 13, fontFamily: TropicFonts.uiSemiBold, marginBottom: 6, letterSpacing: -0.1 },
     typeRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
     typeChip: { paddingHorizontal: 12, paddingVertical: 7, borderRadius: 8, borderWidth: 1.5 },
-    typeChipText: { fontSize: 13, fontWeight: '600' },
+    typeChipText: { fontSize: 13, fontFamily: TropicFonts.uiSemiBold, letterSpacing: -0.1 },
 });
