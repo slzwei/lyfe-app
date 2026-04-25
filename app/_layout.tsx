@@ -1,4 +1,10 @@
 import { useFonts } from 'expo-font';
+import {
+    AlbertSans_400Regular,
+    AlbertSans_500Medium,
+    AlbertSans_600SemiBold,
+    AlbertSans_700Bold,
+} from '@expo-google-fonts/albert-sans';
 import { Stack, useNavigationContainerRef, useRouter, useSegments } from 'expo-router';
 import * as SplashScreen from 'expo-splash-screen';
 import { StatusBar } from 'expo-status-bar';
@@ -105,17 +111,24 @@ function RootLayout() {
     }, [ref]);
 
     const [fontsLoaded, fontError] = useFonts({
-        // Editorial serif (Tropic Office)
+        // Editorial serif (Tropic Office) — greetings, one hero number, one italic accent per screen
         Fraunces: require('../assets/fonts/Fraunces-Regular.ttf'),
         'Fraunces-Italic': require('../assets/fonts/Fraunces-Italic.ttf'),
 
-        // Sans UI workhorse
+        // Sans UI workhorse — Albert Sans (humanist, warm; replaces Inter per impeccable teach 2026-04-22)
+        AlbertSans_400Regular,
+        AlbertSans_500Medium,
+        AlbertSans_600SemiBold,
+        AlbertSans_700Bold,
+
+        // Inter retained for backwards compat with any leftover direct 'Inter' references.
+        // Remove once grep shows zero direct Inter usage outside constants/type.ts.
         Inter: require('../assets/fonts/Inter-Regular.ttf'),
         'Inter-Medium': require('../assets/fonts/Inter-Medium.ttf'),
         'Inter-SemiBold': require('../assets/fonts/Inter-SemiBold.ttf'),
         'Inter-Bold': require('../assets/fonts/Inter-Bold.ttf'),
 
-        // Tabular mono
+        // Tabular mono — timestamps and IDs only; never counts/values/labels
         JetBrainsMono: require('../assets/fonts/JetBrainsMono-Regular.ttf'),
         'JetBrainsMono-Medium': require('../assets/fonts/JetBrainsMono-Medium.ttf'),
 

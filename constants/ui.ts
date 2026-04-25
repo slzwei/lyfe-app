@@ -1,19 +1,23 @@
 /**
- * Shared UI constants — colour palettes, picker data, and display configs
+ * Lyfe App — UI constants.
+ *
+ * Tropic design tokens (AVATAR_COLORS, PA_MANAGER_COLORS, getAvatarColor, ANIM,
+ * SPACING, ICON) live in the root design system and are re-exported here for
+ * backwards compatibility. Edit them in `lyfe-design/src/` and run
+ * `npm run sync:design` from lyfe-master.
+ *
+ * Lyfe-app-specific configs (attendee roles, picker helpers, interview status,
+ * roadshow constants, pledged defaults) are defined in this file.
  */
 import type { AttendeeRole } from '@/types/event';
 
 import { ACTIVITY_TYPE_CONFIG } from './displayConfigs';
 import type { RoadshowActivityType } from '@/types/event';
 
-// ── Avatar colour palettes ─────────────────────────────────────
-export const AVATAR_COLORS = ['#6366F1', '#FF7600', '#E11D48', '#F59E0B', '#8B5CF6', '#06B6D4'];
-export const PA_MANAGER_COLORS = ['#6366F1', '#FF7600', '#E11D48', '#F59E0B', '#8B5CF6'];
-
-/** Deterministic avatar colour from a name string */
-export function getAvatarColor(name: string): string {
-    return AVATAR_COLORS[name.charCodeAt(0) % AVATAR_COLORS.length];
-}
+// ── Tropic design tokens (re-exported from @/design) ─────────────────
+export { AVATAR_COLORS, PA_MANAGER_COLORS, getAvatarColor } from '@/design/avatar-palette';
+export { ANIM } from '@/design/motion';
+export { SPACING, ICON } from '@/design/spacing';
 
 // ── Attendee role display config ────────────────────────────────
 export const ATTENDEE_ROLE_ORDER: AttendeeRole[] = ['host', 'duty_manager', 'presenter', 'attendee'];
@@ -23,11 +27,13 @@ export const ATTENDEE_ROLE_LABELS: Record<AttendeeRole, string> = {
     presenter: 'Presenter',
     attendee: 'Attendee',
 };
+// Tropic-family (was hot pink + AI-indigo + orange + iOS grey — replaced 2026-04-22).
+// Roles stay visually distinct while living within the warm palette.
 export const ATTENDEE_ROLE_COLORS: Record<AttendeeRole, string> = {
-    host: '#EC4899',
-    duty_manager: '#6366F1',
-    presenter: '#FF7600',
-    attendee: '#8E8E93',
+    host: '#B27AAE', // Dusty plum — warm-cool bridge, reads as "host"
+    duty_manager: '#5C7A9E', // Dusty slate-blue (matches info token) — authoritative
+    presenter: '#D6552B', // Terracotta accent — the spotlight role
+    attendee: '#8B857A', // Textured warm-grey (matches textTertiary)
 };
 
 export const ATTENDEE_ROLES: { key: AttendeeRole; label: string }[] = [
@@ -76,19 +82,26 @@ export function pickerToHHMM24(hour: number, minIdx: number, ampm: number): stri
 }
 
 // ── Error banner colours ──────────────────────────────────────
-export const ERROR_BG = '#FEE2E2';
-export const ERROR_TEXT = '#DC2626';
+// Retuned 2026-04-22 toward Tropic danger palette (was generic bright red).
+// Consumers without theme-context access still use these as safe fallbacks.
+export const ERROR_BG = '#F7DDD6'; // matches Colors.light.dangerLight
+export const ERROR_TEXT = '#B33A2E'; // matches Colors.light.danger
 
 // ── Interview status colours ─────────────────────────────────
+// Retuned 2026-04-22 from iOS defaults (systemGreen/Red/Purple/Yellow)
+// toward Tropic palette: sage success, danger, dusty plum, butter warning.
 export const INTERVIEW_STATUS_COLORS: Record<string, string> = {
-    completed: '#34C759',
-    cancelled: '#FF3B30',
-    rescheduled: '#AF52DE',
-    scheduled: '#EAB308',
+    completed: '#7A8C6B', // sage (matches success)
+    cancelled: '#B33A2E', // danger
+    rescheduled: '#B27AAE', // dusty plum (matches statusProposed)
+    scheduled: '#C89B3C', // butter/ochre (matches warning)
 };
 
 // ── Roadshow constants ──────────────────────────────────────────
-export const ROADSHOW_PINK = '#EC4899';
+// Retuned 2026-04-22 from hot pink '#EC4899' (AI-default magenta) toward
+// Tropic dusty-plum. Used only as a 6% tint on the leaderboard "self" row;
+// the role is "warm self-highlight", not brand identity.
+export const ROADSHOW_PINK = '#B27AAE';
 
 /** Default pledge values when no roadshow config is provided */
 export const DEFAULT_PLEDGED_SITDOWNS = 5;
@@ -102,28 +115,3 @@ export function activityLabel(type: string): string {
 export function activityTypeColor(type: string, fallback: string): string {
     return ACTIVITY_TYPE_CONFIG[type as RoadshowActivityType]?.color ?? fallback;
 }
-
-// ── Animation timing ──────────────────────────────────────────
-export const ANIM = {
-    MICRO: 200, // hover, press, toggle
-    TRANSITION: 300, // tab switch, modal slide
-    REVEAL: 600, // progress bar, entrance
-} as const;
-
-// ── Spacing scale (4pt grid) ──────────────────────────────────
-export const SPACING = {
-    XS: 4,
-    SM: 8,
-    MD: 12,
-    LG: 16,
-    XL: 20,
-    XXL: 24,
-} as const;
-
-// ── Icon sizes ─────────────────────────────────────────────────
-export const ICON = {
-    SM: 16, // inline, badges, meta
-    MD: 20, // list items, actions
-    LG: 24, // headers, primary actions
-    XL: 32, // empty states, heroes
-} as const;
