@@ -1,0 +1,9 @@
+# Synthetic monitoring touches prod-adjacent infrastructure (staging project,
+# GH Actions workflows, alerting secrets). Gate every change behind your
+# review so a probe cannot silently be pointed at production.
+
+scripts/synthetic/** @slzwei
+.github/workflows/synthetic-*.yml @slzwei
+supabase/migrations/*synthetic*.sql @slzwei
+supabase/seed-synthetic.sql @slzwei
+docs/synthetic-monitoring-*.md @slzwei

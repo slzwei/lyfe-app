@@ -1,0 +1,17 @@
+{
+    "name": "lyfe-synthetic-monitoring",
+    "version": "0.1.0",
+    "private": true,
+    "type": "module",
+    "description": "Synthetic monitoring probes for lyfe-app. Runs against the STAGING Supabase project only.",
+    "engines": {
+        "node": ">=20"
+    },
+    "scripts": {
+        "hello": "node 00-hello.mjs",
+        "seed": "node seed.mjs"
+    },
+    "dependencies": {
+        "@supabase/supabase-js": "^2.98.0"
+    }
+}

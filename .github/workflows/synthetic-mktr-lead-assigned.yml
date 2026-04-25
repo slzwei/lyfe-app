@@ -1,0 +1,48 @@
+name: Synthetic — mktr lead.assigned
+
+# R1b: MKTR reassign webhook — create then reassign to agent2.
+# Hourly.
+
+on:
+  workflow_dispatch:
+  # schedule:
+  #   - cron: '5 * * * *'
+
+permissions:
+  contents: read
+  issues: write
+
+jobs:
+  probe:
+    runs-on: ubuntu-latest
+    environment: synthetic-monitoring
+    timeout-minutes: 5
+
+    steps:
+      - name: Honour kill switch
+        if: ${{ vars.SYNTHETIC_KILL_SWITCH == 'true' }}
+        run: |
+          echo "SYNTHETIC_KILL_SWITCH=true — skipping."
+          exit 0
+
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Install probe dependencies
+        working-directory: scripts/synthetic
+        run: npm ci --no-audit --no-fund
+
+      - name: Run mktr-lead-assigned probe
+        working-directory: scripts/synthetic
+        env:
+          STAGING_SUPABASE_URL: ${{ secrets.STAGING_SUPABASE_URL }}
+          STAGING_SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.STAGING_SUPABASE_SERVICE_ROLE_KEY }}
+          STAGING_SUPABASE_ANON_KEY: ${{ secrets.STAGING_SUPABASE_ANON_KEY }}
+          MKTR_WEBHOOK_SECRET_STAGING: ${{ secrets.MKTR_WEBHOOK_SECRET_STAGING }}
+          SYNTHETIC_GH_TOKEN: ${{ secrets.SYNTHETIC_GH_TOKEN }}
+          GITHUB_REPOSITORY: ${{ github.repository }}
+          GITHUB_SERVER_URL: ${{ github.server_url }}
+          GITHUB_RUN_ID: ${{ github.run_id }}
+        run: node 04-mktr-lead-assigned.mjs

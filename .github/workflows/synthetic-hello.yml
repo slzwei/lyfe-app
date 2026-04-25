@@ -1,0 +1,56 @@
+name: Synthetic — hello
+
+# Phase 0 smoke test for the synthetic monitoring pipeline.
+# Once this goes green on a schedule for 48h, proceed to Phase 1 probes.
+#
+# Targets STAGING ONLY (guard lives in scripts/synthetic/_lib/env.mjs and
+# cannot reach prod even if secrets were misconfigured).
+
+on:
+  workflow_dispatch:
+  # Uncomment after the workflow has been manually triggered at least once
+  # and confirmed to open + close a GH issue correctly.
+  # schedule:
+  #   - cron: '0 * * * *'
+
+permissions:
+  contents: read
+  issues: write
+
+jobs:
+  hello:
+    runs-on: ubuntu-latest
+    # Secrets for synthetic probes live in a dedicated GH Environment called
+    # 'synthetic-monitoring'. Production secrets live in a different
+    # environment that this workflow has no access to.
+    environment: synthetic-monitoring
+    timeout-minutes: 5
+
+    steps:
+      - name: Honour kill switch
+        if: ${{ vars.SYNTHETIC_KILL_SWITCH == 'true' }}
+        run: |
+          echo "SYNTHETIC_KILL_SWITCH=true in environment vars — exiting without running any probe."
+          exit 0
+
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Install probe dependencies
+        working-directory: scripts/synthetic
+        run: npm ci --no-audit --no-fund
+
+      - name: Run hello probe
+        working-directory: scripts/synthetic
+        env:
+          STAGING_SUPABASE_URL: ${{ secrets.STAGING_SUPABASE_URL }}
+          STAGING_SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.STAGING_SUPABASE_SERVICE_ROLE_KEY }}
+          STAGING_SUPABASE_ANON_KEY: ${{ secrets.STAGING_SUPABASE_ANON_KEY }}
+          SYNTHETIC_GH_TOKEN: ${{ secrets.SYNTHETIC_GH_TOKEN }}
+          GITHUB_REPOSITORY: ${{ github.repository }}
+          GITHUB_SERVER_URL: ${{ github.server_url }}
+          GITHUB_RUN_ID: ${{ github.run_id }}
+        run: node 00-hello.mjs

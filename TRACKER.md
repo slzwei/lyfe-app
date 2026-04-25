@@ -334,3 +334,55 @@
   4. Is the `sync-agent-to-mktr` edge function deployed? (referenced in code but not in function list)
   5. Are the exam paper duration hard-codes (M5:60, M9:60, M9A:45, HI:45) correct, or should they come from the DB?
 - **Estimated completion:** 85% done (source code fully audited; tests, migrations, and full admin panel remaining)
+
+---
+
+## Synthetic Monitoring
+
+Added 2026-04-22. Full audit in `docs/synthetic-monitoring-audit.md`. Implementation plan + zero-prod guardrails shipped 2026-04-23. **Files in repo; schedules commented pending per-probe 48h soak.**
+
+### Phase 0 — foundations (SHIPPED)
+
+- [x] Migration `20260422180000_synthetic_monitoring_tables.sql` — marker + probe_runs + invariant_violations.
+- [x] `supabase/seed-synthetic.sql` — staging-only marker + `SYN_PROBE` paper.
+- [x] Harness `scripts/synthetic/_lib/{env,supabase,hmac,alert,run}.mjs` + hardcoded `STAGING_PROJECT_REF` guard.
+- [x] Hello probe `scripts/synthetic/00-hello.mjs` + workflow.
+- [x] `.github/CODEOWNERS` gating all synthetic paths.
+- [x] `docs/synthetic-monitoring-runbook.md`.
+
+### Phase 1 — cheap + broad (SHIPPED)
+
+- [x] **R3** cron freshness — `01-cron-freshness.mjs` + `get_synthetic_cron_freshness()` RPC. Target `*/15` cadence.
+- [x] **R7** edge OPTIONS sweep — `02-edge-options.mjs`. Staging only (prod descoped). Target `*/10` cadence.
+
+### Phase 2 — MKTR end-to-end (SHIPPED)
+
+- [x] SQL helper `cleanup_synthetic_leads()` (migration `20260423180000_*`).
+- [x] **R1a** `03-mktr-lead-created.mjs` — hourly.
+- [x] **R1b** `04-mktr-lead-assigned.mjs` — hourly (:05).
+- [x] **R1c** `05-mktr-lead-unassigned.mjs` — hourly (:10). Regression guard for MKTR TRACKER B2.
+- [x] **R5** `06-mktr-agents.mjs` — 30-min. Masked-phone regression guard.
+
+### Phase 3 — security backstop (SHIPPED)
+
+- [x] **R2** RLS matrix — `07-rls-matrix.mjs` + `_lib/rls-matrix.mjs`. 6-hourly, P0 security-regression label.
+
+### Phase 4 — depth (SHIPPED)
+
+- [x] **R4** exam RPC — `08-exam-submit.mjs`. Daily. Server-side scoring regression guard.
+- [x] **R6** invariants — `sweep_synthetic_invariants()` (migration `20260424120000_*`) + `09-invariants-drain.mjs`. Sweeper scheduled on staging only via `seed-synthetic.sql`; drain hourly.
+
+### Phase 5 — deferred (per plan)
+
+- [ ] R8 Maestro Cloud daily smoke (cost).
+- [ ] R9 face-verify weekly (Rekognition cost).
+- [ ] R10 delete-account cascade weekly (heavy).
+
+### Activation checklist (per probe)
+
+1. Apply relevant migration(s) to staging (`supabase db push --linked`).
+2. Apply `supabase/seed-synthetic.sql` to staging once.
+3. Run `npm run seed` inside `scripts/synthetic/` once to create probe users.
+4. Add secrets to the `synthetic-monitoring` GH Environment.
+5. Trigger each workflow via `workflow_dispatch` 5× — confirm green + alert behaviour.
+6. Uncomment `schedule:` block; soak 48h; repeat for next probe.

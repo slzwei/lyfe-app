@@ -1,0 +1,49 @@
+name: Synthetic — exam submit RPC
+
+# R4: daily, submit the SYN_PROBE paper via the submit_exam_attempt RPC and
+# assert server-side scoring. Regression guard against scoring algorithm
+# change, auth regression, or RLS breakage that blocks exam submissions.
+
+on:
+  workflow_dispatch:
+  # schedule:
+  #   - cron: '0 3 * * *'
+
+permissions:
+  contents: read
+  issues: write
+
+jobs:
+  exam-submit:
+    runs-on: ubuntu-latest
+    environment: synthetic-monitoring
+    timeout-minutes: 5
+
+    steps:
+      - name: Honour kill switch
+        if: ${{ vars.SYNTHETIC_KILL_SWITCH == 'true' }}
+        run: |
+          echo "SYNTHETIC_KILL_SWITCH=true — skipping."
+          exit 0
+
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Install probe dependencies
+        working-directory: scripts/synthetic
+        run: npm ci --no-audit --no-fund
+
+      - name: Run exam-submit probe
+        working-directory: scripts/synthetic
+        env:
+          STAGING_SUPABASE_URL: ${{ secrets.STAGING_SUPABASE_URL }}
+          STAGING_SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.STAGING_SUPABASE_SERVICE_ROLE_KEY }}
+          STAGING_SUPABASE_ANON_KEY: ${{ secrets.STAGING_SUPABASE_ANON_KEY }}
+          PROBE_ACCOUNT_PASSWORD: ${{ secrets.PROBE_ACCOUNT_PASSWORD }}
+          SYNTHETIC_GH_TOKEN: ${{ secrets.SYNTHETIC_GH_TOKEN }}
+          GITHUB_REPOSITORY: ${{ github.repository }}
+          GITHUB_SERVER_URL: ${{ github.server_url }}
+          GITHUB_RUN_ID: ${{ github.run_id }}
+        run: node 08-exam-submit.mjs

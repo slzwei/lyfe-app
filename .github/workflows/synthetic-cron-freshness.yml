@@ -1,0 +1,49 @@
+name: Synthetic — cron freshness
+
+# R3: poll cron.job_run_details on staging every 15 min.
+# Alerts if any of the four scheduled edge-function cron jobs misses its window.
+
+on:
+  workflow_dispatch:
+  # Uncomment after 48 h soak on workflow_dispatch.
+  # schedule:
+  #   - cron: '*/15 * * * *'
+
+permissions:
+  contents: read
+  issues: write
+
+jobs:
+  cron-freshness:
+    runs-on: ubuntu-latest
+    environment: synthetic-monitoring
+    timeout-minutes: 5
+
+    steps:
+      - name: Honour kill switch
+        if: ${{ vars.SYNTHETIC_KILL_SWITCH == 'true' }}
+        run: |
+          echo "SYNTHETIC_KILL_SWITCH=true — skipping."
+          exit 0
+
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Install probe dependencies
+        working-directory: scripts/synthetic
+        run: npm ci --no-audit --no-fund
+
+      - name: Run cron freshness probe
+        working-directory: scripts/synthetic
+        env:
+          STAGING_SUPABASE_URL: ${{ secrets.STAGING_SUPABASE_URL }}
+          STAGING_SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.STAGING_SUPABASE_SERVICE_ROLE_KEY }}
+          STAGING_SUPABASE_ANON_KEY: ${{ secrets.STAGING_SUPABASE_ANON_KEY }}
+          SYNTHETIC_GH_TOKEN: ${{ secrets.SYNTHETIC_GH_TOKEN }}
+          GITHUB_REPOSITORY: ${{ github.repository }}
+          GITHUB_SERVER_URL: ${{ github.server_url }}
+          GITHUB_RUN_ID: ${{ github.run_id }}
+        run: node 01-cron-freshness.mjs
