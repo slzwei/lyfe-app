@@ -14,10 +14,12 @@ interface EmptyStateProps {
 function EmptyState({ icon = 'file-tray-outline', title, subtitle, actionLabel, onAction }: EmptyStateProps) {
     const { colors } = useTheme();
 
+    // Icon in accent on accentLight circle — empty states are emotional moments
+    // and should be seen at a glance, not blend into cream-on-cream (prev: textTertiary on surfacePrimary).
     return (
         <View style={styles.container} accessibilityLabel={subtitle ? `${title}. ${subtitle}` : title}>
-            <View style={[styles.iconWrap, { backgroundColor: colors.surfacePrimary }]}>
-                <Ionicons name={icon} size={40} color={colors.textTertiary} />
+            <View style={[styles.iconWrap, { backgroundColor: colors.accentLight }]}>
+                <Ionicons name={icon} size={40} color={colors.accent} />
             </View>
             <Text style={[styles.title, { color: colors.textPrimary }]}>{title}</Text>
             {subtitle && <Text style={[styles.subtitle, { color: colors.textSecondary }]}>{subtitle}</Text>}

@@ -311,7 +311,7 @@ export default function InviteMemberScreen() {
                     {isSubmitting ? (
                         <ActivityIndicator color="#fff" size="small" />
                     ) : (
-                        <Text style={styles.submitText}>Create Invitation</Text>
+                        <Text style={[styles.submitText, { color: colors.textInverse }]}>Create Invitation</Text>
                     )}
                 </TouchableOpacity>
             </KeyboardAwareScrollView>
@@ -479,7 +479,7 @@ export default function InviteMemberScreen() {
                                 style={[styles.submitButton, { backgroundColor: colors.accent }]}
                                 onPress={handleDone}
                             >
-                                <Text style={styles.submitText}>Done</Text>
+                                <Text style={[styles.submitText, { color: colors.textInverse }]}>Done</Text>
                             </TouchableOpacity>
                             <TouchableOpacity
                                 style={[styles.outlineButton, { borderColor: colors.border }]}
@@ -543,7 +543,8 @@ const styles = StyleSheet.create({
         alignItems: 'center',
         marginTop: 8,
     },
-    submitText: { color: '#fff', fontSize: 16, fontWeight: '600' },
+    // color applied inline via theme token (colors.textInverse)
+    submitText: { fontSize: 16, fontWeight: '600' },
     outlineButton: {
         height: 50,
         borderRadius: 12,

@@ -1,4 +1,5 @@
 import { letterSpacing } from '@/constants/platform';
+import { Fonts } from '@/constants/type';
 import ScreenHeader from '@/components/ScreenHeader';
 import { useAuth } from '@/contexts/AuthContext';
 import { useTheme } from '@/contexts/ThemeContext';
@@ -103,8 +104,9 @@ function EmptyState() {
     const { colors } = useTheme();
     return (
         <View style={emptyStyles.container}>
-            <View style={[emptyStyles.iconContainer, { backgroundColor: colors.surfacePrimary }]}>
-                <Ionicons name="funnel" size={48} color={colors.textTertiary} />
+            {/* Icon in accent on accentLight — was grey-on-cream, invisible at a glance */}
+            <View style={[emptyStyles.iconContainer, { backgroundColor: colors.accentLight }]}>
+                <Ionicons name="funnel" size={48} color={colors.accent} />
             </View>
             <Text style={[emptyStyles.title, { color: colors.textPrimary }]}>No candidates yet</Text>
             <Text style={[emptyStyles.subtitle, { color: colors.textSecondary }]}>
@@ -124,8 +126,14 @@ const emptyStyles = StyleSheet.create({
         justifyContent: 'center',
         marginBottom: 16,
     },
-    title: { fontSize: 18, fontWeight: '700', marginBottom: 8, letterSpacing: letterSpacing(-0.3) },
-    subtitle: { fontSize: 15, textAlign: 'center', lineHeight: 22 },
+    title: {
+        fontFamily: Fonts.sansBold,
+        fontSize: 18,
+        fontWeight: '700',
+        marginBottom: 8,
+        letterSpacing: letterSpacing(-0.3),
+    },
+    subtitle: { fontFamily: Fonts.sans, fontSize: 15, textAlign: 'center', lineHeight: 22 },
 });
 
 // ── Animated Bar ─────────────────────────────────────────────
@@ -248,9 +256,22 @@ const cardStyles = StyleSheet.create({
         justifyContent: 'center',
     },
     labelWrap: { flex: 1 },
-    label: { fontSize: 15, fontWeight: '600', letterSpacing: letterSpacing(-0.3) },
-    count: { fontSize: 11, fontWeight: '500', marginTop: 2 },
-    bigCount: { fontSize: 28, fontWeight: '700', letterSpacing: letterSpacing(-1) },
+    label: {
+        fontFamily: Fonts.sansSemibold,
+        fontSize: 15,
+        fontWeight: '600',
+        letterSpacing: letterSpacing(-0.3),
+        lineHeight: 20,
+    },
+    count: { fontFamily: Fonts.sans, fontSize: 12, fontWeight: '500', marginTop: 2, lineHeight: 16 },
+    // Big stage count — sans-bold (not serif; there's already a hero elsewhere). Previously
+    // had no fontFamily set (fell back to system default) — fixed 2026-04-22.
+    bigCount: {
+        fontFamily: Fonts.sansBold,
+        fontSize: 28,
+        fontWeight: '700',
+        letterSpacing: letterSpacing(-1),
+    },
     barTrack: {
         height: 24,
         borderRadius: 12,
@@ -264,8 +285,10 @@ const cardStyles = StyleSheet.create({
         paddingVertical: 4,
     },
     conversionText: {
-        fontSize: 11,
+        fontFamily: Fonts.sansMedium,
+        fontSize: 12,
         fontWeight: '500',
+        lineHeight: 16,
     },
 });
 
@@ -385,7 +408,9 @@ const styles = StyleSheet.create({
         marginBottom: 16,
     },
     summaryText: {
+        fontFamily: Fonts.sans,
         fontSize: 15,
         fontWeight: '400',
+        lineHeight: 22,
     },
 });

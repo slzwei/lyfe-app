@@ -1,5 +1,7 @@
 import ScreenHeader from '@/components/ScreenHeader';
 import { useTheme } from '@/contexts/ThemeContext';
+import { Fonts } from '@/constants/type';
+import { letterSpacing } from '@/constants/platform';
 import React from 'react';
 import { ScrollView, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -71,17 +73,49 @@ export default function TermsScreen() {
 
 const styles = StyleSheet.create({
     container: { flex: 1 },
-    scrollContent: { padding: 20, paddingBottom: 48 },
-    effective: { fontSize: 13, marginBottom: 20 },
+    // Long-form reading: cap at 640 for tablet readability (line-length < 75ch)
+    scrollContent: {
+        padding: 20,
+        paddingBottom: 48,
+        maxWidth: 640,
+        width: '100%',
+        alignSelf: 'center',
+    },
+    effective: {
+        fontFamily: Fonts.sans,
+        fontSize: 13,
+        lineHeight: 18,
+        marginBottom: 24,
+    },
 
-    section: { marginBottom: 20 },
-    heading: { fontSize: 15, fontWeight: '700', marginBottom: 6 },
-    body: { fontSize: 14, lineHeight: 22 },
+    // Section spacing: 24 between sections (was 20) — gives paragraphs breathing room
+    section: { marginBottom: 24 },
+    // Stronger heading hierarchy: 17pt bold with negative tracking (was 15pt)
+    heading: {
+        fontFamily: Fonts.sansBold,
+        fontSize: 17,
+        fontWeight: '700',
+        marginBottom: 8,
+        letterSpacing: letterSpacing(-0.3),
+        lineHeight: 22,
+    },
+    // Body: 15pt minimum + 1.53 line-height ratio
+    body: {
+        fontFamily: Fonts.sans,
+        fontSize: 15,
+        fontWeight: '400',
+        lineHeight: 23,
+    },
 
     footer: {
         borderTopWidth: StyleSheet.hairlineWidth,
-        paddingTop: 16,
-        marginTop: 8,
+        paddingTop: 20,
+        marginTop: 12,
     },
-    footerText: { fontSize: 12, lineHeight: 18, textAlign: 'center' },
+    footerText: {
+        fontFamily: Fonts.sans,
+        fontSize: 13,
+        lineHeight: 18,
+        textAlign: 'center',
+    },
 });

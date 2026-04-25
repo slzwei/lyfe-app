@@ -141,11 +141,14 @@ const styles = StyleSheet.create({
     },
     avatarText: { fontSize: 17, fontWeight: '500' }, // ← serif italic now
     nameCol: { flex: 1 },
+    // Lead-row name: sans per role rules (list rows are NEVER serif).
+    // Previously Fraunces, but every LeadCard in a list diluted the serif accent.
     name: {
-        fontFamily: Fonts.serif, // ← Fraunces, not sans
+        fontFamily: Fonts.sansSemibold,
         fontSize: 16,
-        fontWeight: '500',
-        letterSpacing: letterSpacing(-0.2),
+        fontWeight: '600',
+        letterSpacing: letterSpacing(-0.1),
+        lineHeight: 22,
     },
     phone: {
         fontFamily: Fonts.mono, // ← tabular mono for phone numbers

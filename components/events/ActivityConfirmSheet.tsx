@@ -4,6 +4,7 @@ import type { Colors } from '@/constants/Colors';
 import { RoadshowRadii, getRoadshowColors } from '@/constants/roadshow/tokens';
 import { letterSpacing } from '@/constants/platform';
 import { PICKER_AMPM, PICKER_HOURS, PICKER_MINUTES } from '@/constants/ui';
+import { Fonts } from '@/constants/type';
 import { useTheme } from '@/contexts/ThemeContext';
 import { Ionicons } from '@expo/vector-icons';
 import React from 'react';
@@ -190,7 +191,7 @@ const styles = StyleSheet.create({
         lineHeight: 28,
     },
     titleItalic: { fontFamily: 'Fraunces-Italic', fontWeight: '500' },
-    subtitle: { fontSize: 12.5, fontFamily: 'Inter', lineHeight: 18, textAlign: 'center' },
+    subtitle: { fontSize: 12.5, fontFamily: Fonts.sans, lineHeight: 18, textAlign: 'center' },
     timeLabel: { fontSize: 11, fontWeight: '700', letterSpacing: 0.8, marginTop: 6, marginBottom: -4 },
     wheelRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center' },
     confirmBtn: {

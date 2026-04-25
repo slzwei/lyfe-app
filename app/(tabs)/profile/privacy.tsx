@@ -1,5 +1,7 @@
 import ScreenHeader from '@/components/ScreenHeader';
 import { useTheme } from '@/contexts/ThemeContext';
+import { Fonts } from '@/constants/type';
+import { letterSpacing } from '@/constants/platform';
 import { Ionicons } from '@expo/vector-icons';
 import React from 'react';
 import { Linking, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
@@ -69,19 +71,32 @@ export default function PrivacyScreen() {
 
 const styles = StyleSheet.create({
     container: { flex: 1 },
-    scrollContent: { padding: 16, paddingBottom: 40 },
-    intro: { fontSize: 13, marginBottom: 16, paddingHorizontal: 4 },
+    // Long-form reading: cap at 640 for tablet readability (line-length < 75ch)
+    scrollContent: {
+        padding: 20,
+        paddingBottom: 48,
+        maxWidth: 640,
+        width: '100%',
+        alignSelf: 'center',
+    },
+    intro: {
+        fontFamily: Fonts.sans,
+        fontSize: 13,
+        lineHeight: 18,
+        marginBottom: 20,
+        paddingHorizontal: 4,
+    },
 
     card: {
         borderRadius: 16,
-        padding: 16,
-        marginBottom: 12,
+        padding: 20,
+        marginBottom: 14,
     },
     cardHeader: {
         flexDirection: 'row',
         alignItems: 'center',
-        gap: 10,
-        marginBottom: 10,
+        gap: 12,
+        marginBottom: 12,
     },
     iconCircle: {
         width: 34,
@@ -90,18 +105,34 @@ const styles = StyleSheet.create({
         alignItems: 'center',
         justifyContent: 'center',
     },
-    cardTitle: { fontSize: 15, fontWeight: '700' },
-    cardBody: { fontSize: 14, lineHeight: 21 },
+    // Section title: stronger hierarchy — 16pt bold + negative tracking
+    cardTitle: {
+        fontFamily: Fonts.sansBold,
+        fontSize: 16,
+        fontWeight: '700',
+        letterSpacing: letterSpacing(-0.2),
+    },
+    // Body: 15pt minimum + 1.53 line-height ratio for comfortable reading
+    cardBody: {
+        fontFamily: Fonts.sans,
+        fontSize: 15,
+        fontWeight: '400',
+        lineHeight: 23,
+    },
 
     contactBtn: {
         flexDirection: 'row',
         alignItems: 'center',
         justifyContent: 'center',
         gap: 8,
-        marginTop: 12,
+        marginTop: 16,
         paddingVertical: 14,
         borderRadius: 14,
         borderWidth: 1.5,
     },
-    contactBtnText: { fontSize: 15, fontWeight: '600' },
+    contactBtnText: {
+        fontFamily: Fonts.sansSemibold,
+        fontSize: 15,
+        fontWeight: '600',
+    },
 });

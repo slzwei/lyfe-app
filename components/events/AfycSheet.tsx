@@ -1,5 +1,6 @@
 import type { Colors } from '@/constants/Colors';
 import { RoadshowBounds, RoadshowRadii, getRoadshowColors } from '@/constants/roadshow/tokens';
+import { Fonts } from '@/constants/type';
 import { useTheme } from '@/contexts/ThemeContext';
 import React, { useEffect, useRef, useState } from 'react';
 import { ActivityIndicator, Modal, Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
@@ -267,7 +268,7 @@ const styles = StyleSheet.create({
     titleItalic: { fontFamily: 'Fraunces-Italic', fontWeight: '500' },
     subtitle: {
         fontSize: 12.5,
-        fontFamily: 'Inter',
+        fontFamily: Fonts.sans,
         lineHeight: 18,
     },
 
@@ -286,7 +287,7 @@ const styles = StyleSheet.create({
     },
     eyebrow: {
         fontSize: 10.5,
-        fontFamily: 'Inter-SemiBold',
+        fontFamily: Fonts.sansSemibold,
         letterSpacing: 1.2,
         textTransform: 'uppercase',
     },
@@ -315,7 +316,7 @@ const styles = StyleSheet.create({
     },
     afycFoot: {
         fontSize: 10.5,
-        fontFamily: 'Inter',
+        fontFamily: Fonts.sans,
     },
     tabular: { fontVariant: ['tabular-nums'] },
 

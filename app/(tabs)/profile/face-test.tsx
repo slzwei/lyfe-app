@@ -158,8 +158,10 @@ export default function FaceTestScreen() {
                         onPress={() => startFlow('register')}
                         disabled={!hasPermission || checkingRegistration}
                     >
-                        <Ionicons name="person-add" size={20} color="#FFFFFF" />
-                        <Text style={styles.buttonText}>{hasRegistered ? 'Re-register Face' : 'Register Face'}</Text>
+                        <Ionicons name="person-add" size={20} color={colors.textInverse} />
+                        <Text style={[styles.buttonText, { color: colors.textInverse }]}>
+                            {hasRegistered ? 'Re-register Face' : 'Register Face'}
+                        </Text>
                     </Pressable>
 
                     <Pressable
@@ -167,15 +169,15 @@ export default function FaceTestScreen() {
                             styles.button,
                             {
                                 backgroundColor:
-                                    hasRegistered && !checkingRegistration ? '#34C759' : colors.textTertiary,
+                                    hasRegistered && !checkingRegistration ? colors.success : colors.textTertiary,
                                 marginTop: 10,
                             },
                         ]}
                         onPress={() => startFlow('verify')}
                         disabled={!hasPermission || !hasRegistered || checkingRegistration}
                     >
-                        <Ionicons name="shield-checkmark" size={20} color="#FFFFFF" />
-                        <Text style={styles.buttonText}>Verify Face</Text>
+                        <Ionicons name="shield-checkmark" size={20} color={colors.textInverse} />
+                        <Text style={[styles.buttonText, { color: colors.textInverse }]}>Verify Face</Text>
                     </Pressable>
                 </View>
 
@@ -212,29 +214,37 @@ function StatusRow({
     loading?: boolean;
     subtitle?: string;
 }) {
+    // Theme tokens instead of hardcoded iOS defaults (was #8E8E93/#34C759/#FF3B30/#FF9500).
+    // StatusRow now works correctly in both light and dark mode.
+    const { colors } = useTheme();
+
     return (
-        <View style={styles.statusRow}>
+        <View style={[styles.statusRow, { borderBottomColor: colors.border }]}>
             <View style={{ flex: 1 }}>
-                <Text style={styles.statusLabel}>{label}</Text>
-                {subtitle && !loading ? <Text style={styles.statusSubtitle}>{subtitle}</Text> : null}
+                <Text style={[styles.statusLabel, { color: colors.textTertiary }]}>{label}</Text>
+                {subtitle && !loading ? (
+                    <Text style={[styles.statusSubtitle, { color: colors.textTertiary }]}>{subtitle}</Text>
+                ) : null}
             </View>
             <View style={styles.statusRight}>
                 {loading ? (
                     <>
-                        <ActivityIndicator size="small" color="#8E8E93" />
-                        <Text style={[styles.statusValue, { color: '#8E8E93', marginLeft: 6 }]}>Checking…</Text>
+                        <ActivityIndicator size="small" color={colors.textTertiary} />
+                        <Text style={[styles.statusValue, { color: colors.textTertiary, marginLeft: 6 }]}>
+                            Checking…
+                        </Text>
                     </>
                 ) : error ? (
-                    <Text style={[styles.statusValue, { color: '#FF3B30' }]}>{error}</Text>
+                    <Text style={[styles.statusValue, { color: colors.danger }]}>{error}</Text>
                 ) : (
                     <>
-                        <Text style={[styles.statusValue, { color: ok ? '#34C759' : '#FF9500' }]}>
+                        <Text style={[styles.statusValue, { color: ok ? colors.success : colors.warning }]}>
                             {ok ? 'Ready' : 'Not Ready'}
                         </Text>
                         <Ionicons
                             name={ok ? 'checkmark-circle' : 'ellipse-outline'}
                             size={18}
-                            color={ok ? '#34C759' : '#FF9500'}
+                            color={ok ? colors.success : colors.warning}
                             style={{ marginLeft: 6 }}
                         />
                     </>
@@ -268,16 +278,17 @@ const styles = StyleSheet.create({
     content: { padding: 16, paddingBottom: 40 },
     card: { borderRadius: 12, padding: 16, marginBottom: 16 },
     cardTitle: { fontSize: 15, fontWeight: '600', marginBottom: 12 },
+    // borderBottomColor applied inline from theme
     statusRow: {
         flexDirection: 'row',
         justifyContent: 'space-between',
         alignItems: 'center',
         paddingVertical: 8,
         borderBottomWidth: StyleSheet.hairlineWidth,
-        borderBottomColor: '#E5E5EA',
     },
-    statusLabel: { fontSize: 14, color: '#8E8E93' },
-    statusSubtitle: { fontSize: 11, color: '#C7C7CC', marginTop: 2 },
+    // label/subtitle colors applied inline from theme
+    statusLabel: { fontSize: 14 },
+    statusSubtitle: { fontSize: 11, marginTop: 2 },
     statusRight: { flexDirection: 'row', alignItems: 'center' },
     statusValue: { fontSize: 14, fontWeight: '500' },
     button: {
@@ -288,7 +299,8 @@ const styles = StyleSheet.create({
         borderRadius: 10,
         gap: 8,
     },
-    buttonText: { color: '#FFFFFF', fontSize: 16, fontWeight: '600' },
+    // color applied inline from theme (colors.textInverse)
+    buttonText: { fontSize: 16, fontWeight: '600' },
     infoText: { fontSize: 13, lineHeight: 20 },
     errorText: { fontSize: 15, textAlign: 'center', marginTop: 40 },
 });

@@ -77,10 +77,16 @@ const styles = StyleSheet.create({
         justifyContent: 'space-between',
         marginBottom: 16,
     },
-    sectionTitle: { fontFamily: Fonts.serif, fontSize: 18, fontWeight: '500', marginBottom: 0 },
+    sectionTitle: {
+        fontFamily: Fonts.sansSemibold,
+        fontSize: 17,
+        fontWeight: '600',
+        marginBottom: 0,
+        letterSpacing: -0.2,
+    },
     seeAllText: { fontFamily: Fonts.sansSemibold, fontSize: 14, fontWeight: '600' },
     activityFeed: { gap: 16 },
-    emptyText: { fontFamily: Fonts.sans, fontSize: 14, textAlign: 'center', paddingVertical: 8 },
+    emptyText: { fontFamily: Fonts.sans, fontSize: 15, textAlign: 'center', paddingVertical: 8, lineHeight: 22 },
     activityRow: {
         flexDirection: 'row',
         alignItems: 'center',
@@ -94,8 +100,10 @@ const styles = StyleSheet.create({
         justifyContent: 'center',
     },
     activityContent: { flex: 1 },
-    activityLeadName: { fontFamily: Fonts.serif, fontSize: 15, fontWeight: '500', marginBottom: 2 },
-    activityDetail: { fontFamily: Fonts.sans, fontSize: 13, fontWeight: '400' },
+    // List-row name: sans (per role rules — list rows are NEVER serif)
+    activityLeadName: { fontFamily: Fonts.sansSemibold, fontSize: 15, fontWeight: '600', marginBottom: 2 },
+    activityDetail: { fontFamily: Fonts.sans, fontSize: 13, fontWeight: '400', lineHeight: 18 },
+    // Timestamp — legitimate mono use (one of the only sanctioned roles)
     activityTime: { fontFamily: Fonts.mono, fontSize: 11, alignSelf: 'flex-start', marginTop: 2 },
 });
 

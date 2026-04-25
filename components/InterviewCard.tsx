@@ -26,8 +26,9 @@ export default function InterviewCard({ interview, colors, onEdit, onDelete }: I
             ]}
         >
             <View style={styles.headerRow}>
-                <View style={styles.roundBadge}>
-                    <Text style={styles.roundText}>R{interview.round_number}</Text>
+                {/* Round badge: info-tinted (was iOS-blue #007AFF — replaced with theme token) */}
+                <View style={[styles.roundBadge, { backgroundColor: colors.info + '18' }]}>
+                    <Text style={[styles.roundText, { color: colors.info }]}>R{interview.round_number}</Text>
                 </View>
                 <View style={{ flex: 1 }}>
                     <Text style={[styles.dateText, { color: colors.textPrimary }]}>
@@ -115,15 +116,15 @@ const styles = StyleSheet.create({
         alignItems: 'center',
         gap: 10,
     },
+    // backgroundColor + text color applied inline from theme (colors.info + '18' / colors.info)
     roundBadge: {
         width: 28,
         height: 28,
         borderRadius: 14,
-        backgroundColor: '#007AFF18',
         alignItems: 'center',
         justifyContent: 'center',
     },
-    roundText: { fontSize: 11, fontWeight: '700', color: '#007AFF' },
+    roundText: { fontSize: 11, fontWeight: '700' },
     dateText: { fontSize: 14, fontWeight: '600' },
     typeText: { fontSize: 12, marginTop: 1 },
     statusPill: {

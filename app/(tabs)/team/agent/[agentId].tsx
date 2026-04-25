@@ -381,7 +381,8 @@ export default function AgentDetailScreen() {
                     ))
                 ) : (
                     <View style={[styles.emptyLeads, { backgroundColor: colors.cardBackground }]}>
-                        <Ionicons name="folder-open-outline" size={36} color={colors.textTertiary} />
+                        {/* Icon in accent — empty states must be seen, not blend into the card */}
+                        <Ionicons name="folder-open-outline" size={36} color={colors.accent} />
                         <Text style={[styles.emptyLeadsText, { color: colors.textSecondary }]}>
                             No leads assigned yet
                         </Text>

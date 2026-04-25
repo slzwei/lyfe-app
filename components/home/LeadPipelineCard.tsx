@@ -67,7 +67,14 @@ const styles = StyleSheet.create({
         shadowRadius: 12,
         elevation: 2,
     },
-    sectionTitle: { fontFamily: Fonts.serif, fontSize: 18, fontWeight: '500', marginBottom: 12 },
+    // Section header: sans per role rules (serif reserved for greetings + hero numbers)
+    sectionTitle: {
+        fontFamily: Fonts.sansSemibold,
+        fontSize: 17,
+        fontWeight: '600',
+        marginBottom: 12,
+        letterSpacing: -0.2,
+    },
     pipelineWrapper: {
         borderRadius: 10,
         padding: 4,
@@ -99,8 +106,9 @@ const styles = StyleSheet.create({
         height: 6,
         borderRadius: 3,
     },
-    legendLabel: { fontFamily: Fonts.sans, fontSize: 12, fontWeight: '500' },
-    legendCount: { fontFamily: Fonts.monoMedium, fontSize: 13, fontWeight: '500' },
+    legendLabel: { fontFamily: Fonts.sans, fontSize: 12, fontWeight: '500', lineHeight: 16 },
+    // Counts are not IDs/timestamps — sans, not mono (role rule enforcement)
+    legendCount: { fontFamily: Fonts.sansSemibold, fontSize: 13, fontWeight: '600' },
 });
 
 export default React.memo(LeadPipelineCard);

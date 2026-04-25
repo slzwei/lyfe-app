@@ -43,9 +43,9 @@ export default function RejectedScreen() {
                         disabled={isSigningOut}
                     >
                         {isSigningOut ? (
-                            <ActivityIndicator color="#fff" size="small" />
+                            <ActivityIndicator color={colors.textInverse} size="small" />
                         ) : (
-                            <Text style={styles.primaryButtonText}>Sign Out</Text>
+                            <Text style={[styles.primaryButtonText, { color: colors.textInverse }]}>Sign Out</Text>
                         )}
                     </TouchableOpacity>
 
@@ -106,8 +106,8 @@ const styles = StyleSheet.create({
         justifyContent: 'center',
         alignItems: 'center',
     },
+    // color applied inline via theme token (colors.textInverse)
     primaryButtonText: {
-        color: '#fff',
         fontSize: 16,
         fontWeight: '600',
     },

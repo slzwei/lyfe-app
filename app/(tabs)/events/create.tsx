@@ -541,8 +541,8 @@ export default function CreateEventScreen() {
                         <ActivityIndicator size="small" color="#FFFFFF" />
                     ) : (
                         <>
-                            <Text style={styles.publishCtaText}>{ctaLabel}</Text>
-                            <Text style={styles.publishCtaArrow}>→</Text>
+                            <Text style={[styles.publishCtaText, { color: colors.textInverse }]}>{ctaLabel}</Text>
+                            <Text style={[styles.publishCtaArrow, { color: colors.textInverse }]}>→</Text>
                         </>
                     )}
                 </TouchableOpacity>
@@ -754,15 +754,14 @@ const styles = StyleSheet.create({
         borderRadius: 14,
         minHeight: 52,
     },
+    // colors applied inline via theme token (colors.textInverse)
     publishCtaText: {
-        color: '#FFFFFF',
         fontSize: 16,
         fontFamily: TropicFonts.serif,
         fontWeight: '500',
         letterSpacing: -0.2,
     },
     publishCtaArrow: {
-        color: '#FFFFFF',
         fontSize: 16,
         fontFamily: TropicFonts.serifItalic,
         opacity: 0.85,

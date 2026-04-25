@@ -14,19 +14,23 @@ const { width: W, height: H } = Dimensions.get('window');
 export const CONFETTI_DURATION = 2600;
 
 const COUNT = 40;
+// Tropic-warm confetti palette. Previously a dozen AI-default hex (indigo, violet,
+// hot magenta, tailwind blues) — replaced 2026-04-22 so every celebration beat
+// stays inside the Tropic brand. Shawn specifically locked in "terracotta confetti,
+// never indigo" during /impeccable:teach.
 const COLORS = [
-    '#EC4899',
-    '#F59E0B',
-    '#6366F1',
-    '#22C55E',
-    '#EF4444',
-    '#FF7600',
-    '#8B5CF6',
-    '#F97316',
-    '#FBBF24',
-    '#FFB366',
-    '#60A5FA',
-    '#FB7185',
+    '#D6552B', // terracotta — flagship
+    '#E27A4E', // warm coral (dark-mode accent)
+    '#C89B3C', // ochre / butter
+    '#B89556', // muted ochre
+    '#9C5E6B', // dusty rose
+    '#B27AAE', // dusty plum
+    '#7A8C6B', // sage (cool relief for visual variety)
+    '#A5623C', // clay
+    '#C07A60', // persimmon
+    '#B06B45', // burnt sienna
+    '#EADBA8', // cream-gold (for light specks)
+    '#F7E7DC', // accent-light tint (bright sparkle)
 ];
 
 interface Particle {

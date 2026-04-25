@@ -109,8 +109,9 @@ export default function RoadmapScreen() {
                         <RefreshControl refreshing={isRefreshing} onRefresh={refresh} tintColor={colors.accent} />
                     }
                 >
-                    <View style={[styles.emptyIcon, { backgroundColor: colors.surfacePrimary }]}>
-                        <Ionicons name="leaf-outline" size={48} color={colors.textTertiary} />
+                    {/* Icon in accent on accentLight — visible at a glance (was grey-on-cream) */}
+                    <View style={[styles.emptyIcon, { backgroundColor: colors.accentLight }]}>
+                        <Ionicons name="leaf-outline" size={48} color={colors.accent} />
                     </View>
                     <Text style={[styles.emptyTitle, { color: colors.textPrimary }]}>No roadmap assigned yet</Text>
                     <Text style={[styles.emptySubtitle, { color: colors.textSecondary }]}>

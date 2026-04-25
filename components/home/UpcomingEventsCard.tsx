@@ -78,14 +78,23 @@ const styles = StyleSheet.create({
         justifyContent: 'space-between',
         marginBottom: 16,
     },
-    sectionTitle: { fontFamily: Fonts.serif, fontSize: 18, fontWeight: '500', marginBottom: 0 },
+    // Section header: sans per role rules
+    sectionTitle: {
+        fontFamily: Fonts.sansSemibold,
+        fontSize: 17,
+        fontWeight: '600',
+        marginBottom: 0,
+        letterSpacing: -0.2,
+    },
     seeAllText: { fontFamily: Fonts.sansSemibold, fontSize: 14, fontWeight: '600' },
     loader: { paddingVertical: 16 },
-    emptyText: { fontFamily: Fonts.sans, fontSize: 14, textAlign: 'center', paddingVertical: 8 },
+    emptyText: { fontFamily: Fonts.sans, fontSize: 15, textAlign: 'center', paddingVertical: 8, lineHeight: 22 },
     eventRow: { flexDirection: 'row', alignItems: 'stretch', gap: 12, marginBottom: 14 },
     eventStripe: { width: 4, borderRadius: 2 },
     eventContent: { flex: 1 },
-    eventTitle: { fontFamily: Fonts.serif, fontSize: 15, fontWeight: '500', marginBottom: 2 },
+    // Event-row title: sans per role rules (list rows are NEVER serif)
+    eventTitle: { fontFamily: Fonts.sansSemibold, fontSize: 15, fontWeight: '600', marginBottom: 2 },
+    // Event metadata: mono for date/time is legitimate (timestamp-adjacent)
     eventMeta: { fontFamily: Fonts.mono, fontSize: 11, marginBottom: 2 },
     eventLocation: { fontFamily: Fonts.sansSemibold, fontSize: 12, fontWeight: '600' },
 });

@@ -58,12 +58,21 @@ const styles = StyleSheet.create({
         justifyContent: 'space-between',
         marginBottom: 16,
     },
-    sectionTitle: { fontFamily: Fonts.serif, fontSize: 18, fontWeight: '500', marginBottom: 0 },
+    // Section header: sans per role rules
+    sectionTitle: {
+        fontFamily: Fonts.sansSemibold,
+        fontSize: 17,
+        fontWeight: '600',
+        marginBottom: 0,
+        letterSpacing: -0.2,
+    },
+    // Programme name: sans per role rules (list-row label, not hero)
     progName: {
-        fontFamily: Fonts.serif,
-        fontSize: 14,
-        fontWeight: '500',
+        fontFamily: Fonts.sansSemibold,
+        fontSize: 15,
+        fontWeight: '600',
         marginBottom: 10,
+        lineHeight: 20,
     },
     progressBarTrack: {
         height: 8,

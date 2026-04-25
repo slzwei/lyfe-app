@@ -22,12 +22,17 @@ import {
     View,
 } from 'react-native';
 
+// Login is a persistent branded terracotta hero (regardless of theme), with
+// white overlay text designed for max contrast on orange. The overlays stay
+// as rgba whites on purpose — the brand moment doesn't flip in dark mode.
+// colors.accent was previously pinned to Colors.light.accent, meaning dark-mode
+// users saw the light-accent even though Colors.dark.accent is warmer; now
+// we pull accent dynamically from useTheme() inside the component (see colors.accent).
 const OVERLAY_TEXT = Colors.light.textInverse;
 const OVERLAY_TEXT_MUTED = 'rgba(255,255,255,0.8)';
 const OVERLAY_TEXT_SUBTLE = 'rgba(255,255,255,0.6)';
 const OVERLAY_TINT = 'rgba(255,255,255,0.18)';
 const OVERLAY_BORDER = 'rgba(255,255,255,0.35)';
-const BRAND_ORANGE = Colors.light.accent;
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 
@@ -246,7 +251,7 @@ export default function LoginScreen() {
     /* ── Render ── */
 
     return (
-        <View style={[styles.container, { backgroundColor: BRAND_ORANGE }]}>
+        <View style={[styles.container, { backgroundColor: colors.accent }]}>
             <SafeAreaView style={styles.safeArea}>
                 <TouchableWithoutFeedback onPress={step === 'phone' ? Keyboard.dismiss : undefined} accessible={false}>
                     <KeyboardAvoidingView
@@ -280,10 +285,14 @@ export default function LoginScreen() {
                                                 accessibilityLabel={`Sign in with ${biometricLabel}`}
                                             >
                                                 {isBiometricLoading ? (
-                                                    <ActivityIndicator color={BRAND_ORANGE} />
+                                                    <ActivityIndicator color={colors.accent} />
                                                 ) : (
                                                     <>
-                                                        <Ionicons name={biometricIcon} size={26} color={BRAND_ORANGE} />
+                                                        <Ionicons
+                                                            name={biometricIcon}
+                                                            size={26}
+                                                            color={colors.accent}
+                                                        />
                                                         <Text style={[styles.buttonText, { color: colors.accent }]}>
                                                             Sign in with {biometricLabel}
                                                         </Text>
@@ -445,7 +454,7 @@ export default function LoginScreen() {
                                         accessibilityLabel="Verify OTP"
                                     >
                                         {isLoading ? (
-                                            <ActivityIndicator color={BRAND_ORANGE} />
+                                            <ActivityIndicator color={colors.accent} />
                                         ) : (
                                             <Text style={[styles.buttonText, { color: colors.accent }]}>Verify</Text>
                                         )}
@@ -577,7 +586,7 @@ export default function LoginScreen() {
                     accessibilityLabel="Send OTP"
                 >
                     {isLoading ? (
-                        <ActivityIndicator color={BRAND_ORANGE} />
+                        <ActivityIndicator color={colors.accent} />
                     ) : (
                         <Text style={[styles.buttonText, { color: colors.accent }]}>Send OTP</Text>
                     )}

@@ -33,6 +33,12 @@ const styles = StyleSheet.create({
         shadowRadius: 8,
         elevation: 1,
     },
-    statValueSmall: { fontFamily: Fonts.serif, fontSize: 22, fontWeight: '500', marginBottom: 2 },
-    statLabelSmall: { fontFamily: Fonts.sans, fontSize: 13, fontWeight: '500' },
+    statValueSmall: {
+        fontFamily: Fonts.sansSemibold,
+        fontSize: 22,
+        fontWeight: '600',
+        marginBottom: 2,
+        letterSpacing: -0.4,
+    },
+    statLabelSmall: { fontFamily: Fonts.sans, fontSize: 13, fontWeight: '500', lineHeight: 16 },
 });

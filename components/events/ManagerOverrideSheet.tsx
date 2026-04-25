@@ -2,6 +2,7 @@ import { NumberStepper } from '@/components/roadshow/atoms/NumberStepper';
 import type { Colors } from '@/constants/Colors';
 import { RoadshowBounds, RoadshowRadii, getRoadshowColors } from '@/constants/roadshow/tokens';
 import { ERROR_BG, ERROR_TEXT } from '@/constants/ui';
+import { Fonts } from '@/constants/type';
 import { useTheme } from '@/contexts/ThemeContext';
 import type { EventAttendee } from '@/types/event';
 import { Ionicons } from '@expo/vector-icons';
@@ -235,7 +236,7 @@ const styles = StyleSheet.create({
     },
     headerCol: { flex: 1, gap: 4 },
     eyebrow: { fontSize: 11, fontWeight: '700', letterSpacing: 1 },
-    subtitle: { fontSize: 12, fontFamily: 'Inter' },
+    subtitle: { fontSize: 12, fontFamily: Fonts.sans },
     title: { fontSize: 22, fontFamily: 'Fraunces', fontWeight: '500', letterSpacing: -0.4, lineHeight: 26 },
     titleItalic: { fontFamily: 'Fraunces-Italic', fontWeight: '500' },
 

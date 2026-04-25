@@ -290,7 +290,7 @@ export default function LeadDetailScreen() {
                         <QuickAction
                             icon="logo-whatsapp"
                             label="WhatsApp"
-                            color="#25D366"
+                            color={colors.whatsappGreen}
                             bgColor={colors.successLight}
                             onPress={handleWhatsApp}
                             disabled={!lead.phone}

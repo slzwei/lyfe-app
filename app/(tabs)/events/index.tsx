@@ -309,7 +309,7 @@ export default function EventsScreen() {
             >
                 <DarkHeroCard glow="terra" glowSize="md">
                     <EventStatusPill status="live" />
-                    <Text style={[styles.liveTitle, { color: '#F4EEE1' }]}>
+                    <Text style={[styles.liveTitle, { color: colors.textInverse }]}>
                         {place}
                         {sub ? (
                             <>

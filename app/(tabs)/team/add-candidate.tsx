@@ -248,7 +248,7 @@ export default function AddCandidateScreen() {
                                 <TouchableOpacity
                                     style={[
                                         styles.managerPickerBtn,
-                                        { borderColor: errors.manager ? '#ef4444' : colors.border },
+                                        { borderColor: errors.manager ? colors.danger : colors.border },
                                     ]}
                                     onPress={() => setShowManagerPicker(true)}
                                     activeOpacity={0.7}
@@ -270,7 +270,7 @@ export default function AddCandidateScreen() {
                                     <Ionicons name="chevron-down" size={16} color={colors.textTertiary} />
                                 </TouchableOpacity>
                                 {errors.manager && (
-                                    <Text style={{ color: '#ef4444', fontSize: 12, marginTop: 4 }}>
+                                    <Text style={{ color: colors.danger, fontSize: 12, marginTop: 4 }}>
                                         {errors.manager}
                                     </Text>
                                 )}
