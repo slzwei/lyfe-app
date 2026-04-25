@@ -494,6 +494,74 @@ describe('computeNextStep — on track (default)', () => {
         );
         expect(result.urgency).toBe('on-track');
     });
+
+    // Cover the on-track copy variants — each candidate status surfaces a
+    // different placeholder message via onTrackText().
+    it.each([
+        ['interview_scheduled', /Awaiting interview/],
+        ['interviewed', /Awaiting decision/],
+        ['eapp_done', /eApp complete/],
+        ['approved', /Preparing for papers/],
+        ['licensed', /Licensed/],
+        ['active_agent', /Active agent/],
+    ] as const)('uses the right on-track copy for status=%s', (status, pattern) => {
+        const result = computeNextStep(
+            baseInput({
+                candidate: makeCandidate({
+                    status: status as CandidateStatus,
+                    updated_at: daysAgo(1),
+                }),
+            }),
+        );
+        expect(result.text).toMatch(pattern);
+    });
+});
+
+describe('computeNextStep — upcoming paper exam', () => {
+    it('flags an upcoming paper exam (no result, exam_at within 5 days) as this-week', () => {
+        const sched = makeAttempt('M9', { result: null, exam_at: daysFromNow(2) });
+        const result = computeNextStep(baseInput({ attempts: [sched] }));
+        expect(result.urgency).toBe('this-week');
+        expect(result.text).toMatch(/M9 exam/);
+    });
+
+    it('ignores upcoming paper exams beyond the this-week horizon', () => {
+        const sched = makeAttempt('HI', { result: null, exam_at: daysFromNow(20) });
+        const result = computeNextStep(baseInput({ attempts: [sched] }));
+        expect(result.urgency).not.toBe('this-week');
+    });
+});
+
+describe('computeNextStep — milestone label coverage', () => {
+    // Each milestone has a distinct human label — exercise the milestoneLabel
+    // switch by surfacing each code through the missed-milestone at-risk path.
+    it.each([
+        ['bes_induction', /BES induction/],
+        ['soar', /SOAR/],
+        ['rnf', /RNF application/],
+        ['sales_authority', /sales authority/],
+    ] as const)('renders the right copy for missed milestone %s', (code, pattern) => {
+        const ms = makeMilestone(code as MilestoneCode, {
+            status: 'scheduled',
+            scheduled_date: daysAgo(10),
+        });
+        const result = computeNextStep(baseInput({ milestones: [ms] }));
+        expect(result.urgency).toBe('at-risk');
+        expect(result.text).toMatch(pattern);
+    });
+
+    it('formats higher-round interview ordinals correctly (4th interview)', () => {
+        const iv = makeInterview({ datetime: daysAgo(10), round_number: 4, status: 'scheduled' });
+        const result = computeNextStep(baseInput({ interviews: [iv] }));
+        expect(result.text).toMatch(/4th interview/);
+    });
+
+    it('picks the most-recent of multiple missed interviews', () => {
+        const older = makeInterview({ datetime: daysAgo(20), round_number: 1, status: 'scheduled' });
+        const newer = makeInterview({ datetime: daysAgo(8), round_number: 2, status: 'scheduled' });
+        const result = computeNextStep(baseInput({ interviews: [older, newer] }));
+        expect(result.text).toMatch(/2nd interview/);
+    });
 });
 
 describe('THRESHOLDS — sanity', () => {

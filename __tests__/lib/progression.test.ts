@@ -11,6 +11,10 @@ import { supabase } from '@/lib/supabase';
 import {
     checkAllPapersPassed,
     deletePaperAttempt,
+    fetchActivitiesForCandidates,
+    fetchMilestonesForCandidates,
+    fetchPaperAttemptsForCandidates,
+    fetchPrepCourseBookings,
     markCandidateLicensed,
     upsertMilestone,
     upsertPaperAttempt,
@@ -323,5 +327,132 @@ describe('markCandidateLicensed', () => {
 
         expect(res.error).toMatch(/rnf/i);
         expect(mockSupa.from).not.toHaveBeenCalledWith('candidates');
+    });
+});
+
+describe('fetchPrepCourseBookings', () => {
+    it('queries candidate_prep_course_bookings for the supplied candidate id', async () => {
+        const chain = mockSupa.__getChain('candidate_prep_course_bookings');
+        chain.__resolveWith({ data: [], error: null });
+
+        const res = await fetchPrepCourseBookings('cand-1');
+
+        expect(res).toEqual({ data: [], error: null });
+        expect(chain.__calls).toContainEqual({ method: 'eq', args: ['candidate_id', 'cand-1'] });
+    });
+
+    it('forwards supabase errors as { data: [], error }', async () => {
+        const chain = mockSupa.__getChain('candidate_prep_course_bookings');
+        chain.__resolveWith({ data: null, error: { message: 'connection lost' } });
+
+        const res = await fetchPrepCourseBookings('cand-1');
+        expect(res).toEqual({ data: [], error: 'connection lost' });
+    });
+});
+
+// ── Bulk fetchers (pipeline-view N+1 prevention) ──────────────────────────
+
+describe('fetchPaperAttemptsForCandidates', () => {
+    it('returns an empty array without hitting Supabase when the id list is empty', async () => {
+        const res = await fetchPaperAttemptsForCandidates([]);
+        expect(res).toEqual({ data: [], error: null });
+        expect(mockSupa.from).not.toHaveBeenCalled();
+    });
+
+    it('issues a single .in() query against candidate_paper_attempts and returns the rows', async () => {
+        const chain = mockSupa.__getChain('candidate_paper_attempts');
+        const rows = [makeAttempt('M9'), makeAttempt('M9A')];
+        chain.__resolveWith({ data: rows, error: null });
+
+        const res = await fetchPaperAttemptsForCandidates(['cand-1', 'cand-2']);
+
+        expect(res.error).toBeNull();
+        expect(res.data).toEqual(rows);
+        expect(chain.__calls).toContainEqual({ method: 'in', args: ['candidate_id', ['cand-1', 'cand-2']] });
+        expect(chain.__calls).toContainEqual({ method: 'select', args: ['*'] });
+    });
+
+    it('returns the supabase error message and an empty data array on failure', async () => {
+        const chain = mockSupa.__getChain('candidate_paper_attempts');
+        chain.__resolveWith({ data: null, error: { message: 'PostgREST: connection refused' } });
+
+        const res = await fetchPaperAttemptsForCandidates(['cand-1']);
+        expect(res).toEqual({ data: [], error: 'PostgREST: connection refused' });
+    });
+});
+
+describe('fetchMilestonesForCandidates', () => {
+    it('returns empty without querying when no ids are passed', async () => {
+        const res = await fetchMilestonesForCandidates([]);
+        expect(res).toEqual({ data: [], error: null });
+        expect(mockSupa.from).not.toHaveBeenCalled();
+    });
+
+    it('issues a single .in() query against candidate_milestones', async () => {
+        const chain = mockSupa.__getChain('candidate_milestones');
+        const rows = [makeRnf('issued')];
+        chain.__resolveWith({ data: rows, error: null });
+
+        const res = await fetchMilestonesForCandidates(['cand-1']);
+
+        expect(res.error).toBeNull();
+        expect(res.data).toEqual(rows);
+        expect(chain.__calls).toContainEqual({ method: 'in', args: ['candidate_id', ['cand-1']] });
+    });
+
+    it('forwards supabase errors as { data: [], error }', async () => {
+        const chain = mockSupa.__getChain('candidate_milestones');
+        chain.__resolveWith({ data: null, error: { message: 'RLS policy denied' } });
+
+        const res = await fetchMilestonesForCandidates(['cand-1']);
+        expect(res).toEqual({ data: [], error: 'RLS policy denied' });
+    });
+});
+
+describe('fetchActivitiesForCandidates', () => {
+    it('returns empty without querying when no ids are passed', async () => {
+        const res = await fetchActivitiesForCandidates([]);
+        expect(res).toEqual({ data: [], error: null });
+        expect(mockSupa.from).not.toHaveBeenCalled();
+    });
+
+    it('issues a query with a created_at cutoff derived from sinceDaysAgo', async () => {
+        const chain = mockSupa.__getChain('candidate_activities');
+        chain.__resolveWith({ data: [], error: null });
+
+        await fetchActivitiesForCandidates(['cand-1', 'cand-2'], 30);
+
+        expect(chain.__calls).toContainEqual({ method: 'in', args: ['candidate_id', ['cand-1', 'cand-2']] });
+        const gteCall = chain.__calls.find((c: any) => c.method === 'gte');
+        expect(gteCall).toBeDefined();
+        expect(gteCall.args[0]).toBe('created_at');
+        // Cutoff should be ~30 days ago — assert it's an ISO string and within the expected range.
+        const cutoff = new Date(gteCall.args[1]);
+        const expected = new Date();
+        expected.setDate(expected.getDate() - 30);
+        const driftMs = Math.abs(cutoff.getTime() - expected.getTime());
+        expect(driftMs).toBeLessThan(60_000); // tolerate any clock skew within the test runtime
+    });
+
+    it('defaults to a 60-day window when sinceDaysAgo is omitted', async () => {
+        const chain = mockSupa.__getChain('candidate_activities');
+        chain.__resolveWith({ data: [], error: null });
+
+        await fetchActivitiesForCandidates(['cand-1']);
+
+        const gteCall = chain.__calls.find((c: any) => c.method === 'gte');
+        const cutoff = new Date(gteCall.args[1]);
+        const expected = new Date();
+        expected.setDate(expected.getDate() - 60);
+        const driftMs = Math.abs(cutoff.getTime() - expected.getTime());
+        expect(driftMs).toBeLessThan(60_000);
+    });
+
+    it('forwards supabase errors as { data: [], error }', async () => {
+        const chain = mockSupa.__getChain('candidate_activities');
+        chain.__resolveWith({ data: null, error: { message: 'timeout' } });
+
+        const res = await fetchActivitiesForCandidates(['cand-1']);
+        expect(res).toEqual({ data: [], error: 'timeout' });
     });
 });
