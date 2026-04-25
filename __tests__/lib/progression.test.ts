@@ -12,7 +12,9 @@ import {
     checkAllPapersPassed,
     deletePaperAttempt,
     fetchActivitiesForCandidates,
+    fetchMilestones,
     fetchMilestonesForCandidates,
+    fetchPaperAttempts,
     fetchPaperAttemptsForCandidates,
     fetchPrepCourseBookings,
     markCandidateLicensed,
@@ -242,6 +244,48 @@ describe('upsertMilestone', () => {
         expect(row.scheduled_date).toBe('2026-05-01T02:00:00Z');
         expect(row.scheduled_end_date).toBe('2026-05-02T02:00:00Z');
     });
+
+    it('clears verified_by_user_id when transitioning to not_started, regardless of actor', async () => {
+        const chain = mockSupa.__getChain('candidate_milestones');
+        chain.__resolveWith({ data: null, error: null });
+
+        await upsertMilestone('cand-1', 'soar', { status: 'not_started' }, 'user-1');
+
+        const row = chain.__calls.find((c: any) => c.method === 'upsert').args[0];
+        expect(row.verified_by_user_id).toBeNull();
+        expect(row.completed_date).toBeNull();
+    });
+
+    it('marks verified_by_user_id with actor when status is completed', async () => {
+        const chain = mockSupa.__getChain('candidate_milestones');
+        chain.__resolveWith({ data: null, error: null });
+
+        await upsertMilestone('cand-1', 'soar', { status: 'completed' }, 'user-9');
+
+        const row = chain.__calls.find((c: any) => c.method === 'upsert').args[0];
+        expect(row.verified_by_user_id).toBe('user-9');
+        expect(row.completed_date).not.toBeNull();
+    });
+
+    it('falls back to null verified_by when actor is omitted on completion', async () => {
+        const chain = mockSupa.__getChain('candidate_milestones');
+        chain.__resolveWith({ data: null, error: null });
+
+        await upsertMilestone('cand-1', 'soar', { status: 'completed' });
+
+        const row = chain.__calls.find((c: any) => c.method === 'upsert').args[0];
+        expect(row.verified_by_user_id).toBeNull();
+    });
+
+    it('honours an explicit completedDate over today() for done states', async () => {
+        const chain = mockSupa.__getChain('candidate_milestones');
+        chain.__resolveWith({ data: null, error: null });
+
+        await upsertMilestone('cand-1', 'soar', { status: 'completed', completedDate: '2025-12-25' }, 'user-1');
+
+        const row = chain.__calls.find((c: any) => c.method === 'upsert').args[0];
+        expect(row.completed_date).toBe('2025-12-25');
+    });
 });
 
 // ── upsertPrepCourseBooking ──────────────────────────────────────────────
@@ -327,6 +371,44 @@ describe('markCandidateLicensed', () => {
 
         expect(res.error).toMatch(/rnf/i);
         expect(mockSupa.from).not.toHaveBeenCalledWith('candidates');
+    });
+});
+
+describe('fetchPaperAttempts (single-candidate)', () => {
+    it('returns the rows on success', async () => {
+        const chain = mockSupa.__getChain('candidate_paper_attempts');
+        const rows = [makeAttempt('M9')];
+        chain.__resolveWith({ data: rows, error: null });
+
+        const res = await fetchPaperAttempts('cand-1');
+        expect(res).toEqual({ data: rows, error: null });
+    });
+
+    it('forwards supabase errors as { data: [], error }', async () => {
+        const chain = mockSupa.__getChain('candidate_paper_attempts');
+        chain.__resolveWith({ data: null, error: { message: 'rls denied' } });
+
+        const res = await fetchPaperAttempts('cand-1');
+        expect(res).toEqual({ data: [], error: 'rls denied' });
+    });
+});
+
+describe('fetchMilestones (single-candidate)', () => {
+    it('returns the rows on success', async () => {
+        const chain = mockSupa.__getChain('candidate_milestones');
+        const rows = [makeRnf('issued')];
+        chain.__resolveWith({ data: rows, error: null });
+
+        const res = await fetchMilestones('cand-1');
+        expect(res).toEqual({ data: rows, error: null });
+    });
+
+    it('forwards supabase errors as { data: [], error }', async () => {
+        const chain = mockSupa.__getChain('candidate_milestones');
+        chain.__resolveWith({ data: null, error: { message: 'connection lost' } });
+
+        const res = await fetchMilestones('cand-1');
+        expect(res).toEqual({ data: [], error: 'connection lost' });
     });
 });
 

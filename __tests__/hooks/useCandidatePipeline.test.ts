@@ -139,6 +139,18 @@ describe('useCandidatePipeline', () => {
         expect(mockFetchSnapshot).not.toHaveBeenCalled();
     });
 
+    it('uses default options when called with no arguments (isManagerView=false, enabled=true)', async () => {
+        const { result } = renderHook(() => useCandidatePipeline());
+
+        await act(async () => {
+            jest.advanceTimersByTime(1);
+        });
+        await waitFor(() => expect(result.current.isLoading).toBe(false));
+
+        // Default isManagerView=false should be passed to the snapshot fetcher.
+        expect(mockFetchSnapshot).toHaveBeenCalledWith('user-1', false);
+    });
+
     it('subscribes a realtime callback that triggers a refetch when invoked', async () => {
         renderHook(() => useCandidatePipeline({ isManagerView: true }));
 
