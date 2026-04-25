@@ -42,8 +42,8 @@ beforeEach(() => {
 describe('ProfilePhotoScreen', () => {
     it('renders the photo prompt', () => {
         const { getByText } = render(<ProfilePhotoScreen />);
-        expect(getByText('Add a profile photo')).toBeTruthy();
-        expect(getByText('Help your team recognize you')).toBeTruthy();
+        expect(getByText('photo')).toBeTruthy();
+        expect(getByText('Help your team recognise you at a glance.')).toBeTruthy();
     });
 
     it('shows user initial in the avatar placeholder', () => {

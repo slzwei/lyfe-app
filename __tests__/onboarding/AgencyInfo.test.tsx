@@ -29,17 +29,17 @@ beforeEach(() => {
 describe('AgencyInfoScreen', () => {
     it('renders without crashing', () => {
         const { getByText } = render(<AgencyInfoScreen />);
-        expect(getByText("What's Inside")).toBeTruthy();
+        expect(getByText('inside.')).toBeTruthy();
     });
 
     it('shows subtitle', () => {
         const { getByText } = render(<AgencyInfoScreen />);
-        expect(getByText('Everything you need to grow your insurance career')).toBeTruthy();
+        expect(getByText(/Everything you need to grow your insurance career/)).toBeTruthy();
     });
 
     it('shows Training Roadmap feature', () => {
         const { getByText } = render(<AgencyInfoScreen />);
-        expect(getByText('Training Roadmap')).toBeTruthy();
+        expect(getByText('Training roadmap')).toBeTruthy();
         expect(getByText('Structured learning paths to build your skills')).toBeTruthy();
     });
 
@@ -51,7 +51,7 @@ describe('AgencyInfoScreen', () => {
 
     it('shows Exam Preparation feature', () => {
         const { getByText } = render(<AgencyInfoScreen />);
-        expect(getByText('Exam Preparation')).toBeTruthy();
+        expect(getByText('Exam preparation')).toBeTruthy();
         expect(getByText('Track your exam progress and certifications')).toBeTruthy();
     });
 

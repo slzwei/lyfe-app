@@ -42,7 +42,7 @@ beforeEach(() => {
 describe('ProfileSetupScreen', () => {
     it('renders the name question', () => {
         const { getByText } = render(<ProfileSetupScreen />);
-        expect(getByText("What's your name?")).toBeTruthy();
+        expect(getByText('This is how your team will see you.')).toBeTruthy();
     });
 
     it('shows the name input empty for New User', () => {

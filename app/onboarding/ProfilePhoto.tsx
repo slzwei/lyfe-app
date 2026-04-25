@@ -1,5 +1,7 @@
 import Avatar from '@/components/Avatar';
 import AvatarPickerSheet, { type AvatarAction } from '@/components/profile/AvatarPickerSheet';
+import { letterSpacing } from '@/constants/platform';
+import { Fonts } from '@/constants/type';
 import { useAuth } from '@/contexts/AuthContext';
 import { useTheme } from '@/contexts/ThemeContext';
 import { pickAndUploadAvatar, removeAvatar, takeAndUploadAvatar } from '@/lib/storage';
@@ -7,8 +9,10 @@ import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import React, { useCallback, useState } from 'react';
 import { ActivityIndicator, Alert, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import Animated, { FadeInDown } from 'react-native-reanimated';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
+/** Onboarding step 3/5. Upload or skip a profile photo. */
 export default function ProfilePhotoScreen() {
     const { colors } = useTheme();
     const { user, updateAvatarUrl } = useAuth();
@@ -62,51 +66,64 @@ export default function ProfilePhotoScreen() {
     };
 
     return (
-        <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]}>
-            <View style={styles.content}>
-                <Text style={[styles.title, { color: colors.textPrimary }]}>Add a profile photo</Text>
-                <Text style={[styles.subtitle, { color: colors.textSecondary }]}>Help your team recognize you</Text>
+        <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]} edges={['top']}>
+            <View style={styles.contentWrap}>
+                <Animated.View entering={FadeInDown.springify().duration(500)}>
+                    <Text style={[styles.eyebrow, { color: colors.textTertiary }]}>STEP 3 OF 5</Text>
+                    <Text style={[styles.title, { color: colors.textPrimary }]}>
+                        A <Text style={[styles.titleItalic, { color: colors.accent }]}>photo</Text> for your team.
+                    </Text>
+                    <Text style={[styles.subtitle, { color: colors.textSecondary }]}>
+                        Help your team recognise you at a glance.
+                    </Text>
+                </Animated.View>
 
-                {/* Avatar area */}
-                <TouchableOpacity
-                    style={styles.avatarArea}
-                    onPress={() => setShowSheet(true)}
-                    activeOpacity={0.7}
-                    disabled={uploading}
-                    testID="avatar-button"
-                >
-                    {uploading ? (
-                        <View style={[styles.avatarCircle, { backgroundColor: colors.surfacePrimary }]}>
-                            <ActivityIndicator size="large" color={colors.accent} />
-                        </View>
-                    ) : hasAvatar ? (
-                        <View>
-                            <Avatar
-                                name={displayName}
-                                avatarUrl={avatarUrl}
-                                size={140}
-                                backgroundColor={colors.accentLight}
-                                textColor={colors.accent}
-                            />
-                            <View style={[styles.checkBadge, { backgroundColor: colors.success }]}>
-                                <Ionicons name="checkmark" size={16} color="#fff" />
+                {/* Avatar placed asymmetrically, not dead-center */}
+                <Animated.View style={styles.heroBlock} entering={FadeInDown.delay(120).springify().duration(600)}>
+                    <TouchableOpacity
+                        style={styles.avatarArea}
+                        onPress={() => setShowSheet(true)}
+                        activeOpacity={0.7}
+                        disabled={uploading}
+                        testID="avatar-button"
+                    >
+                        {uploading ? (
+                            <View style={[styles.avatarCircle, { backgroundColor: colors.surfacePrimary }]}>
+                                <ActivityIndicator size="large" color={colors.accent} />
                             </View>
-                        </View>
-                    ) : (
-                        <View style={[styles.avatarCircle, styles.dashedBorder, { borderColor: colors.accent }]}>
-                            <Avatar
-                                name={displayName}
-                                size={134}
-                                backgroundColor={colors.accentLight}
-                                textColor={colors.accent}
-                            />
-                        </View>
-                    )}
+                        ) : hasAvatar ? (
+                            <View>
+                                <Avatar
+                                    name={displayName}
+                                    avatarUrl={avatarUrl}
+                                    size={140}
+                                    backgroundColor={colors.accentLight}
+                                    textColor={colors.accent}
+                                />
+                                <View style={[styles.checkBadge, { backgroundColor: colors.success }]}>
+                                    <Ionicons name="checkmark" size={16} color={colors.textInverse} />
+                                </View>
+                            </View>
+                        ) : (
+                            <View style={[styles.avatarCircle, styles.dashedBorder, { borderColor: colors.accent }]}>
+                                <Avatar
+                                    name={displayName}
+                                    size={134}
+                                    backgroundColor={colors.accentLight}
+                                    textColor={colors.accent}
+                                />
+                            </View>
+                        )}
 
-                    {!uploading && (
                         <View style={styles.tapHint}>
                             <Ionicons
-                                name={hasAvatar ? 'swap-horizontal-outline' : 'camera-outline'}
+                                name={
+                                    uploading
+                                        ? 'cloud-upload-outline'
+                                        : hasAvatar
+                                          ? 'swap-horizontal-outline'
+                                          : 'camera-outline'
+                                }
                                 size={16}
                                 color={hasAvatar ? colors.textSecondary : colors.accent}
                             />
@@ -116,11 +133,11 @@ export default function ProfilePhotoScreen() {
                                     { color: hasAvatar ? colors.textSecondary : colors.accent },
                                 ]}
                             >
-                                {hasAvatar ? 'Change photo' : 'Tap to add'}
+                                {uploading ? 'Uploading…' : hasAvatar ? 'Change photo' : 'Tap to add'}
                             </Text>
                         </View>
-                    )}
-                </TouchableOpacity>
+                    </TouchableOpacity>
+                </Animated.View>
             </View>
 
             <View style={styles.footer}>
@@ -132,6 +149,7 @@ export default function ProfilePhotoScreen() {
                             : { backgroundColor: 'transparent', borderWidth: 1.5, borderColor: colors.accent },
                     ]}
                     onPress={handleContinue}
+                    activeOpacity={0.85}
                     testID="continue-button"
                 >
                     <Text style={[styles.buttonText, { color: hasAvatar ? colors.textInverse : colors.accent }]}>
@@ -152,25 +170,44 @@ export default function ProfilePhotoScreen() {
 }
 
 const styles = StyleSheet.create({
-    container: {
+    container: { flex: 1 },
+    contentWrap: {
         flex: 1,
+        paddingLeft: 24,
+        paddingRight: 32,
+        paddingTop: 24,
     },
-    content: {
-        flex: 1,
-        paddingHorizontal: 24,
-        paddingTop: 60,
-        alignItems: 'center',
+    eyebrow: {
+        fontFamily: Fonts.sansSemibold,
+        fontSize: 11,
+        fontWeight: '600',
+        letterSpacing: 1.5,
+        textTransform: 'uppercase',
+        marginBottom: 20,
     },
     title: {
-        fontSize: 28,
+        fontFamily: Fonts.sansBold,
+        fontSize: 32,
         fontWeight: '700',
-        marginBottom: 8,
-        textAlign: 'center',
+        lineHeight: 38,
+        letterSpacing: letterSpacing(-0.5),
+        marginBottom: 10,
+    },
+    titleItalic: {
+        fontFamily: Fonts.serifItalic,
+        fontWeight: '500',
     },
     subtitle: {
+        fontFamily: Fonts.sans,
         fontSize: 16,
-        textAlign: 'center',
-        marginBottom: 48,
+        lineHeight: 24,
+        maxWidth: 440,
+    },
+    heroBlock: {
+        flex: 1,
+        justifyContent: 'center',
+        alignItems: 'flex-start',
+        paddingLeft: 24, // asymmetric left-indent
     },
     avatarArea: {
         alignItems: 'center',
@@ -204,7 +241,8 @@ const styles = StyleSheet.create({
         marginTop: 16,
     },
     tapHintText: {
-        fontSize: 15,
+        fontFamily: Fonts.sansSemibold,
+        fontSize: 14,
         fontWeight: '600',
     },
     footer: {
@@ -216,10 +254,11 @@ const styles = StyleSheet.create({
         alignItems: 'center',
         justifyContent: 'center',
         paddingVertical: 16,
-        borderRadius: 12,
+        borderRadius: 14,
     },
     buttonText: {
-        fontSize: 18,
+        fontFamily: Fonts.sansSemibold,
+        fontSize: 17,
         fontWeight: '600',
     },
 });

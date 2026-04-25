@@ -1,11 +1,11 @@
-jest.mock('@/contexts/ThemeContext');
-
 import React from 'react';
 import { render, fireEvent } from '@testing-library/react-native';
 import { useRouter } from 'expo-router';
 import { useTheme } from '@/contexts/ThemeContext';
 import { Colors } from '@/constants/Colors';
 import WelcomeScreen from '@/app/onboarding/Welcome';
+
+jest.mock('@/contexts/ThemeContext');
 
 const mockPush = jest.fn();
 
@@ -28,12 +28,12 @@ beforeEach(() => {
 describe('WelcomeScreen', () => {
     it('renders without crashing', () => {
         const { getByText } = render(<WelcomeScreen />);
-        expect(getByText('Welcome to Lyfe')).toBeTruthy();
+        expect(getByText('Lyfe.')).toBeTruthy();
     });
 
     it('shows the tagline', () => {
         const { getByText } = render(<WelcomeScreen />);
-        expect(getByText('Your insurance career starts here')).toBeTruthy();
+        expect(getByText(/Your insurance career starts here/)).toBeTruthy();
     });
 
     it('shows the Get Started button', () => {

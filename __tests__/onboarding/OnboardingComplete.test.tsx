@@ -53,12 +53,12 @@ afterEach(() => {
 describe('OnboardingCompleteScreen', () => {
     it('renders without crashing', () => {
         const { getByText } = render(<OnboardingCompleteScreen />);
-        expect(getByText("You're all set!")).toBeTruthy();
+        expect(getByText('in.')).toBeTruthy();
     });
 
     it('shows celebration message', () => {
         const { getByText } = render(<OnboardingCompleteScreen />);
-        expect(getByText(/Your onboarding is complete/)).toBeTruthy();
+        expect(getByText(/Let's get to work/)).toBeTruthy();
     });
 
     it('shows the Go to Dashboard button', () => {
@@ -68,7 +68,7 @@ describe('OnboardingCompleteScreen', () => {
 
     it('shows redirect text', () => {
         const { getByText } = render(<OnboardingCompleteScreen />);
-        expect(getByText('Redirecting automatically...')).toBeTruthy();
+        expect(getByText('Redirecting automatically…')).toBeTruthy();
     });
 
     it('navigates to dashboard on button press when onboarding complete', () => {

@@ -40,9 +40,9 @@ afterEach(() => {
 describe('EmailVerificationScreen', () => {
     it('renders email step initially', () => {
         const { getByText, getByPlaceholderText } = render(<EmailVerificationScreen />);
-        expect(getByText('Verify your email')).toBeTruthy();
-        expect(getByPlaceholderText('Enter your email')).toBeTruthy();
-        expect(getByText('Send Verification Code')).toBeTruthy();
+        expect(getByText('VERIFY EMAIL')).toBeTruthy();
+        expect(getByPlaceholderText('you@example.com')).toBeTruthy();
+        expect(getByText('Send verification code')).toBeTruthy();
     });
 
     it('transitions to OTP step on successful send', async () => {
@@ -51,7 +51,7 @@ describe('EmailVerificationScreen', () => {
         fireEvent.press(getByTestId('email-send-code-button'));
 
         await waitFor(() => {
-            expect(getByText('Check your inbox')).toBeTruthy();
+            expect(getByText('inbox.')).toBeTruthy();
             expect(getByText('test@example.com')).toBeTruthy();
         });
     });
@@ -76,7 +76,7 @@ describe('EmailVerificationScreen', () => {
         fireEvent.press(getByTestId('email-send-code-button'));
 
         await waitFor(() => {
-            expect(getByText('Check your inbox')).toBeTruthy();
+            expect(getByText('inbox.')).toBeTruthy();
         });
 
         // Step 2: Enter OTP
@@ -98,7 +98,7 @@ describe('EmailVerificationScreen', () => {
         fireEvent.press(getByTestId('email-send-code-button'));
 
         await waitFor(() => {
-            expect(getByText('Check your inbox')).toBeTruthy();
+            expect(getByText('inbox.')).toBeTruthy();
         });
 
         fireEvent.changeText(getByTestId('email-otp-input'), '999999');
@@ -123,7 +123,7 @@ describe('EmailVerificationScreen', () => {
         fireEvent.press(getByText('Change email'));
 
         await waitFor(() => {
-            expect(getByText('Verify your email')).toBeTruthy();
+            expect(getByText('VERIFY EMAIL')).toBeTruthy();
         });
     });
 });

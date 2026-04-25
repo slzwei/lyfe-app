@@ -1,35 +1,57 @@
+import { letterSpacing } from '@/constants/platform';
+import { Fonts } from '@/constants/type';
 import { useTheme } from '@/contexts/ThemeContext';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import React from 'react';
 import { StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import Animated, { FadeInDown } from 'react-native-reanimated';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
+/**
+ * Onboarding step 1 / 5. Sets the editorial tone for the whole flow.
+ *
+ * Layout pattern (shared across all onboarding screens):
+ *   - Eyebrow step counter (top-left, warm grey caps)
+ *   - Left-anchored title with ONE italic serif accent word
+ *   - Subtitle with maxWidth for readability
+ *   - Hero visual block (asymmetrically placed — not centered)
+ *   - Footer-anchored primary CTA
+ *   - FadeInDown spring entrance on hero + delayed fade-in on content
+ */
 export default function WelcomeScreen() {
     const { colors } = useTheme();
     const router = useRouter();
 
     return (
-        <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]}>
-            <View style={styles.content}>
-                <View style={styles.logoContainer}>
+        <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]} edges={['top']}>
+            <View style={styles.contentWrap}>
+                <Animated.View entering={FadeInDown.springify().duration(500)}>
+                    <Text style={[styles.eyebrow, { color: colors.textTertiary }]}>STEP 1 OF 5</Text>
+                    <Text style={[styles.title, { color: colors.textPrimary }]}>
+                        Welcome to <Text style={[styles.titleItalic, { color: colors.accent }]}>Lyfe.</Text>
+                    </Text>
+                    <Text style={[styles.subtitle, { color: colors.textSecondary }]}>
+                        Your insurance career starts here — with the tools, training, and team to back you up.
+                    </Text>
+                </Animated.View>
+
+                {/* Asymmetric hero: icon offset from center, not dead-centered */}
+                <Animated.View style={styles.heroBlock} entering={FadeInDown.delay(120).springify().duration(600)}>
                     <View style={[styles.iconCircle, { backgroundColor: colors.accentLight }]}>
                         <Ionicons name="shield-checkmark" size={64} color={colors.accent} />
                     </View>
-                </View>
+                </Animated.View>
+            </View>
 
-                <Text style={[styles.title, { color: colors.textPrimary }]}>Welcome to Lyfe</Text>
-
-                <Text style={[styles.tagline, { color: colors.textSecondary }]}>Your insurance career starts here</Text>
-
-                <View style={styles.spacer} />
-
+            <View style={styles.footer}>
                 <TouchableOpacity
                     style={[styles.button, { backgroundColor: colors.accent }]}
                     onPress={() => router.push('/onboarding/ProfileSetup')}
+                    activeOpacity={0.85}
                     testID="get-started-button"
                 >
-                    <Text style={[styles.buttonText, { color: colors.textInverse }]}>Get Started</Text>
+                    <Text style={[styles.buttonText, { color: colors.textInverse }]}>Get started</Text>
                     <Ionicons name="arrow-forward" size={20} color={colors.textInverse} />
                 </TouchableOpacity>
             </View>
@@ -41,14 +63,45 @@ const styles = StyleSheet.create({
     container: {
         flex: 1,
     },
-    content: {
+    // Asymmetric padding: extra right-side breathing room breaks the centered bias
+    contentWrap: {
         flex: 1,
-        alignItems: 'center',
-        justifyContent: 'center',
-        paddingHorizontal: 32,
+        paddingLeft: 24,
+        paddingRight: 32,
+        paddingTop: 24,
     },
-    logoContainer: {
-        marginBottom: 32,
+    eyebrow: {
+        fontFamily: Fonts.sansSemibold,
+        fontSize: 11,
+        fontWeight: '600',
+        letterSpacing: 1.5,
+        textTransform: 'uppercase',
+        marginBottom: 20,
+    },
+    title: {
+        fontFamily: Fonts.sansBold,
+        fontSize: 32,
+        fontWeight: '700',
+        lineHeight: 38,
+        letterSpacing: letterSpacing(-0.5),
+        marginBottom: 12,
+    },
+    titleItalic: {
+        fontFamily: Fonts.serifItalic,
+        fontWeight: '500',
+    },
+    subtitle: {
+        fontFamily: Fonts.sans,
+        fontSize: 16,
+        lineHeight: 24,
+        maxWidth: 440,
+    },
+    // Hero is flex:1 so it fills remaining space with the icon asymmetrically placed
+    heroBlock: {
+        flex: 1,
+        justifyContent: 'center',
+        alignItems: 'flex-start', // left-anchored, not centered
+        paddingLeft: 16, // slight indent — off-grid
     },
     iconCircle: {
         width: 120,
@@ -57,19 +110,10 @@ const styles = StyleSheet.create({
         alignItems: 'center',
         justifyContent: 'center',
     },
-    title: {
-        fontSize: 32,
-        fontWeight: '700',
-        marginBottom: 12,
-    },
-    tagline: {
-        fontSize: 18,
-        textAlign: 'center',
-        lineHeight: 26,
-    },
-    spacer: {
-        flex: 1,
-        minHeight: 40,
+    footer: {
+        paddingHorizontal: 24,
+        paddingBottom: 32,
+        paddingTop: 12,
     },
     button: {
         flexDirection: 'row',
@@ -77,13 +121,12 @@ const styles = StyleSheet.create({
         justifyContent: 'center',
         paddingVertical: 16,
         paddingHorizontal: 32,
-        borderRadius: 12,
-        width: '100%',
+        borderRadius: 14,
         gap: 8,
-        marginBottom: 40,
     },
     buttonText: {
-        fontSize: 18,
+        fontFamily: Fonts.sansSemibold,
+        fontSize: 17,
         fontWeight: '600',
     },
 });
