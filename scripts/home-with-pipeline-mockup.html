@@ -1,0 +1,663 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Home with Pipeline — Mockup</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Albert+Sans:ital,wght@0,400;0,500;0,600;0,700;1,500&family=Fraunces:ital,opsz,wght@0,9..144,400;0,9..144,500;1,9..144,500&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --bg: #F5F0E6;
+      --paper: #FBF7EE;
+      --border: #E6E0D1;
+      --border-light: #EFEADB;
+
+      --ink-primary: #1B1A17;
+      --ink-secondary: #4A4640;
+      --ink-tertiary: #8B857A;
+
+      --accent: #D6552B;
+      --accent-light: #F7E7DC;
+      --sage: #7A8C6B;
+      --butter: #C89B3C;
+      --danger: #B33A2E;
+      --info: #5C7A9E;
+
+      --font-sans: 'Albert Sans', -apple-system, BlinkMacSystemFont, sans-serif;
+      --font-serif: 'Fraunces', Georgia, serif;
+      --font-mono: 'JetBrains Mono', 'SF Mono', monospace;
+    }
+
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+
+    body {
+      font-family: var(--font-sans);
+      background: #E8E2D4;
+      background-image: radial-gradient(ellipse at top, #EEE6D4 0%, #E0D8C6 100%);
+      min-height: 100vh;
+      padding: 40px 24px 60px;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 32px;
+      color: var(--ink-primary);
+    }
+
+    .page-header {
+      max-width: 520px;
+      text-align: center;
+    }
+    .page-header .eyebrow {
+      font-size: 11px;
+      font-weight: 600;
+      letter-spacing: 1.5px;
+      text-transform: uppercase;
+      color: var(--ink-tertiary);
+      margin-bottom: 12px;
+    }
+    .page-header h1 {
+      font-weight: 700;
+      font-size: 30px;
+      line-height: 1.1;
+      letter-spacing: -0.6px;
+      margin-bottom: 10px;
+    }
+    .page-header h1 em {
+      font-family: var(--font-serif);
+      font-style: italic;
+      font-weight: 500;
+      color: var(--accent);
+    }
+    .page-header p {
+      font-size: 14.5px;
+      color: var(--ink-secondary);
+      line-height: 1.5;
+    }
+
+    /* iPhone frame */
+    .device {
+      width: 390px;
+      height: 844px;
+      background: var(--bg);
+      border-radius: 52px;
+      border: 11px solid #1B1A17;
+      box-shadow:
+        0 40px 100px -20px rgba(27, 26, 23, 0.35),
+        0 20px 40px -8px rgba(27, 26, 23, 0.18);
+      overflow: hidden;
+      position: relative;
+    }
+    .notch {
+      position: absolute;
+      top: 0; left: 50%;
+      transform: translateX(-50%);
+      width: 118px; height: 30px;
+      background: #1B1A17;
+      border-radius: 0 0 20px 20px;
+      z-index: 10;
+    }
+    .screen {
+      height: 100%;
+      overflow-y: auto;
+      padding-top: 48px;
+      padding-bottom: 96px; /* room for bottom tab bar */
+      scrollbar-width: none;
+    }
+    .screen::-webkit-scrollbar { display: none; }
+
+    .statusbar {
+      position: absolute;
+      top: 0; left: 0; right: 0;
+      height: 48px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 18px 30px 0;
+      font-size: 15px;
+      font-weight: 600;
+      z-index: 11;
+    }
+
+    /* ════════════════════════════════════════
+       HOME hero (compact, existing-style)
+       ════════════════════════════════════════ */
+    .home-hero {
+      padding: 16px 24px 12px;
+    }
+    .home-date {
+      font-family: var(--font-mono);
+      font-size: 11px;
+      font-weight: 500;
+      letter-spacing: 1px;
+      text-transform: uppercase;
+      color: var(--ink-tertiary);
+      margin-bottom: 6px;
+    }
+    .home-greeting {
+      font-family: var(--font-sans);
+      font-size: 28px;
+      font-weight: 700;
+      line-height: 1.1;
+      letter-spacing: -0.5px;
+    }
+    .home-greeting em {
+      font-family: var(--font-serif);
+      font-style: italic;
+      font-weight: 500;
+      color: var(--accent);
+    }
+
+    /* Quick stats stub (representing your existing Home content) */
+    .quick-stats {
+      margin: 18px 24px 28px;
+      padding: 16px;
+      background: var(--accent);
+      border-radius: 18px;
+      color: #FBF7EE;
+      display: flex;
+      gap: 16px;
+      align-items: center;
+      justify-content: space-between;
+    }
+    .qs-big {
+      font-family: var(--font-serif);
+      font-size: 38px;
+      font-weight: 500;
+      letter-spacing: -1px;
+      line-height: 1;
+    }
+    .qs-label {
+      font-size: 12px;
+      font-weight: 500;
+      opacity: 0.85;
+      margin-top: 6px;
+      letter-spacing: 0.3px;
+    }
+    .qs-divider {
+      width: 1px;
+      height: 40px;
+      background: rgba(255,255,255,0.25);
+    }
+    .qs-side {
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+      flex: 1;
+    }
+    .qs-small {
+      font-size: 13px;
+      font-weight: 500;
+      opacity: 0.9;
+      display: flex;
+      justify-content: space-between;
+    }
+    .qs-small-val {
+      font-family: var(--font-mono);
+      font-weight: 600;
+    }
+
+    /* ════════════════════════════════════════
+       PIPELINE MINI-SECTIONS (NEW)
+       Each section boxed in its own card
+       ════════════════════════════════════════ */
+    .mini-section {
+      margin: 0 20px 14px;
+      background: var(--paper);
+      border: 1px solid var(--border);
+      border-radius: 18px;
+      overflow: hidden;
+    }
+    .mini-head {
+      padding: 16px 18px 12px;
+      display: flex;
+      justify-content: space-between;
+      align-items: baseline;
+      border-bottom: 1px solid var(--border-light);
+    }
+    .mini-title {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      font-size: 11px;
+      font-weight: 700;
+      letter-spacing: 1.3px;
+      text-transform: uppercase;
+      color: var(--ink-primary);
+    }
+    .mini-title::before {
+      content: '';
+      width: 7px; height: 7px;
+      border-radius: 50%;
+    }
+    .mini-section.at-risk  .mini-title::before { background: var(--danger); }
+    .mini-section.this-week .mini-title::before { background: var(--butter); }
+    .mini-section.ready    .mini-title::before { background: var(--sage); }
+
+    .mini-count {
+      font-family: var(--font-mono);
+      font-size: 11px;
+      color: var(--ink-tertiary);
+      letter-spacing: -0.2px;
+    }
+    .see-all {
+      font-size: 12px;
+      font-weight: 600;
+      color: var(--accent);
+      letter-spacing: -0.1px;
+      padding: 4px 0;
+      cursor: pointer;
+    }
+    .see-all:hover { text-decoration: underline; }
+
+    /* Minimal row (inside the card) */
+    .row {
+      display: flex;
+      gap: 12px;
+      padding: 12px 18px;
+      cursor: pointer;
+      border-top: 1px solid var(--border-light);
+      transition: background 0.15s;
+    }
+    .row:first-of-type { border-top: none; }
+    .row:hover { background: rgba(214, 85, 43, 0.04); }
+    .row:active { background: rgba(214, 85, 43, 0.08); }
+
+    .row-stripe {
+      width: 2px;
+      flex-shrink: 0;
+      border-radius: 1px;
+    }
+    .mini-section.at-risk  .row-stripe { background: var(--danger); }
+    .mini-section.this-week .row-stripe { background: var(--butter); }
+    .mini-section.ready    .row-stripe { background: var(--sage); }
+
+    .row-body { flex: 1; min-width: 0; }
+    .row-meta-line {
+      display: flex;
+      justify-content: space-between;
+      align-items: baseline;
+      gap: 10px;
+      margin-bottom: 4px;
+    }
+    .row-name {
+      font-size: 13px;
+      font-weight: 500;
+      color: var(--ink-tertiary);
+      letter-spacing: -0.1px;
+    }
+    .row-time {
+      font-family: var(--font-mono);
+      font-size: 11.5px;
+      color: var(--ink-tertiary);
+      letter-spacing: -0.2px;
+      flex-shrink: 0;
+    }
+    .mini-section.at-risk .row-time { color: var(--danger); font-weight: 600; }
+
+    .row-next {
+      font-size: 15.5px;
+      font-weight: 600;
+      color: var(--ink-primary);
+      letter-spacing: -0.2px;
+      line-height: 1.35;
+    }
+
+    /* ════════════════════════════════════════
+       DOWNSTREAM HOME CONTENT STUB
+       (represents your existing sections below)
+       ════════════════════════════════════════ */
+    .home-section-stub {
+      margin: 24px 20px 0;
+      padding: 20px;
+      background: var(--paper);
+      border: 1px solid var(--border);
+      border-radius: 16px;
+    }
+    .stub-title {
+      font-size: 11px;
+      font-weight: 700;
+      letter-spacing: 1.3px;
+      text-transform: uppercase;
+      color: var(--ink-primary);
+      margin-bottom: 12px;
+    }
+    .stub-row {
+      display: flex;
+      justify-content: space-between;
+      padding: 8px 0;
+      border-top: 1px solid var(--border-light);
+      font-size: 13px;
+      color: var(--ink-secondary);
+    }
+    .stub-row:first-of-type { border-top: none; padding-top: 4px; }
+    .stub-time {
+      font-family: var(--font-mono);
+      font-size: 11px;
+      color: var(--ink-tertiary);
+    }
+
+    /* Bottom tab bar (matches existing app chrome) */
+    .tabbar {
+      position: absolute;
+      bottom: 0;
+      left: 0; right: 0;
+      height: 82px;
+      background: var(--paper);
+      border-top: 1px solid var(--border);
+      display: flex;
+      padding-bottom: 20px;
+    }
+    .tab {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      gap: 4px;
+      font-size: 10px;
+      font-weight: 600;
+      color: var(--ink-tertiary);
+      cursor: pointer;
+    }
+    .tab.active { color: var(--accent); }
+    .tab svg {
+      width: 22px; height: 22px;
+      stroke-width: 2;
+      fill: none;
+      stroke-linecap: round;
+      stroke-linejoin: round;
+    }
+
+    /* Explainer */
+    .explain {
+      max-width: 640px;
+      background: var(--paper);
+      border: 1px solid var(--border);
+      border-radius: 18px;
+      padding: 28px 32px;
+      font-size: 14.5px;
+      color: var(--ink-secondary);
+      line-height: 1.6;
+    }
+    .explain h2 {
+      font-weight: 700;
+      font-size: 18px;
+      letter-spacing: -0.3px;
+      margin-bottom: 10px;
+      color: var(--ink-primary);
+    }
+    .explain h2 em {
+      font-family: var(--font-serif);
+      font-style: italic;
+      font-weight: 500;
+      color: var(--accent);
+    }
+    .explain h3 {
+      font-size: 12px;
+      font-weight: 600;
+      letter-spacing: 1px;
+      text-transform: uppercase;
+      color: var(--ink-tertiary);
+      margin-top: 18px;
+      margin-bottom: 8px;
+    }
+    .explain ul { list-style: none; }
+    .explain li {
+      padding: 4px 0 4px 18px;
+      position: relative;
+      font-size: 14px;
+    }
+    .explain li::before {
+      content: '·';
+      position: absolute;
+      left: 4px;
+      color: var(--accent);
+      font-weight: 700;
+    }
+  </style>
+</head>
+<body>
+
+  <div class="page-header">
+    <div class="eyebrow">HOME TAB · WITH PIPELINE SECTIONS</div>
+    <h1>Home tab, <em>but useful.</em></h1>
+    <p>3 mini-sections on the Home tab surface the candidates who need you today. Existing Home content lives below. Candidates tab stays as-is.</p>
+  </div>
+
+  <!-- ═══════════════════ iPhone ═══════════════════ -->
+  <div class="device">
+    <div class="notch"></div>
+    <div class="statusbar">
+      <span>9:41</span>
+      <span style="font-size: 13px;">●●●● 5G 94%</span>
+    </div>
+
+    <div class="screen">
+
+      <!-- Home hero (compressed; represents existing greeting block) -->
+      <div class="home-hero">
+        <div class="home-date">MON · 23 APR</div>
+        <div class="home-greeting">Morning, <em>Shawn.</em></div>
+      </div>
+
+      <!-- Quick stats card (representing your existing role-based hero card) -->
+      <div class="quick-stats">
+        <div>
+          <div class="qs-big">13</div>
+          <div class="qs-label">CANDIDATES</div>
+        </div>
+        <div class="qs-divider"></div>
+        <div class="qs-side">
+          <div class="qs-small"><span>New leads</span><span class="qs-small-val">3</span></div>
+          <div class="qs-small"><span>Conversion</span><span class="qs-small-val">28%</span></div>
+        </div>
+      </div>
+
+
+      <!-- ═══════════════════ AT RISK ═══════════════════ -->
+      <div class="mini-section at-risk">
+        <div class="mini-head">
+          <span class="mini-title">
+            Needs you
+            <span class="mini-count">· 3</span>
+          </span>
+          <span class="see-all" data-see-all>See all →</span>
+        </div>
+
+        <a class="row" data-cand="Raj Kumar">
+          <div class="row-stripe"></div>
+          <div class="row-body">
+            <div class="row-meta-line">
+              <span class="row-name">Raj Kumar</span>
+              <span class="row-time">stuck 14d</span>
+            </div>
+            <div class="row-next">Follow up on M9 failure</div>
+          </div>
+        </a>
+
+        <a class="row" data-cand="Priya Selvaraj">
+          <div class="row-stripe"></div>
+          <div class="row-body">
+            <div class="row-meta-line">
+              <span class="row-name">Priya Selvaraj</span>
+              <span class="row-time">onboarding 5d</span>
+            </div>
+            <div class="row-next">Profile incomplete — chase</div>
+          </div>
+        </a>
+
+        <a class="row" data-cand="Jasmine Lim">
+          <div class="row-stripe"></div>
+          <div class="row-body">
+            <div class="row-meta-line">
+              <span class="row-name">Jasmine Lim</span>
+              <span class="row-time">missed intake</span>
+            </div>
+            <div class="row-next">Re-register for next BES</div>
+          </div>
+        </a>
+      </div>
+
+
+      <!-- ═══════════════════ THIS WEEK ═══════════════════ -->
+      <div class="mini-section this-week">
+        <div class="mini-head">
+          <span class="mini-title">
+            This week
+            <span class="mini-count">· 4</span>
+          </span>
+          <span class="see-all" data-see-all>See all →</span>
+        </div>
+
+        <a class="row" data-cand="Sarah Rahman">
+          <div class="row-stripe"></div>
+          <div class="row-body">
+            <div class="row-meta-line">
+              <span class="row-name">Sarah Rahman</span>
+              <span class="row-time">in 4h</span>
+            </div>
+            <div class="row-next">2nd interview · 3pm Zoom</div>
+          </div>
+        </a>
+
+        <a class="row" data-cand="Ahmad Tan">
+          <div class="row-stripe"></div>
+          <div class="row-body">
+            <div class="row-meta-line">
+              <span class="row-name">Ahmad Tan</span>
+              <span class="row-time">tomorrow</span>
+            </div>
+            <div class="row-next">RES5 exam</div>
+          </div>
+        </a>
+      </div>
+
+
+      <!-- ═══════════════════ READY ═══════════════════ -->
+      <div class="mini-section ready">
+        <div class="mini-head">
+          <span class="mini-title">
+            Ready
+            <span class="mini-count">· 2</span>
+          </span>
+          <span class="see-all" data-see-all>See all →</span>
+        </div>
+
+        <a class="row" data-cand="Marcus Chen">
+          <div class="row-stripe"></div>
+          <div class="row-body">
+            <div class="row-meta-line">
+              <span class="row-name">Marcus Chen</span>
+              <span class="row-time">all papers passed</span>
+            </div>
+            <div class="row-next">Schedule BDM interview</div>
+          </div>
+        </a>
+
+        <a class="row" data-cand="Kevin Ooi">
+          <div class="row-stripe"></div>
+          <div class="row-body">
+            <div class="row-meta-line">
+              <span class="row-name">Kevin Ooi</span>
+              <span class="row-time">license-ready</span>
+            </div>
+            <div class="row-next">File RNF with MAS</div>
+          </div>
+        </a>
+      </div>
+
+
+      <!-- Existing Home content continues below (stubs) -->
+      <div class="home-section-stub">
+        <div class="stub-title">Recent activity</div>
+        <div class="stub-row"><span>Call · Wei Ming</span><span class="stub-time">2h</span></div>
+        <div class="stub-row"><span>Lead · Jordan Ong</span><span class="stub-time">4h</span></div>
+        <div class="stub-row"><span>WhatsApp · Sarah R.</span><span class="stub-time">1d</span></div>
+      </div>
+
+      <div class="home-section-stub">
+        <div class="stub-title">Upcoming events</div>
+        <div class="stub-row"><span>Clementi Roadshow</span><span class="stub-time">Wed</span></div>
+        <div class="stub-row"><span>Jurong Training</span><span class="stub-time">Fri</span></div>
+      </div>
+
+      <div style="height: 24px;"></div>
+    </div>
+
+    <!-- Bottom tab bar -->
+    <div class="tabbar">
+      <div class="tab active">
+        <svg viewBox="0 0 24 24" stroke="currentColor"><path d="M3 12l9-9 9 9M5 10v10h14V10"/></svg>
+        Home
+      </div>
+      <div class="tab">
+        <svg viewBox="0 0 24 24" stroke="currentColor"><path d="M20 12H4M12 4v16"/></svg>
+        Leads
+      </div>
+      <div class="tab">
+        <svg viewBox="0 0 24 24" stroke="currentColor"><path d="M17 20h5v-2a4 4 0 00-3-3.87M9 20H4v-2a4 4 0 013-3.87"/><circle cx="9" cy="7" r="4"/><path d="M17 11a4 4 0 100-8 4 4 0 000 8z"/></svg>
+        Candidates
+      </div>
+      <div class="tab">
+        <svg viewBox="0 0 24 24" stroke="currentColor"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
+        Events
+      </div>
+      <div class="tab">
+        <svg viewBox="0 0 24 24" stroke="currentColor"><circle cx="12" cy="8" r="4"/><path d="M4 21v-2a4 4 0 014-4h8a4 4 0 014 4v2"/></svg>
+        Profile
+      </div>
+    </div>
+  </div>
+
+
+  <!-- Explainer -->
+  <div class="explain">
+    <h2>What this mockup shows <em>→</em></h2>
+    <p>Your Home tab gains three new mini-sections between the hero stats and the existing content. Each section shows the 2–3 most-urgent candidates. Tapping a row opens that candidate's detail. Tapping "See all →" opens the full pipeline view.</p>
+
+    <h3>The 3 sections, in priority order</h3>
+    <ul>
+      <li><strong>Needs you</strong> (red) — candidates flagged at-risk by automatic rules: onboarding stuck, paper failed without re-sit, missed course intake, stuck at same stage 14+ days.</li>
+      <li><strong>This week</strong> (butter) — candidates with a scheduled event in the next 5 days: interviews, exams, course starts.</li>
+      <li><strong>Ready</strong> (sage) — candidates who just cleared a gate and need you to unlock the next stage: BDM scheduling, RNF filing, etc.</li>
+    </ul>
+
+    <h3>What stays the same</h3>
+    <ul>
+      <li><strong>Candidates tab</strong> — unchanged. Still the search + filter list you have today.</li>
+      <li><strong>Home's existing content</strong> — Recent activity, Upcoming events, Roadmap card, Lead pipeline — all live below the new sections.</li>
+      <li><strong>No manager-logging required</strong> — urgency signals come from database state the system already tracks (stage transitions, paper attempts, scheduled events).</li>
+    </ul>
+
+    <h3>Tap behaviour</h3>
+    <ul>
+      <li>Tap a candidate row → their detail page (peek cards view).</li>
+      <li>Tap "See all →" on any section → full pipeline view (the other mockup).</li>
+    </ul>
+  </div>
+
+  <script>
+    (function () {
+      // Row tap → candidate detail
+      document.querySelectorAll('.row').forEach((row) => {
+        row.addEventListener('click', (e) => {
+          e.preventDefault();
+          window.location.href = 'candidate-detail-peek-cards-mockup.html';
+        });
+      });
+
+      // See all → pipeline view
+      document.querySelectorAll('[data-see-all]').forEach((el) => {
+        el.addEventListener('click', (e) => {
+          e.preventDefault();
+          e.stopPropagation();
+          window.location.href = 'pipeline-mockup.html';
+        });
+      });
+    })();
+  </script>
+
+</body>
+</html>

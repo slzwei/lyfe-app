@@ -6,7 +6,10 @@ import ScreenHeader from '@/components/ScreenHeader';
 import { useAuth } from '@/contexts/AuthContext';
 import { useTheme } from '@/contexts/ThemeContext';
 import { useCandidateRealtime } from '@/hooks/useCandidateRealtime';
+import { useCandidatePipeline } from '@/hooks/useCandidatePipeline';
+import { pipelineAnalytics } from '@/lib/analytics';
 import { fetchCandidates } from '@/lib/recruitment';
+import { compareByUrgency, type NextStep } from '@/lib/recruitment/pipeline';
 import {
     CANDIDATE_STATUSES,
     CANDIDATE_STATUS_CONFIG,
@@ -20,6 +23,8 @@ import { useFocusEffect } from 'expo-router';
 import React, { useCallback, useState } from 'react';
 import { FlatList, RefreshControl, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+
+type SortMode = 'alpha' | 'urgency';
 
 export interface CandidateListProps {
     /** Builds the path for the candidate detail screen given a candidate id. */
@@ -58,30 +63,52 @@ export function CandidateList({ candidateRoute, isManagerView = false, embedded 
     const [search, setSearch] = useState('');
     const [activeFilter, setActiveFilter] = useState<CandidateStatus | 'all'>('all');
     const [refreshing, setRefreshing] = useState(false);
-    const [candidates, setCandidates] = useState<RecruitmentCandidate[]>([]);
-    const [isLoading, setIsLoading] = useState(true);
-    const [error, setError] = useState<string | null>(null);
+    const [sortMode, setSortMode] = useState<SortMode>('alpha');
 
-    const loadCandidates = useCallback(async () => {
+    // A–Z path — cheap, candidates only
+    const [candidatesAlpha, setCandidatesAlpha] = useState<RecruitmentCandidate[]>([]);
+    const [isLoadingAlpha, setIsLoadingAlpha] = useState(true);
+    const [errorAlpha, setErrorAlpha] = useState<string | null>(null);
+
+    const loadAlpha = useCallback(async () => {
         if (!user?.id) return;
-        setError(null);
+        setErrorAlpha(null);
         const { data, error: fetchError } = await fetchCandidates(user.id, isManagerView);
-        if (fetchError) {
-            setError(fetchError);
-        } else {
-            setCandidates(data);
-        }
-        setIsLoading(false);
+        if (fetchError) setErrorAlpha(fetchError);
+        else setCandidatesAlpha(data);
+        setIsLoadingAlpha(false);
     }, [user?.id, isManagerView]);
 
     useFocusEffect(
         useCallback(() => {
-            loadCandidates();
-        }, [loadCandidates]),
+            if (sortMode === 'alpha') loadAlpha();
+        }, [loadAlpha, sortMode]),
     );
 
-    // Real-time: re-fetch when any candidate pipeline data changes
-    useCandidateRealtime(loadCandidates);
+    // Realtime for A–Z mode
+    useCandidateRealtime(
+        useCallback(() => {
+            if (sortMode === 'alpha') loadAlpha();
+        }, [loadAlpha, sortMode]),
+    );
+
+    // Pipeline path — bulk fetch with computed next-steps. Only active when urgency selected.
+    const pipeline = useCandidatePipeline({
+        isManagerView,
+        enabled: sortMode === 'urgency',
+    });
+
+    // Reconcile the two paths into one rendering dataset.
+    const candidates: RecruitmentCandidate[] =
+        sortMode === 'urgency' ? pipeline.rows.map((r) => r.candidate) : candidatesAlpha;
+    const nextStepByCandidateId: Record<string, NextStep> = (() => {
+        if (sortMode !== 'urgency') return {};
+        const out: Record<string, NextStep> = {};
+        for (const r of pipeline.rows) out[r.candidate.id] = r.nextStep;
+        return out;
+    })();
+    const isLoading = sortMode === 'urgency' ? pipeline.isLoading : isLoadingAlpha;
+    const error = sortMode === 'urgency' ? pipeline.error : errorAlpha;
 
     const { filtered: filteredRaw, counts } = useFilteredList(
         candidates,
@@ -93,8 +120,22 @@ export function CandidateList({ candidateRoute, isManagerView = false, embedded 
     // Phase F: on the "All" tab, hide rejected candidates by default. Users
     // can still see them via the dedicated "Rejected" filter chip, which is
     // unaffected by this pre-filter.
-    const filteredCandidates =
-        activeFilter === 'all' ? filteredRaw.filter((c) => c.status !== 'rejected') : filteredRaw;
+    const filteredCandidates = (() => {
+        let list = activeFilter === 'all' ? filteredRaw.filter((c) => c.status !== 'rejected') : filteredRaw;
+
+        if (sortMode === 'urgency') {
+            // Hide candidates whose pipeline engine returns 'hidden' (rejected/on-hold).
+            // Then sort by urgency (at-risk → this-week → ready → on-track).
+            list = list.filter((c) => nextStepByCandidateId[c.id]?.urgency !== 'hidden');
+            list = [...list].sort((a, b) => {
+                const na = nextStepByCandidateId[a.id];
+                const nb = nextStepByCandidateId[b.id];
+                if (!na || !nb) return 0;
+                return compareByUrgency(na, nb);
+            });
+        }
+        return list;
+    })();
     // Reflect the hidden-rejected behavior in the "All" chip count.
     const displayedCounts: Record<string, number> = {
         ...counts,
@@ -103,9 +144,10 @@ export function CandidateList({ candidateRoute, isManagerView = false, embedded 
 
     const onRefresh = useCallback(async () => {
         setRefreshing(true);
-        await loadCandidates();
+        if (sortMode === 'urgency') await pipeline.refresh();
+        else await loadAlpha();
         setRefreshing(false);
-    }, [loadCandidates]);
+    }, [sortMode, pipeline, loadAlpha]);
 
     if (isLoading) {
         return <LoadingState />;
@@ -115,6 +157,68 @@ export function CandidateList({ candidateRoute, isManagerView = false, embedded 
         <View style={{ flex: 1 }}>
             {/* Pinned Search + Filters */}
             <View style={[styles.stickyHeader, embedded && { paddingTop: 0 }]}>
+                {/* Sort-mode segment — A–Z (default) / Pipeline (urgency-sorted) */}
+                <View style={[styles.sortSegments, { backgroundColor: colors.surfaceSecondary }]}>
+                    <TouchableOpacity
+                        style={[
+                            styles.sortSeg,
+                            sortMode === 'alpha' && {
+                                backgroundColor: colors.cardBackground,
+                            },
+                        ]}
+                        onPress={() => {
+                            if (sortMode !== 'alpha') {
+                                setSortMode('alpha');
+                                pipelineAnalytics.sortModeChanged('alpha');
+                            }
+                        }}
+                        accessibilityRole="button"
+                        accessibilityLabel="Sort A–Z"
+                        accessibilityState={{ selected: sortMode === 'alpha' }}
+                    >
+                        <Text
+                            style={[
+                                styles.sortSegText,
+                                {
+                                    color: sortMode === 'alpha' ? colors.textPrimary : colors.textSecondary,
+                                    fontWeight: sortMode === 'alpha' ? '600' : '500',
+                                },
+                            ]}
+                        >
+                            A–Z
+                        </Text>
+                    </TouchableOpacity>
+                    <TouchableOpacity
+                        style={[
+                            styles.sortSeg,
+                            sortMode === 'urgency' && {
+                                backgroundColor: colors.cardBackground,
+                            },
+                        ]}
+                        onPress={() => {
+                            if (sortMode !== 'urgency') {
+                                setSortMode('urgency');
+                                pipelineAnalytics.sortModeChanged('urgency');
+                            }
+                        }}
+                        accessibilityRole="button"
+                        accessibilityLabel="Sort by pipeline urgency"
+                        accessibilityState={{ selected: sortMode === 'urgency' }}
+                    >
+                        <Text
+                            style={[
+                                styles.sortSegText,
+                                {
+                                    color: sortMode === 'urgency' ? colors.textPrimary : colors.textSecondary,
+                                    fontWeight: sortMode === 'urgency' ? '600' : '500',
+                                },
+                            ]}
+                        >
+                            Pipeline
+                        </Text>
+                    </TouchableOpacity>
+                </View>
+
                 <View
                     style={[styles.searchBar, { backgroundColor: colors.cardBackground, borderColor: colors.border }]}
                 >
@@ -187,7 +291,7 @@ export function CandidateList({ candidateRoute, isManagerView = false, embedded 
             {/* Error Banner */}
             {error && (
                 <View style={{ paddingHorizontal: 16 }}>
-                    <ErrorBanner message={error} onRetry={loadCandidates} />
+                    <ErrorBanner message={error} onRetry={sortMode === 'urgency' ? pipeline.refresh : loadAlpha} />
                 </View>
             )}
 
@@ -211,7 +315,17 @@ export function CandidateList({ candidateRoute, isManagerView = false, embedded 
                     />
                 }
                 renderItem={({ item }) => (
-                    <CandidateCard candidate={item} onPress={() => router.push(candidateRoute(item.id))} />
+                    <CandidateCard
+                        candidate={item}
+                        onPress={() => {
+                            if (sortMode === 'urgency') {
+                                const ns = nextStepByCandidateId[item.id];
+                                if (ns) pipelineAnalytics.flaggedRowOpened(item.id, ns.urgency);
+                            }
+                            router.push(candidateRoute(item.id));
+                        }}
+                        nextStep={sortMode === 'urgency' ? nextStepByCandidateId[item.id] : undefined}
+                    />
                 )}
             />
         </View>
@@ -258,6 +372,22 @@ const styles = StyleSheet.create({
         paddingHorizontal: 16,
         paddingTop: 16,
         paddingBottom: 4,
+    },
+    sortSegments: {
+        flexDirection: 'row',
+        borderRadius: 10,
+        padding: 3,
+        marginBottom: 12,
+    },
+    sortSeg: {
+        flex: 1,
+        paddingVertical: 8,
+        alignItems: 'center',
+        borderRadius: 8,
+    },
+    sortSegText: {
+        fontSize: 13,
+        letterSpacing: -0.1,
     },
     searchBar: {
         flexDirection: 'row',

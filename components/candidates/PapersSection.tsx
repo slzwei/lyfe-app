@@ -145,13 +145,14 @@ const styles = StyleSheet.create({
         marginBottom: 12,
         gap: 12,
     },
+    // Section heading: sans per role rules; italic accent word stays serifItalic for editorial feel
     heading: {
         flex: 1,
-        fontFamily: Fonts.serif,
-        fontSize: 20,
-        fontWeight: '500',
-        lineHeight: 24,
-        letterSpacing: letterSpacing(-0.3),
+        fontFamily: Fonts.sansSemibold,
+        fontSize: 17,
+        fontWeight: '600',
+        lineHeight: 22,
+        letterSpacing: letterSpacing(-0.2),
     },
     headingItalic: {
         fontFamily: Fonts.serifItalic,
@@ -180,12 +181,13 @@ const styles = StyleSheet.create({
     rowBody: {
         flex: 1,
     },
+    // List-row label: sans (rows are NEVER serif per role rules)
     label: {
-        fontFamily: Fonts.serif,
-        fontSize: 16,
-        fontWeight: '500',
+        fontFamily: Fonts.sansSemibold,
+        fontSize: 15,
+        fontWeight: '600',
         lineHeight: 20,
-        letterSpacing: letterSpacing(-0.2),
+        letterSpacing: letterSpacing(-0.1),
     },
     subtitle: {
         fontFamily: Fonts.sans,

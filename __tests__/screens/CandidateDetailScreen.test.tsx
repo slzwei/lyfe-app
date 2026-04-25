@@ -2,7 +2,7 @@
  * Tests for app/(tabs)/candidates/[candidateId].tsx — Candidate detail screen (revamped)
  */
 import React from 'react';
-import { render, waitFor } from '@testing-library/react-native';
+import { fireEvent, render, waitFor, type RenderResult } from '@testing-library/react-native';
 import CandidateDetailScreen from '@/app/(tabs)/candidates/[candidateId]';
 import { useAuth } from '@/contexts/AuthContext';
 import { useTheme } from '@/contexts/ThemeContext';
@@ -30,6 +30,13 @@ function renderScreen() {
             <CandidateDetailScreen />
         </CandidateProgressionProvider>,
     );
+}
+
+// The 4-tab structure (Progress/Profile/Docs/Activity) defaults to Progress.
+// Tests asserting profile/docs/activity content must switch tabs first.
+async function switchTab(r: RenderResult, label: 'Profile' | 'Docs' | 'Activity' | 'Progress') {
+    await waitFor(() => expect(r.getByText(label)).toBeTruthy());
+    fireEvent.press(r.getByText(label));
 }
 
 // Mock child components — sheets and complex UI that aren't under test
@@ -426,13 +433,14 @@ describe('CandidateDetailScreen', () => {
             data: { ...MOCK_CANDIDATE, profile_details: MOCK_PROFILE },
             error: null,
         });
-        const { getByText } = renderScreen();
+        const r = renderScreen();
+        await switchTab(r, 'Profile');
         await waitFor(() => {
-            expect(getByText('Personal Details')).toBeTruthy();
-            expect(getByText('Singaporean')).toBeTruthy();
-            expect(getByText('Chinese')).toBeTruthy();
-            expect(getByText('Female')).toBeTruthy();
-            expect(getByText('Single')).toBeTruthy();
+            expect(r.getByText('Personal Details')).toBeTruthy();
+            expect(r.getByText('Singaporean')).toBeTruthy();
+            expect(r.getByText('Chinese')).toBeTruthy();
+            expect(r.getByText('Female')).toBeTruthy();
+            expect(r.getByText('Single')).toBeTruthy();
         });
     });
 
@@ -441,10 +449,11 @@ describe('CandidateDetailScreen', () => {
             data: { ...MOCK_CANDIDATE, profile_details: MOCK_PROFILE },
             error: null,
         });
-        const { getByText } = renderScreen();
+        const r = renderScreen();
+        await switchTab(r, 'Profile');
         await waitFor(() => {
-            expect(getByText('李小红')).toBeTruthy();
-            expect(getByText('Jenny')).toBeTruthy();
+            expect(r.getByText('李小红')).toBeTruthy();
+            expect(r.getByText('Jenny')).toBeTruthy();
         });
     });
 
@@ -453,9 +462,10 @@ describe('CandidateDetailScreen', () => {
             data: { ...MOCK_CANDIDATE, profile_details: MOCK_PROFILE },
             error: null,
         });
-        const { getByText } = renderScreen();
+        const r = renderScreen();
+        await switchTab(r, 'Profile');
         await waitFor(() => {
-            expect(getByText('Blk 123 Orchard Road #04-05 S(238888)')).toBeTruthy();
+            expect(r.getByText('Blk 123 Orchard Road #04-05 S(238888)')).toBeTruthy();
         });
     });
 
@@ -473,11 +483,12 @@ describe('CandidateDetailScreen', () => {
             data: { ...MOCK_CANDIDATE, profile_details: MOCK_PROFILE },
             error: null,
         });
-        const { getByText } = renderScreen();
+        const r = renderScreen();
+        await switchTab(r, 'Profile');
         await waitFor(() => {
-            expect(getByText('Employment Details')).toBeTruthy();
-            expect(getByText('Financial Advisor')).toBeTruthy();
-            expect(getByText('$5000 / month')).toBeTruthy();
+            expect(r.getByText('Employment Details')).toBeTruthy();
+            expect(r.getByText('Financial Advisor')).toBeTruthy();
+            expect(r.getByText('$5000 / month')).toBeTruthy();
         });
     });
 
@@ -488,11 +499,12 @@ describe('CandidateDetailScreen', () => {
             data: { ...MOCK_CANDIDATE, profile_details: MOCK_PROFILE },
             error: null,
         });
-        const { getByText } = renderScreen();
+        const r = renderScreen();
+        await switchTab(r, 'Profile');
         await waitFor(() => {
-            expect(getByText('Emergency Contact')).toBeTruthy();
-            expect(getByText('John Smith')).toBeTruthy();
-            expect(getByText('Father')).toBeTruthy();
+            expect(r.getByText('Emergency Contact')).toBeTruthy();
+            expect(r.getByText('John Smith')).toBeTruthy();
+            expect(r.getByText('Father')).toBeTruthy();
         });
     });
 
@@ -503,12 +515,13 @@ describe('CandidateDetailScreen', () => {
             data: { ...MOCK_CANDIDATE, profile_details: MOCK_PROFILE },
             error: null,
         });
-        const { getByText } = renderScreen();
+        const r = renderScreen();
+        await switchTab(r, 'Profile');
         await waitFor(() => {
-            expect(getByText('Education')).toBeTruthy();
-            expect(getByText('NUS')).toBeTruthy();
-            expect(getByText('BSc Finance')).toBeTruthy();
-            expect(getByText('RI')).toBeTruthy();
+            expect(r.getByText('Education')).toBeTruthy();
+            expect(r.getByText('NUS')).toBeTruthy();
+            expect(r.getByText('BSc Finance')).toBeTruthy();
+            expect(r.getByText('RI')).toBeTruthy();
         });
     });
 
@@ -519,12 +532,13 @@ describe('CandidateDetailScreen', () => {
             data: { ...MOCK_CANDIDATE, profile_details: MOCK_PROFILE },
             error: null,
         });
-        const { getByText } = renderScreen();
+        const r = renderScreen();
+        await switchTab(r, 'Profile');
         await waitFor(() => {
-            expect(getByText('Employment History')).toBeTruthy();
-            expect(getByText('DBS Bank')).toBeTruthy();
-            expect(getByText('Associate')).toBeTruthy();
-            expect(getByText('Left: Career change')).toBeTruthy();
+            expect(r.getByText('Employment History')).toBeTruthy();
+            expect(r.getByText('DBS Bank')).toBeTruthy();
+            expect(r.getByText('Associate')).toBeTruthy();
+            expect(r.getByText('Left: Career change')).toBeTruthy();
         });
     });
 
@@ -535,13 +549,14 @@ describe('CandidateDetailScreen', () => {
             data: { ...MOCK_CANDIDATE, profile_details: MOCK_PROFILE },
             error: null,
         });
-        const { getByText } = renderScreen();
+        const r = renderScreen();
+        await switchTab(r, 'Profile');
         await waitFor(() => {
-            expect(getByText('Skills & Languages')).toBeTruthy();
-            expect(getByText('English')).toBeTruthy();
-            expect(getByText('Mandarin')).toBeTruthy();
-            expect(getByText('MS Office, Salesforce')).toBeTruthy();
-            expect(getByText('60 WPM')).toBeTruthy();
+            expect(r.getByText('Skills & Languages')).toBeTruthy();
+            expect(r.getByText('English')).toBeTruthy();
+            expect(r.getByText('Mandarin')).toBeTruthy();
+            expect(r.getByText('MS Office, Salesforce')).toBeTruthy();
+            expect(r.getByText('60 WPM')).toBeTruthy();
         });
     });
 
@@ -552,12 +567,13 @@ describe('CandidateDetailScreen', () => {
             data: { ...MOCK_CANDIDATE, disc_results: MOCK_DISC },
             error: null,
         });
-        const { getByText } = renderScreen();
+        const r = renderScreen();
+        await switchTab(r, 'Profile');
         await waitFor(() => {
-            expect(getByText('DISC Profile')).toBeTruthy();
-            expect(getByText('Di')).toBeTruthy();
-            expect(getByText('35%')).toBeTruthy();
-            expect(getByText('28%')).toBeTruthy();
+            expect(r.getByText('DISC Profile')).toBeTruthy();
+            expect(r.getByText('Di')).toBeTruthy();
+            expect(r.getByText('35%')).toBeTruthy();
+            expect(r.getByText('28%')).toBeTruthy();
         });
     });
 
@@ -571,20 +587,22 @@ describe('CandidateDetailScreen', () => {
     // ── Documents ──
 
     it('renders documents section', async () => {
-        const { getByText } = renderScreen();
+        const r = renderScreen();
+        await switchTab(r, 'Docs');
         await waitFor(() => {
-            expect(getByText('Documents')).toBeTruthy();
-            expect(getByText('Document List')).toBeTruthy();
+            expect(r.getByText('Documents')).toBeTruthy();
+            expect(r.getByText('Document List')).toBeTruthy();
         });
     });
 
     // ── Interviews ──
 
     it('shows empty state when no interviews', async () => {
-        const { getByText } = renderScreen();
+        const r = renderScreen();
+        await switchTab(r, 'Activity');
         await waitFor(() => {
-            expect(getByText('Interviews')).toBeTruthy();
-            expect(getByText('No interviews yet')).toBeTruthy();
+            expect(r.getByText('Interviews')).toBeTruthy();
+            expect(r.getByText('No interviews yet')).toBeTruthy();
         });
     });
 
@@ -625,30 +643,33 @@ describe('CandidateDetailScreen', () => {
             },
             error: null,
         });
-        const { getByText } = renderScreen();
+        const r = renderScreen();
+        await switchTab(r, 'Activity');
         await waitFor(() => {
-            expect(getByText('Interview 1')).toBeTruthy();
-            expect(getByText('Interview 2')).toBeTruthy();
+            expect(r.getByText('Interview 1')).toBeTruthy();
+            expect(r.getByText('Interview 2')).toBeTruthy();
         });
     });
 
     // ── Contact activity ──
 
     it('shows empty contact activity state', async () => {
-        const { getByText } = renderScreen();
+        const r = renderScreen();
+        await switchTab(r, 'Activity');
         await waitFor(() => {
-            expect(getByText('Contact Activity')).toBeTruthy();
-            expect(getByText('No calls or messages logged yet')).toBeTruthy();
+            expect(r.getByText('Contact Activity')).toBeTruthy();
+            expect(r.getByText('No calls or messages logged yet')).toBeTruthy();
         });
     });
 
     // ── Notes ──
 
     it('renders notes when present', async () => {
-        const { getByText } = renderScreen();
+        const r = renderScreen();
+        await switchTab(r, 'Activity');
         await waitFor(() => {
-            expect(getByText('Notes')).toBeTruthy();
-            expect(getByText('Promising candidate')).toBeTruthy();
+            expect(r.getByText('Notes')).toBeTruthy();
+            expect(r.getByText('Promising candidate')).toBeTruthy();
         });
     });
 

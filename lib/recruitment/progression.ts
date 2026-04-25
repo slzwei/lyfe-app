@@ -53,6 +53,54 @@ export async function fetchPrepCourseBookings(
     return { data: (data || []) as CandidatePrepCourseBooking[], error: null };
 }
 
+// ── Bulk fetchers (one roundtrip per data-type for a list of candidates) ───
+// Used by the pipeline view so we can compute urgency for 30+ candidates in
+// 3 queries instead of 30×3 = 90.
+
+export async function fetchPaperAttemptsForCandidates(
+    candidateIds: string[],
+): Promise<{ data: CandidatePaperAttempt[]; error: string | null }> {
+    if (candidateIds.length === 0) return { data: [], error: null };
+    const { data, error } = await supabase
+        .from('candidate_paper_attempts')
+        .select('*')
+        .in('candidate_id', candidateIds)
+        .order('exam_at', { ascending: false, nullsFirst: false })
+        .order('created_at', { ascending: false });
+    if (error) return { data: [], error: error.message };
+    return { data: (data || []) as CandidatePaperAttempt[], error: null };
+}
+
+export async function fetchMilestonesForCandidates(
+    candidateIds: string[],
+): Promise<{ data: CandidateMilestone[]; error: string | null }> {
+    if (candidateIds.length === 0) return { data: [], error: null };
+    const { data, error } = await supabase.from('candidate_milestones').select('*').in('candidate_id', candidateIds);
+    if (error) return { data: [], error: error.message };
+    return { data: (data || []) as CandidateMilestone[], error: null };
+}
+
+export async function fetchActivitiesForCandidates(
+    candidateIds: string[],
+    /** Only fetch activities newer than this cutoff (perf + payload size). */
+    sinceDaysAgo = 60,
+): Promise<{ data: import('@/types/recruitment').CandidateActivity[]; error: string | null }> {
+    if (candidateIds.length === 0) return { data: [], error: null };
+    const cutoff = new Date();
+    cutoff.setDate(cutoff.getDate() - sinceDaysAgo);
+    const { data, error } = await supabase
+        .from('candidate_activities')
+        .select('*')
+        .in('candidate_id', candidateIds)
+        .gte('created_at', cutoff.toISOString())
+        .order('created_at', { ascending: false });
+    if (error) return { data: [], error: error.message };
+    return {
+        data: (data || []) as import('@/types/recruitment').CandidateActivity[],
+        error: null,
+    };
+}
+
 // ── Shared readiness primitive ─────────────────────────────────────────────
 // Mirrors fn_all_papers_passed() in 20260417100100. A paper requirement is
 // passed iff some attempt for an accepted code has result='passed'.

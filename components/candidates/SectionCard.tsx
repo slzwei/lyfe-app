@@ -75,13 +75,16 @@ const styles = StyleSheet.create({
         marginBottom: 12,
         gap: 12,
     },
+    // Section heading: sans (serif reserved for the screen's hero). Italic accent
+    // word inside retains serifItalic — creates an editorial "sans + serif-italic"
+    // magazine feel without diluting the serif accent across many sections.
     heading: {
         flex: 1,
-        fontFamily: Fonts.serif,
-        fontSize: 20,
-        fontWeight: '500',
-        lineHeight: 24,
-        letterSpacing: letterSpacing(-0.3),
+        fontFamily: Fonts.sansSemibold,
+        fontSize: 17,
+        fontWeight: '600',
+        lineHeight: 22,
+        letterSpacing: letterSpacing(-0.2),
     },
     headingItalic: {
         fontFamily: Fonts.serifItalic,
@@ -108,9 +111,10 @@ const styles = StyleSheet.create({
         textTransform: 'uppercase',
         marginBottom: 4,
     },
+    // Detail row values: sans (list-row content is NEVER serif per role rules)
     detailValue: {
-        fontFamily: Fonts.serif,
-        fontSize: 16,
+        fontFamily: Fonts.sans,
+        fontSize: 15,
         lineHeight: 22,
     },
 });

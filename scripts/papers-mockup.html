@@ -1,0 +1,598 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<title>Papers — UI mockup</title>
+<style>
+  :root {
+    --bg: #000;
+    --surface: #1c1c1e;
+    --surface-2: #2c2c2e;
+    --border: #3a3a3c;
+    --text: #ffffff;
+    --text-2: rgba(255,255,255,0.65);
+    --text-3: rgba(255,255,255,0.35);
+    --accent: #ff7600;
+    --accent-light: rgba(255,118,0,0.15);
+    --success: #34c759;
+    --success-light: rgba(52,199,89,0.18);
+    --danger: #ff3b30;
+    --danger-light: rgba(255,59,48,0.18);
+    --warning: #eab308;
+    --warning-light: rgba(234,179,8,0.18);
+    --accent-text-inverse: #000;
+  }
+
+  * { box-sizing: border-box; }
+  html, body { margin: 0; padding: 0; background: #0a0a0a; color: var(--text); font-family: -apple-system, BlinkMacSystemFont, 'Inter', sans-serif; }
+
+  body { padding: 40px 20px; }
+
+  h1 { text-align: center; font-size: 22px; font-weight: 600; margin: 0 0 8px; color: #fff; }
+  .subtitle { text-align: center; font-size: 13px; color: var(--text-3); margin-bottom: 36px; }
+
+  .phones {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 30px;
+    justify-content: center;
+    max-width: 1400px;
+    margin: 0 auto;
+  }
+
+  .phone {
+    width: 390px;
+    height: 844px;
+    border-radius: 48px;
+    border: 10px solid #1c1c1e;
+    background: var(--bg);
+    position: relative;
+    overflow: hidden;
+    box-shadow: 0 20px 60px rgba(0,0,0,0.6);
+    flex-shrink: 0;
+  }
+  .phone::before {
+    content: '';
+    position: absolute;
+    top: 14px;
+    left: 50%;
+    transform: translateX(-50%);
+    width: 120px;
+    height: 28px;
+    background: #000;
+    border-radius: 14px;
+    z-index: 100;
+  }
+  .phone-label {
+    font-size: 12px;
+    color: var(--text-3);
+    text-align: center;
+    margin-top: 10px;
+    letter-spacing: 0.5px;
+    text-transform: uppercase;
+  }
+
+  .screen {
+    position: absolute;
+    inset: 0;
+    padding-top: 52px;
+    display: flex;
+    flex-direction: column;
+  }
+
+  /* ── Nav bar ── */
+  .nav {
+    padding: 16px 20px 12px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    border-bottom: 1px solid rgba(255,255,255,0.06);
+  }
+  .nav-back { color: var(--accent); font-size: 15px; font-weight: 500; }
+  .nav-title { font-size: 15px; font-weight: 600; }
+  .nav-spacer { width: 40px; }
+
+  /* ── Content ── */
+  .content { flex: 1; overflow-y: auto; padding: 16px 0 24px; }
+  .section-card {
+    background: var(--surface);
+    border-radius: 16px;
+    margin: 0 16px 12px;
+    padding: 14px 16px;
+  }
+  .section-header {
+    display: flex; align-items: center; justify-content: space-between;
+    margin-bottom: 10px;
+  }
+  .section-title { display: flex; align-items: center; gap: 8px; font-size: 15px; font-weight: 700; }
+  .section-badge { font-size: 13px; color: var(--text-3); font-weight: 500; }
+  .icon-accent { color: var(--accent); font-size: 15px; }
+
+  .row {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 12px 0;
+    border-top: 1px solid rgba(255,255,255,0.06);
+    cursor: pointer;
+  }
+  .row:first-of-type { border-top: none; }
+  .row-icon { width: 20px; font-size: 18px; text-align: center; }
+  .row-main { flex: 1; min-width: 0; }
+  .row-title { font-size: 14px; font-weight: 600; }
+  .row-sub { font-size: 12px; color: var(--text-3); margin-top: 3px; font-weight: 500; }
+  .pill {
+    display: inline-flex;
+    align-items: center;
+    padding: 3px 9px;
+    border-radius: 12px;
+    font-size: 11px;
+    font-weight: 700;
+  }
+  .pill-success { background: var(--success-light); color: var(--success); }
+  .pill-danger { background: var(--danger-light); color: var(--danger); }
+  .pill-warning { background: var(--warning-light); color: var(--warning); }
+  .pill-muted { background: var(--surface-2); color: var(--text-3); }
+  .chevron { color: var(--text-3); font-size: 14px; margin-left: 2px; }
+
+  /* ── Status icons ── */
+  .status-passed { color: var(--success); }
+  .status-failed { color: var(--danger); }
+  .status-scheduled { color: var(--warning); }
+  .status-none { color: var(--text-3); }
+
+  /* ── Bottom sheet mock ── */
+  .sheet-overlay {
+    position: absolute;
+    inset: 0;
+    background: rgba(0,0,0,0.55);
+    display: flex;
+    flex-direction: column;
+    justify-content: flex-end;
+  }
+  .sheet {
+    background: var(--surface);
+    border-top-left-radius: 24px;
+    border-top-right-radius: 24px;
+    padding: 12px 0 30px;
+    max-height: 88%;
+    display: flex;
+    flex-direction: column;
+  }
+  .sheet-handle {
+    width: 36px; height: 4px; border-radius: 2px;
+    background: rgba(255,255,255,0.2);
+    margin: 0 auto 18px;
+  }
+  .sheet-icon-wrap {
+    width: 54px; height: 54px;
+    border-radius: 16px;
+    background: var(--surface-2);
+    display: flex; align-items: center; justify-content: center;
+    margin: 0 auto 12px;
+    font-size: 26px;
+    color: var(--accent);
+  }
+  .sheet-title { text-align: center; font-size: 19px; font-weight: 700; margin-bottom: 4px; padding: 0 24px; }
+  .sheet-sub { text-align: center; font-size: 13px; color: var(--text-2); margin-bottom: 18px; padding: 0 24px; }
+
+  .sheet-body { flex: 1; overflow-y: auto; padding: 0 24px; }
+
+  .attempt-card {
+    border: 1px solid rgba(255,255,255,0.08);
+    border-radius: 14px;
+    padding: 14px 16px;
+    margin-bottom: 10px;
+    background: rgba(255,255,255,0.02);
+  }
+  .attempt-head { display: flex; align-items: center; gap: 8px; margin-bottom: 6px; }
+  .attempt-head-title { font-size: 13px; font-weight: 700; flex: 1; }
+  .attempt-meta { font-size: 12px; color: var(--text-2); line-height: 1.5; }
+  .attempt-cost { font-weight: 600; color: var(--text); }
+
+  .primary-btn {
+    width: 100%;
+    margin-top: 10px;
+    padding: 15px;
+    border-radius: 14px;
+    background: var(--accent);
+    color: var(--accent-text-inverse);
+    font-size: 16px;
+    font-weight: 700;
+    text-align: center;
+    border: none;
+    cursor: pointer;
+  }
+  .secondary-btn {
+    width: 100%;
+    margin-top: 10px;
+    padding: 14px;
+    border-radius: 14px;
+    border: 1px dashed rgba(255,255,255,0.25);
+    background: transparent;
+    color: var(--text);
+    font-size: 14px;
+    font-weight: 600;
+    text-align: center;
+    cursor: pointer;
+  }
+  .danger-btn {
+    width: 100%;
+    margin-top: 10px;
+    padding: 12px;
+    border-radius: 12px;
+    border: 1px solid var(--danger);
+    background: transparent;
+    color: var(--danger);
+    font-size: 14px;
+    font-weight: 600;
+    text-align: center;
+    cursor: pointer;
+  }
+  .skip {
+    width: 100%;
+    margin-top: 8px;
+    padding: 10px;
+    text-align: center;
+    color: var(--text-3);
+    font-size: 14px;
+    font-weight: 500;
+    cursor: pointer;
+  }
+
+  /* ── Edit form ── */
+  .field-label {
+    font-size: 11px;
+    font-weight: 700;
+    letter-spacing: 0.5px;
+    text-transform: uppercase;
+    color: var(--text-3);
+    margin-bottom: 8px;
+    margin-top: 18px;
+  }
+  .field-label:first-child { margin-top: 0; }
+  .pill-row { display: flex; gap: 8px; flex-wrap: wrap; }
+  .pill-option {
+    flex: 1;
+    padding: 10px 14px;
+    border-radius: 20px;
+    border: 1px solid var(--border);
+    background: var(--surface-2);
+    font-size: 14px;
+    font-weight: 700;
+    text-align: center;
+    color: var(--text);
+    cursor: pointer;
+  }
+  .pill-option.active {
+    background: var(--accent);
+    color: var(--accent-text-inverse);
+    border-color: var(--accent);
+  }
+  .seg {
+    display: flex;
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    overflow: hidden;
+  }
+  .seg-cell {
+    flex: 1;
+    padding: 11px 0;
+    text-align: center;
+    font-size: 14px;
+    font-weight: 700;
+    cursor: pointer;
+    color: var(--text);
+  }
+  .seg-cell.active { background: var(--accent); color: var(--accent-text-inverse); }
+  .seg-cell.active-success { background: var(--success); color: var(--accent-text-inverse); }
+  .seg-cell.active-danger { background: var(--danger); color: #fff; }
+
+  .text-input {
+    width: 100%;
+    border-radius: 12px;
+    border: 1px solid var(--border);
+    background: var(--surface-2);
+    color: var(--text);
+    padding: 12px 14px;
+    font-size: 14px;
+    font-weight: 600;
+  }
+  .text-input.date-chooser {
+    display: flex; align-items: center; gap: 8px;
+    border-color: var(--accent);
+  }
+  .cost-wrap { display: flex; align-items: center; gap: 8px; }
+  .cost-prefix { font-size: 15px; font-weight: 700; color: var(--text-2); }
+
+  /* Calendar mini preview */
+  .cal {
+    background: var(--surface-2);
+    border-radius: 12px;
+    padding: 12px;
+    margin-top: 10px;
+  }
+  .cal-nav {
+    display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;
+  }
+  .cal-month { font-size: 15px; font-weight: 700; }
+  .cal-chev { color: var(--text); font-size: 16px; cursor: pointer; }
+  .cal-row { display: grid; grid-template-columns: repeat(7, 1fr); gap: 2px; text-align: center; }
+  .cal-day { padding: 6px 0; font-size: 13px; color: var(--text); border-radius: 50%; cursor: pointer; }
+  .cal-day.muted { color: var(--text-3); }
+  .cal-day.today { border: 1.5px solid var(--accent); color: var(--accent); font-weight: 700; }
+  .cal-day.selected { background: var(--accent); color: var(--accent-text-inverse); font-weight: 700; }
+  .cal-dow { font-size: 11px; font-weight: 700; color: var(--text-3); padding: 4px 0; }
+
+  /* Time stepper row */
+  .time-row {
+    display: flex; gap: 8px;
+    margin-top: 10px;
+  }
+  .time-col { flex: 1; display: flex; flex-direction: column; align-items: center; }
+  .time-col-label { font-size: 10px; font-weight: 700; letter-spacing: 0.5px; text-transform: uppercase; color: var(--text-3); margin-bottom: 4px; }
+  .stepper {
+    width: 100%;
+    display: flex; align-items: center; justify-content: space-between;
+    background: var(--surface-2);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 6px 10px;
+  }
+  .stepper-value { font-size: 18px; font-weight: 700; color: var(--text); }
+  .stepper-btn { color: var(--accent); font-size: 18px; cursor: pointer; padding: 4px 6px; }
+
+  /* Tiny caption under phones */
+  .caption {
+    max-width: 390px;
+    margin: 10px auto 0;
+    font-size: 12px;
+    color: var(--text-3);
+    text-align: center;
+    line-height: 1.6;
+  }
+  @media (max-width: 900px) {
+    .phones { gap: 40px; }
+  }
+</style>
+</head>
+<body>
+
+<h1>Papers — proposed UI</h1>
+<p class="subtitle">Attempt-centric model. Tap a row to see history, add a new attempt with date/time/cost/result, never overwrite past attempts.</p>
+
+<div class="phones">
+
+  <!-- ── Screen 1: list ── -->
+  <div>
+    <div class="phone">
+      <div class="screen">
+        <div class="nav">
+          <div class="nav-back">‹ Back</div>
+          <div class="nav-title">Cailin Yeo</div>
+          <div class="nav-spacer"></div>
+        </div>
+        <div class="content">
+          <div class="section-card">
+            <div class="section-header">
+              <div class="section-title"><span class="icon-accent">📖</span> Papers</div>
+              <div class="section-badge">1/4</div>
+            </div>
+
+            <div class="row">
+              <div class="row-icon status-passed">✓</div>
+              <div class="row-main">
+                <div class="row-title">Life Insurance 1</div>
+                <div class="row-sub">M9 · passed 22 May · 2 attempts</div>
+              </div>
+              <div class="pill pill-success">Passed</div>
+              <div class="chevron">›</div>
+            </div>
+
+            <div class="row">
+              <div class="row-icon status-failed">✕</div>
+              <div class="row-main">
+                <div class="row-title">Life Insurance 2</div>
+                <div class="row-sub">M9A · latest 15 May — retake needed</div>
+              </div>
+              <div class="pill pill-danger">Failed</div>
+              <div class="chevron">›</div>
+            </div>
+
+            <div class="row">
+              <div class="row-icon status-scheduled">📅</div>
+              <div class="row-main">
+                <div class="row-title">Rules &amp; Ethics</div>
+                <div class="row-sub">M5 · 10 Jun 2026 · 2:00 PM · S$200</div>
+              </div>
+              <div class="pill pill-warning">Scheduled</div>
+              <div class="chevron">›</div>
+            </div>
+
+            <div class="row">
+              <div class="row-icon status-none">○</div>
+              <div class="row-main">
+                <div class="row-title">Health Insurance</div>
+                <div class="row-sub">HI</div>
+              </div>
+              <div class="pill pill-muted">Not Started</div>
+              <div class="chevron">›</div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="phone-label">① List — tap a row</div>
+    <div class="caption">
+      Status &amp; summary are <b>derived</b> from the attempts table. No direct "pass/fail" state on the paper itself.
+    </div>
+  </div>
+
+  <!-- ── Screen 2: attempts list ── -->
+  <div>
+    <div class="phone">
+      <div class="screen">
+        <div class="nav">
+          <div class="nav-back">‹ Back</div>
+          <div class="nav-title">Cailin Yeo</div>
+          <div class="nav-spacer"></div>
+        </div>
+        <div class="content" style="opacity: 0.3"></div>
+        <div class="sheet-overlay">
+          <div class="sheet">
+            <div class="sheet-handle"></div>
+            <div class="sheet-icon-wrap">📖</div>
+            <div class="sheet-title">Life Insurance 1</div>
+            <div class="sheet-sub">2 attempts · Passed ✓</div>
+
+            <div class="sheet-body">
+              <div class="attempt-card" style="border-color: rgba(52,199,89,0.3)">
+                <div class="attempt-head">
+                  <span class="status-passed">✓</span>
+                  <div class="attempt-head-title">Attempt 2 · M9</div>
+                  <div class="pill pill-success">Passed</div>
+                </div>
+                <div class="attempt-meta">
+                  22 May 2026 · 2:00 PM · <span class="attempt-cost">S$120.00</span>
+                </div>
+              </div>
+
+              <div class="attempt-card">
+                <div class="attempt-head">
+                  <span class="status-failed">✕</span>
+                  <div class="attempt-head-title">Attempt 1 · M9</div>
+                  <div class="pill pill-danger">Failed</div>
+                </div>
+                <div class="attempt-meta">
+                  15 May 2026 · 2:00 PM · <span class="attempt-cost">S$120.00</span>
+                </div>
+              </div>
+
+              <button class="secondary-btn">+ Add attempt</button>
+            </div>
+
+            <div style="padding: 0 24px;">
+              <div class="skip">Close</div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="phone-label">② Attempts history</div>
+    <div class="caption">
+      Full chronological log. Tap any card to edit — correct a date, update a just-taken result, or fix the cost.
+    </div>
+  </div>
+
+  <!-- ── Screen 3: add/edit attempt ── -->
+  <div>
+    <div class="phone">
+      <div class="screen">
+        <div class="nav">
+          <div class="nav-back">‹ Back</div>
+          <div class="nav-title">Cailin Yeo</div>
+          <div class="nav-spacer"></div>
+        </div>
+        <div class="content" style="opacity: 0.2"></div>
+        <div class="sheet-overlay">
+          <div class="sheet">
+            <div class="sheet-handle"></div>
+            <div class="sheet-icon-wrap">📖</div>
+            <div class="sheet-title">New Life Insurance 1 attempt</div>
+            <div class="sheet-sub">Book the next sitting</div>
+
+            <div class="sheet-body">
+              <div class="field-label">Paper code</div>
+              <div class="pill-row">
+                <div class="pill-option active">M9</div>
+                <div class="pill-option">CM_LIP</div>
+              </div>
+              <div class="attempt-meta" style="margin-top: 6px;">
+                Tip: CM_LIP satisfies both Life 1 + Life 2 in one sitting.
+              </div>
+
+              <div class="field-label">Exam date &amp; time</div>
+              <div class="text-input date-chooser">
+                <span>📅</span>
+                <span>22 May 2026 · 2:00 PM</span>
+                <span style="margin-left: auto; color: var(--text-3);">▾</span>
+              </div>
+              <div class="cal">
+                <div class="cal-nav">
+                  <span class="cal-chev">‹</span>
+                  <span class="cal-month">May 2026</span>
+                  <span class="cal-chev">›</span>
+                </div>
+                <div class="cal-row">
+                  <span class="cal-dow">Mon</span><span class="cal-dow">Tue</span><span class="cal-dow">Wed</span><span class="cal-dow">Thu</span><span class="cal-dow">Fri</span><span class="cal-dow">Sat</span><span class="cal-dow">Sun</span>
+                </div>
+                <div class="cal-row">
+                  <span class="cal-day muted">28</span><span class="cal-day muted">29</span><span class="cal-day muted">30</span><span class="cal-day">1</span><span class="cal-day">2</span><span class="cal-day">3</span><span class="cal-day">4</span>
+                </div>
+                <div class="cal-row">
+                  <span class="cal-day">5</span><span class="cal-day">6</span><span class="cal-day">7</span><span class="cal-day">8</span><span class="cal-day">9</span><span class="cal-day">10</span><span class="cal-day">11</span>
+                </div>
+                <div class="cal-row">
+                  <span class="cal-day">12</span><span class="cal-day">13</span><span class="cal-day">14</span><span class="cal-day">15</span><span class="cal-day">16</span><span class="cal-day">17</span><span class="cal-day today">18</span>
+                </div>
+                <div class="cal-row">
+                  <span class="cal-day">19</span><span class="cal-day">20</span><span class="cal-day">21</span><span class="cal-day selected">22</span><span class="cal-day">23</span><span class="cal-day">24</span><span class="cal-day">25</span>
+                </div>
+                <div class="cal-row">
+                  <span class="cal-day">26</span><span class="cal-day">27</span><span class="cal-day">28</span><span class="cal-day">29</span><span class="cal-day">30</span><span class="cal-day">31</span><span class="cal-day muted">1</span>
+                </div>
+
+                <div class="time-row">
+                  <div class="time-col">
+                    <div class="time-col-label">Hour</div>
+                    <div class="stepper">
+                      <span class="stepper-btn">▾</span><span class="stepper-value">2</span><span class="stepper-btn">▴</span>
+                    </div>
+                  </div>
+                  <div class="time-col">
+                    <div class="time-col-label">Min</div>
+                    <div class="stepper">
+                      <span class="stepper-btn">▾</span><span class="stepper-value">00</span><span class="stepper-btn">▴</span>
+                    </div>
+                  </div>
+                  <div class="time-col">
+                    <div class="time-col-label">Period</div>
+                    <div class="seg">
+                      <span class="seg-cell">AM</span>
+                      <span class="seg-cell active">PM</span>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              <div class="field-label">Cost</div>
+              <div class="cost-wrap">
+                <span class="cost-prefix">S$</span>
+                <input class="text-input" value="120.00" style="max-width: 140px;" readonly />
+              </div>
+
+              <div class="field-label">Result</div>
+              <div class="seg">
+                <span class="seg-cell">Scheduled</span>
+                <span class="seg-cell active-success">Passed</span>
+                <span class="seg-cell">Failed</span>
+              </div>
+
+              <button class="primary-btn" style="margin-top: 22px;">✓ Save</button>
+              <button class="danger-btn">Delete attempt</button>
+              <div class="skip">Cancel</div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="phone-label">③ Add / edit attempt</div>
+    <div class="caption">
+      Opens same form for "+ Add" and for tapping an existing card. Delete only shown in edit mode.
+    </div>
+  </div>
+
+</div>
+
+</body>
+</html>

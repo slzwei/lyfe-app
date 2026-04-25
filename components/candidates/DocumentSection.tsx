@@ -43,8 +43,9 @@ export function DocumentList({
         <>
             {!hasAny ? (
                 <View style={docStyles.emptyState}>
-                    <Ionicons name="folder-open-outline" size={28} color={colors.textTertiary} />
-                    <Text style={[docStyles.emptyText, { color: colors.textTertiary }]}>No documents yet</Text>
+                    {/* Icon in accent — empty states should be seen, not blend with cream */}
+                    <Ionicons name="folder-open-outline" size={28} color={colors.accent} />
+                    <Text style={[docStyles.emptyText, { color: colors.textSecondary }]}>No documents yet</Text>
                 </View>
             ) : (
                 <>

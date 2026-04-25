@@ -1,6 +1,7 @@
 import { letterSpacing } from '@/constants/platform';
 import { useTheme } from '@/contexts/ThemeContext';
 import { formatSgPhone } from '@/lib/phone';
+import type { NextStep, Urgency } from '@/lib/recruitment/pipeline';
 import { CANDIDATE_STATUS_CONFIG, type RecruitmentCandidate } from '@/types/recruitment';
 import { Ionicons } from '@expo/vector-icons';
 import React from 'react';
@@ -9,6 +10,24 @@ import { StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 interface CandidateCardProps {
     candidate: RecruitmentCandidate;
     onPress: () => void;
+    /** Optional urgency hint from the pipeline engine. When present, the card
+     * shows a small coloured dot + next-step text. Absent on legacy sort paths. */
+    nextStep?: NextStep;
+}
+
+function urgencyColor(u: Urgency, colors: ReturnType<typeof useTheme>['colors']): string {
+    switch (u) {
+        case 'at-risk':
+            return colors.danger;
+        case 'this-week':
+            return colors.warning;
+        case 'ready':
+            return colors.success;
+        case 'on-track':
+            return colors.textTertiary;
+        case 'hidden':
+            return colors.textTertiary;
+    }
 }
 
 function daysInPipeline(createdAt: string): string {
@@ -27,13 +46,16 @@ function relativeAgo(iso: string): string {
     return `${days}d ago`;
 }
 
-function CandidateCard({ candidate, onPress }: CandidateCardProps) {
+function CandidateCard({ candidate, onPress, nextStep }: CandidateCardProps) {
     const { colors } = useTheme();
     const statusConfig = CANDIDATE_STATUS_CONFIG[candidate.status];
 
     const createdStr = daysInPipeline(candidate.created_at);
     const lastChangeStr = relativeAgo(candidate.updated_at);
     const interviewCount = candidate.interviews.length;
+
+    const showUrgency = nextStep && nextStep.urgency !== 'hidden';
+    const urgencyTint = showUrgency ? urgencyColor(nextStep!.urgency, colors) : null;
 
     return (
         <TouchableOpacity
@@ -66,6 +88,18 @@ function CandidateCard({ candidate, onPress }: CandidateCardProps) {
                     </Text>
                 </View>
             </View>
+
+            {showUrgency && urgencyTint && (
+                <View style={[styles.nextStepRow, { borderTopColor: colors.border }]}>
+                    <View style={[styles.urgencyDot, { backgroundColor: urgencyTint }]} />
+                    <Text style={[styles.nextStepText, { color: colors.textPrimary }]} numberOfLines={2}>
+                        {nextStep!.text}
+                    </Text>
+                    {nextStep!.signal && (
+                        <Text style={[styles.nextStepSignal, { color: urgencyTint }]}>{nextStep!.signal}</Text>
+                    )}
+                </View>
+            )}
 
             <View style={[styles.meta, { borderTopColor: colors.border }]}>
                 {candidate.assigned_manager_name && (
@@ -157,5 +191,34 @@ const styles = StyleSheet.create({
     },
     metaText: {
         fontSize: 12,
+    },
+
+    // ── Next-step row (pipeline sort only) ───────────────
+    nextStepRow: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 10,
+        marginTop: 10,
+        paddingTop: 10,
+        borderTopWidth: StyleSheet.hairlineWidth,
+    },
+    urgencyDot: {
+        width: 7,
+        height: 7,
+        borderRadius: 4,
+        flexShrink: 0,
+    },
+    nextStepText: {
+        flex: 1,
+        fontSize: 13.5,
+        fontWeight: '600',
+        letterSpacing: letterSpacing(-0.1),
+        lineHeight: 18,
+    },
+    nextStepSignal: {
+        fontSize: 11,
+        fontWeight: '600',
+        letterSpacing: letterSpacing(-0.2),
+        flexShrink: 0,
     },
 });

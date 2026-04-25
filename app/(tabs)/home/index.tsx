@@ -3,6 +3,7 @@ import Avatar from '@/components/Avatar';
 import BiometricsPrompt from '@/components/home/BiometricsPrompt';
 import ErrorBanner from '@/components/ErrorBanner';
 import HeroStatsSection from '@/components/home/HeroStatsSection';
+import HomePipelineSection from '@/components/home/HomePipelineSection';
 import LeadPipelineCard from '@/components/home/LeadPipelineCard';
 import LyfeLogo from '@/components/LyfeLogo';
 import RecentActivityCard from '@/components/home/RecentActivityCard';
@@ -183,6 +184,17 @@ export default function HomeScreen() {
                     currentProgramme={currentProgramme}
                     candidateRoadmapCount={candidateRoadmap.length}
                 />
+
+                {/* Pipeline triage — for managers, directors, admins. Skips candidates + PAs + agents. */}
+                {(isManagerView || isAdminRole) && !isCandidate && !isPa && (
+                    <HomePipelineSection
+                        isManagerView={isManagerView || isAdminRole}
+                        onCandidatePress={(id) =>
+                            router.push(`/(tabs)/home/candidate/${id}` as Parameters<typeof router.push>[0])
+                        }
+                        onSeeAll={() => router.push('/(tabs)/candidates')}
+                    />
+                )}
 
                 {isCandidate && currentProgramme && (
                     <RoadmapProgressCard

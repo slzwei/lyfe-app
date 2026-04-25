@@ -224,8 +224,9 @@ export default function PaperAttemptsScreen() {
             <ScrollView style={{ flex: 1 }} contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator>
                 {requirement.attempts.length === 0 && (
                     <View style={styles.empty}>
-                        <Ionicons name="document-text-outline" size={28} color={colors.textTertiary} />
-                        <Text style={[styles.emptyText, { color: colors.textTertiary }]}>No attempts yet</Text>
+                        {/* Icon in accent — empty states should be seen, not blend with cream */}
+                        <Ionicons name="document-text-outline" size={28} color={colors.accent} />
+                        <Text style={[styles.emptyText, { color: colors.textSecondary }]}>No attempts yet</Text>
                     </View>
                 )}
 

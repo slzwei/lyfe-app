@@ -107,6 +107,19 @@ export default function CandidateDetailScreen() {
     const [showNoteSheet, setShowNoteSheet] = useState(false);
     const [noteSheetText, setNoteSheetText] = useState('');
 
+    // 4-tab structure (introduced 2026-04-22 via /impeccable:layout).
+    // Previously all 13 sections rendered in one long scroll; managers had to scroll
+    // past reference data to reach actionable content. Default to 'progress' which
+    // is the daily-use view (papers, milestones, training state).
+    type Tab = 'progress' | 'profile' | 'docs' | 'activity';
+    const [tab, setTab] = useState<Tab>('progress');
+    const scrollRef = useRef<ScrollView | null>(null);
+    const handleTabChange = useCallback((next: Tab) => {
+        setTab(next);
+        // Reset scroll to top on tab change so each tab has its own clean scroll
+        scrollRef.current?.scrollTo({ y: 0, animated: false });
+    }, []);
+
     // Papers — tapping a row pushes the attempts screen. Add/edit happens
     // there via a single modal, avoiding nested-modal complexity.
 
@@ -866,22 +879,97 @@ export default function CandidateDetailScreen() {
         <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]} edges={['top']}>
             <ScreenHeader showBack backLabel="Back" title={candidate.name} />
 
-            <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
-                {/* ── Hero ── */}
+            <ScrollView
+                ref={scrollRef}
+                contentContainerStyle={styles.scrollContent}
+                showsVerticalScrollIndicator={false}
+            >
+                {/* ── Hero (always visible — candidate identity) ── */}
                 <HeroSection candidate={candidate} colors={colors} onStatusPress={handleStatusPress} />
 
-                {/* ── Quick Actions ── */}
+                {/* ── Quick Actions (always visible — universal actions) ── */}
                 <View style={{ paddingHorizontal: 20, marginTop: 28 }}>
                     <QuickActionsBar actions={quickActions} colors={colors} />
                 </View>
 
-                {/* ── Onboarding Checklist ── */}
+                {/* ── Onboarding Checklist (always visible — high-signal lifecycle status) ── */}
                 <View style={{ marginTop: 28 }}>
                     <OnboardingChecklist candidate={candidate} documents={documents} colors={colors} />
                 </View>
 
-                {/* ── Personal Details ── */}
-                {p && (
+                {/* ── Tab bar: Progress | Profile | Docs | Activity ── */}
+                <View style={[styles.tabBar, { borderBottomColor: colors.border, backgroundColor: colors.background }]}>
+                    {(
+                        [
+                            { key: 'progress', label: 'Progress' },
+                            { key: 'profile', label: 'Profile' },
+                            {
+                                key: 'docs',
+                                label: 'Docs',
+                                badge: documents.length + generatedPdfs.length,
+                            },
+                            { key: 'activity', label: 'Activity' },
+                        ] as { key: Tab; label: string; badge?: number }[]
+                    ).map(({ key, label, badge }) => {
+                        const active = tab === key;
+                        return (
+                            <TouchableOpacity
+                                key={key}
+                                onPress={() => handleTabChange(key)}
+                                activeOpacity={0.7}
+                                style={styles.tabButton}
+                                accessibilityRole="tab"
+                                accessibilityState={{ selected: active }}
+                                accessibilityLabel={`${label}${badge ? `, ${badge} items` : ''}`}
+                            >
+                                <View style={styles.tabLabelRow}>
+                                    <Text
+                                        style={[
+                                            styles.tabLabel,
+                                            {
+                                                color: active ? colors.textPrimary : colors.textSecondary,
+                                                fontWeight: active ? '700' : '500',
+                                            },
+                                        ]}
+                                    >
+                                        {label}
+                                    </Text>
+                                    {badge !== undefined && badge > 0 ? (
+                                        <View
+                                            style={[
+                                                styles.tabBadge,
+                                                {
+                                                    backgroundColor: active ? colors.accent : colors.surfaceSecondary,
+                                                },
+                                            ]}
+                                        >
+                                            <Text
+                                                style={[
+                                                    styles.tabBadgeText,
+                                                    {
+                                                        color: active ? colors.textInverse : colors.textTertiary,
+                                                    },
+                                                ]}
+                                            >
+                                                {badge}
+                                            </Text>
+                                        </View>
+                                    ) : null}
+                                </View>
+                                {active ? (
+                                    <View style={[styles.tabUnderline, { backgroundColor: colors.accent }]} />
+                                ) : (
+                                    <View style={styles.tabUnderline} />
+                                )}
+                            </TouchableOpacity>
+                        );
+                    })}
+                </View>
+
+                {/* ══════════════════════════════════════════
+                    PROFILE TAB — reference data about the candidate
+                    ══════════════════════════════════════════ */}
+                {tab === 'profile' && p && (
                     <SectionCard title="Personal Details" icon="person-outline" colors={colors}>
                         <DetailRow label="Full Name" value={p.full_name} colors={colors} />
                         <DetailRow label="Chinese Name" value={p.chinese_name} colors={colors} />
@@ -896,7 +984,7 @@ export default function CandidateDetailScreen() {
                 )}
 
                 {/* ── Employment Details ── */}
-                {p && (p.position_applied || p.expected_salary || p.date_available) && (
+                {tab === 'profile' && p && (p.position_applied || p.expected_salary || p.date_available) && (
                     <SectionCard title="Employment Details" icon="briefcase-outline" colors={colors}>
                         <DetailRow label="Position" value={p.position_applied} colors={colors} />
                         <DetailRow label="Salary" value={formatSalary(p)} colors={colors} />
@@ -905,7 +993,7 @@ export default function CandidateDetailScreen() {
                 )}
 
                 {/* ── Emergency Contact ── */}
-                {p && p.emergency_name && (
+                {tab === 'profile' && p && p.emergency_name && (
                     <SectionCard title="Emergency Contact" icon="alert-circle-outline" colors={colors}>
                         <DetailRow label="Name" value={p.emergency_name} colors={colors} />
                         <DetailRow label="Relationship" value={p.emergency_relationship} colors={colors} />
@@ -914,7 +1002,7 @@ export default function CandidateDetailScreen() {
                 )}
 
                 {/* ── Education ── */}
-                {p && p.education && p.education.length > 0 && (
+                {tab === 'profile' && p && p.education && p.education.length > 0 && (
                     <SectionCard
                         title="Education"
                         icon="school-outline"
@@ -947,7 +1035,7 @@ export default function CandidateDetailScreen() {
                 )}
 
                 {/* ── Employment History ── */}
-                {p && p.employment_history && p.employment_history.length > 0 && (
+                {tab === 'profile' && p && p.employment_history && p.employment_history.length > 0 && (
                     <SectionCard
                         title="Employment History"
                         icon="business-outline"
@@ -981,7 +1069,8 @@ export default function CandidateDetailScreen() {
                 )}
 
                 {/* ── Skills & Languages ── */}
-                {p &&
+                {tab === 'profile' &&
+                    p &&
                     ((p.languages && p.languages.length > 0) ||
                         p.software_competencies ||
                         p.shorthand_wpm ||
@@ -1017,7 +1106,7 @@ export default function CandidateDetailScreen() {
                     )}
 
                 {/* ── DISC Profile ── */}
-                {disc && (
+                {tab === 'profile' && disc && (
                     <SectionCard title="DISC Profile" icon="analytics-outline" colors={colors}>
                         <Text style={[styles.discType, { color: colors.accent }]}>{disc.disc_type}</Text>
                         <View style={styles.discGrid}>
@@ -1043,8 +1132,10 @@ export default function CandidateDetailScreen() {
                     </SectionCard>
                 )}
 
-                {/* ── Papers / Milestones / Prep Courses (staff only) ── */}
-                {canMarkComplete && (
+                {/* ══════════════════════════════════════════
+                    PROGRESS TAB — papers, milestones, training (default for managers)
+                    ══════════════════════════════════════════ */}
+                {tab === 'progress' && canMarkComplete && (
                     <>
                         {canConfirmLicensed &&
                             progression.allPapersPassed &&
@@ -1078,108 +1169,123 @@ export default function CandidateDetailScreen() {
                     </>
                 )}
 
-                {/* ── Documents ── */}
-                <SectionCard
-                    title="Documents"
-                    icon="folder-outline"
-                    badge={`${documents.length + generatedPdfs.length}`}
-                    colors={colors}
-                >
-                    <DocumentList
-                        documents={documents}
-                        generatedPdfs={generatedPdfs}
-                        hasDocumentPicker={hasDocumentPicker}
+                {/* ══════════════════════════════════════════
+                    DOCS TAB — uploaded files + generated PDFs
+                    ══════════════════════════════════════════ */}
+                {tab === 'docs' && (
+                    <SectionCard
+                        title="Documents"
+                        icon="folder-outline"
+                        badge={`${documents.length + generatedPdfs.length}`}
                         colors={colors}
-                        onViewDocument={handleViewDocument}
-                        onDeleteDocument={handleDeleteDocument}
-                        onAddDocument={openAddDocSheet}
-                    />
-                </SectionCard>
+                    >
+                        <DocumentList
+                            documents={documents}
+                            generatedPdfs={generatedPdfs}
+                            hasDocumentPicker={hasDocumentPicker}
+                            colors={colors}
+                            onViewDocument={handleViewDocument}
+                            onDeleteDocument={handleDeleteDocument}
+                            onAddDocument={openAddDocSheet}
+                        />
+                    </SectionCard>
+                )}
 
-                {/* ── Interviews ── */}
-                <SectionCard
-                    title="Interviews"
-                    icon="videocam-outline"
-                    badge={`${sortedInterviews.length}`}
-                    colors={colors}
-                >
-                    {sortedInterviews.length === 0 ? (
-                        <View style={styles.empty}>
-                            <Ionicons name="videocam-off-outline" size={28} color={colors.textTertiary} />
-                            <Text style={[styles.emptyText, { color: colors.textTertiary }]}>No interviews yet</Text>
-                        </View>
-                    ) : (
-                        sortedInterviews.map((interview) => (
-                            <InterviewCard
-                                key={interview.id}
-                                interview={interview}
-                                colors={colors}
-                                onEdit={() => openEditInterview(interview)}
-                                onDelete={() => handleDeleteInterview(interview)}
-                            />
-                        ))
-                    )}
-                </SectionCard>
-
-                {/* ── Contact Activity ── */}
-                <SectionCard
-                    title="Contact Activity"
-                    icon="chatbubbles-outline"
-                    badge={callLog.length > 0 ? `${callLog.length}` : undefined}
-                    colors={colors}
-                >
-                    {callLog.length === 0 ? (
-                        <View style={styles.empty}>
-                            <Ionicons name="call-outline" size={28} color={colors.textTertiary} />
-                            <Text style={[styles.emptyText, { color: colors.textTertiary }]}>
-                                No calls or messages logged yet
-                            </Text>
-                        </View>
-                    ) : (
-                        callLog.map((entry) => (
-                            <View key={entry.id} style={[styles.activityRow, { borderBottomColor: colors.border }]}>
-                                <Ionicons
-                                    name={
-                                        entry.type === 'call'
-                                            ? 'call-outline'
-                                            : entry.type === 'whatsapp'
-                                              ? 'logo-whatsapp'
-                                              : 'create-outline'
-                                    }
-                                    size={16}
-                                    color={colors.textTertiary}
-                                />
-                                <View style={{ flex: 1 }}>
-                                    <Text style={[styles.activityType, { color: colors.textPrimary }]}>
-                                        {entry.type === 'call'
-                                            ? 'Call'
-                                            : entry.type === 'whatsapp'
-                                              ? 'WhatsApp'
-                                              : 'Note'}
-                                        {entry.outcome ? ` — ${entry.outcome}` : ''}
-                                    </Text>
-                                    {entry.note && (
-                                        <Text style={[styles.activityNote, { color: colors.textSecondary }]}>
-                                            {entry.note}
-                                        </Text>
-                                    )}
-                                    <Text style={[styles.activityTime, { color: colors.textTertiary }]}>
-                                        {entry.actor_name ? `${entry.actor_name} · ` : ''}
-                                        {new Date(entry.created_at).toLocaleString('en-SG', {
-                                            day: 'numeric',
-                                            month: 'short',
-                                            hour: 'numeric',
-                                            minute: '2-digit',
-                                        })}
+                {/* ══════════════════════════════════════════
+                    ACTIVITY TAB — interviews, contact log, notes
+                    ══════════════════════════════════════════ */}
+                {tab === 'activity' && (
+                    <>
+                        <SectionCard
+                            title="Interviews"
+                            icon="videocam-outline"
+                            badge={`${sortedInterviews.length}`}
+                            colors={colors}
+                        >
+                            {sortedInterviews.length === 0 ? (
+                                <View style={styles.empty}>
+                                    <Ionicons name="videocam-off-outline" size={28} color={colors.textTertiary} />
+                                    <Text style={[styles.emptyText, { color: colors.textTertiary }]}>
+                                        No interviews yet
                                     </Text>
                                 </View>
-                            </View>
-                        ))
-                    )}
-                </SectionCard>
+                            ) : (
+                                sortedInterviews.map((interview) => (
+                                    <InterviewCard
+                                        key={interview.id}
+                                        interview={interview}
+                                        colors={colors}
+                                        onEdit={() => openEditInterview(interview)}
+                                        onDelete={() => handleDeleteInterview(interview)}
+                                    />
+                                ))
+                            )}
+                        </SectionCard>
 
-                {/* ── Training Progress ── */}
-                {canMarkComplete && programmes.length > 0 && (
+                        {/* ── Contact Activity ── */}
+                        <SectionCard
+                            title="Contact Activity"
+                            icon="chatbubbles-outline"
+                            badge={callLog.length > 0 ? `${callLog.length}` : undefined}
+                            colors={colors}
+                        >
+                            {callLog.length === 0 ? (
+                                <View style={styles.empty}>
+                                    <Ionicons name="call-outline" size={28} color={colors.textTertiary} />
+                                    <Text style={[styles.emptyText, { color: colors.textTertiary }]}>
+                                        No calls or messages logged yet
+                                    </Text>
+                                </View>
+                            ) : (
+                                callLog.map((entry) => (
+                                    <View
+                                        key={entry.id}
+                                        style={[styles.activityRow, { borderBottomColor: colors.border }]}
+                                    >
+                                        <Ionicons
+                                            name={
+                                                entry.type === 'call'
+                                                    ? 'call-outline'
+                                                    : entry.type === 'whatsapp'
+                                                      ? 'logo-whatsapp'
+                                                      : 'create-outline'
+                                            }
+                                            size={16}
+                                            color={colors.textTertiary}
+                                        />
+                                        <View style={{ flex: 1 }}>
+                                            <Text style={[styles.activityType, { color: colors.textPrimary }]}>
+                                                {entry.type === 'call'
+                                                    ? 'Call'
+                                                    : entry.type === 'whatsapp'
+                                                      ? 'WhatsApp'
+                                                      : 'Note'}
+                                                {entry.outcome ? ` — ${entry.outcome}` : ''}
+                                            </Text>
+                                            {entry.note && (
+                                                <Text style={[styles.activityNote, { color: colors.textSecondary }]}>
+                                                    {entry.note}
+                                                </Text>
+                                            )}
+                                            <Text style={[styles.activityTime, { color: colors.textTertiary }]}>
+                                                {entry.actor_name ? `${entry.actor_name} · ` : ''}
+                                                {new Date(entry.created_at).toLocaleString('en-SG', {
+                                                    day: 'numeric',
+                                                    month: 'short',
+                                                    hour: 'numeric',
+                                                    minute: '2-digit',
+                                                })}
+                                            </Text>
+                                        </View>
+                                    </View>
+                                ))
+                            )}
+                        </SectionCard>
+                    </>
+                )}
+
+                {/* ── Training Progress (Progress tab) ── */}
+                {tab === 'progress' && canMarkComplete && programmes.length > 0 && (
                     <SectionCard title="Training Progress" icon="school-outline" colors={colors}>
                         <ProgressSummaryCard
                             programmes={programmes}
@@ -1215,8 +1321,8 @@ export default function CandidateDetailScreen() {
                     </SectionCard>
                 )}
 
-                {/* ── Notes ── */}
-                {candidate.notes && (
+                {/* ── Notes (Activity tab) ── */}
+                {tab === 'activity' && candidate.notes && (
                     <SectionCard title="Notes" icon="reader-outline" colors={colors}>
                         <Text style={[styles.notesBody, { color: colors.textSecondary }]}>{candidate.notes}</Text>
                     </SectionCard>
@@ -1427,4 +1533,45 @@ const styles = StyleSheet.create({
         borderWidth: 1,
     },
     unlockBtnText: { fontSize: 14, fontWeight: '600' },
+
+    // ── Tab bar (introduced 2026-04-22 by /impeccable:layout) ───────
+    tabBar: {
+        flexDirection: 'row',
+        marginTop: 24,
+        marginBottom: 8,
+        paddingHorizontal: 20,
+        borderBottomWidth: StyleSheet.hairlineWidth,
+    },
+    tabButton: {
+        flex: 1,
+        paddingTop: 12,
+        alignItems: 'center',
+    },
+    tabLabelRow: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 6,
+        marginBottom: 10,
+    },
+    tabLabel: {
+        fontSize: 14,
+        letterSpacing: -0.1,
+    },
+    tabBadge: {
+        minWidth: 20,
+        height: 20,
+        borderRadius: 10,
+        paddingHorizontal: 6,
+        alignItems: 'center',
+        justifyContent: 'center',
+    },
+    tabBadgeText: {
+        fontSize: 11,
+        fontWeight: '700',
+    },
+    tabUnderline: {
+        height: 2,
+        width: '60%',
+        borderRadius: 1,
+    },
 });

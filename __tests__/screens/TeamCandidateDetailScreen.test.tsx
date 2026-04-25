@@ -6,7 +6,7 @@
  * verifies the re-export works and basic rendering from the team tab context.
  */
 import React from 'react';
-import { render, waitFor } from '@testing-library/react-native';
+import { fireEvent, render, waitFor } from '@testing-library/react-native';
 import TeamCandidateDetailScreen from '@/app/(tabs)/team/candidate/[candidateId]';
 import CandidateDetailScreen from '@/app/(tabs)/candidates/[candidateId]';
 import { useAuth } from '@/contexts/AuthContext';
@@ -276,6 +276,11 @@ describe('TeamCandidateDetailScreen', () => {
 
     it('renders notes when present', async () => {
         const { getByText } = renderTeamScreen();
+        // Notes live under the Activity tab now; switch to it first.
+        await waitFor(() => {
+            expect(getByText('Activity')).toBeTruthy();
+        });
+        fireEvent.press(getByText('Activity'));
         await waitFor(() => {
             expect(getByText('Promising candidate')).toBeTruthy();
         });
