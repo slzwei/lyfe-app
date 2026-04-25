@@ -130,19 +130,28 @@ export default function VarkResultsScreen() {
                     <View style={{ width: 32 }} />
                 </View>
 
-                {/* Primary Result Card */}
+                {/* ── 1. Hero Card (unified shell: icon → eyebrow → name → secondary) ── */}
                 <View
                     style={[
-                        styles.resultCard,
-                        { backgroundColor: colors.cardBackground, borderColor: colors.cardBorder },
+                        styles.heroCard,
+                        {
+                            backgroundColor: colors.cardBackground,
+                            borderColor: colors.accent + '30',
+                        },
                     ]}
                 >
-                    <View style={[styles.preferenceBadge, { backgroundColor: colors.accentLight }]}>
-                        <Text style={[styles.preferenceBadgeText, { color: colors.accent }]}>
-                            {PREFERENCE_BADGES[varkResults.preference]}
-                        </Text>
+                    <View style={[styles.typeIconBadge, { backgroundColor: colors.accentLight }]}>
+                        <Ionicons name="school-outline" size={28} color={colors.accent} />
                     </View>
-                    <Text style={[styles.preferenceLabel, { color: colors.textPrimary }]}>{preferenceLabel}</Text>
+
+                    <Text style={[styles.heroLabel, { color: colors.textTertiary }]}>YOUR LEARNING STYLE</Text>
+
+                    <Text style={[styles.heroName, { color: colors.textPrimary }]}>{preferenceLabel}</Text>
+
+                    <Text style={[styles.heroSecondary, { color: colors.textSecondary }]}>
+                        {PREFERENCE_BADGES[varkResults.preference]}
+                    </Text>
+
                     {varkResults.topTypes.length > 0 && (
                         <View style={styles.topIcons}>
                             {varkResults.topTypes.map((t) => (
@@ -274,7 +283,13 @@ export default function VarkResultsScreen() {
                     </View>
                 )}
 
-                {/* Actions */}
+                {/* ── Disclaimer (shared across DISC/Enneagram/VARK) ── */}
+                <Text style={[styles.disclaimer, { color: colors.textTertiary }]}>
+                    This assessment is for personal reflection only. Your profile may vary across situations and over
+                    time.
+                </Text>
+
+                {/* ── Actions ── */}
                 <View style={styles.actionRow}>
                     <TouchableOpacity
                         style={[styles.retakeButton, { borderColor: colors.border }]}
@@ -324,28 +339,37 @@ const styles = StyleSheet.create({
     scroll: { flex: 1 },
     scrollContent: { padding: 16, paddingBottom: 48, flexGrow: 1 },
 
-    // Result card
-    resultCard: {
+    // ── Unified hero card (matches DISC + Enneagram shell) ──────────
+    heroCard: {
         alignItems: 'center',
+        borderRadius: 20,
+        borderWidth: 1,
+        padding: 24,
+        marginBottom: 12,
+        gap: 8,
+    },
+    typeIconBadge: {
+        width: 56,
+        height: 56,
         borderRadius: 16,
-        borderWidth: 0.5,
-        padding: 28,
-        marginBottom: 16,
-        gap: 12,
+        alignItems: 'center',
+        justifyContent: 'center',
+        marginBottom: 4,
     },
-    preferenceBadge: {
-        paddingHorizontal: 12,
-        paddingVertical: 4,
-        borderRadius: 8,
+    heroLabel: {
+        fontSize: 10,
+        fontWeight: '600',
+        letterSpacing: letterSpacing(1),
+        textTransform: 'uppercase',
     },
-    preferenceBadgeText: { fontSize: 12, fontWeight: '600', textTransform: 'uppercase', letterSpacing: 0.5 },
-    preferenceLabel: {
-        fontSize: 26,
+    heroName: {
+        fontSize: 28,
         fontWeight: displayWeight('800'),
         letterSpacing: letterSpacing(-0.5),
         textAlign: 'center',
     },
-    topIcons: { flexDirection: 'row', gap: 8, flexWrap: 'wrap', justifyContent: 'center' },
+    heroSecondary: { fontSize: 13, textAlign: 'center' },
+    topIcons: { flexDirection: 'row', gap: 8, flexWrap: 'wrap', justifyContent: 'center', marginTop: 4 },
     topIconBadge: {
         flexDirection: 'row',
         alignItems: 'center',
@@ -355,6 +379,15 @@ const styles = StyleSheet.create({
         borderRadius: 8,
     },
     topIconLabel: { fontSize: 12, fontWeight: '600' },
+
+    // Disclaimer (shared copy across DISC/Enneagram/VARK)
+    disclaimer: {
+        fontSize: 11,
+        textAlign: 'center',
+        lineHeight: 16,
+        marginBottom: 24,
+        paddingHorizontal: 8,
+    },
 
     // Warning
     warningCard: {

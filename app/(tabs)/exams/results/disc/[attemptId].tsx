@@ -289,9 +289,9 @@ export default function DiscResultsScreen() {
                     <DiscCircumplexChart results={results} colors={colors} />
                 </View>
 
-                {/* ── 3. Style Tendencies ── */}
+                {/* ── 3. Score Breakdown (renamed from "Behavioral Blend" to match Enneagram/VARK) ── */}
                 <View style={[styles.card, { backgroundColor: colors.cardBackground }]}>
-                    <Text style={[styles.sectionTitle, { color: colors.textPrimary }]}>Behavioral Blend</Text>
+                    <Text style={[styles.sectionTitle, { color: colors.textPrimary }]}>Score Breakdown</Text>
                     <Text style={[styles.sectionSubtitle, { color: colors.textTertiary }]}>
                         Independent scores — not percentages of a whole
                     </Text>
@@ -454,9 +454,9 @@ export default function DiscResultsScreen() {
                     )}
                 </View>
 
-                {/* ── 7. Disclaimer ── */}
+                {/* ── 7. Disclaimer (shared copy across DISC/Enneagram/VARK) ── */}
                 <Text style={[styles.disclaimer, { color: colors.textTertiary }]}>
-                    This assessment is for personal reflection only. Your work style may vary across situations and over
+                    This assessment is for personal reflection only. Your profile may vary across situations and over
                     time.
                 </Text>
 
@@ -795,10 +795,11 @@ const styles = StyleSheet.create({
         justifyContent: 'center',
         marginBottom: 4,
     },
+    // Shared with Enneagram + VARK — eyebrow caps at 1.0 letterSpacing
     heroLabel: {
         fontSize: 10,
         fontWeight: '600',
-        letterSpacing: letterSpacing(0.2),
+        letterSpacing: letterSpacing(1),
         textTransform: 'uppercase',
     },
     heroName: {

@@ -84,9 +84,9 @@ describe('EnneagramResultsScreen', () => {
         const { getByText } = render(<EnneagramResultsScreen />);
 
         await waitFor(() => {
-            expect(getByText('About Your Type')).toBeTruthy();
-            expect(getByText('Key Strengths')).toBeTruthy();
-            expect(getByText('Growth Path')).toBeTruthy();
+            expect(getByText('Score Breakdown')).toBeTruthy();
+            expect(getByText('Strengths')).toBeTruthy();
+            expect(getByText('Growth')).toBeTruthy();
         });
     });
 

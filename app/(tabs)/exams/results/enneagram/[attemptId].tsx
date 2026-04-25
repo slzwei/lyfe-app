@@ -128,18 +128,26 @@ export default function EnneagramResultsScreen() {
                     <View style={{ width: 32 }} />
                 </View>
 
-                {/* Primary Result Card */}
+                {/* ── 1. Hero Card (unified shell: icon badge → eyebrow → name → secondary → description) ── */}
                 <View
                     style={[
-                        styles.resultCard,
-                        { backgroundColor: colors.cardBackground, borderColor: colors.cardBorder },
+                        styles.heroCard,
+                        {
+                            backgroundColor: colors.cardBackground,
+                            borderColor: primaryInfo.color + '30',
+                        },
                     ]}
                 >
-                    <View style={[styles.typeNumberBadge, { backgroundColor: primaryInfo.color + '18' }]}>
+                    <View style={[styles.typeIconBadge, { backgroundColor: primaryInfo.color + '18' }]}>
                         <Ionicons name={primaryInfo.icon} size={28} color={primaryInfo.color} />
                     </View>
-                    <Text style={[styles.typeLabel, { color: colors.textPrimary }]}>{typeLabel}</Text>
-                    <Text style={[styles.typeName, { color: primaryInfo.color }]}>{primaryInfo.name}</Text>
+
+                    <Text style={[styles.heroLabel, { color: colors.textTertiary }]}>YOUR ENNEAGRAM TYPE</Text>
+
+                    <Text style={[styles.heroName, { color: primaryInfo.color }]}>{primaryInfo.name}</Text>
+
+                    <Text style={[styles.heroSecondary, { color: colors.textSecondary }]}>{typeLabel}</Text>
+
                     {wingInfo && (
                         <View style={[styles.wingBadge, { backgroundColor: colors.surfacePrimary }]}>
                             <Ionicons name={wingInfo.icon} size={14} color={wingInfo.color} />
@@ -148,6 +156,10 @@ export default function EnneagramResultsScreen() {
                             </Text>
                         </View>
                     )}
+
+                    <Text style={[styles.heroDescription, { color: colors.textSecondary }]}>
+                        {primaryInfo.description}
+                    </Text>
                 </View>
 
                 {/* Low confidence warning */}
@@ -165,36 +177,7 @@ export default function EnneagramResultsScreen() {
                     </View>
                 )}
 
-                {/* Description Card */}
-                <View
-                    style={[
-                        styles.descriptionCard,
-                        { backgroundColor: colors.cardBackground, borderColor: colors.cardBorder },
-                    ]}
-                >
-                    <Text style={[styles.sectionTitle, { color: colors.textPrimary }]}>About Your Type</Text>
-                    <Text style={[styles.descriptionText, { color: colors.textSecondary }]}>
-                        {primaryInfo.description}
-                    </Text>
-
-                    <Text style={[styles.subsectionTitle, { color: colors.textPrimary }]}>Key Strengths</Text>
-                    {primaryInfo.strengths.map((strength, i) => (
-                        <View key={i} style={styles.bulletRow}>
-                            <Ionicons name="checkmark-circle-outline" size={14} color={primaryInfo.color} />
-                            <Text style={[styles.bulletText, { color: colors.textSecondary }]}>{strength}</Text>
-                        </View>
-                    ))}
-
-                    <Text style={[styles.subsectionTitle, { color: colors.textPrimary }]}>Growth Path</Text>
-                    {primaryInfo.growthTips.map((tip, i) => (
-                        <View key={i} style={styles.bulletRow}>
-                            <Ionicons name="arrow-forward-circle-outline" size={14} color={colors.accent} />
-                            <Text style={[styles.bulletText, { color: colors.textSecondary }]}>{tip}</Text>
-                        </View>
-                    ))}
-                </View>
-
-                {/* Bar Chart */}
+                {/* ── 2. Score Breakdown (renamed heading for consistency with DISC/VARK) ── */}
                 <View style={styles.chartSection}>
                     <Text style={[styles.sectionTitle, { color: colors.textPrimary }]}>Score Breakdown</Text>
                     {sortedTypes.map((type) => {
@@ -216,7 +199,10 @@ export default function EnneagramResultsScreen() {
                                         ]}
                                     >
                                         <Text
-                                            style={[styles.barTypeNumText, { color: isPrimary ? '#fff' : info.color }]}
+                                            style={[
+                                                styles.barTypeNumText,
+                                                { color: isPrimary ? colors.textInverse : info.color },
+                                            ]}
                                         >
                                             {type}
                                         </Text>
@@ -247,7 +233,55 @@ export default function EnneagramResultsScreen() {
                     })}
                 </View>
 
-                {/* Actions */}
+                {/* ── 3. Strengths (sage-tinted card — unified pattern with DISC) ── */}
+                <View
+                    style={[
+                        styles.strengthsCard,
+                        { borderColor: colors.success + '30', backgroundColor: colors.success + '0a' },
+                    ]}
+                >
+                    <View style={styles.tintedCardHeader}>
+                        <View style={[styles.tintedIconBadge, { backgroundColor: colors.success + '20' }]}>
+                            <Ionicons name="checkmark" size={14} color={colors.success} />
+                        </View>
+                        <Text style={[styles.tintedCardTitle, { color: colors.textPrimary }]}>Strengths</Text>
+                    </View>
+                    {primaryInfo.strengths.map((strength, i) => (
+                        <View key={i} style={styles.bulletRow}>
+                            <Ionicons name="checkmark-circle-outline" size={15} color={colors.success} />
+                            <Text style={[styles.bulletText, { color: colors.textSecondary }]}>{strength}</Text>
+                        </View>
+                    ))}
+                </View>
+
+                {/* ── 4. Growth (butter-tinted card — unified pattern with DISC blind spots) ── */}
+                <View
+                    style={[
+                        styles.growthCard,
+                        { borderColor: colors.warning + '30', backgroundColor: colors.warning + '0a' },
+                    ]}
+                >
+                    <View style={styles.tintedCardHeader}>
+                        <View style={[styles.tintedIconBadge, { backgroundColor: colors.warning + '20' }]}>
+                            <Ionicons name="arrow-forward" size={13} color={colors.warning} />
+                        </View>
+                        <Text style={[styles.tintedCardTitle, { color: colors.textPrimary }]}>Growth</Text>
+                    </View>
+                    {primaryInfo.growthTips.map((tip, i) => (
+                        <View key={i} style={styles.bulletRow}>
+                            <Ionicons name="arrow-forward-circle-outline" size={15} color={colors.warning} />
+                            <Text style={[styles.bulletText, { color: colors.textSecondary }]}>{tip}</Text>
+                        </View>
+                    ))}
+                </View>
+
+                {/* ── 5. Disclaimer (shared across DISC/Enneagram/VARK) ── */}
+                <Text style={[styles.disclaimer, { color: colors.textTertiary }]}>
+                    This assessment is for personal reflection only. Your profile may vary across situations and over
+                    time.
+                </Text>
+
+                {/* ── Actions ── */}
                 <View style={styles.actionRow}>
                     <TouchableOpacity
                         style={[styles.retakeButton, { borderColor: colors.border }]}
@@ -291,16 +325,16 @@ const styles = StyleSheet.create({
     scroll: { flex: 1 },
     scrollContent: { padding: 16, paddingBottom: 48, flexGrow: 1 },
 
-    // Result card
-    resultCard: {
+    // ── Unified hero card (matches DISC + VARK shell) ─────────────
+    heroCard: {
         alignItems: 'center',
-        borderRadius: 16,
-        borderWidth: 0.5,
-        padding: 28,
-        marginBottom: 16,
+        borderRadius: 20,
+        borderWidth: 1,
+        padding: 24,
+        marginBottom: 12,
         gap: 8,
     },
-    typeNumberBadge: {
+    typeIconBadge: {
         width: 56,
         height: 56,
         borderRadius: 16,
@@ -308,17 +342,20 @@ const styles = StyleSheet.create({
         justifyContent: 'center',
         marginBottom: 4,
     },
-    typeLabel: {
-        fontSize: 30,
+    heroLabel: {
+        fontSize: 10,
+        fontWeight: '600',
+        letterSpacing: letterSpacing(1),
+        textTransform: 'uppercase',
+    },
+    heroName: {
+        fontSize: 32,
         fontWeight: displayWeight('800'),
         letterSpacing: letterSpacing(-0.5),
         textAlign: 'center',
     },
-    typeName: {
-        fontSize: 18,
-        fontWeight: '600',
-        textAlign: 'center',
-    },
+    heroSecondary: { fontSize: 13, textAlign: 'center' },
+    heroDescription: { fontSize: 14, lineHeight: 21, textAlign: 'center', marginTop: 4 },
     wingBadge: {
         flexDirection: 'row',
         alignItems: 'center',
@@ -342,18 +379,43 @@ const styles = StyleSheet.create({
     },
     warningText: { flex: 1, fontSize: 13, lineHeight: 18 },
 
-    // Description
-    descriptionCard: {
-        borderRadius: 14,
-        borderWidth: 0.5,
+    // Bullet rows (shared with strengths/growth cards)
+    bulletRow: { flexDirection: 'row', alignItems: 'flex-start', gap: 8, paddingLeft: 2 },
+    bulletText: { flex: 1, fontSize: 13, lineHeight: 19 },
+
+    // ── Strengths / Growth tinted cards (unified pattern with DISC) ─
+    strengthsCard: {
+        borderRadius: 16,
+        borderWidth: 1,
         padding: 16,
-        marginBottom: 24,
+        marginBottom: 12,
         gap: 8,
     },
-    descriptionText: { fontSize: 14, lineHeight: 21 },
-    subsectionTitle: { fontSize: 13, fontWeight: '600', marginTop: 4 },
-    bulletRow: { flexDirection: 'row', alignItems: 'flex-start', gap: 6, paddingLeft: 2 },
-    bulletText: { flex: 1, fontSize: 13, lineHeight: 19 },
+    growthCard: {
+        borderRadius: 16,
+        borderWidth: 1,
+        padding: 16,
+        marginBottom: 12,
+        gap: 8,
+    },
+    tintedCardHeader: { flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 4 },
+    tintedIconBadge: {
+        width: 24,
+        height: 24,
+        borderRadius: 12,
+        alignItems: 'center',
+        justifyContent: 'center',
+    },
+    tintedCardTitle: { fontSize: 14, fontWeight: '700' },
+
+    // Disclaimer (shared copy across DISC/Enneagram/VARK)
+    disclaimer: {
+        fontSize: 11,
+        textAlign: 'center',
+        lineHeight: 16,
+        marginBottom: 24,
+        paddingHorizontal: 8,
+    },
 
     // Chart
     sectionTitle: { fontSize: 16, fontWeight: '700', letterSpacing: letterSpacing(-0.2), marginBottom: 4 },
