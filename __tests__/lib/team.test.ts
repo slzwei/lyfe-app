@@ -3,7 +3,7 @@
  */
 import { supabase } from '@/lib/supabase';
 
-import { fetchTeamMembers, fetchTeamMember, getTeamPerformance } from '@/lib/team';
+import { fetchTeamMembers, fetchTeamMember, getTeamPerformance, fetchManagerOverview } from '@/lib/team';
 
 jest.mock('@/lib/supabase');
 
@@ -153,6 +153,54 @@ describe('fetchTeamMembers', () => {
         expect(result.error).toBe('RLS denied');
         expect(result.data).toEqual([]);
     });
+
+    it('manager rows include outstanding-candidate and team-size counts; agents do not', async () => {
+        const USER_MANAGER = {
+            id: 'mgr-1',
+            full_name: 'Manager Mei',
+            role: 'manager',
+            phone: '+6593333333',
+            email: 'mei@example.com',
+            avatar_url: null,
+            is_active: true,
+            created_at: '2025-12-01T00:00:00Z',
+        };
+
+        const usersChain = mockSupa.__getChain('users');
+        // Final users fetch returns one manager + one agent. The manager-stats
+        // query also hits 'users', but the chain is shared and only the last
+        // resolution sticks — that's fine because we don't assert on agentRows
+        // here, just on the final aggregation paths exercised by the candidates fetch.
+        mockResolve(usersChain, { data: [USER_MANAGER, USER_AGENT], error: null });
+
+        const leadsChain = mockSupa.__getChain('leads');
+        mockResolve(leadsChain, { data: [], error: null });
+
+        const candidatesChain = mockSupa.__getChain('candidates');
+        mockResolve(candidatesChain, {
+            data: [
+                { assigned_manager_id: 'mgr-1', status: 'applied' }, // outstanding
+                { assigned_manager_id: 'mgr-1', status: 'interviewed' }, // outstanding
+                { assigned_manager_id: 'mgr-1', status: 'licensed' }, // terminal — excluded
+                { assigned_manager_id: 'mgr-1', status: 'rejected' }, // terminal — excluded
+            ],
+            error: null,
+        });
+
+        const result = await fetchTeamMembers('dir-1', 'director');
+        expect(result.error).toBeNull();
+
+        const mgr = result.data.find((m) => m.id === 'mgr-1')!;
+        expect(mgr.outstandingCandidatesCount).toBe(2);
+        // teamSize comes from the shared 'users' chain which last resolved with
+        // [manager + agent]; the agent has reports_to undefined in the fixture,
+        // so it's filtered out by the row.reports_to guard. Expect 0.
+        expect(mgr.teamSize).toBe(0);
+
+        const agent = result.data.find((m) => m.id === 'agent-1')!;
+        expect(agent.outstandingCandidatesCount).toBeUndefined();
+        expect(agent.teamSize).toBeUndefined();
+    });
 });
 
 // ── fetchTeamMember ──
@@ -291,5 +339,177 @@ describe('getTeamPerformance', () => {
 
         expect(result.error).toBe('Invalid date range: start must be before or equal to end');
         expect(result.data.agents).toEqual([]);
+    });
+});
+
+// ── fetchManagerOverview ──
+
+describe('fetchManagerOverview', () => {
+    const NOW = new Date('2026-04-26T00:00:00Z');
+
+    const MANAGER_ROW = {
+        id: 'mgr-1',
+        full_name: 'Manager Mei',
+        role: 'manager',
+        phone: '+6593333333',
+        email: 'mei@example.com',
+        avatar_url: null,
+        is_active: true,
+        created_at: '2025-10-01T00:00:00Z',
+        reports_to: null,
+    };
+
+    it('aggregates outstanding candidate pipeline by stage and excludes terminal statuses', async () => {
+        const usersChain = mockSupa.__getChain('users');
+        mockResolve(usersChain, { data: MANAGER_ROW, error: null });
+
+        const candidatesChain = mockSupa.__getChain('candidates');
+        mockResolve(candidatesChain, {
+            data: [
+                {
+                    id: 'c1',
+                    name: 'Cand A',
+                    status: 'applied',
+                    stage_entered_at: '2026-04-20T00:00:00Z',
+                    updated_at: '2026-04-20T00:00:00Z',
+                    converted_to_agent_at: null,
+                },
+                {
+                    id: 'c2',
+                    name: 'Cand B',
+                    status: 'interviewed',
+                    stage_entered_at: '2026-04-10T00:00:00Z',
+                    updated_at: '2026-04-15T00:00:00Z',
+                    converted_to_agent_at: null,
+                },
+                {
+                    id: 'c3',
+                    name: 'Cand C',
+                    status: 'licensed',
+                    stage_entered_at: '2026-04-22T00:00:00Z',
+                    updated_at: '2026-04-22T00:00:00Z',
+                    converted_to_agent_at: '2026-04-22T00:00:00Z',
+                },
+                {
+                    id: 'c4',
+                    name: 'Cand D',
+                    status: 'rejected',
+                    stage_entered_at: null,
+                    updated_at: '2026-04-01T00:00:00Z',
+                    converted_to_agent_at: null,
+                },
+            ],
+            error: null,
+        });
+
+        const result = await fetchManagerOverview('mgr-1', 30, NOW);
+        expect(result.error).toBeNull();
+        expect(result.data).not.toBeNull();
+
+        const pipeline = result.data!.candidatePipeline;
+        expect(pipeline.outstandingTotal).toBe(2);
+        expect(pipeline.byStage).toEqual({ applied: 1, interviewed: 1 });
+    });
+
+    it('sorts recently-updated candidates by oldest stage_entered_at first', async () => {
+        const usersChain = mockSupa.__getChain('users');
+        mockResolve(usersChain, { data: MANAGER_ROW, error: null });
+
+        const candidatesChain = mockSupa.__getChain('candidates');
+        mockResolve(candidatesChain, {
+            data: [
+                {
+                    id: 'recent',
+                    name: 'Recent',
+                    status: 'applied',
+                    stage_entered_at: '2026-04-25T00:00:00Z', // 1 day ago
+                    updated_at: '2026-04-25T00:00:00Z',
+                    converted_to_agent_at: null,
+                },
+                {
+                    id: 'oldest',
+                    name: 'Oldest',
+                    status: 'interviewed',
+                    stage_entered_at: '2026-04-01T00:00:00Z', // 25 days ago
+                    updated_at: '2026-04-01T00:00:00Z',
+                    converted_to_agent_at: null,
+                },
+                {
+                    id: 'mid',
+                    name: 'Mid',
+                    status: 'approved',
+                    stage_entered_at: '2026-04-15T00:00:00Z', // 11 days ago
+                    updated_at: '2026-04-15T00:00:00Z',
+                    converted_to_agent_at: null,
+                },
+            ],
+            error: null,
+        });
+
+        const result = await fetchManagerOverview('mgr-1', 30, NOW);
+        const ordered = result.data!.candidatePipeline.recentlyUpdated.map((r) => r.id);
+        expect(ordered).toEqual(['oldest', 'mid', 'recent']);
+        expect(result.data!.candidatePipeline.recentlyUpdated[0].daysSinceLastUpdate).toBe(25);
+        expect(result.data!.candidatePipeline.recentlyUpdated[2].daysSinceLastUpdate).toBe(1);
+    });
+
+    it('falls back to updated_at when stage_entered_at is missing', async () => {
+        const usersChain = mockSupa.__getChain('users');
+        mockResolve(usersChain, { data: MANAGER_ROW, error: null });
+
+        const candidatesChain = mockSupa.__getChain('candidates');
+        mockResolve(candidatesChain, {
+            data: [
+                {
+                    id: 'x',
+                    name: 'X',
+                    status: 'applied',
+                    stage_entered_at: null,
+                    updated_at: '2026-04-20T00:00:00Z', // 6 days ago
+                    converted_to_agent_at: null,
+                },
+            ],
+            error: null,
+        });
+
+        const result = await fetchManagerOverview('mgr-1', 30, NOW);
+        expect(result.data!.candidatePipeline.recentlyUpdated[0].daysSinceLastUpdate).toBe(6);
+    });
+
+    it('returns error when manager not found', async () => {
+        const usersChain = mockSupa.__getChain('users');
+        mockResolve(usersChain, { data: null, error: { message: 'Not found' } });
+
+        const result = await fetchManagerOverview('bad-id', 30, NOW);
+        expect(result.error).toBe('Not found');
+        expect(result.data).toBeNull();
+    });
+
+    it('returns error when candidates query fails', async () => {
+        const usersChain = mockSupa.__getChain('users');
+        mockResolve(usersChain, { data: MANAGER_ROW, error: null });
+
+        const candidatesChain = mockSupa.__getChain('candidates');
+        mockResolve(candidatesChain, { data: null, error: { message: 'RLS denied' } });
+
+        const result = await fetchManagerOverview('mgr-1', 30, NOW);
+        expect(result.error).toBe('RLS denied');
+        expect(result.data).toBeNull();
+    });
+
+    it('returns zero-state outputs when manager has no candidates', async () => {
+        const usersChain = mockSupa.__getChain('users');
+        mockResolve(usersChain, { data: MANAGER_ROW, error: null });
+
+        const candidatesChain = mockSupa.__getChain('candidates');
+        mockResolve(candidatesChain, { data: [], error: null });
+
+        const result = await fetchManagerOverview('mgr-1', 30, NOW);
+        expect(result.error).toBeNull();
+        expect(result.data!.candidatePipeline.outstandingTotal).toBe(0);
+        expect(result.data!.candidatePipeline.byStage).toEqual({});
+        expect(result.data!.candidatePipeline.recentlyUpdated).toEqual([]);
+        expect(result.data!.manager.id).toBe('mgr-1');
+        expect(result.data!.manager.role).toBe('manager');
     });
 });

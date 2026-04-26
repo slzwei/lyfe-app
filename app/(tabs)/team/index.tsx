@@ -1,27 +1,32 @@
-import { CandidateList } from '@/components/CandidateListScreen';
+import Avatar from '@/components/Avatar';
 import EmptyState from '@/components/EmptyState';
 import ErrorBanner from '@/components/ErrorBanner';
 import LoadingState from '@/components/LoadingState';
 import ScreenHeader from '@/components/ScreenHeader';
-import { canCreateCandidates } from '@/constants/Roles';
+import { letterSpacing } from '@/constants/platform';
+import { Fonts } from '@/constants/type';
 import { useAuth } from '@/contexts/AuthContext';
 import { useTheme } from '@/contexts/ThemeContext';
-import { fetchTeamMembers, type TeamMember } from '@/lib/team';
+import { useTypedRouter } from '@/hooks/useTypedRouter';
 import { canInviteMembers, fetchMyInvitations, revokeInvitation, type MemberInvitation } from '@/lib/invitations';
-import { useFilteredList } from '@/hooks/useFilteredList';
-import { letterSpacing } from '@/constants/platform';
+import {
+    buildTeamAttentionItems,
+    buildTeamHealthSummary,
+    getMemberSignal,
+    type TeamAttentionItem,
+} from '@/lib/teamAttention';
+import { fetchTeamMembers, type TeamMember } from '@/lib/team';
+import type { UserRole } from '@/types/shared/roles';
 import { Ionicons } from '@expo/vector-icons';
 import { useFocusEffect } from 'expo-router';
-import { useTypedRouter } from '@/hooks/useTypedRouter';
 import React, { useCallback, useMemo, useState } from 'react';
 import { Alert, FlatList, RefreshControl, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import type { UserRole } from '@/types/shared/roles';
+
+type FilterKey = 'all' | 'manager' | 'agent';
 
 const TEAM_SEARCH_FIELDS: (keyof TeamMember)[] = ['name', 'phone', 'email'];
-const AVATAR_COLOR_KEYS = ['statusProposed', 'accent', 'danger', 'warning', 'statusProposed', 'info'] as const;
-
-type FilterKey = 'all' | 'manager' | 'agent' | 'pending';
+const AVATAR_COLOR_KEYS = ['accent', 'success', 'warning', 'info', 'statusProposed', 'accentMuted'] as const;
 
 const ROLE_LABELS: Record<string, string> = {
     admin: 'Admin',
@@ -29,8 +34,28 @@ const ROLE_LABELS: Record<string, string> = {
     manager: 'Manager',
     agent: 'Agent',
     pa: 'PA',
-    candidate: 'Candidate',
 };
+
+function plural(count: number, singular: string, pluralText = `${singular}s`) {
+    return `${count} ${count === 1 ? singular : pluralText}`;
+}
+
+function initials(name: string) {
+    return name
+        .split(' ')
+        .filter(Boolean)
+        .slice(0, 2)
+        .map((part) => part[0])
+        .join('')
+        .toUpperCase();
+}
+
+function daysLeftLabel(expiresAt: string) {
+    const daysLeft = Math.max(0, Math.ceil((new Date(expiresAt).getTime() - Date.now()) / 86400000));
+    if (daysLeft === 0) return 'Expires today';
+    if (daysLeft === 1) return 'Expires tomorrow';
+    return `Expires in ${daysLeft} days`;
+}
 
 export default function TeamScreen() {
     const { colors } = useTheme();
@@ -43,10 +68,10 @@ export default function TeamScreen() {
     const [invitations, setInvitations] = useState<MemberInvitation[]>([]);
     const [isLoading, setIsLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
-    const [teamView, setTeamView] = useState<'members' | 'candidates'>('members');
 
-    const canFilter = user?.role === 'director' || user?.role === 'admin' || user?.role === 'manager';
-    const showInviteTab = canInviteMembers((user?.role ?? 'agent') as import('@/types/shared/roles').UserRole);
+    const role = (user?.role ?? 'agent') as UserRole;
+    const showRoleFilters = role === 'director' || role === 'admin';
+    const showInviteWorkflow = canInviteMembers(role);
 
     const loadMembers = useCallback(async () => {
         if (!user?.id) return;
@@ -54,20 +79,27 @@ export default function TeamScreen() {
         try {
             const [teamResult, invResult] = await Promise.all([
                 fetchTeamMembers(user.id, user.role || 'agent'),
-                showInviteTab ? fetchMyInvitations() : Promise.resolve({ data: [], error: null }),
+                showInviteWorkflow ? fetchMyInvitations() : Promise.resolve({ data: [], error: null }),
             ]);
             if (teamResult.error) {
                 setError(teamResult.error);
             } else {
                 setMembers(teamResult.data);
             }
-            setInvitations(invResult.data.filter((i) => i.status === 'pending'));
+            if (invResult.error) {
+                setError((prev) => prev ?? invResult.error);
+            }
+            setInvitations(
+                invResult.data
+                    .filter((inv) => inv.status === 'pending' && inv.intended_role !== 'candidate')
+                    .sort((a, b) => new Date(a.expires_at).getTime() - new Date(b.expires_at).getTime()),
+            );
         } catch {
             setError('Failed to load team members');
         } finally {
             setIsLoading(false);
         }
-    }, [user?.id, user?.role, showInviteTab]);
+    }, [user?.id, user?.role, showInviteWorkflow]);
 
     useFocusEffect(
         useCallback(() => {
@@ -75,8 +107,14 @@ export default function TeamScreen() {
         }, [loadMembers]),
     );
 
+    const onRefresh = useCallback(async () => {
+        setRefreshing(true);
+        await loadMembers();
+        setRefreshing(false);
+    }, [loadMembers]);
+
     const handleRevoke = useCallback((inv: MemberInvitation) => {
-        Alert.alert('Revoke Invitation', `Remove the pending invitation for ${inv.full_name}?`, [
+        Alert.alert('Revoke invitation', `Remove the pending invitation for ${inv.full_name}?`, [
             { text: 'Cancel', style: 'cancel' },
             {
                 text: 'Revoke',
@@ -84,52 +122,68 @@ export default function TeamScreen() {
                 onPress: async () => {
                     const { error: revokeErr } = await revokeInvitation(inv.id);
                     if (revokeErr) {
-                        Alert.alert('Error', revokeErr);
+                        Alert.alert('Could not revoke invitation', revokeErr);
                     } else {
-                        setInvitations((prev) => prev.filter((i) => i.id !== inv.id));
+                        setInvitations((prev) => prev.filter((item) => item.id !== inv.id));
                     }
                 },
             },
         ]);
     }, []);
 
-    const { filtered: filteredMembers, counts: baseCounts } = useFilteredList(
-        members,
-        search,
-        filter,
-        'role',
-        TEAM_SEARCH_FIELDS,
+    const canRevoke = useCallback(
+        (inv: MemberInvitation) =>
+            role === 'admin' ||
+            inv.invited_by_id === user?.id ||
+            (['manager', 'director'].includes(role) && inv.assigned_manager_id === user?.id),
+        [role, user?.id],
     );
 
-    const { counts, totalLeads, totalWon, avgConversion } = useMemo(() => {
-        const c: Record<string, number> = {
-            ...baseCounts,
-            active: members.filter((m) => m.isActive).length,
-        };
-        const tl = members.reduce((sum, m) => sum + m.leadsCount, 0);
-        const tw = members.reduce((sum, m) => sum + m.wonCount, 0);
-        return { counts: c, totalLeads: tl, totalWon: tw, avgConversion: tl > 0 ? Math.round((tw / tl) * 100) : 0 };
-    }, [members, baseCounts]);
+    const counts = useMemo(
+        () => ({
+            all: members.length,
+            manager: members.filter((m) => m.role === 'manager').length,
+            agent: members.filter((m) => m.role === 'agent').length,
+        }),
+        [members],
+    );
 
-    const onRefresh = useCallback(async () => {
-        setRefreshing(true);
-        await loadMembers();
-        setRefreshing(false);
-    }, [loadMembers]);
+    const isSearching = search.trim().length > 0;
 
-    const filters: { key: FilterKey; label: string }[] = canFilter
+    const filteredMembers = useMemo(() => {
+        const term = search.trim().toLowerCase();
+        return members.filter((member) => {
+            const matchesFilter = filter === 'all' || member.role === filter;
+            if (!matchesFilter) return false;
+            if (!term) return true;
+            return TEAM_SEARCH_FIELDS.some((field) => {
+                const value = member[field];
+                return typeof value === 'string' && value.toLowerCase().includes(term);
+            });
+        });
+    }, [filter, members, search]);
+
+    const attentionItems = useMemo(
+        () =>
+            buildTeamAttentionItems({
+                members,
+                invitations,
+            }),
+        [invitations, members],
+    );
+
+    const health = useMemo(
+        () => buildTeamHealthSummary({ members, invitations, attentionItems }),
+        [attentionItems, invitations, members],
+    );
+
+    const filters: { key: FilterKey; label: string }[] = showRoleFilters
         ? [
               { key: 'all', label: 'All' },
               { key: 'manager', label: 'Managers' },
               { key: 'agent', label: 'Agents' },
-              ...(showInviteTab ? [{ key: 'pending' as const, label: 'Pending' }] : []),
           ]
-        : showInviteTab
-          ? [
-                { key: 'all' as const, label: 'All' },
-                { key: 'pending' as const, label: 'Pending' },
-            ]
-          : [{ key: 'all' as const, label: 'All' }];
+        : [{ key: 'all', label: 'All' }];
 
     const getAvatarColor = useCallback(
         (name: string) => {
@@ -139,225 +193,41 @@ export default function TeamScreen() {
         [colors],
     );
 
+    const goToAttentionItem = useCallback(
+        (item: TeamAttentionItem) => {
+            if (item.memberId) {
+                router.push(`/(tabs)/team/agent/${item.memberId}`);
+            }
+        },
+        [router],
+    );
+
     const renderMember = useCallback(
-        ({ item }: { item: TeamMember }) => {
-            const avatarColor = getAvatarColor(item.name);
-            const isManager = item.role === 'manager';
-
-            return (
-                <TouchableOpacity
-                    style={[styles.card, { backgroundColor: colors.cardBackground, shadowColor: colors.textPrimary }]}
-                    activeOpacity={0.7}
-                    accessibilityRole="button"
-                    accessibilityLabel={`View ${item.name}'s profile`}
-                    onPress={() => router.push(`/(tabs)/team/agent/${item.id}`)}
-                >
-                    {/* Top Row: Avatar + Info + Status */}
-                    <View style={styles.cardTop}>
-                        <View style={[styles.avatar, { backgroundColor: avatarColor + '18' }]}>
-                            <Text style={[styles.avatarText, { color: avatarColor }]}>
-                                {item.name
-                                    .split(' ')
-                                    .map((n) => n[0])
-                                    .join('')}
-                            </Text>
-                        </View>
-
-                        <View style={styles.cardInfo}>
-                            <Text style={[styles.name, { color: colors.textPrimary }]} numberOfLines={1}>
-                                {item.name}
-                            </Text>
-                            <View style={styles.metaRow}>
-                                <View
-                                    style={[
-                                        styles.roleBadge,
-                                        {
-                                            backgroundColor: isManager
-                                                ? colors.statusProposed + '18'
-                                                : colors.accentLight,
-                                        },
-                                    ]}
-                                >
-                                    <View
-                                        style={[
-                                            styles.roleDot,
-                                            { backgroundColor: isManager ? colors.statusProposed : colors.accent },
-                                        ]}
-                                    />
-                                    <Text
-                                        style={[
-                                            styles.roleText,
-                                            { color: isManager ? colors.statusProposed : colors.accent },
-                                        ]}
-                                    >
-                                        {isManager ? 'Manager' : 'Agent'}
-                                    </Text>
-                                </View>
-                            </View>
-                        </View>
-
-                        <View
-                            style={[
-                                styles.statusPill,
-                                { backgroundColor: item.isActive ? colors.successLight : colors.surfaceSecondary },
-                            ]}
-                        >
-                            <View
-                                style={[
-                                    styles.statusDot,
-                                    { backgroundColor: item.isActive ? colors.success : colors.textTertiary },
-                                ]}
-                            />
-                            <Text
-                                style={[
-                                    styles.statusText,
-                                    { color: item.isActive ? colors.success : colors.textTertiary },
-                                ]}
-                            >
-                                {item.isActive ? 'Active' : 'Inactive'}
-                            </Text>
-                        </View>
-                    </View>
-
-                    {/* Stats Row */}
-                    <View style={[styles.statsRow, { borderTopColor: colors.border }]}>
-                        <View style={styles.statItem}>
-                            <Text style={[styles.statValue, { color: colors.textPrimary }]}>{item.leadsCount}</Text>
-                            <Text style={[styles.statLabel, { color: colors.textTertiary }]}>Leads</Text>
-                        </View>
-                        <View style={[styles.statDivider, { backgroundColor: colors.border }]} />
-                        <View style={styles.statItem}>
-                            <Text style={[styles.statValue, { color: colors.textPrimary }]}>{item.wonCount}</Text>
-                            <Text style={[styles.statLabel, { color: colors.textTertiary }]}>Won</Text>
-                        </View>
-                        <View style={[styles.statDivider, { backgroundColor: colors.border }]} />
-                        <View style={styles.statItem}>
-                            <Text
-                                style={[
-                                    styles.statValue,
-                                    { color: item.conversionRate >= 30 ? colors.success : colors.textPrimary },
-                                ]}
-                            >
-                                {item.conversionRate}%
-                            </Text>
-                            <Text style={[styles.statLabel, { color: colors.textTertiary }]}>Conv.</Text>
-                        </View>
-                    </View>
-                </TouchableOpacity>
-            );
-        },
-        [colors, router, getAvatarColor],
+        ({ item }: { item: TeamMember }) => (
+            <TeamMemberCard
+                member={item}
+                avatarColor={getAvatarColor(item.name)}
+                onPress={() =>
+                    router.push(
+                        item.role === 'manager' ? `/(tabs)/team/manager/${item.id}` : `/(tabs)/team/agent/${item.id}`,
+                    )
+                }
+            />
+        ),
+        [getAvatarColor, router],
     );
 
-    const canRevoke = useCallback(
-        (inv: MemberInvitation) =>
-            user?.role === 'admin' ||
-            inv.invited_by_id === user?.id ||
-            (['manager', 'director'].includes(user?.role ?? '') && inv.assigned_manager_id === user?.id),
-        [user?.id, user?.role],
-    );
-
-    const renderInvitation = useCallback(
-        ({ item }: { item: MemberInvitation }) => {
-            const avatarColor = getAvatarColor(item.full_name);
-            const daysLeft = Math.max(0, Math.ceil((new Date(item.expires_at).getTime() - Date.now()) / 86400000));
-            const showRevoke = canRevoke(item);
-            const inviterName = item.inviter?.full_name;
-            const managerName = item.manager?.full_name;
-            const isInviterSameAsManager = item.invited_by_id === item.assigned_manager_id;
-
-            return (
-                <View
-                    style={[
-                        styles.card,
-                        styles.pendingCard,
-                        { backgroundColor: colors.cardBackground, borderColor: colors.border },
-                    ]}
-                >
-                    <View style={styles.cardTop}>
-                        <View style={[styles.avatar, { backgroundColor: avatarColor + '18' }]}>
-                            <Text style={[styles.avatarText, { color: avatarColor }]}>
-                                {item.full_name
-                                    .split(' ')
-                                    .map((n) => n[0])
-                                    .join('')}
-                            </Text>
-                        </View>
-
-                        <View style={styles.cardInfo}>
-                            <Text style={[styles.name, { color: colors.textPrimary }]} numberOfLines={1}>
-                                {item.full_name}
-                            </Text>
-                            <View style={styles.metaRow}>
-                                <View style={[styles.roleBadge, { backgroundColor: colors.warning + '18' }]}>
-                                    <View style={[styles.roleDot, { backgroundColor: colors.warning }]} />
-                                    <Text style={[styles.roleText, { color: colors.warning }]}>
-                                        {ROLE_LABELS[item.intended_role] ?? item.intended_role}
-                                    </Text>
-                                </View>
-                            </View>
-                        </View>
-
-                        <View style={[styles.statusPill, { backgroundColor: colors.warning + '18' }]}>
-                            <View style={[styles.statusDot, { backgroundColor: colors.warning }]} />
-                            <Text style={[styles.statusText, { color: colors.warning }]}>Pending</Text>
-                        </View>
-                    </View>
-
-                    {(inviterName || managerName) && (
-                        <View style={[styles.inviteMeta, { borderTopColor: colors.border }]}>
-                            {inviterName && (
-                                <View style={styles.inviteMetaItem}>
-                                    <Ionicons name="person-outline" size={13} color={colors.textTertiary} />
-                                    <Text style={[styles.inviteMetaLabel, { color: colors.textTertiary }]}>
-                                        Invited by
-                                    </Text>
-                                    <Text
-                                        style={[styles.inviteMetaValue, { color: colors.textSecondary }]}
-                                        numberOfLines={1}
-                                    >
-                                        {inviterName}
-                                    </Text>
-                                </View>
-                            )}
-                            {managerName && !isInviterSameAsManager && (
-                                <View style={styles.inviteMetaItem}>
-                                    <Ionicons name="shield-outline" size={13} color={colors.textTertiary} />
-                                    <Text style={[styles.inviteMetaLabel, { color: colors.textTertiary }]}>
-                                        Assigned to
-                                    </Text>
-                                    <Text
-                                        style={[styles.inviteMetaValue, { color: colors.textSecondary }]}
-                                        numberOfLines={1}
-                                    >
-                                        {managerName}
-                                    </Text>
-                                </View>
-                            )}
-                        </View>
-                    )}
-
-                    <View style={[styles.pendingFooter, { borderTopColor: colors.border }]}>
-                        <Text style={[styles.pendingMeta, { color: colors.textTertiary }]}>
-                            Expires in {daysLeft} day{daysLeft !== 1 ? 's' : ''}
-                        </Text>
-                        {showRevoke && (
-                            <TouchableOpacity
-                                onPress={() => handleRevoke(item)}
-                                hitSlop={8}
-                                style={[styles.revokeButton, { borderColor: colors.danger + '40' }]}
-                            >
-                                <Text style={[styles.revokeText, { color: colors.danger }]}>Revoke</Text>
-                            </TouchableOpacity>
-                        )}
-                    </View>
-                </View>
-            );
-        },
-        [colors, getAvatarColor, handleRevoke, canRevoke],
-    );
-
-    const isPending = filter === 'pending';
+    const headerRight = showInviteWorkflow ? (
+        <TouchableOpacity
+            onPress={() => router.push('/(tabs)/team/invite-member')}
+            hitSlop={8}
+            testID="team-invite-button"
+            accessibilityRole="button"
+            accessibilityLabel="Invite team member"
+        >
+            <Ionicons name="person-add-outline" size={22} color={colors.accent} />
+        </TouchableOpacity>
+    ) : undefined;
 
     if (isLoading) {
         return (
@@ -368,256 +238,465 @@ export default function TeamScreen() {
         );
     }
 
-    const role = (user?.role ?? 'agent') as UserRole;
-    const headerRight =
-        teamView === 'candidates' ? (
-            canCreateCandidates(role) ? (
-                <TouchableOpacity
-                    onPress={() => router.push('/(tabs)/team/add-candidate')}
-                    hitSlop={8}
-                    testID="team-add-candidate-button"
-                    accessibilityLabel="Add candidate"
-                >
-                    <Ionicons name="person-add" size={22} color={colors.accent} />
-                </TouchableOpacity>
-            ) : undefined
-        ) : canInviteMembers(role) ? (
-            <TouchableOpacity
-                onPress={() => router.push('/(tabs)/team/invite-member')}
-                hitSlop={8}
-                testID="team-invite-button"
-            >
-                <Ionicons name="person-add-outline" size={22} color={colors.accent} />
-            </TouchableOpacity>
-        ) : undefined;
-
     return (
         <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]} edges={['top']}>
             <ScreenHeader title="Team" rightAction={headerRight} />
 
-            {/* Segment + (Members only) Search + Filters */}
-            <View style={[styles.stickyHeader, teamView === 'candidates' && { paddingBottom: 0 }]}>
-                <View style={styles.segmentRow}>
-                    <TouchableOpacity
-                        style={[
-                            styles.segmentButton,
-                            {
-                                backgroundColor: teamView === 'members' ? colors.accent : colors.cardBackground,
-                                borderColor: teamView === 'members' ? colors.accent : colors.border,
-                            },
-                        ]}
-                        onPress={() => setTeamView('members')}
-                        accessibilityRole="button"
-                        accessibilityState={{ selected: teamView === 'members' }}
-                        testID="team-segment-members"
-                    >
-                        <Text
-                            style={[
-                                styles.segmentText,
-                                { color: teamView === 'members' ? colors.textInverse : colors.textSecondary },
-                            ]}
-                        >
-                            Members
-                        </Text>
-                    </TouchableOpacity>
-                    <TouchableOpacity
-                        style={[
-                            styles.segmentButton,
-                            {
-                                backgroundColor: teamView === 'candidates' ? colors.accent : colors.cardBackground,
-                                borderColor: teamView === 'candidates' ? colors.accent : colors.border,
-                            },
-                        ]}
-                        onPress={() => setTeamView('candidates')}
-                        accessibilityRole="button"
-                        accessibilityState={{ selected: teamView === 'candidates' }}
-                        testID="team-segment-candidates"
-                    >
-                        <Text
-                            style={[
-                                styles.segmentText,
-                                { color: teamView === 'candidates' ? colors.textInverse : colors.textSecondary },
-                            ]}
-                        >
-                            Candidates
-                        </Text>
-                    </TouchableOpacity>
+            <View style={styles.stickyHeader}>
+                <View
+                    style={[styles.searchBar, { backgroundColor: colors.cardBackground, borderColor: colors.border }]}
+                >
+                    <Ionicons name="search" size={18} color={colors.textTertiary} />
+                    <TextInput
+                        style={[styles.searchInput, { color: colors.textPrimary }]}
+                        placeholder="Search members"
+                        placeholderTextColor={colors.textTertiary}
+                        value={search}
+                        onChangeText={setSearch}
+                        returnKeyType="search"
+                        accessibilityLabel="Search members"
+                    />
+                    {search.length > 0 && (
+                        <TouchableOpacity onPress={() => setSearch('')} hitSlop={8} accessibilityLabel="Clear search">
+                            <Ionicons name="close-circle" size={18} color={colors.textTertiary} />
+                        </TouchableOpacity>
+                    )}
                 </View>
 
-                {teamView === 'members' && (
-                    <>
-                        {/* Search Bar */}
-                        <View
-                            style={[
-                                styles.searchBar,
-                                { backgroundColor: colors.cardBackground, borderColor: colors.border },
-                            ]}
-                        >
-                            <Ionicons name="search" size={18} color={colors.textTertiary} />
-                            <TextInput
-                                style={[styles.searchInput, { color: colors.textPrimary }]}
-                                placeholder="Search team members..."
-                                placeholderTextColor={colors.textTertiary}
-                                value={search}
-                                onChangeText={setSearch}
-                                returnKeyType="search"
-                            />
-                            {search.length > 0 && (
+                {filters.length > 1 && (
+                    <View style={styles.filterRow}>
+                        {filters.map((item) => {
+                            const isActive = filter === item.key;
+                            return (
                                 <TouchableOpacity
-                                    onPress={() => setSearch('')}
-                                    hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                                    key={item.key}
+                                    style={[
+                                        styles.filterChip,
+                                        {
+                                            backgroundColor: isActive ? colors.accent : colors.cardBackground,
+                                            borderColor: isActive ? colors.accent : colors.border,
+                                        },
+                                    ]}
+                                    onPress={() => setFilter(item.key)}
+                                    accessibilityRole="button"
+                                    accessibilityState={{ selected: isActive }}
+                                    accessibilityLabel={`Show ${item.label.toLowerCase()}`}
                                 >
-                                    <Ionicons name="close-circle" size={18} color={colors.textTertiary} />
+                                    <Text
+                                        style={[
+                                            styles.filterText,
+                                            { color: isActive ? colors.textInverse : colors.textSecondary },
+                                        ]}
+                                    >
+                                        {item.label}
+                                    </Text>
+                                    <Text
+                                        style={[
+                                            styles.filterCount,
+                                            { color: isActive ? colors.textInverse : colors.textTertiary },
+                                        ]}
+                                    >
+                                        {counts[item.key]}
+                                    </Text>
                                 </TouchableOpacity>
-                            )}
-                        </View>
-
-                        {/* Filter Chips */}
-                        {filters.length > 1 && (
-                            <View style={styles.filterRow}>
-                                {filters.map((f) => {
-                                    const isActive = filter === f.key;
-                                    const count = f.key === 'pending' ? invitations.length : counts[f.key] || 0;
-                                    return (
-                                        <TouchableOpacity
-                                            key={f.key}
-                                            style={[
-                                                styles.filterChip,
-                                                {
-                                                    backgroundColor: isActive ? colors.accent : colors.cardBackground,
-                                                    borderColor: isActive ? colors.accent : colors.border,
-                                                },
-                                            ]}
-                                            onPress={() => setFilter(f.key)}
-                                            accessibilityRole="button"
-                                            accessibilityLabel={`Filter by ${f.label}`}
-                                            accessibilityState={{ selected: isActive }}
-                                        >
-                                            <Text
-                                                style={[
-                                                    styles.filterText,
-                                                    { color: isActive ? colors.textInverse : colors.textSecondary },
-                                                ]}
-                                            >
-                                                {f.label}
-                                            </Text>
-                                            <Text
-                                                style={[
-                                                    styles.filterCount,
-                                                    {
-                                                        color: isActive ? colors.textInverse : colors.textTertiary,
-                                                        opacity: isActive ? 0.8 : 1,
-                                                    },
-                                                ]}
-                                            >
-                                                {count}
-                                            </Text>
-                                        </TouchableOpacity>
-                                    );
-                                })}
-                            </View>
-                        )}
-                    </>
+                            );
+                        })}
+                    </View>
                 )}
             </View>
 
-            {/* Error Banner (members view only — CandidateList renders its own) */}
-            {error && teamView === 'members' && (
-                <View style={{ paddingHorizontal: 16 }}>
+            {error && (
+                <View style={styles.errorWrap}>
                     <ErrorBanner message={error} onRetry={loadMembers} />
                 </View>
             )}
 
-            {teamView === 'candidates' ? (
-                <CandidateList candidateRoute={(id) => `/(tabs)/team/candidate/${id}`} isManagerView embedded />
-            ) : isPending ? (
-                <FlatList
-                    data={invitations}
-                    renderItem={renderInvitation}
-                    keyExtractor={(item) => item.id}
-                    contentContainerStyle={styles.listContent}
-                    showsVerticalScrollIndicator={false}
-                    refreshControl={
-                        <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={colors.accent} />
-                    }
-                    ListHeaderComponent={
+            <FlatList
+                data={filteredMembers}
+                renderItem={renderMember}
+                keyExtractor={(item) => item.id}
+                contentContainerStyle={styles.listContent}
+                showsVerticalScrollIndicator={false}
+                refreshControl={
+                    <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={colors.accent} />
+                }
+                removeClippedSubviews={true}
+                maxToRenderPerBatch={10}
+                windowSize={5}
+                initialNumToRender={10}
+                ListHeaderComponent={
+                    <View>
+                        {!isSearching && (
+                            <>
+                                <TeamHealthCard health={health} />
+                                <NeedsAttentionSection items={attentionItems} onPressItem={goToAttentionItem} />
+                                {showInviteWorkflow && (
+                                    <PendingInvitesSection
+                                        invitations={invitations}
+                                        canRevoke={canRevoke}
+                                        onRevoke={handleRevoke}
+                                    />
+                                )}
+                            </>
+                        )}
                         <View style={styles.sectionRow}>
-                            <Text style={[styles.sectionLabel, { color: colors.textSecondary }]}>
-                                {invitations.length} pending invitation{invitations.length !== 1 ? 's' : ''}
+                            <Text style={[styles.sectionTitle, { color: colors.textPrimary }]}>
+                                {isSearching ? 'Search results' : 'Members'}
+                            </Text>
+                            <Text style={[styles.sectionMeta, { color: colors.textTertiary }]}>
+                                {plural(filteredMembers.length, 'person', 'people')}
                             </Text>
                         </View>
-                    }
-                    ListEmptyComponent={
-                        <EmptyState
-                            icon="mail-outline"
-                            title="No pending invitations"
-                            subtitle="Invitations you send will appear here until accepted"
-                        />
-                    }
-                />
-            ) : (
-                <FlatList
-                    data={filteredMembers}
-                    renderItem={renderMember}
-                    keyExtractor={(item) => item.id}
-                    contentContainerStyle={styles.listContent}
-                    showsVerticalScrollIndicator={false}
-                    refreshControl={
-                        <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={colors.accent} />
-                    }
-                    removeClippedSubviews={true}
-                    maxToRenderPerBatch={10}
-                    windowSize={5}
-                    initialNumToRender={10}
-                    ListHeaderComponent={
-                        <View>
-                            {/* Hero Stats */}
-                            <View style={styles.heroRow}>
-                                <View style={[styles.heroCard, { backgroundColor: colors.accent }]}>
-                                    <Text style={[styles.heroValue, { color: colors.textInverse }]}>{counts.all}</Text>
-                                    <Text style={[styles.heroLabel, { color: colors.textInverse, opacity: 0.8 }]}>
-                                        Members
-                                    </Text>
-                                </View>
-                                <View
-                                    style={[
-                                        styles.heroCard,
-                                        { backgroundColor: colors.cardBackground, shadowColor: colors.textPrimary },
-                                    ]}
-                                >
-                                    <Text style={[styles.heroValue, { color: colors.textPrimary }]}>{totalLeads}</Text>
-                                    <Text style={[styles.heroLabel, { color: colors.textTertiary }]}>Total Leads</Text>
-                                </View>
-                                <View
-                                    style={[
-                                        styles.heroCard,
-                                        { backgroundColor: colors.cardBackground, shadowColor: colors.textPrimary },
-                                    ]}
-                                >
-                                    <Text style={[styles.heroValue, { color: colors.success }]}>{avgConversion}%</Text>
-                                    <Text style={[styles.heroLabel, { color: colors.textTertiary }]}>Avg Conv.</Text>
-                                </View>
-                            </View>
-
-                            {/* Section Label */}
-                            <View style={styles.sectionRow}>
-                                <Text style={[styles.sectionLabel, { color: colors.textSecondary }]}>
-                                    {filteredMembers.length} member{filteredMembers.length !== 1 ? 's' : ''}
-                                </Text>
-                            </View>
-                        </View>
-                    }
-                    ListEmptyComponent={
-                        <EmptyState
-                            icon="people-outline"
-                            title="No members found"
-                            subtitle={search.trim() ? `No results for "${search}"` : 'Try a different filter'}
-                        />
-                    }
-                />
-            )}
+                    </View>
+                }
+                ListEmptyComponent={
+                    <EmptyState
+                        icon="people-outline"
+                        title="No members found"
+                        subtitle={
+                            search.trim()
+                                ? `No results for "${search}"`
+                                : 'Members you invite will appear here once they accept.'
+                        }
+                    />
+                }
+            />
         </SafeAreaView>
     );
+}
+
+function TeamHealthCard({ health }: { health: ReturnType<typeof buildTeamHealthSummary> }) {
+    const { colors } = useTheme();
+    return (
+        <View
+            style={[
+                styles.healthCard,
+                { backgroundColor: colors.cardBackground, borderColor: colors.cardBorder, shadowColor: colors.shadow },
+            ]}
+        >
+            <View style={styles.healthHeader}>
+                <Text style={[styles.kicker, { color: colors.accent }]}>Team health</Text>
+            </View>
+            <View style={styles.healthMainRow}>
+                <Text style={[styles.healthNumber, { color: colors.textPrimary }]}>{health.activeMembers}</Text>
+                <Text style={[styles.healthLabel, { color: colors.textSecondary }]}>active members</Text>
+            </View>
+            <View style={styles.healthFacts}>
+                <FactPill label={`${health.needsFollowUp} need follow-up`} tone="warning" />
+                <FactPill label={`${health.pendingInvites} pending invites`} tone="neutral" />
+            </View>
+            <View style={[styles.healthSecondary, { borderTopColor: colors.border }]}>
+                <SecondaryFact label="Team leads" value={String(health.totalLeads)} />
+                <SecondaryFact label="Avg conversion" value={`${health.avgConversion}%`} />
+            </View>
+        </View>
+    );
+}
+
+function SecondaryFact({ label, value }: { label: string; value: string }) {
+    const { colors } = useTheme();
+    return (
+        <View style={styles.secondaryFact}>
+            <Text style={[styles.secondaryFactValue, { color: colors.textPrimary }]}>{value}</Text>
+            <Text style={[styles.secondaryFactLabel, { color: colors.textTertiary }]}>{label}</Text>
+        </View>
+    );
+}
+
+function FactPill({ label, tone }: { label: string; tone: 'warning' | 'neutral' | 'danger' | 'success' }) {
+    const { colors } = useTheme();
+    const palette = getTonePalette(tone, colors);
+    return (
+        <View style={[styles.factPill, { backgroundColor: palette.bg }]}>
+            <Text style={[styles.factPillText, { color: palette.fg }]}>{label}</Text>
+        </View>
+    );
+}
+
+function NeedsAttentionSection({
+    items,
+    onPressItem,
+}: {
+    items: TeamAttentionItem[];
+    onPressItem: (item: TeamAttentionItem) => void;
+}) {
+    const { colors } = useTheme();
+    if (items.length === 0) return null;
+
+    return (
+        <View style={styles.sectionBlock}>
+            <View style={styles.sectionRow}>
+                <Text style={[styles.sectionTitle, { color: colors.textPrimary }]}>Needs attention</Text>
+                <Text style={[styles.sectionMeta, { color: colors.textTertiary }]}>Sorted by who needs you first</Text>
+            </View>
+            {items.map((item) => {
+                const palette = getTonePalette(item.tone, colors);
+                const isPressable = Boolean(item.memberId);
+                return (
+                    <TouchableOpacity
+                        key={item.id}
+                        style={[
+                            styles.attentionRow,
+                            { backgroundColor: colors.cardBackground, borderColor: colors.border },
+                        ]}
+                        onPress={() => isPressable && onPressItem(item)}
+                        activeOpacity={isPressable ? 0.7 : 1}
+                        accessibilityRole={isPressable ? 'button' : undefined}
+                    >
+                        <View style={[styles.attentionIcon, { backgroundColor: palette.bg }]}>
+                            <Ionicons name={attentionIcon(item.kind)} size={16} color={palette.fg} />
+                        </View>
+                        <View style={styles.attentionText}>
+                            <Text style={[styles.attentionTitle, { color: colors.textPrimary }]} numberOfLines={1}>
+                                {item.title}
+                            </Text>
+                            <Text style={[styles.attentionSubtitle, { color: colors.textSecondary }]} numberOfLines={2}>
+                                {item.subtitle}
+                            </Text>
+                        </View>
+                        <Text style={[styles.attentionSignal, { color: palette.fg }]} numberOfLines={1}>
+                            {item.signal}
+                        </Text>
+                    </TouchableOpacity>
+                );
+            })}
+        </View>
+    );
+}
+
+function PendingInvitesSection({
+    invitations,
+    canRevoke,
+    onRevoke,
+}: {
+    invitations: MemberInvitation[];
+    canRevoke: (inv: MemberInvitation) => boolean;
+    onRevoke: (inv: MemberInvitation) => void;
+}) {
+    const { colors } = useTheme();
+    if (invitations.length === 0) return null;
+
+    return (
+        <View style={styles.sectionBlock}>
+            <View style={styles.sectionRow}>
+                <Text style={[styles.sectionTitle, { color: colors.textPrimary }]}>Pending invites</Text>
+                <Text style={[styles.sectionMeta, { color: colors.textTertiary }]}>
+                    {plural(invitations.length, 'invite')}
+                </Text>
+            </View>
+            {invitations.map((inv) => {
+                const inviterName = inv.inviter?.full_name;
+                const managerName = inv.manager?.full_name;
+                const isInviterSameAsManager = inv.invited_by_id === inv.assigned_manager_id;
+                return (
+                    <View
+                        key={inv.id}
+                        style={[
+                            styles.inviteCard,
+                            { backgroundColor: colors.cardBackground, borderColor: colors.border },
+                        ]}
+                    >
+                        <View style={styles.inviteTop}>
+                            <View style={[styles.smallAvatar, { backgroundColor: colors.warningLight }]}>
+                                <Text style={[styles.smallAvatarText, { color: colors.warning }]}>
+                                    {initials(inv.full_name)}
+                                </Text>
+                            </View>
+                            <View style={styles.inviteInfo}>
+                                <Text style={[styles.inviteName, { color: colors.textPrimary }]} numberOfLines={1}>
+                                    {inv.full_name}
+                                </Text>
+                                <Text style={[styles.inviteRole, { color: colors.textSecondary }]}>
+                                    {ROLE_LABELS[inv.intended_role] ?? inv.intended_role}
+                                </Text>
+                            </View>
+                            <Text style={[styles.inviteExpiry, { color: colors.warning }]}>
+                                {daysLeftLabel(inv.expires_at)}
+                            </Text>
+                        </View>
+                        {(inviterName || managerName) && (
+                            <View style={styles.inviteMetaRow}>
+                                {inviterName && <InviteMeta icon="person-outline" text={`Invited by ${inviterName}`} />}
+                                {managerName && !isInviterSameAsManager && (
+                                    <InviteMeta icon="shield-outline" text={`Assigned to ${managerName}`} />
+                                )}
+                            </View>
+                        )}
+                        {canRevoke(inv) && (
+                            <TouchableOpacity
+                                style={[styles.revokeButton, { borderColor: colors.danger + '40' }]}
+                                onPress={() => onRevoke(inv)}
+                                accessibilityRole="button"
+                                accessibilityLabel={`Revoke invitation for ${inv.full_name}`}
+                            >
+                                <Text style={[styles.revokeText, { color: colors.danger }]}>Revoke</Text>
+                            </TouchableOpacity>
+                        )}
+                    </View>
+                );
+            })}
+        </View>
+    );
+}
+
+function InviteMeta({ icon, text }: { icon: keyof typeof Ionicons.glyphMap; text: string }) {
+    const { colors } = useTheme();
+    return (
+        <View style={styles.inviteMetaItem}>
+            <Ionicons name={icon} size={13} color={colors.textTertiary} />
+            <Text style={[styles.inviteMetaText, { color: colors.textTertiary }]} numberOfLines={1}>
+                {text}
+            </Text>
+        </View>
+    );
+}
+
+function TeamMemberCard({
+    member,
+    avatarColor,
+    onPress,
+}: {
+    member: TeamMember;
+    avatarColor: string;
+    onPress: () => void;
+}) {
+    const { colors } = useTheme();
+    const signal = getMemberSignal(member);
+    const signalPalette = signal ? getTonePalette(signal.tone, colors) : null;
+    const roleColor = member.role === 'manager' ? colors.info : colors.accent;
+    const roleBg = member.role === 'manager' ? colors.infoLight : colors.accentLight;
+
+    return (
+        <TouchableOpacity
+            style={[styles.memberCard, { backgroundColor: colors.cardBackground, borderColor: colors.cardBorder }]}
+            activeOpacity={0.72}
+            accessibilityRole="button"
+            accessibilityLabel={`View ${member.name}'s profile`}
+            onPress={onPress}
+        >
+            <View style={styles.memberTop}>
+                <Avatar
+                    name={member.name}
+                    avatarUrl={member.avatarUrl}
+                    size={48}
+                    backgroundColor={avatarColor + '18'}
+                    textColor={avatarColor}
+                />
+
+                <View style={styles.memberInfo}>
+                    <Text style={[styles.memberName, { color: colors.textPrimary }]} numberOfLines={1}>
+                        {member.name}
+                    </Text>
+                    <View style={styles.badgeRow}>
+                        <View style={[styles.roleBadge, { backgroundColor: roleBg }]}>
+                            <Text style={[styles.roleText, { color: roleColor }]}>
+                                {ROLE_LABELS[member.role] ?? member.role}
+                            </Text>
+                        </View>
+                        <View
+                            style={[
+                                styles.statusBadge,
+                                { backgroundColor: member.isActive ? colors.successLight : colors.surfaceSecondary },
+                            ]}
+                        >
+                            <View
+                                style={[
+                                    styles.statusDot,
+                                    { backgroundColor: member.isActive ? colors.success : colors.textTertiary },
+                                ]}
+                            />
+                            <Text
+                                style={[
+                                    styles.statusText,
+                                    { color: member.isActive ? colors.success : colors.textTertiary },
+                                ]}
+                            >
+                                {member.isActive ? 'Active' : 'Inactive'}
+                            </Text>
+                        </View>
+                    </View>
+                </View>
+                <Ionicons name="chevron-forward" size={18} color={colors.textTertiary} />
+            </View>
+
+            {signal && signalPalette && (
+                <View style={[styles.signalRow, { backgroundColor: signalPalette.bg }]}>
+                    <Ionicons name={signalIcon(signal.tone)} size={15} color={signalPalette.fg} />
+                    <Text style={[styles.signalText, { color: signalPalette.fg }]} numberOfLines={1}>
+                        {signal.text}
+                    </Text>
+                </View>
+            )}
+
+            <View style={[styles.memberFacts, { borderTopColor: colors.border }]}>
+                {member.role === 'manager' ? (
+                    <>
+                        <MetricChip value={String(member.outstandingCandidatesCount ?? 0)} label="outstanding" />
+                        <MetricChip
+                            value={String(member.teamSize ?? 0)}
+                            label={(member.teamSize ?? 0) === 1 ? 'member' : 'members'}
+                        />
+                    </>
+                ) : (
+                    <>
+                        <MetricChip value={String(member.leadsCount)} label="leads" />
+                        <MetricChip value={String(member.wonCount)} label="won" />
+                        <MetricChip value={`${member.conversionRate}%`} label="conversion" />
+                    </>
+                )}
+            </View>
+        </TouchableOpacity>
+    );
+}
+
+function MetricChip({ value, label }: { value: string; label: string }) {
+    const { colors } = useTheme();
+    return (
+        <View style={[styles.metricChip, { backgroundColor: colors.surfaceSecondary }]}>
+            <Text style={[styles.metricValue, { color: colors.textPrimary }]}>{value}</Text>
+            <Text style={[styles.metricLabel, { color: colors.textTertiary }]}>{label}</Text>
+        </View>
+    );
+}
+
+function getTonePalette(
+    tone: 'danger' | 'warning' | 'success' | 'neutral',
+    colors: ReturnType<typeof useTheme>['colors'],
+) {
+    switch (tone) {
+        case 'danger':
+            return { fg: colors.danger, bg: colors.dangerLight };
+        case 'warning':
+            return { fg: colors.warning, bg: colors.warningLight };
+        case 'success':
+            return { fg: colors.success, bg: colors.successLight };
+        case 'neutral':
+            return { fg: colors.textSecondary, bg: colors.surfaceSecondary };
+    }
+}
+
+function attentionIcon(kind: TeamAttentionItem['kind']): keyof typeof Ionicons.glyphMap {
+    switch (kind) {
+        case 'stale_leads':
+            return 'time-outline';
+        case 'inactive_member':
+            return 'person-circle-outline';
+        case 'pending_invite':
+            return 'mail-unread-outline';
+    }
+}
+
+function signalIcon(tone: 'danger' | 'warning' | 'success' | 'neutral'): keyof typeof Ionicons.glyphMap {
+    switch (tone) {
+        case 'danger':
+            return 'alert-circle-outline';
+        case 'warning':
+            return 'time-outline';
+        case 'success':
+            return 'trending-up-outline';
+        case 'neutral':
+            return 'chatbubble-ellipses-outline';
+    }
 }
 
 const styles = StyleSheet.create({
@@ -628,38 +707,9 @@ const styles = StyleSheet.create({
         paddingTop: 8,
         paddingBottom: 4,
     },
-
-    // ── Hero Stats ──
-    heroRow: {
-        flexDirection: 'row',
-        gap: 10,
-        marginTop: 8,
-        marginBottom: 16,
+    errorWrap: {
+        paddingHorizontal: 16,
     },
-    heroCard: {
-        flex: 1,
-        borderRadius: 14,
-        paddingVertical: 16,
-        paddingHorizontal: 12,
-        alignItems: 'center',
-        shadowOffset: { width: 0, height: 2 },
-        shadowOpacity: 0.04,
-        shadowRadius: 8,
-        elevation: 2,
-    },
-    heroValue: {
-        fontSize: 22,
-        fontWeight: '800',
-        letterSpacing: letterSpacing(-0.3),
-    },
-    heroLabel: {
-        fontSize: 11,
-        fontWeight: '600',
-        marginTop: 2,
-        letterSpacing: 0.2,
-    },
-
-    // ── Search ──
     searchBar: {
         flexDirection: 'row',
         alignItems: 'center',
@@ -672,29 +722,11 @@ const styles = StyleSheet.create({
     },
     searchInput: {
         flex: 1,
+        fontFamily: Fonts.sans,
         fontSize: 15,
+        lineHeight: 20,
         padding: 0,
     },
-
-    // ── Segment control ──
-    segmentRow: {
-        flexDirection: 'row',
-        gap: 8,
-        marginBottom: 12,
-    },
-    segmentButton: {
-        flex: 1,
-        paddingVertical: 10,
-        borderRadius: 10,
-        borderWidth: 1,
-        alignItems: 'center',
-    },
-    segmentText: {
-        fontSize: 14,
-        fontWeight: '700',
-    },
-
-    // ── Filters ──
     filterRow: {
         flexDirection: 'row',
         gap: 8,
@@ -709,82 +741,265 @@ const styles = StyleSheet.create({
         borderRadius: 20,
         borderWidth: 1,
     },
-    filterText: { fontSize: 13, fontWeight: '600' },
-    filterCount: { fontSize: 12 },
+    filterText: { fontFamily: Fonts.sansSemibold, fontSize: 13, lineHeight: 17 },
+    filterCount: { fontFamily: Fonts.sans, fontSize: 12, lineHeight: 16 },
 
-    // ── Section ──
-    sectionRow: {
-        marginBottom: 8,
-    },
-    sectionLabel: {
-        fontSize: 13,
-        fontWeight: '600',
-    },
-
-    // ── Card ──
-    card: {
-        borderRadius: 16,
-        padding: 16,
-        marginBottom: 12,
-        shadowOffset: { width: 0, height: 4 },
-        shadowOpacity: 0.04,
-        shadowRadius: 12,
+    healthCard: {
+        borderWidth: StyleSheet.hairlineWidth,
+        borderRadius: 20,
+        padding: 18,
+        marginTop: 8,
+        marginBottom: 18,
+        shadowOffset: { width: 0, height: 5 },
+        shadowOpacity: 0.05,
+        shadowRadius: 14,
         elevation: 2,
     },
-    cardTop: {
+    healthHeader: {
+        flexDirection: 'row',
+        justifyContent: 'space-between',
+        alignItems: 'center',
+        marginBottom: 8,
+    },
+    kicker: {
+        fontFamily: Fonts.sansSemibold,
+        fontSize: 13,
+        lineHeight: 18,
+        textTransform: 'uppercase',
+        letterSpacing: 0.4,
+    },
+    healthMainRow: {
+        flexDirection: 'row',
+        alignItems: 'baseline',
+        gap: 8,
+    },
+    healthNumber: {
+        fontFamily: Fonts.serif,
+        fontSize: 40,
+        lineHeight: 48,
+    },
+    healthLabel: {
+        fontFamily: Fonts.sansSemibold,
+        fontSize: 18,
+        lineHeight: 24,
+    },
+    healthFacts: {
+        flexDirection: 'row',
+        flexWrap: 'wrap',
+        gap: 8,
+        marginTop: 12,
+    },
+    factPill: {
+        borderRadius: 12,
+        paddingHorizontal: 10,
+        paddingVertical: 6,
+    },
+    factPillText: {
+        fontFamily: Fonts.sansSemibold,
+        fontSize: 13,
+        lineHeight: 17,
+    },
+    healthSecondary: {
+        flexDirection: 'row',
+        gap: 14,
+        marginTop: 16,
+        paddingTop: 14,
+        borderTopWidth: StyleSheet.hairlineWidth,
+    },
+    secondaryFact: {
+        flex: 1,
+    },
+    secondaryFactValue: {
+        fontFamily: Fonts.sansSemibold,
+        fontSize: 16,
+        lineHeight: 21,
+    },
+    secondaryFactLabel: {
+        fontFamily: Fonts.sans,
+        fontSize: 13,
+        lineHeight: 17,
+        marginTop: 1,
+    },
+    sectionBlock: {
+        marginBottom: 18,
+    },
+    sectionRow: {
+        flexDirection: 'row',
+        alignItems: 'baseline',
+        justifyContent: 'space-between',
+        gap: 12,
+        marginBottom: 8,
+    },
+    sectionTitle: {
+        fontFamily: Fonts.sansSemibold,
+        fontSize: 16,
+        lineHeight: 21,
+    },
+    sectionMeta: {
+        flexShrink: 1,
+        fontFamily: Fonts.sans,
+        fontSize: 13,
+        lineHeight: 18,
+        textAlign: 'right',
+    },
+    attentionRow: {
+        minHeight: 64,
+        borderWidth: StyleSheet.hairlineWidth,
+        borderRadius: 14,
+        padding: 12,
+        marginBottom: 8,
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 10,
+    },
+    attentionIcon: {
+        width: 32,
+        height: 32,
+        borderRadius: 16,
+        alignItems: 'center',
+        justifyContent: 'center',
+        flexShrink: 0,
+    },
+    attentionText: {
+        flex: 1,
+        minWidth: 0,
+    },
+    attentionTitle: {
+        fontFamily: Fonts.sansSemibold,
+        fontSize: 15,
+        lineHeight: 20,
+    },
+    attentionSubtitle: {
+        fontFamily: Fonts.sans,
+        fontSize: 13,
+        lineHeight: 18,
+        marginTop: 1,
+    },
+    attentionSignal: {
+        maxWidth: 94,
+        fontFamily: Fonts.mono,
+        fontSize: 11,
+        lineHeight: 15,
+        textAlign: 'right',
+    },
+    inviteCard: {
+        borderWidth: StyleSheet.hairlineWidth,
+        borderRadius: 14,
+        padding: 14,
+        marginBottom: 8,
+    },
+    inviteTop: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 10,
+    },
+    smallAvatar: {
+        width: 38,
+        height: 38,
+        borderRadius: 19,
+        alignItems: 'center',
+        justifyContent: 'center',
+    },
+    smallAvatarText: {
+        fontFamily: Fonts.sansSemibold,
+        fontSize: 13,
+        lineHeight: 17,
+    },
+    inviteInfo: {
+        flex: 1,
+        minWidth: 0,
+    },
+    inviteName: {
+        fontFamily: Fonts.sansSemibold,
+        fontSize: 15,
+        lineHeight: 20,
+    },
+    inviteRole: {
+        fontFamily: Fonts.sans,
+        fontSize: 13,
+        lineHeight: 18,
+    },
+    inviteExpiry: {
+        fontFamily: Fonts.mono,
+        fontSize: 11,
+        lineHeight: 15,
+        maxWidth: 100,
+        textAlign: 'right',
+    },
+    inviteMetaRow: {
+        gap: 5,
+        marginTop: 10,
+    },
+    inviteMetaItem: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 6,
+    },
+    inviteMetaText: {
+        flex: 1,
+        fontFamily: Fonts.sans,
+        fontSize: 12,
+        lineHeight: 16,
+    },
+    revokeButton: {
+        alignSelf: 'flex-start',
+        minHeight: 34,
+        justifyContent: 'center',
+        borderRadius: 8,
+        borderWidth: 1,
+        paddingHorizontal: 14,
+        marginTop: 12,
+    },
+    revokeText: {
+        fontFamily: Fonts.sansSemibold,
+        fontSize: 13,
+        lineHeight: 17,
+    },
+    memberCard: {
+        borderWidth: StyleSheet.hairlineWidth,
+        borderRadius: 16,
+        padding: 14,
+        marginBottom: 10,
+    },
+    memberTop: {
         flexDirection: 'row',
         alignItems: 'center',
         gap: 12,
     },
-    avatar: {
-        width: 48,
-        height: 48,
-        borderRadius: 24,
-        alignItems: 'center',
-        justifyContent: 'center',
-    },
-    avatarText: {
-        fontSize: 16,
-        fontWeight: '700',
-    },
-    cardInfo: {
+    memberInfo: {
         flex: 1,
-        gap: 4,
+        minWidth: 0,
     },
-    name: {
+    memberName: {
+        fontFamily: Fonts.sansSemibold,
         fontSize: 16,
-        fontWeight: '700',
-        letterSpacing: letterSpacing(-0.2),
+        lineHeight: 22,
+        letterSpacing: letterSpacing(-0.1),
     },
-    metaRow: {
+    badgeRow: {
         flexDirection: 'row',
+        flexWrap: 'wrap',
         alignItems: 'center',
-        gap: 8,
+        gap: 6,
+        marginTop: 4,
     },
     roleBadge: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        gap: 5,
+        borderRadius: 7,
         paddingHorizontal: 8,
         paddingVertical: 3,
-        borderRadius: 6,
-    },
-    roleDot: {
-        width: 6,
-        height: 6,
-        borderRadius: 3,
     },
     roleText: {
-        fontSize: 11,
-        fontWeight: '700',
+        fontFamily: Fonts.sansSemibold,
+        fontSize: 12,
+        lineHeight: 16,
     },
-    statusPill: {
+    statusBadge: {
         flexDirection: 'row',
         alignItems: 'center',
         gap: 5,
-        paddingHorizontal: 10,
-        paddingVertical: 4,
-        borderRadius: 12,
+        borderRadius: 7,
+        paddingHorizontal: 8,
+        paddingVertical: 3,
     },
     statusDot: {
         width: 6,
@@ -792,80 +1007,49 @@ const styles = StyleSheet.create({
         borderRadius: 3,
     },
     statusText: {
-        fontSize: 11,
-        fontWeight: '600',
+        fontFamily: Fonts.sansSemibold,
+        fontSize: 12,
+        lineHeight: 16,
     },
-
-    // ── Stats Row ──
-    statsRow: {
+    signalRow: {
         flexDirection: 'row',
-        marginTop: 14,
-        paddingTop: 14,
-        borderTopWidth: StyleSheet.hairlineWidth,
-    },
-    statItem: {
-        flex: 1,
         alignItems: 'center',
+        gap: 7,
+        borderRadius: 12,
+        paddingHorizontal: 10,
+        paddingVertical: 8,
+        marginTop: 12,
     },
-    statValue: {
-        fontSize: 17,
-        fontWeight: '800',
+    signalText: {
+        flex: 1,
+        fontFamily: Fonts.sansSemibold,
+        fontSize: 14,
+        lineHeight: 19,
     },
-    statLabel: {
-        fontSize: 11,
-        fontWeight: '500',
-        marginTop: 2,
-    },
-    statDivider: {
-        width: StyleSheet.hairlineWidth,
-        height: '100%',
-    },
-
-    // ── Pending Card ──
-    pendingCard: {
-        borderWidth: 1,
-        borderStyle: 'dashed',
-    },
-    inviteMeta: {
+    memberFacts: {
+        flexDirection: 'row',
+        flexWrap: 'wrap',
+        gap: 8,
         marginTop: 12,
         paddingTop: 12,
         borderTopWidth: StyleSheet.hairlineWidth,
-        gap: 6,
     },
-    inviteMetaItem: {
+    metricChip: {
         flexDirection: 'row',
-        alignItems: 'center',
-        gap: 6,
-    },
-    inviteMetaLabel: {
-        fontSize: 12,
-        fontWeight: '400',
-    },
-    inviteMetaValue: {
-        fontSize: 12,
-        fontWeight: '600',
-        flexShrink: 1,
-    },
-    pendingFooter: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        justifyContent: 'space-between',
-        marginTop: 14,
-        paddingTop: 14,
-        borderTopWidth: StyleSheet.hairlineWidth,
-    },
-    pendingMeta: {
-        fontSize: 12,
-        fontWeight: '500',
-    },
-    revokeButton: {
-        paddingHorizontal: 14,
+        alignItems: 'baseline',
+        gap: 4,
+        borderRadius: 10,
+        paddingHorizontal: 10,
         paddingVertical: 6,
-        borderRadius: 8,
-        borderWidth: 1,
     },
-    revokeText: {
-        fontSize: 13,
-        fontWeight: '600',
+    metricValue: {
+        fontFamily: Fonts.sansSemibold,
+        fontSize: 14,
+        lineHeight: 18,
+    },
+    metricLabel: {
+        fontFamily: Fonts.sans,
+        fontSize: 12,
+        lineHeight: 16,
     },
 });

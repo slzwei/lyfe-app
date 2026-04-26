@@ -6,7 +6,7 @@ import { createMemberInvitation, getInvitableRoles } from '@/lib/invitations';
 import { fetchAssignableManagers, type AssignableManager } from '@/lib/recruitment';
 import { useSubmitGuard } from '@/hooks/useSubmitGuard';
 import { Ionicons } from '@expo/vector-icons';
-import { useRouter } from 'expo-router';
+import { usePathname, useRouter } from 'expo-router';
 import React, { useEffect, useMemo, useState } from 'react';
 import {
     ActivityIndicator,
@@ -37,6 +37,7 @@ export default function InviteMemberScreen() {
     const { colors } = useTheme();
     const { user } = useAuth();
     const router = useRouter();
+    const pathname = usePathname();
     const { isSubmitting, guard } = useSubmitGuard();
 
     const [name, setName] = useState('');
@@ -56,9 +57,12 @@ export default function InviteMemberScreen() {
     const [loadingManagers, setLoadingManagers] = useState(false);
 
     const callerRole = (user?.role ?? 'agent') as UserRole;
-    const invitableRoles = useMemo(() => getInvitableRoles(callerRole), [callerRole]);
+    const invitableRoles = useMemo(() => {
+        const roles = getInvitableRoles(callerRole);
+        return pathname.includes('/team/') ? roles.filter((role) => role !== 'candidate') : roles;
+    }, [callerRole, pathname]);
 
-    // Auto-select if PA (only candidate available)
+    // Auto-select when the current route/role only has one invite option.
     useEffect(() => {
         if (invitableRoles.length === 1) {
             setSelectedRole(invitableRoles[0]);

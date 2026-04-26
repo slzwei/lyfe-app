@@ -47,6 +47,7 @@ const mockBack = jest.fn();
 jest.mock('expo-router', () => ({
     ...jest.requireActual('expo-router'),
     useRouter: () => ({ push: jest.fn(), back: mockBack, replace: jest.fn() }),
+    usePathname: () => '/team/invite-member',
 }));
 
 beforeEach(() => {
@@ -101,11 +102,14 @@ describe('InviteMemberScreen', () => {
     });
 
     it('shows role picker with invitable roles', () => {
-        const { getByTestId, getByText } = render(<InviteMemberScreen />);
+        const { getByTestId, getByText, queryByText } = render(<InviteMemberScreen />);
         fireEvent.press(getByTestId('invite-role-picker'));
 
         // Manager can invite these roles
         expect(getByText('Select Role')).toBeTruthy();
+        expect(getByText('Agent')).toBeTruthy();
+        expect(getByText('PA')).toBeTruthy();
+        expect(queryByText('Candidate')).toBeNull();
     });
 
     it('shows success modal on successful invite', async () => {

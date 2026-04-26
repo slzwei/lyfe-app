@@ -27,6 +27,7 @@ type TabRoute =
     | `/(tabs)/candidates/progress/${string}`
     | '/(tabs)/team'
     | `/(tabs)/team/agent/${string}`
+    | `/(tabs)/team/manager/${string}`
     | `/(tabs)/team/candidate/${string}`
     | `/(tabs)/team/lead/${string}`
     | '/(tabs)/team/add-candidate'
