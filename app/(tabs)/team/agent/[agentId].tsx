@@ -1,3 +1,4 @@
+import Avatar from '@/components/Avatar';
 import LeadCard from '@/components/LeadCard';
 import LoadingState from '@/components/LoadingState';
 import ScreenHeader from '@/components/ScreenHeader';
@@ -27,7 +28,7 @@ const AVATAR_COLOR_KEYS = ['statusProposed', 'accent', 'danger', 'warning', 'sta
 export default function AgentDetailScreen() {
     const { colors } = useTheme();
     const router = useTypedRouter();
-    const { profile } = useAuth();
+    const { user } = useAuth();
     const { agentId } = useLocalSearchParams<{ agentId: string }>();
 
     const [agent, setAgent] = useState<TeamMember | null>(null);
@@ -40,7 +41,7 @@ export default function AgentDetailScreen() {
     const [reassignLoading, setReassignLoading] = useState(false);
     const [reassignSubmitting, setReassignSubmitting] = useState(false);
 
-    const callerCanReassign = canReassignAgents(profile?.role ?? 'candidate');
+    const callerCanReassign = canReassignAgents((user?.role as Parameters<typeof canReassignAgents>[0]) ?? 'candidate');
 
     const loadAgent = useCallback(async () => {
         if (!agentId) return;
@@ -67,7 +68,7 @@ export default function AgentDetailScreen() {
         setReassignLoading(false);
     }, [agent]);
 
-    const handleReassignSelect = useCallback(
+    const handleReassignConfirm = useCallback(
         async (manager: ReassignableManager | null) => {
             if (!agent) return;
             setReassignSubmitting(true);
@@ -78,7 +79,6 @@ export default function AgentDetailScreen() {
                 return;
             }
             setReassignVisible(false);
-            // Refresh to show the new upline
             await loadAgent();
             Alert.alert(
                 'Reassigned',
@@ -127,10 +127,6 @@ export default function AgentDetailScreen() {
     }
 
     const avatarColor = colors[AVATAR_COLOR_KEYS[agent.name.charCodeAt(0) % AVATAR_COLOR_KEYS.length]];
-    const initials = agent.name
-        .split(' ')
-        .map((n) => n[0])
-        .join('');
     const isManager = agent.role === 'manager';
     const lostCount = pipelineCounts['lost'] || 0;
 
@@ -158,9 +154,13 @@ export default function AgentDetailScreen() {
                     ]}
                 >
                     <View style={styles.profileTop}>
-                        <View style={[styles.avatarLarge, { backgroundColor: avatarColor + '18' }]}>
-                            <Text style={[styles.avatarLargeText, { color: avatarColor }]}>{initials}</Text>
-                        </View>
+                        <Avatar
+                            name={agent.name}
+                            avatarUrl={agent.avatarUrl}
+                            size={64}
+                            backgroundColor={avatarColor + '18'}
+                            textColor={avatarColor}
+                        />
                         <View style={styles.profileInfo}>
                             <Text style={[styles.profileName, { color: colors.textPrimary }]}>{agent.name}</Text>
                             <View style={styles.profileMeta}>
@@ -401,7 +401,7 @@ export default function AgentDetailScreen() {
                 loading={reassignLoading}
                 submitting={reassignSubmitting}
                 colors={colors}
-                onSelect={handleReassignSelect}
+                onConfirm={handleReassignConfirm}
                 onClose={() => setReassignVisible(false)}
             />
         </SafeAreaView>
@@ -429,17 +429,6 @@ const styles = StyleSheet.create({
     profileTop: {
         flexDirection: 'row',
         gap: 16,
-    },
-    avatarLarge: {
-        width: 64,
-        height: 64,
-        borderRadius: 32,
-        alignItems: 'center',
-        justifyContent: 'center',
-    },
-    avatarLargeText: {
-        fontSize: 22,
-        fontWeight: '800',
     },
     profileInfo: {
         flex: 1,

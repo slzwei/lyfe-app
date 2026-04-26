@@ -170,7 +170,7 @@ export default function ReassignAgentsScreen() {
                 loading={managersLoading}
                 submitting={submitting}
                 colors={colors}
-                onSelect={handleSelect}
+                onConfirm={handleSelect}
                 onClose={() => setSelectedAgent(null)}
             />
         </SafeAreaView>
