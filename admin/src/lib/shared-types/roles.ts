@@ -70,7 +70,6 @@ export const ROLE_CAPABILITIES: Record<UserRole, Capability[]> = {
     manager: [
         'hold_agents',
         'reassign_leads',
-        'reassign_candidates',
         'invite_agents',
         'create_candidates',
         'schedule_interviews',
@@ -94,6 +93,7 @@ export const ROLE_CAPABILITIES: Record<UserRole, Capability[]> = {
         'put_on_hold',
         'reject_candidate',
         'reassign_agents',
+        'reassign_candidates',
     ],
     candidate: [],
 };

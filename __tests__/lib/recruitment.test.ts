@@ -163,7 +163,7 @@ describe('fetchCandidates', () => {
         expect(result.data).toHaveLength(1);
     });
 
-    it('defaults manager name to Unknown when not found', async () => {
+    it('defaults manager name to unavailable when not found', async () => {
         const candidatesChain = mockSupa.__getChain('candidates');
         mockResolve(candidatesChain, { data: [{ ...CANDIDATE_ROW, assigned_manager_id: 'unknown-mgr' }], error: null });
 
@@ -174,7 +174,27 @@ describe('fetchCandidates', () => {
         mockResolve(interviewsChain, { data: [], error: null });
 
         const result = await fetchCandidates('unknown-mgr', false);
-        expect(result.data[0].assigned_manager_name).toBe('Unknown');
+        expect(result.data[0].assigned_manager_name).toBe('Manager unavailable');
+    });
+
+    it('filters unassigned candidates out of the bulk manager lookup', async () => {
+        const candidatesChain = mockSupa.__getChain('candidates');
+        mockResolve(candidatesChain, {
+            data: [CANDIDATE_ROW, { ...CANDIDATE_ROW, id: 'cand-2', assigned_manager_id: null }],
+            error: null,
+        });
+
+        const usersChain = mockSupa.__getChain('users');
+        mockResolve(usersChain, { data: [{ id: 'mgr-1', full_name: 'Manager Alice' }], error: null });
+
+        const interviewsChain = mockSupa.__getChain('interviews');
+        mockResolve(interviewsChain, { data: [], error: null });
+
+        const result = await fetchCandidates('mgr-1', true);
+
+        expect(usersChain.__calls).toContainEqual({ method: 'in', args: ['id', ['mgr-1']] });
+        expect(result.data[0].assigned_manager_name).toBe('Manager Alice');
+        expect(result.data[1].assigned_manager_name).toBe('');
     });
 });
 
@@ -642,6 +662,41 @@ describe('fetchAssignableManagers', () => {
 
         const result = await fetchAssignableManagers('mgr-1', 'admin');
         expect(result.error).toBe('DB error');
+    });
+
+    it('excludes the current owner when excludeManagerId is passed (manager role)', async () => {
+        const usersChain = mockSupa.__getChain('users');
+        mockResolve(usersChain, {
+            data: [
+                { id: 'mgr-2', full_name: 'Alice', role: 'manager' },
+                { id: 'mgr-3', full_name: 'Bob', role: 'director' },
+            ],
+            error: null,
+        });
+
+        const result = await fetchAssignableManagers('mgr-1', 'admin', 'mgr-2');
+        expect(result.error).toBeNull();
+        expect(result.data).toHaveLength(1);
+        expect(result.data[0].id).toBe('mgr-3');
+    });
+
+    it('excludes the current owner when excludeManagerId is passed (PA role)', async () => {
+        const assignmentsChain = mockSupa.__getChain('pa_manager_assignments');
+        mockResolve(assignmentsChain, { data: [{ manager_id: 'mgr-1' }, { manager_id: 'mgr-2' }], error: null });
+
+        const usersChain = mockSupa.__getChain('users');
+        mockResolve(usersChain, {
+            data: [
+                { id: 'mgr-1', full_name: 'Alice', role: 'manager' },
+                { id: 'mgr-2', full_name: 'Bob', role: 'director' },
+            ],
+            error: null,
+        });
+
+        const result = await fetchAssignableManagers('pa-1', 'pa', 'mgr-1');
+        expect(result.error).toBeNull();
+        expect(result.data).toHaveLength(1);
+        expect(result.data[0].id).toBe('mgr-2');
     });
 });
 

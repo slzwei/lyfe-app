@@ -4,6 +4,7 @@ import { formatSgPhone } from '@/lib/phone';
 import { CANDIDATE_STATUS_CONFIG } from '@/types/recruitment';
 import type { RecruitmentCandidate } from '@/types/recruitment';
 import type { ThemeColors } from '@/types/theme';
+import { Ionicons } from '@expo/vector-icons';
 import React from 'react';
 import { StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 
@@ -11,6 +12,8 @@ interface Props {
     candidate: RecruitmentCandidate;
     colors: ThemeColors;
     onStatusPress: () => void;
+    canReassign?: boolean;
+    onReassignPress?: () => void;
 }
 
 // 6-char hex color + 40% alpha suffix.
@@ -18,7 +21,7 @@ function alphaBorder(hex: string): string {
     return hex.length === 7 ? `${hex}66` : hex;
 }
 
-export default function HeroSection({ candidate, colors, onStatusPress }: Props) {
+export default function HeroSection({ candidate, colors, onStatusPress, canReassign, onReassignPress }: Props) {
     const daysSinceCreated = Math.floor((Date.now() - new Date(candidate.created_at).getTime()) / 86400000);
     const statusConfig = CANDIDATE_STATUS_CONFIG[candidate.status];
     const initials = candidate.name
@@ -61,9 +64,27 @@ export default function HeroSection({ candidate, colors, onStatusPress }: Props)
                 </View>
                 <View style={styles.metaItem}>
                     <Text style={[styles.metaLabel, { color: colors.textTertiary }]}>MANAGER</Text>
-                    <Text style={[styles.metaValue, { color: colors.textPrimary }]} numberOfLines={1}>
-                        {candidate.assigned_manager_name || '—'}
-                    </Text>
+                    {canReassign && onReassignPress ? (
+                        <TouchableOpacity
+                            onPress={onReassignPress}
+                            activeOpacity={0.7}
+                            accessibilityRole="button"
+                            accessibilityLabel="Reassign manager"
+                            style={styles.managerRow}
+                        >
+                            <Text
+                                style={[styles.metaValue, { color: colors.textPrimary, flexShrink: 1 }]}
+                                numberOfLines={1}
+                            >
+                                {candidate.assigned_manager_name || '—'}
+                            </Text>
+                            <Ionicons name="chevron-forward" size={14} color={colors.textTertiary} />
+                        </TouchableOpacity>
+                    ) : (
+                        <Text style={[styles.metaValue, { color: colors.textPrimary }]} numberOfLines={1}>
+                            {candidate.assigned_manager_name || '—'}
+                        </Text>
+                    )}
                 </View>
                 <View style={styles.metaItem}>
                     <Text style={[styles.metaLabel, { color: colors.textTertiary }]}>IN PIPELINE</Text>
@@ -153,6 +174,11 @@ const styles = StyleSheet.create({
         fontSize: 14,
         fontWeight: '500',
         lineHeight: 18,
+    },
+    managerRow: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 4,
     },
     rule: {
         height: 1,

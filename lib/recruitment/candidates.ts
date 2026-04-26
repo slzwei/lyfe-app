@@ -41,7 +41,7 @@ export async function fetchCandidates(
         phone: string;
         email: string | null;
         status: string;
-        assigned_manager_id: string;
+        assigned_manager_id: string | null;
         created_by_id: string;
         invite_token: string | null;
         notes: string | null;
@@ -55,7 +55,9 @@ export async function fetchCandidates(
     }[];
 
     // Fetch manager names and interviews in parallel (independent lookups)
-    const managerIds = [...new Set(typedRows.map((r) => r.assigned_manager_id))];
+    const managerIds = [
+        ...new Set(typedRows.map((r) => r.assigned_manager_id).filter((id): id is string => Boolean(id))),
+    ];
     const candidateIds = typedRows.map((r) => r.id);
 
     const [managersResult, interviewsResult] = await Promise.all([
@@ -71,8 +73,13 @@ export async function fetchCandidates(
             : Promise.resolve({ data: null }),
     ]);
 
+    const managerLookupError = 'error' in managersResult ? managersResult.error : null;
+    if (managerLookupError) {
+        captureError(managerLookupError, { fn: 'fetchCandidates.managerLookup' });
+    }
+
     let managerMap: Record<string, string> = {};
-    if (managersResult.data) {
+    if (!managerLookupError && managersResult.data) {
         (managersResult.data as { id: string; full_name: string }[]).forEach((m) => {
             managerMap[m.id] = m.full_name;
         });
@@ -93,8 +100,8 @@ export async function fetchCandidates(
         phone: r.phone,
         email: r.email,
         status: r.status as CandidateStatus,
-        assigned_manager_id: r.assigned_manager_id,
-        assigned_manager_name: managerMap[r.assigned_manager_id] || 'Unknown',
+        assigned_manager_id: r.assigned_manager_id ?? '',
+        assigned_manager_name: r.assigned_manager_id ? managerMap[r.assigned_manager_id] || 'Manager unavailable' : '',
         created_by_id: r.created_by_id,
         invite_token: r.invite_token,
         notes: r.notes,
@@ -137,7 +144,7 @@ export async function fetchCandidate(
         supabase.from('candidate_profiles').select(profileFields).eq('candidate_id', candidateId).single(),
     ]);
 
-    const managerName = mgrResult.data?.full_name || 'Unknown';
+    const managerName = row.assigned_manager_id ? mgrResult.data?.full_name || 'Manager unavailable' : '';
     const profile = profileResult.data;
 
     // Interviews + invitation PDFs + DISC results (parallel)
@@ -165,7 +172,7 @@ export async function fetchCandidate(
         phone: row.phone,
         email: row.email,
         status: row.status as CandidateStatus,
-        assigned_manager_id: row.assigned_manager_id,
+        assigned_manager_id: row.assigned_manager_id ?? '',
         assigned_manager_name: managerName,
         created_by_id: row.created_by_id,
         invite_token: row.invite_token,
@@ -266,8 +273,10 @@ export async function createCandidate(
 
         const row = result.candidate;
 
-        // Fetch manager name for the response
-        const { data: mgr } = await supabase.from('users').select('full_name').eq('id', userId).single();
+        // Fetch assigned manager name for the optimistic response.
+        const { data: mgr } = row.assigned_manager_id
+            ? await supabase.from('users').select('full_name').eq('id', row.assigned_manager_id).single()
+            : { data: null };
 
         const candidate: RecruitmentCandidate = {
             id: row.id,
@@ -275,8 +284,8 @@ export async function createCandidate(
             phone: row.phone,
             email: row.email,
             status: row.status,
-            assigned_manager_id: row.assigned_manager_id,
-            assigned_manager_name: mgr?.full_name || 'Unknown',
+            assigned_manager_id: row.assigned_manager_id ?? '',
+            assigned_manager_name: row.assigned_manager_id ? mgr?.full_name || 'Manager unavailable' : '',
             created_by_id: row.created_by_id,
             invite_token: row.invite_token,
             notes: row.notes,
@@ -378,12 +387,18 @@ export interface AssignableManager {
 /**
  * Fetch managers/directors that the current user can assign candidates to.
  * PAs: only their assigned managers. Manager+: all active managers/directors (excluding self).
+ * Pass excludeManagerId to hide a candidate's current owner (so a reassign picker
+ * never lists "the person who already holds them").
  */
 export async function fetchAssignableManagers(
     userId: string,
     userRole: string,
+    excludeManagerId?: string | null,
 ): Promise<{ data: AssignableManager[]; error: string | null }> {
     try {
+        const filterExcluded = (rows: AssignableManager[]) =>
+            excludeManagerId ? rows.filter((m) => m.id !== excludeManagerId) : rows;
+
         if (userRole === 'pa') {
             const { data: assignments, error: aErr } = await supabase
                 .from('pa_manager_assignments')
@@ -400,7 +415,10 @@ export async function fetchAssignableManagers(
                 .eq('is_active', true)
                 .order('full_name');
 
-            return { data: (managers || []) as AssignableManager[], error: mErr?.message || null };
+            return {
+                data: filterExcluded((managers || []) as AssignableManager[]),
+                error: mErr?.message || null,
+            };
         }
 
         const { data: managers, error } = await supabase
@@ -411,7 +429,10 @@ export async function fetchAssignableManagers(
             .neq('id', userId)
             .order('full_name');
 
-        return { data: (managers || []) as AssignableManager[], error: error?.message || null };
+        return {
+            data: filterExcluded((managers || []) as AssignableManager[]),
+            error: error?.message || null,
+        };
     } catch (err: unknown) {
         captureError(err, { fn: 'fetchAssignableManagers' });
         return { data: [], error: err instanceof Error ? err.message : 'Failed to fetch managers' };

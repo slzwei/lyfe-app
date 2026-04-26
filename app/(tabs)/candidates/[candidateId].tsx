@@ -13,6 +13,7 @@ import PapersSection from '@/components/candidates/PapersSection';
 import PdfViewerModal from '@/components/candidates/PdfViewerModal';
 import PrepCourseMarkSheet from '@/components/candidates/PrepCourseMarkSheet';
 import PrepCourseSection from '@/components/candidates/PrepCourseSection';
+import ReassignManagerSheet from '@/components/candidates/ReassignManagerSheet';
 import RejectCandidateSheet from '@/components/candidates/RejectCandidateSheet';
 import ActivateAgentSheet, { type ReadinessItem } from '@/components/candidates/ActivateAgentSheet';
 import ProgressSummaryCard from '@/components/roadmap/ProgressSummaryCard';
@@ -29,17 +30,21 @@ import { useInterviewScheduler } from '@/hooks/useInterviewScheduler';
 import {
     activateAgent,
     addCandidateActivity,
+    fetchAssignableManagers,
     fetchCandidate,
     getGeneratedPdfUrl,
     markCandidateLicensed,
+    reassignCandidate,
     rejectCandidate,
     upsertMilestone,
     upsertPrepCourseBooking,
+    type AssignableManager,
 } from '@/lib/recruitment';
 import {
     canActivateAgent,
     canManageMilestones,
     canPutOnHold,
+    canReassignCandidates,
     canRejectCandidate,
     canVerifyPapers,
 } from '@/types/shared/roles';
@@ -156,6 +161,7 @@ export default function CandidateDetailScreen() {
     const canHoldCandidate = canPutOnHold(role as Parameters<typeof canPutOnHold>[0]);
     const canRejectCand = canRejectCandidate(role as Parameters<typeof canRejectCandidate>[0]);
     const canActivate = canActivateAgent(role as Parameters<typeof canActivateAgent>[0]);
+    const canReassign = canReassignCandidates(role as Parameters<typeof canReassignCandidates>[0]);
 
     // ── Reject flow state ──
     const [showRejectSheet, setShowRejectSheet] = useState(false);
@@ -167,6 +173,13 @@ export default function CandidateDetailScreen() {
     const [showActivateSheet, setShowActivateSheet] = useState(false);
     const [activateError, setActivateError] = useState<string | null>(null);
     const [isActivating, setIsActivating] = useState(false);
+
+    // ── Reassign manager flow state ──
+    const [showReassignSheet, setShowReassignSheet] = useState(false);
+    const [reassignManagers, setReassignManagers] = useState<AssignableManager[]>([]);
+    const [isLoadingManagers, setIsLoadingManagers] = useState(false);
+    const [isReassigning, setIsReassigning] = useState(false);
+    const [reassignError, setReassignError] = useState<string | null>(null);
     const progression = useCandidateProgressionContext();
     const [programmes, setProgrammes] = useState<ProgrammeWithModules[]>([]);
     const [showUnlockSheet, setShowUnlockSheet] = useState(false);
@@ -487,6 +500,46 @@ export default function CandidateDetailScreen() {
         }
     }, [candidate]);
 
+    const openReassignSheet = useCallback(async () => {
+        if (!user?.id) return;
+        setReassignError(null);
+        setShowReassignSheet(true);
+        setIsLoadingManagers(true);
+        const { data, error: fetchErr } = await fetchAssignableManagers(
+            user.id,
+            role,
+            candidate?.assigned_manager_id ?? null,
+        );
+        setIsLoadingManagers(false);
+        if (fetchErr) setReassignError(fetchErr);
+        else setReassignManagers(data);
+    }, [user?.id, role, candidate?.assigned_manager_id]);
+
+    const handleReassignSelect = useCallback(
+        async (manager: AssignableManager) => {
+            if (!candidate || !user?.id) return;
+            setReassignError(null);
+            setIsReassigning(true);
+            const { error: reErr } = await reassignCandidate(candidate.id, manager.id, user.id);
+            setIsReassigning(false);
+            if (reErr) {
+                setReassignError(reErr);
+                return;
+            }
+            setCandidate((prev) =>
+                prev
+                    ? {
+                          ...prev,
+                          assigned_manager_id: manager.id,
+                          assigned_manager_name: manager.full_name,
+                      }
+                    : prev,
+            );
+            setShowReassignSheet(false);
+        },
+        [candidate, user?.id],
+    );
+
     const dismissRejectSheet = useCallback(() => {
         if (rejectReason.trim()) {
             Alert.alert('Discard rejection?', 'Your reason will not be saved.', [
@@ -618,7 +671,6 @@ export default function CandidateDetailScreen() {
             // Push within the CURRENT tab's stack so Back returns to this
             // detail page rather than jumping tabs. pathname is e.g.
             //   /candidates/<id>              (candidates tab)
-            //   /team/candidate/<id>          (team tab)
             //   /pa/candidate/<id>            (pa tab)
             //   /home/candidate/<id>          (home tab)
             // Replace the final <id> segment with papers/<id>/<code>.
@@ -885,7 +937,13 @@ export default function CandidateDetailScreen() {
                 showsVerticalScrollIndicator={false}
             >
                 {/* ── Hero (always visible — candidate identity) ── */}
-                <HeroSection candidate={candidate} colors={colors} onStatusPress={handleStatusPress} />
+                <HeroSection
+                    candidate={candidate}
+                    colors={colors}
+                    onStatusPress={handleStatusPress}
+                    canReassign={canReassign}
+                    onReassignPress={openReassignSheet}
+                />
 
                 {/* ── Quick Actions (always visible — universal actions) ── */}
                 <View style={{ paddingHorizontal: 20, marginTop: 28 }}>
@@ -1476,6 +1534,20 @@ export default function CandidateDetailScreen() {
                 animatedStyle={activateSheetStyle}
                 onSubmit={handleActivateSubmit}
                 onDismiss={() => setShowActivateSheet(false)}
+            />
+            <ReassignManagerSheet
+                visible={showReassignSheet}
+                candidateName={candidate.name}
+                currentManagerName={candidate.assigned_manager_name ?? null}
+                managers={reassignManagers}
+                loading={isLoadingManagers}
+                submitting={isReassigning}
+                error={reassignError}
+                colors={colors}
+                onSelect={handleReassignSelect}
+                onClose={() => {
+                    if (!isReassigning) setShowReassignSheet(false);
+                }}
             />
         </SafeAreaView>
     );
