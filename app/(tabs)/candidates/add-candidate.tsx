@@ -60,7 +60,7 @@ export default function AddCandidateScreen() {
     const [selectedManagerId, setSelectedManagerId] = useState<string>('');
     const [showManagerPicker, setShowManagerPicker] = useState(false);
 
-    const userRole = user?.app_metadata?.role as string | undefined;
+    const userRole = user?.role;
     const isPA = userRole === 'pa';
 
     React.useEffect(() => {
@@ -112,6 +112,11 @@ export default function AddCandidateScreen() {
                 uploadCandidateDocument(newCandidate.id, 'Resume', resumeFile.uri, resumeFile.name);
             }
 
+            if (!inviteToken) {
+                setSaveError('Candidate created, but the invite link was not generated.');
+                return;
+            }
+
             setInviteLink(getInviteUrl(inviteToken));
             setShowSuccess(true);
         });
@@ -143,7 +148,6 @@ export default function AddCandidateScreen() {
                     {/* Form Card */}
                     <View style={[styles.formCard, { backgroundColor: colors.cardBackground }]}>
                         <FormField
-                            testID="add-candidate-name"
                             label="Full Name"
                             value={name}
                             onChangeText={setName}
@@ -155,7 +159,6 @@ export default function AddCandidateScreen() {
                         />
                         <View style={[styles.fieldDivider, { backgroundColor: colors.border }]} />
                         <FormField
-                            testID="add-candidate-phone"
                             label="Phone Number"
                             value={phone}
                             onChangeText={setPhone}

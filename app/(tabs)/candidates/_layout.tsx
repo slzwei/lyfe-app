@@ -23,6 +23,7 @@ export default function CandidatesLayout() {
             >
                 <Stack.Screen name="index" />
                 <Stack.Screen name="[candidateId]" />
+                <Stack.Screen name="add-candidate" options={{ presentation: 'modal' }} />
                 <Stack.Screen name="progress/[candidateId]" options={{ presentation: 'card' }} />
                 <Stack.Screen name="papers/[candidateId]/[code]" options={{ presentation: 'card' }} />
             </Stack>

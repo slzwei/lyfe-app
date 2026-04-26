@@ -1,14 +1,16 @@
 /**
- * Tests for components/CandidateListScreen.tsx — Candidate list with search/filter
+ * Tests for components/CandidateListScreen.tsx — Candidate list with role-aware modes and grouped filters.
  */
 import React from 'react';
-import { render, waitFor, fireEvent } from '@testing-library/react-native';
+import { fireEvent, render, waitFor } from '@testing-library/react-native';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import CandidateListScreen from '@/components/CandidateListScreen';
-import { fetchCandidates } from '@/lib/recruitment';
+import { Colors } from '@/constants/Colors';
 import { useAuth } from '@/contexts/AuthContext';
 import { useTheme } from '@/contexts/ThemeContext';
 import { useTypedRouter } from '@/hooks/useTypedRouter';
-import { Colors } from '@/constants/Colors';
+import { useCandidatePipeline } from '@/hooks/useCandidatePipeline';
+import { fetchCandidates } from '@/lib/recruitment';
 import type { RecruitmentCandidate } from '@/types/recruitment';
 
 jest.mock('@/lib/supabase');
@@ -16,8 +18,8 @@ jest.mock('@/lib/recruitment');
 jest.mock('@/contexts/AuthContext');
 jest.mock('@/contexts/ThemeContext');
 jest.mock('@/hooks/useTypedRouter');
+jest.mock('@/hooks/useCandidatePipeline');
 
-// Override useFocusEffect to behave like useEffect (not called on every render)
 jest.mock('expo-router', () => ({
     ...(jest.requireActual('expo-router') as any),
     useRouter: jest.fn(() => ({ push: jest.fn(), replace: jest.fn(), back: jest.fn() })),
@@ -33,20 +35,12 @@ jest.mock('expo-router', () => ({
 }));
 
 const mockFetch = fetchCandidates as jest.MockedFunction<typeof fetchCandidates>;
+const mockUsePipeline = useCandidatePipeline as jest.MockedFunction<typeof useCandidatePipeline>;
 const mockPush = jest.fn();
+const mockRefreshPipeline = jest.fn().mockResolvedValue(undefined);
 
-(useAuth as jest.Mock).mockReturnValue({ user: { id: 'user-1', role: 'manager' } });
-(useTheme as jest.Mock).mockReturnValue({
-    colors: Colors.light,
-    isDark: false,
-    mode: 'light',
-    resolved: 'light',
-    setMode: jest.fn(),
-});
-(useTypedRouter as jest.Mock).mockReturnValue({ push: mockPush, replace: jest.fn(), back: jest.fn() });
-
-const CANDIDATES: RecruitmentCandidate[] = [
-    {
+function candidate(overrides: Partial<RecruitmentCandidate>): RecruitmentCandidate {
+    return {
         id: 'c1',
         name: 'Alice Tan',
         phone: '+6591111111',
@@ -61,61 +55,53 @@ const CANDIDATES: RecruitmentCandidate[] = [
         profile_pdf_path: null,
         disc_pdf_path: null,
         enneagram_pdf_path: null,
+        disc_results: null,
+        profile_details: null,
         interviews: [],
-        created_at: '2026-03-01',
-        updated_at: '2026-03-05',
-    },
-    {
-        id: 'c2',
-        name: 'Bob Lim',
-        phone: '+6592222222',
-        email: null,
-        status: 'interview_scheduled',
-        assigned_manager_id: 'mgr-1',
-        assigned_manager_name: 'Manager',
-        created_by_id: 'user-1',
-        invite_token: null,
-        notes: null,
-        resume_url: null,
-        profile_pdf_path: null,
-        disc_pdf_path: null,
-        enneagram_pdf_path: null,
-        interviews: [],
-        created_at: '2026-03-02',
-        updated_at: '2026-03-06',
-    },
-    {
-        id: 'c3',
-        name: 'Charlie Wong',
-        phone: '+6593333333',
-        email: null,
-        status: 'approved',
-        assigned_manager_id: 'mgr-1',
-        assigned_manager_name: 'Manager',
-        created_by_id: 'user-1',
-        invite_token: null,
-        notes: null,
-        resume_url: null,
-        profile_pdf_path: null,
-        disc_pdf_path: null,
-        enneagram_pdf_path: null,
-        interviews: [],
-        created_at: '2026-03-03',
-        updated_at: '2026-03-07',
-    },
+        stage_before_hold: null,
+        rejected_at: null,
+        rejected_reason: null,
+        rejected_by_user_id: null,
+        created_at: '2026-03-01T00:00:00Z',
+        updated_at: '2026-03-05T00:00:00Z',
+        ...overrides,
+    };
+}
+
+const CANDIDATES: RecruitmentCandidate[] = [
+    candidate({ id: 'c1', name: 'Alice Tan', status: 'applied' }),
+    candidate({ id: 'c2', name: 'Bob Lim', phone: '+6592222222', status: 'interview_scheduled' }),
+    candidate({ id: 'c3', name: 'Charlie Wong', phone: '+6593333333', status: 'approved' }),
 ];
 
 beforeEach(() => {
     jest.clearAllMocks();
+    (AsyncStorage.getItem as jest.Mock).mockResolvedValue(null);
+    (AsyncStorage.setItem as jest.Mock).mockResolvedValue(undefined);
     mockFetch.mockResolvedValue({ data: CANDIDATES, error: null, hasMore: false });
-    (useAuth as jest.Mock).mockReturnValue({ user: { id: 'user-1', role: 'manager' } });
+    mockUsePipeline.mockReturnValue({
+        rows: [],
+        counts: { 'at-risk': 0, 'this-week': 0, ready: 0, 'on-track': 0, hidden: 0 },
+        isLoading: false,
+        isRefreshing: false,
+        error: null,
+        refresh: mockRefreshPipeline,
+    });
+    (useAuth as jest.Mock).mockReturnValue({ user: { id: 'user-1', role: 'pa' } });
+    (useTheme as jest.Mock).mockReturnValue({
+        colors: Colors.light,
+        isDark: false,
+        mode: 'light',
+        resolved: 'light',
+        setMode: jest.fn(),
+    });
     (useTypedRouter as jest.Mock).mockReturnValue({ push: mockPush, replace: jest.fn(), back: jest.fn() });
 });
 
 describe('CandidateListScreen', () => {
-    it('renders candidates after loading', async () => {
-        const { getByText, queryByText } = render(
-            <CandidateListScreen candidateRoute={(id) => `/candidates/${id}`} addRoute="/team/add-candidate" />,
+    it('defaults PA users to Directory and renders candidates', async () => {
+        const { getByText } = render(
+            <CandidateListScreen candidateRoute={(id) => `/candidates/${id}`} addRoute="/candidates/add-candidate" />,
         );
 
         await waitFor(() => {
@@ -124,41 +110,38 @@ describe('CandidateListScreen', () => {
 
         expect(getByText('Bob Lim')).toBeTruthy();
         expect(getByText('Charlie Wong')).toBeTruthy();
+        expect(mockFetch).toHaveBeenCalledWith('user-1', false);
     });
 
-    it('shows loading state initially', () => {
-        // Never resolve the fetch
-        mockFetch.mockReturnValue(new Promise(() => {}));
+    it('defaults managers to Pipeline', async () => {
+        (useAuth as jest.Mock).mockReturnValue({ user: { id: 'user-1', role: 'manager' } });
+        mockUsePipeline.mockReturnValue({
+            rows: [
+                {
+                    candidate: CANDIDATES[0],
+                    nextStep: { urgency: 'ready', text: 'Schedule BDM interview', signal: 'all papers passed' },
+                },
+            ],
+            counts: { 'at-risk': 0, 'this-week': 0, ready: 1, 'on-track': 0, hidden: 0 },
+            isLoading: false,
+            isRefreshing: false,
+            error: null,
+            refresh: mockRefreshPipeline,
+        });
 
         const { getByText } = render(
-            <CandidateListScreen candidateRoute={(id) => `/candidates/${id}`} addRoute="/add" />,
-        );
-
-        expect(getByText('Candidates')).toBeTruthy();
-    });
-
-    it('shows error banner on fetch failure', async () => {
-        mockFetch.mockResolvedValue({ data: [], error: 'Network error', hasMore: false });
-
-        const { getByText } = render(
-            <CandidateListScreen candidateRoute={(id) => `/candidates/${id}`} addRoute="/add" />,
+            <CandidateListScreen
+                candidateRoute={(id) => `/candidates/${id}`}
+                addRoute="/candidates/add-candidate"
+                isManagerView
+            />,
         );
 
         await waitFor(() => {
-            expect(getByText('Network error')).toBeTruthy();
+            expect(getByText('Schedule BDM interview')).toBeTruthy();
         });
-    });
 
-    it('shows empty state when no candidates match', async () => {
-        mockFetch.mockResolvedValue({ data: [], error: null, hasMore: false });
-
-        const { getByText } = render(
-            <CandidateListScreen candidateRoute={(id) => `/candidates/${id}`} addRoute="/add" />,
-        );
-
-        await waitFor(() => {
-            expect(getByText('No candidates found')).toBeTruthy();
-        });
+        expect(mockUsePipeline).toHaveBeenCalledWith({ isManagerView: true, enabled: true });
     });
 
     it('search filters candidates by name', async () => {
@@ -170,8 +153,7 @@ describe('CandidateListScreen', () => {
             expect(getByText('Alice Tan')).toBeTruthy();
         });
 
-        const searchInput = getByPlaceholderText('Search candidates...');
-        fireEvent.changeText(searchInput, 'Alice');
+        fireEvent.changeText(getByPlaceholderText('Search candidates'), 'Alice');
 
         await waitFor(() => {
             expect(getByText('Alice Tan')).toBeTruthy();
@@ -180,7 +162,40 @@ describe('CandidateListScreen', () => {
         });
     });
 
-    it('navigates to candidate on press', async () => {
+    it('uses grouped filters by default', async () => {
+        const { getAllByText, getByText, queryByText } = render(
+            <CandidateListScreen candidateRoute={(id) => `/candidates/${id}`} addRoute="/add" />,
+        );
+
+        await waitFor(() => {
+            expect(getByText('Alice Tan')).toBeTruthy();
+        });
+
+        fireEvent.press(getAllByText('Interview')[0]);
+
+        expect(queryByText('Alice Tan')).toBeNull();
+        expect(getByText('Bob Lim')).toBeTruthy();
+        expect(queryByText('Charlie Wong')).toBeNull();
+    });
+
+    it('keeps granular statuses in the status sheet', async () => {
+        const { getAllByText, getByLabelText, getByText, queryByText } = render(
+            <CandidateListScreen candidateRoute={(id) => `/candidates/${id}`} addRoute="/add" />,
+        );
+
+        await waitFor(() => {
+            expect(getByText('Alice Tan')).toBeTruthy();
+        });
+
+        fireEvent.press(getByLabelText('Open detailed status filters'));
+        fireEvent.press(getAllByText('Approved').at(-1)!);
+
+        expect(queryByText('Alice Tan')).toBeNull();
+        expect(queryByText('Bob Lim')).toBeNull();
+        expect(getByText('Charlie Wong')).toBeTruthy();
+    });
+
+    it('persists manual mode switches', async () => {
         const { getByText } = render(
             <CandidateListScreen candidateRoute={(id) => `/candidates/${id}`} addRoute="/add" />,
         );
@@ -189,39 +204,37 @@ describe('CandidateListScreen', () => {
             expect(getByText('Alice Tan')).toBeTruthy();
         });
 
-        // CandidateCard has a TouchableOpacity — find the card and press it
-        // The entire card is wrapped in a press handler
-        fireEvent.press(getByText('Alice Tan'));
+        fireEvent.press(getByText('Pipeline'));
 
-        expect(mockPush).toHaveBeenCalledWith('/candidates/c1');
+        expect(AsyncStorage.setItem).toHaveBeenCalledWith('lyfe_candidate_sort_mode:pa', 'urgency');
     });
 
-    it('navigates to add route on add button press', async () => {
-        const { getByLabelText } = render(
-            <CandidateListScreen candidateRoute={(id) => `/candidates/${id}`} addRoute="/team/add-candidate" />,
+    it('navigates to candidate and add routes', async () => {
+        const { getByLabelText, getByText } = render(
+            <CandidateListScreen candidateRoute={(id) => `/candidates/${id}`} addRoute="/candidates/add-candidate" />,
         );
 
         await waitFor(() => {
-            expect(getByLabelText('Add new candidate')).toBeTruthy();
+            expect(getByText('Alice Tan')).toBeTruthy();
         });
 
+        fireEvent.press(getByText('Alice Tan'));
+        expect(mockPush).toHaveBeenCalledWith('/candidates/c1');
+
         fireEvent.press(getByLabelText('Add new candidate'));
-        expect(mockPush).toHaveBeenCalledWith('/team/add-candidate');
+        expect(mockPush).toHaveBeenCalledWith('/candidates/add-candidate');
     });
 
-    it('does not fetch when no user', async () => {
+    it('does not fetch directory candidates when no user', () => {
         (useAuth as jest.Mock).mockReturnValue({ user: null });
 
         render(<CandidateListScreen candidateRoute={(id) => `/candidates/${id}`} addRoute="/add" />);
 
-        // Should not call fetchCandidates
         expect(mockFetch).not.toHaveBeenCalled();
     });
 
-    it('passes isManagerView to fetchCandidates', async () => {
-        const { getByText } = render(
-            <CandidateListScreen candidateRoute={(id) => `/candidates/${id}`} addRoute="/add" isManagerView={true} />,
-        );
+    it('passes isManagerView to directory fetch', async () => {
+        render(<CandidateListScreen candidateRoute={(id) => `/candidates/${id}`} addRoute="/add" isManagerView />);
 
         await waitFor(() => {
             expect(mockFetch).toHaveBeenCalledWith('user-1', true);

@@ -1,9 +1,9 @@
 /**
- * Tests for app/(tabs)/team/add-candidate.tsx
+ * Tests for app/(tabs)/candidates/add-candidate.tsx
  */
 import React from 'react';
 import { render, fireEvent, waitFor } from '@testing-library/react-native';
-import AddCandidateScreen from '@/app/(tabs)/team/add-candidate';
+import AddCandidateScreen from '@/app/(tabs)/candidates/add-candidate';
 import { useAuth } from '@/contexts/AuthContext';
 import { useTheme } from '@/contexts/ThemeContext';
 import { Colors } from '@/constants/Colors';

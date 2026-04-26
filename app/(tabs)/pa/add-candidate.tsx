@@ -1,1 +1,1 @@
-export { default } from '../team/add-candidate';
+export { default } from '../candidates/add-candidate';

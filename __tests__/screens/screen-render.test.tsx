@@ -120,6 +120,44 @@ jest.mock('@/lib/leads', () => ({
 
 jest.mock('@/lib/team', () => ({
     fetchTeamMembers: jest.fn().mockResolvedValue({ data: [], error: null }),
+    fetchManagerOverview: jest.fn().mockResolvedValue({
+        data: {
+            manager: {
+                id: 'mgr-1',
+                name: 'Mei',
+                role: 'manager',
+                phone: '+6593333333',
+                email: 'mei@example.com',
+                avatarUrl: null,
+                isActive: true,
+                joinedDate: '2025-10-01T00:00:00Z',
+                leadsCount: 0,
+                openLeadsCount: 0,
+                staleLeadsCount: 0,
+                wonCount: 0,
+                conversionRate: 0,
+                lastLeadUpdatedAt: null,
+                currentManagerId: null,
+                currentManagerName: null,
+                teamSize: 0,
+                outstandingCandidatesCount: 0,
+            },
+            candidatePipeline: {
+                outstandingTotal: 0,
+                byStage: {},
+                recentlyUpdated: [],
+            },
+            teamPerformance: {
+                periodDays: 30,
+                activitiesLogged: 0,
+                leadsClosed: 0,
+                leadsWon: 0,
+                winRate: 0,
+            },
+            teamRoster: [],
+        },
+        error: null,
+    }),
 }));
 
 jest.mock('@/lib/recruitment', () => ({
@@ -172,6 +210,17 @@ jest.mock('@/hooks/useLeadRealtime', () => ({
 
 jest.mock('@/hooks/useCandidateRealtime', () => ({
     useCandidateRealtime: jest.fn(),
+}));
+
+jest.mock('@/hooks/useCandidatePipeline', () => ({
+    useCandidatePipeline: () => ({
+        rows: [],
+        counts: { 'at-risk': 0, 'this-week': 0, ready: 0, 'on-track': 0, hidden: 0 },
+        isLoading: false,
+        isRefreshing: false,
+        error: null,
+        refresh: jest.fn().mockResolvedValue(undefined),
+    }),
 }));
 
 jest.mock('@/hooks/useFilteredList', () => ({
@@ -256,6 +305,12 @@ describe('Screen render tests', () => {
     it('team screen renders without crashing', async () => {
         const TeamScreen = require('@/app/(tabs)/team/index').default;
         const { toJSON } = render(<TeamScreen />);
+        expect(toJSON()).toBeTruthy();
+    });
+
+    it('manager detail screen renders without crashing', async () => {
+        const ManagerDetailScreen = require('@/app/(tabs)/team/manager/[managerId]').default;
+        const { toJSON } = render(<ManagerDetailScreen />);
         expect(toJSON()).toBeTruthy();
     });
 
