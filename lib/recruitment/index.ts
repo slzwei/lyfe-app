@@ -34,6 +34,7 @@ export {
     fetchPaperAttempts,
     fetchMilestones,
     fetchPrepCourseBookings,
+    fetchEmockAttemptsForCandidate,
     checkAllPapersPassed,
     upsertPaperAttempt,
     deletePaperAttempt,

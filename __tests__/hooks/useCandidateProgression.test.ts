@@ -18,15 +18,18 @@ import type {
     MilestoneStatus,
     PaperCode,
 } from '@/types/recruitment';
+import type { EmockAttempt, EmockModuleCode } from '@/types/emock';
 
 const mockFetchPaperAttempts = jest.fn();
 const mockFetchMilestones = jest.fn();
 const mockFetchPrepCourseBookings = jest.fn();
+const mockFetchEmockAttemptsForCandidate = jest.fn();
 
 jest.mock('@/lib/recruitment', () => ({
     fetchPaperAttempts: (...a: unknown[]) => mockFetchPaperAttempts(...a),
     fetchMilestones: (...a: unknown[]) => mockFetchMilestones(...a),
     fetchPrepCourseBookings: (...a: unknown[]) => mockFetchPrepCourseBookings(...a),
+    fetchEmockAttemptsForCandidate: (...a: unknown[]) => mockFetchEmockAttemptsForCandidate(...a),
 }));
 
 function makeAttempt(
@@ -64,14 +67,30 @@ function makeMilestone(code: MilestoneCode, status: MilestoneStatus): CandidateM
     };
 }
 
+function makeEmockAttempt(moduleId: EmockModuleCode, overrides: Partial<EmockAttempt> = {}): EmockAttempt {
+    return {
+        id: `em-${moduleId}-${overrides.quiz_id ?? 'set-a'}-${overrides.completed_at ?? 'd1'}`,
+        module_id: moduleId,
+        quiz_id: overrides.quiz_id ?? 'set-a',
+        score: overrides.score ?? 80,
+        total: overrides.total ?? 100,
+        passed: overrides.passed ?? true,
+        time_taken_seconds: overrides.time_taken_seconds ?? 4200,
+        completed_at: overrides.completed_at ?? '2026-04-20T10:00:00Z',
+        status: overrides.status ?? 'completed',
+    };
+}
+
 function setup(
     attempts: CandidatePaperAttempt[],
     milestones: CandidateMilestone[] = [],
     prepCourses: CandidatePrepCourseBooking[] = [],
+    emockAttempts: EmockAttempt[] = [],
 ) {
     mockFetchPaperAttempts.mockResolvedValue({ data: attempts, error: null });
     mockFetchMilestones.mockResolvedValue({ data: milestones, error: null });
     mockFetchPrepCourseBookings.mockResolvedValue({ data: prepCourses, error: null });
+    mockFetchEmockAttemptsForCandidate.mockResolvedValue({ data: emockAttempts, error: null });
 }
 
 beforeEach(() => {
@@ -175,5 +194,78 @@ describe('useCandidateProgression — paper requirements', () => {
         expect(result.current.milestoneByCode.soar).toBeNull();
         expect(result.current.milestoneByCode.rnf).toBeNull();
         expect(result.current.milestoneByCode.sales_authority).toBeNull();
+    });
+});
+
+describe('useCandidateProgression — eMock summaries', () => {
+    it('returns zero-attempt summaries for all 4 modules when no eMock data exists', async () => {
+        setup([], [], [], []);
+        const { result } = renderHook(() => useCandidateProgression('cand-1'));
+        await waitFor(() => expect(result.current.isLoading).toBe(false));
+
+        const codes: EmockModuleCode[] = ['M9', 'M9A', 'HI', 'RES5'];
+        for (const code of codes) {
+            const summary = result.current.emockSummariesByCode[code];
+            expect(summary.code).toBe(code);
+            expect(summary.attemptCount).toBe(0);
+            expect(summary.bestAttempt).toBeNull();
+            expect(summary.latestAttempt).toBeNull();
+            expect(summary.everPassed).toBe(false);
+            expect(summary.bestPercent).toBeNull();
+        }
+    });
+
+    it('aggregates best score across multiple attempts for the same module', async () => {
+        // Lib returns rows ordered by completed_at desc — mirror that here so
+        // the hook's "latest = forModule[0]" assumption holds in the test too.
+        setup(
+            [],
+            [],
+            [],
+            [
+                makeEmockAttempt('M9', { score: 71, passed: true, completed_at: '2026-04-22T10:00:00Z' }),
+                makeEmockAttempt('M9', { score: 82, passed: true, completed_at: '2026-04-20T10:00:00Z' }),
+                makeEmockAttempt('M9', { score: 65, passed: false, completed_at: '2026-04-15T10:00:00Z' }),
+            ],
+        );
+        const { result } = renderHook(() => useCandidateProgression('cand-1'));
+        await waitFor(() => expect(result.current.isLoading).toBe(false));
+
+        const m9 = result.current.emockSummariesByCode.M9;
+        expect(m9.attemptCount).toBe(3);
+        expect(m9.bestAttempt?.score).toBe(82);
+        expect(m9.bestPercent).toBe(82);
+        expect(m9.everPassed).toBe(true);
+        expect(m9.latestAttempt?.completed_at).toBe('2026-04-22T10:00:00Z');
+    });
+
+    it('marks everPassed=false when all attempts failed', async () => {
+        setup(
+            [],
+            [],
+            [],
+            [
+                makeEmockAttempt('HI', { score: 55, passed: false }),
+                makeEmockAttempt('HI', { score: 62, passed: false, completed_at: '2026-04-22T10:00:00Z' }),
+            ],
+        );
+        const { result } = renderHook(() => useCandidateProgression('cand-1'));
+        await waitFor(() => expect(result.current.isLoading).toBe(false));
+
+        const hi = result.current.emockSummariesByCode.HI;
+        expect(hi.attemptCount).toBe(2);
+        expect(hi.everPassed).toBe(false);
+        expect(hi.bestPercent).toBe(62);
+    });
+
+    it('isolates each module — attempts on M9 do not affect M9A', async () => {
+        setup([], [], [], [makeEmockAttempt('M9', { score: 90 })]);
+        const { result } = renderHook(() => useCandidateProgression('cand-1'));
+        await waitFor(() => expect(result.current.isLoading).toBe(false));
+
+        expect(result.current.emockSummariesByCode.M9.attemptCount).toBe(1);
+        expect(result.current.emockSummariesByCode.M9A.attemptCount).toBe(0);
+        expect(result.current.emockSummariesByCode.HI.attemptCount).toBe(0);
+        expect(result.current.emockSummariesByCode.RES5.attemptCount).toBe(0);
     });
 });

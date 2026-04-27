@@ -17,6 +17,7 @@ import type {
     PaperCode,
     PrepCourseCode,
 } from '@/types/recruitment';
+import { EMOCK_MODULE_CODES, type EmockAttempt } from '@/types/emock';
 import { supabase } from '../supabase';
 
 // ── Reads ──────────────────────────────────────────────────────────────────
@@ -51,6 +52,39 @@ export async function fetchPrepCourseBookings(
         .eq('candidate_id', candidateId);
     if (error) return { data: [], error: error.message };
     return { data: (data || []) as CandidatePrepCourseBooking[], error: null };
+}
+
+/**
+ * eMock practice attempts for a candidate.
+ *
+ * Bridges candidate_id → candidate_profiles.user_id → emock_attempts.user_id.
+ * RLS allows staff reads via `emock_attempts_staff_select` policy
+ * (migration 20260427190000) — the policy joins candidate_profiles and uses
+ * the same can_access_candidate_user() helper as candidate_paper_attempts.
+ *
+ * Returns only completed attempts; in-progress quizzes are excluded so the
+ * UI shows confirmed scores only.
+ */
+export async function fetchEmockAttemptsForCandidate(
+    candidateId: string,
+): Promise<{ data: EmockAttempt[]; error: string | null }> {
+    const { data: profile, error: profErr } = await supabase
+        .from('candidate_profiles')
+        .select('user_id')
+        .eq('candidate_id', candidateId)
+        .maybeSingle();
+    if (profErr) return { data: [], error: profErr.message };
+    if (!profile?.user_id) return { data: [], error: null };
+
+    const { data, error } = await supabase
+        .from('emock_attempts')
+        .select('id, module_id, quiz_id, score, total, passed, time_taken_seconds, completed_at, status')
+        .eq('user_id', profile.user_id)
+        .eq('status', 'completed')
+        .in('module_id', EMOCK_MODULE_CODES as unknown as string[])
+        .order('completed_at', { ascending: false });
+    if (error) return { data: [], error: error.message };
+    return { data: (data || []) as EmockAttempt[], error: null };
 }
 
 // ── Bulk fetchers (one roundtrip per data-type for a list of candidates) ───

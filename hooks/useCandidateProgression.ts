@@ -1,4 +1,9 @@
-import { fetchMilestones, fetchPaperAttempts, fetchPrepCourseBookings } from '@/lib/recruitment';
+import {
+    fetchEmockAttemptsForCandidate,
+    fetchMilestones,
+    fetchPaperAttempts,
+    fetchPrepCourseBookings,
+} from '@/lib/recruitment';
 import type {
     CandidateMilestone,
     CandidatePaperAttempt,
@@ -10,6 +15,13 @@ import type {
     PaperRequirementStatus,
     PrepCourseCode,
 } from '@/types/recruitment';
+import {
+    EMOCK_MODULE_CODES,
+    EMOCK_MODULE_META,
+    type EmockAttempt,
+    type EmockModuleCode,
+    type EmockModuleSummary,
+} from '@/types/emock';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 
 // Preference order per requirement. Listing M9/M9A first means the UI defaults
@@ -73,9 +85,11 @@ export interface UseCandidateProgressionResult {
     paperAttempts: CandidatePaperAttempt[];
     milestones: CandidateMilestone[];
     prepCourses: CandidatePrepCourseBooking[];
+    emockAttempts: EmockAttempt[];
     paperRequirements: PaperRequirement[];
     milestoneByCode: Record<MilestoneCode, CandidateMilestone | null>;
     prepCourseByCode: Record<PrepCourseCode, CandidatePrepCourseBooking | null>;
+    emockSummariesByCode: Record<EmockModuleCode, EmockModuleSummary>;
     allPapersPassed: boolean;
     rnfIssued: boolean;
     isLoading: boolean;
@@ -87,22 +101,25 @@ export function useCandidateProgression(candidateId: string | undefined): UseCan
     const [paperAttempts, setPaperAttempts] = useState<CandidatePaperAttempt[]>([]);
     const [milestones, setMilestones] = useState<CandidateMilestone[]>([]);
     const [prepCourses, setPrepCourses] = useState<CandidatePrepCourseBooking[]>([]);
+    const [emockAttempts, setEmockAttempts] = useState<EmockAttempt[]>([]);
     const [isLoading, setIsLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
 
     const refresh = useCallback(async () => {
         if (!candidateId) return;
         setError(null);
-        const [attemptsResult, milestonesResult, prepResult] = await Promise.all([
+        const [attemptsResult, milestonesResult, prepResult, emockResult] = await Promise.all([
             fetchPaperAttempts(candidateId),
             fetchMilestones(candidateId),
             fetchPrepCourseBookings(candidateId),
+            fetchEmockAttemptsForCandidate(candidateId),
         ]);
-        const firstError = attemptsResult.error || milestonesResult.error || prepResult.error;
+        const firstError = attemptsResult.error || milestonesResult.error || prepResult.error || emockResult.error;
         if (firstError) setError(firstError);
         setPaperAttempts(attemptsResult.data);
         setMilestones(milestonesResult.data);
         setPrepCourses(prepResult.data);
+        setEmockAttempts(emockResult.data);
         setIsLoading(false);
     }, [candidateId]);
 
@@ -147,13 +164,43 @@ export function useCandidateProgression(candidateId: string | undefined): UseCan
         return base;
     }, [prepCourses]);
 
+    // Aggregate eMock attempts into per-module summaries (best score, count, latest).
+    // emockAttempts arrives ordered by completed_at desc — preserves "latest" semantics.
+    const emockSummariesByCode = useMemo<Record<EmockModuleCode, EmockModuleSummary>>(() => {
+        const out = {} as Record<EmockModuleCode, EmockModuleSummary>;
+        for (const code of EMOCK_MODULE_CODES) {
+            const forModule = emockAttempts.filter((a) => a.module_id === code);
+            const bestAttempt = forModule.reduce<EmockAttempt | null>((best, a) => {
+                if (a.score == null) return best;
+                if (!best || (best.score ?? -1) < a.score) return a;
+                return best;
+            }, null);
+            const bestPercent =
+                bestAttempt && bestAttempt.score != null && bestAttempt.total
+                    ? Math.round((bestAttempt.score / bestAttempt.total) * 100)
+                    : null;
+            out[code] = {
+                code,
+                label: EMOCK_MODULE_META[code].label,
+                attemptCount: forModule.length,
+                bestAttempt,
+                latestAttempt: forModule[0] ?? null,
+                everPassed: forModule.some((a) => a.passed === true),
+                bestPercent,
+            };
+        }
+        return out;
+    }, [emockAttempts]);
+
     return {
         paperAttempts,
         milestones,
         prepCourses,
+        emockAttempts,
         paperRequirements,
         milestoneByCode,
         prepCourseByCode,
+        emockSummariesByCode,
         allPapersPassed,
         rnfIssued,
         isLoading,

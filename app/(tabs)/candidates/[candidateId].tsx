@@ -9,6 +9,7 @@ import MilestoneMarkSheet from '@/components/candidates/MilestoneMarkSheet';
 import MilestonesSection from '@/components/candidates/MilestonesSection';
 import NoteSheet from '@/components/candidates/NoteSheet';
 import OnboardingChecklist from '@/components/candidates/OnboardingChecklist';
+import EmockScoresSection from '@/components/candidates/EmockScoresSection';
 import PapersSection from '@/components/candidates/PapersSection';
 import PdfViewerModal from '@/components/candidates/PdfViewerModal';
 import PrepCourseMarkSheet from '@/components/candidates/PrepCourseMarkSheet';
@@ -1214,6 +1215,7 @@ export default function CandidateDetailScreen() {
                             colors={colors}
                             onMark={openPaperAttempts}
                         />
+                        <EmockScoresSection summariesByCode={progression.emockSummariesByCode} colors={colors} />
                         <MilestonesSection
                             milestoneByCode={progression.milestoneByCode}
                             colors={colors}

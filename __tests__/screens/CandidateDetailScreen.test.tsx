@@ -7,7 +7,13 @@ import CandidateDetailScreen from '@/app/(tabs)/candidates/[candidateId]';
 import { useAuth } from '@/contexts/AuthContext';
 import { useTheme } from '@/contexts/ThemeContext';
 import { Colors } from '@/constants/Colors';
-import { fetchCandidate, fetchMilestones, fetchPaperAttempts, fetchPrepCourseBookings } from '@/lib/recruitment';
+import {
+    fetchCandidate,
+    fetchEmockAttemptsForCandidate,
+    fetchMilestones,
+    fetchPaperAttempts,
+    fetchPrepCourseBookings,
+} from '@/lib/recruitment';
 import { fetchCandidateRoadmap } from '@/lib/roadmap';
 import { useContactOutcome } from '@/hooks/useContactOutcome';
 import { useDocumentManager } from '@/hooks/useDocumentManager';
@@ -182,6 +188,7 @@ function defaultHookMocks() {
     (fetchPaperAttempts as jest.Mock).mockResolvedValue({ data: [], error: null });
     (fetchMilestones as jest.Mock).mockResolvedValue({ data: [], error: null });
     (fetchPrepCourseBookings as jest.Mock).mockResolvedValue({ data: [], error: null });
+    (fetchEmockAttemptsForCandidate as jest.Mock).mockResolvedValue({ data: [], error: null });
     (useContactOutcome as jest.Mock).mockReturnValue({
         pendingType: null,
         showConfirmSheet: false,
