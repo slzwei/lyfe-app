@@ -124,7 +124,8 @@ export default function TakeExamScreen() {
                     else if (parsed?.quiz_type === 'vark') detected = 'vark';
                     else if (parsed?.quiz_type === 'disc') {
                         // DISC uses a dedicated screen — redirect
-                        router.replace({ pathname: `${tabBase}/disc` as any, params: { paperId } });
+                        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                        router.replace({ pathname: `${tabBase}/disc`, params: { paperId } } as any);
                         return;
                     }
                 } catch {

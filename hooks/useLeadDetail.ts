@@ -162,7 +162,14 @@ function useLeadReassign({ lead, userId, userRole, fullName, setActivities }: Us
             setShowReassignModal(false);
 
             setIsReassigning(true);
-            const { error } = await reassignLead(lead.id, toAgent.id, fromId, fromName, toAgent.full_name, userId);
+            const { error } = await reassignLead(
+                lead.id,
+                toAgent.id,
+                fromId,
+                fromName ?? '',
+                toAgent.full_name,
+                userId,
+            );
             setIsReassigning(false);
             if (!error) {
                 setActivities((prev) => [newActivity, ...prev]);

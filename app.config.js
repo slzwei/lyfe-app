@@ -29,10 +29,15 @@ module.exports = {
             appleTeamId: 'Y953XF3N6C',
             infoPlist: {
                 NSFaceIDUsageDescription: 'Use Face ID to sign in to Lyfe quickly and securely.',
-                NSCameraUsageDescription: 'Allow Lyfe to take a profile photo and verify your identity at check-in.',
+                NSCameraUsageDescription:
+                    'Lyfe uses the camera for profile photos and to verify your identity at roadshow check-in.',
+                NSMicrophoneUsageDescription:
+                    'Lyfe uses the microphone when recording video for events. Lyfe does not record audio in the background.',
                 NSLocationWhenInUseUsageDescription:
                     'Lyfe uses your location to verify you are at the roadshow venue during check-in.',
                 NSPhotoLibraryUsageDescription: 'Allow Lyfe to choose a profile photo from your library.',
+                NSPhotoLibraryAddUsageDescription:
+                    'Lyfe needs permission to save event photos and exported documents to your photo library.',
                 ITSAppUsesNonExemptEncryption: false,
                 UIRequiredDeviceCapabilities: [],
             },

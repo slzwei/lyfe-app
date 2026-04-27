@@ -5,6 +5,7 @@ import {
     AlbertSans_600SemiBold,
     AlbertSans_700Bold,
 } from '@expo-google-fonts/albert-sans';
+import * as Notifications from 'expo-notifications';
 import { Stack, useNavigationContainerRef, useRouter, useSegments } from 'expo-router';
 import * as SplashScreen from 'expo-splash-screen';
 import { StatusBar } from 'expo-status-bar';
@@ -19,6 +20,7 @@ import { ThemeProvider, useTheme } from '@/contexts/ThemeContext';
 import { NotificationProvider } from '@/contexts/NotificationContext';
 import { ViewModeProvider } from '@/contexts/ViewModeContext';
 import { useLastSeen } from '@/hooks/useLastSeen';
+import { useNotificationDeepLink } from '@/hooks/useNotificationDeepLink';
 import { initSentry, navigationIntegration, Sentry } from '@/lib/sentry';
 import { KeyboardProvider } from 'react-native-keyboard-controller';
 
@@ -32,6 +34,21 @@ export { ErrorBoundary } from 'expo-router';
 
 initSentry();
 
+// Foreground notification display. Without this, iOS silently drops banners
+// when the app is in the foreground, so agents who keep the app open during
+// roadshows would miss every incoming lead. shouldShowAlert is the legacy
+// flag; shouldShowBanner + shouldShowList are the iOS 14+ replacements that
+// expo-notifications now requires.
+Notifications.setNotificationHandler({
+    handleNotification: async () => ({
+        shouldShowAlert: true,
+        shouldShowBanner: true,
+        shouldShowList: true,
+        shouldPlaySound: true,
+        shouldSetBadge: true,
+    }),
+});
+
 // Prevent the splash screen from auto-hiding before asset loading is complete.
 SplashScreen.preventAutoHideAsync();
 
@@ -41,6 +58,10 @@ function AuthGate({ children }: { children: React.ReactNode }) {
     const router = useRouter();
 
     useLastSeen();
+    // Route notification taps to data.route. Defers cold-start navigation
+    // until isLoading flips false so we never navigate to a protected
+    // screen before the session is restored.
+    useNotificationDeepLink({ ready: !isLoading && isAuthenticated });
 
     useEffect(() => {
         if (isLoading) return;

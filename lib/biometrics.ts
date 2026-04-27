@@ -122,15 +122,57 @@ export function biometricMeta(type: BiometryType): { label: string; icon: IconNa
     }
 }
 
-export async function authenticate(promptMessage: string): Promise<boolean> {
+export type AuthenticateResult =
+    | { ok: true }
+    | { ok: false; reason: 'weak_biometric' | 'cancelled' | 'failed' | 'unavailable'; message?: string };
+
+/**
+ * On Android, the device's enrolled biometric may be Class 2 ("weak" — some
+ * face unlock implementations, certain fingerprint sensors). expo-local-
+ * authentication accepts those by default. For an auth surface holding a
+ * 7-day-valid Supabase refresh token, we only want Class 3 ("strong") to
+ * pass — anything weaker must fall through to the OTP path.
+ *
+ * iOS doesn't have this distinction — Face ID and Touch ID are both Class 3
+ * equivalent — so on iOS we keep the original behavior.
+ */
+export async function authenticateStrict(promptMessage: string): Promise<AuthenticateResult> {
     try {
+        if (Platform.OS === 'android') {
+            const level = await LocalAuthentication.getEnrolledLevelAsync();
+            // SecurityLevel.BIOMETRIC_STRONG === 3; anything below means the
+            // device only has weak biometric or no biometric at all.
+            if (level < LocalAuthentication.SecurityLevel.BIOMETRIC_STRONG) {
+                return {
+                    ok: false,
+                    reason: 'weak_biometric',
+                    message:
+                        "This device's biometric isn't strong enough to keep your session signed in. Use the 6-digit code instead — you can re-enable biometrics later from Settings.",
+                };
+            }
+        }
         const result = await LocalAuthentication.authenticateAsync({
             promptMessage,
             cancelLabel: 'Cancel',
             disableDeviceFallback: true,
         });
-        return result.success;
+        if (result.success) return { ok: true };
+        if (
+            'error' in result &&
+            (result.error === 'user_cancel' || result.error === 'system_cancel' || result.error === 'app_cancel')
+        ) {
+            return { ok: false, reason: 'cancelled' };
+        }
+        return { ok: false, reason: 'failed' };
     } catch {
-        return false;
+        return { ok: false, reason: 'unavailable' };
     }
+}
+
+/** Legacy boolean wrapper preserved for callers that don't surface failure
+ *  reasons. New code should prefer authenticateStrict for the actionable
+ *  weak_biometric case. */
+export async function authenticate(promptMessage: string): Promise<boolean> {
+    const r = await authenticateStrict(promptMessage);
+    return r.ok;
 }

@@ -2,7 +2,7 @@
  * Events service — Supabase CRUD for agency events & attendees
  */
 import type { AgencyEvent, CreateEventInput, EventAttendee, EventType, ExternalAttendee } from '@/types/event';
-import type { Json } from '@/types/supabase';
+import type { Json } from '@/types/shared/database.types';
 import { applyPageRange, resolvePage } from './pagination';
 import { supabase } from './supabase';
 

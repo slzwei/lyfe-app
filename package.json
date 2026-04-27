@@ -15,7 +15,6 @@
         "lint:fix": "eslint . --ext .ts,.tsx --fix",
         "format": "prettier --write '**/*.{ts,tsx,js,json}'",
         "prepare": "husky",
-        "gen:types": "npx supabase gen types typescript --project-id nvtedkyjwulkzjeoqjgx > types/supabase.ts",
         "seed": "node scripts/seed.mjs",
         "seed:reset": "node scripts/seed.mjs --reset",
         "seed:reset-only": "node scripts/seed.mjs --reset-only",
@@ -32,7 +31,6 @@
         ]
     },
     "dependencies": {
-        "@aws-sdk/client-rekognition": "^3.1029.0",
         "@expo-google-fonts/albert-sans": "^0.4.2",
         "@expo/vector-icons": "^15.1.1",
         "@react-native-async-storage/async-storage": "^2.1.0",

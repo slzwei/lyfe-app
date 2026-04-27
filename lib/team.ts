@@ -97,41 +97,47 @@ export async function fetchTeamMembers(
             return { data: [], error: null };
         }
 
-        // Fetch lead stats for all members in a single query
+        // Fetch lead stats for all members via the get_team_lead_stats RPC.
+        // Server-side aggregation replaces the previous client-side fan-out
+        // (.from('leads').select('assigned_to, status, updated_at').in('assigned_to', userIds))
+        // which transmitted every lead row to the device — fine at 6 leads,
+        // fails at 100k. The RPC returns one row per agent.
         const userIds = (users as { id: string }[]).map((u) => u.id);
-        const { data: leads } = await supabase
-            .from('leads')
-            .select('assigned_to, status, updated_at')
-            .in('assigned_to', userIds);
+        // RPC name is not yet in generated types until `gen:types` re-runs
+        // post-migration. Cast at the call site; the args + return shape are
+        // documented in 20260427130800_get_team_lead_stats_rpc.sql.
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const rpc = supabase.rpc as any;
+        const { data: statsRows, error: statsErr } = await rpc('get_team_lead_stats', {
+            p_user_ids: userIds,
+            p_stale_days: 7,
+        });
+        if (statsErr) {
+            captureError(statsErr, { fn: 'getTeamMembers.statsRpc' });
+            // Don't fail the whole call — degrade gracefully to zeroed stats.
+        }
 
-        // Aggregate stats per user
-        const staleCutoff = Date.now() - 7 * 86400000;
         const statsMap: Record<
             string,
             { total: number; open: number; stale: number; won: number; lastUpdatedAt: string | null }
         > = {};
-        ((leads || []) as { assigned_to: string; status: string; updated_at: string | null }[]).forEach((lead) => {
-            if (!statsMap[lead.assigned_to]) {
-                statsMap[lead.assigned_to] = { total: 0, open: 0, stale: 0, won: 0, lastUpdatedAt: null };
-            }
-            statsMap[lead.assigned_to].total++;
-            if (lead.status === 'won') {
-                statsMap[lead.assigned_to].won++;
-            }
-            if (lead.status !== 'won' && lead.status !== 'lost') {
-                statsMap[lead.assigned_to].open++;
-                if (lead.updated_at && new Date(lead.updated_at).getTime() < staleCutoff) {
-                    statsMap[lead.assigned_to].stale++;
-                }
-            }
-            if (
-                lead.updated_at &&
-                (!statsMap[lead.assigned_to].lastUpdatedAt ||
-                    new Date(lead.updated_at).getTime() >
-                        new Date(statsMap[lead.assigned_to].lastUpdatedAt ?? '').getTime())
-            ) {
-                statsMap[lead.assigned_to].lastUpdatedAt = lead.updated_at;
-            }
+        (
+            (statsRows || []) as {
+                user_id: string;
+                total_count: number;
+                open_count: number;
+                stale_count: number;
+                won_count: number;
+                last_updated_at: string | null;
+            }[]
+        ).forEach((row) => {
+            statsMap[row.user_id] = {
+                total: Number(row.total_count) || 0,
+                open: Number(row.open_count) || 0,
+                stale: Number(row.stale_count) || 0,
+                won: Number(row.won_count) || 0,
+                lastUpdatedAt: row.last_updated_at,
+            };
         });
 
         const typedUsers = users as {
@@ -312,7 +318,8 @@ export async function reassignAgent(agentId: string, newManagerId: string | null
     try {
         const { error } = await supabase.rpc('reassign_agent_upline', {
             p_agent_id: agentId,
-            p_new_manager_id: newManagerId,
+            // RPC accepts null for "clear upline"; generated types model the param as string only.
+            p_new_manager_id: newManagerId as string,
         });
         if (error) return { error: error.message };
         return { error: null };

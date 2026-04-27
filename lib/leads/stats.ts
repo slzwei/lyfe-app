@@ -35,7 +35,6 @@ export async function fetchLeadStats(
         pipeline: [],
     };
 
-    // @ts-expect-error — get_lead_pipeline_stats RPC not yet in generated types
     const { data, error } = await supabase.rpc('get_lead_pipeline_stats', {
         p_user_id: userId,
         p_is_manager: isManager,

@@ -2,7 +2,7 @@
  * Roadshow service — check-in, pledges, activities, config, bulk creation
  */
 import type { RoadshowActivity, RoadshowActivityType, RoadshowAttendance, RoadshowConfig } from '@/types/event';
-import type { Json } from '@/types/supabase';
+import type { Json } from '@/types/shared/database.types';
 import { applyPageRange, resolvePage } from './pagination';
 import { supabase } from './supabase';
 

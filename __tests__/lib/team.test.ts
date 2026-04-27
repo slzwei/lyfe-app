@@ -13,6 +13,60 @@ function mockResolve(chain: any, value: any) {
     chain.__resolveWith(value);
 }
 
+/** Helper for the new get_team_lead_stats RPC. Takes the legacy
+ * per-row leads array (from the original test fixtures) and returns
+ * the pre-aggregated shape the RPC produces. Keeps existing tests
+ * intent-preserving without restructuring fixtures. */
+function rpcStatsFromLeads(
+    leads: { assigned_to: string; status: string; updated_at?: string | null }[],
+    staleDays = 7,
+) {
+    const staleCutoff = Date.now() - staleDays * 86400000;
+    const map: Record<
+        string,
+        {
+            user_id: string;
+            total_count: number;
+            open_count: number;
+            stale_count: number;
+            won_count: number;
+            last_updated_at: string | null;
+        }
+    > = {};
+    for (const l of leads) {
+        const m = (map[l.assigned_to] ||= {
+            user_id: l.assigned_to,
+            total_count: 0,
+            open_count: 0,
+            stale_count: 0,
+            won_count: 0,
+            last_updated_at: null,
+        });
+        m.total_count++;
+        if (l.status === 'won') m.won_count++;
+        if (l.status !== 'won' && l.status !== 'lost') {
+            m.open_count++;
+            if (l.updated_at && new Date(l.updated_at).getTime() < staleCutoff) m.stale_count++;
+        }
+        if (
+            l.updated_at &&
+            (!m.last_updated_at || new Date(l.updated_at).getTime() > new Date(m.last_updated_at).getTime())
+        ) {
+            m.last_updated_at = l.updated_at;
+        }
+    }
+    return Object.values(map);
+}
+
+function mockTeamStatsRpc(leads: { assigned_to: string; status: string; updated_at?: string | null }[]) {
+    mockSupa.rpc.mockImplementation((name: string) => {
+        if (name === 'get_team_lead_stats') {
+            return Promise.resolve({ data: rpcStatsFromLeads(leads), error: null });
+        }
+        return Promise.resolve({ data: null, error: null });
+    });
+}
+
 // ── Fixtures ──
 
 const USER_AGENT = {
@@ -49,16 +103,14 @@ describe('fetchTeamMembers', () => {
         const usersChain = mockSupa.__getChain('users');
         mockResolve(usersChain, { data: [USER_AGENT, USER_AGENT_2], error: null });
 
-        const leadsChain = mockSupa.__getChain('leads');
-        mockResolve(leadsChain, {
-            data: [
-                { assigned_to: 'agent-1', status: 'won' },
-                { assigned_to: 'agent-1', status: 'new' },
-                { assigned_to: 'agent-1', status: 'lost' },
-                { assigned_to: 'agent-2', status: 'new' },
-            ],
-            error: null,
-        });
+        // get_team_lead_stats now returns pre-aggregated rows. Helper computes
+        // the same aggregation server-side would, from the same fixture leads.
+        mockTeamStatsRpc([
+            { assigned_to: 'agent-1', status: 'won' },
+            { assigned_to: 'agent-1', status: 'new' },
+            { assigned_to: 'agent-1', status: 'lost' },
+            { assigned_to: 'agent-2', status: 'new' },
+        ]);
 
         const result = await fetchTeamMembers('mgr-1', 'manager');
         expect(result.error).toBeNull();
@@ -98,8 +150,7 @@ describe('fetchTeamMembers', () => {
         const usersChain = mockSupa.__getChain('users');
         mockResolve(usersChain, { data: [USER_AGENT], error: null });
 
-        const leadsChain = mockSupa.__getChain('leads');
-        mockResolve(leadsChain, { data: [], error: null });
+        mockTeamStatsRpc([]);
 
         const result = await fetchTeamMembers('mgr-1', 'director');
         expect(result.data[0].leadsCount).toBe(0);
@@ -110,8 +161,7 @@ describe('fetchTeamMembers', () => {
         const usersChain = mockSupa.__getChain('users');
         mockResolve(usersChain, { data: [{ ...USER_AGENT, is_active: null }], error: null });
 
-        const leadsChain = mockSupa.__getChain('leads');
-        mockResolve(leadsChain, { data: [], error: null });
+        mockTeamStatsRpc([]);
 
         const result = await fetchTeamMembers('mgr-1', 'manager');
         expect(result.data[0].isActive).toBe(true);
@@ -121,8 +171,7 @@ describe('fetchTeamMembers', () => {
         const usersChain = mockSupa.__getChain('users');
         mockResolve(usersChain, { data: [USER_AGENT], error: null });
 
-        const leadsChain = mockSupa.__getChain('leads');
-        mockResolve(leadsChain, { data: [], error: null });
+        mockTeamStatsRpc([]);
 
         const result = await fetchTeamMembers('dir-1', 'director');
         expect(result.error).toBeNull();
@@ -173,8 +222,7 @@ describe('fetchTeamMembers', () => {
         // here, just on the final aggregation paths exercised by the candidates fetch.
         mockResolve(usersChain, { data: [USER_MANAGER, USER_AGENT], error: null });
 
-        const leadsChain = mockSupa.__getChain('leads');
-        mockResolve(leadsChain, { data: [], error: null });
+        mockTeamStatsRpc([]);
 
         const candidatesChain = mockSupa.__getChain('candidates');
         mockResolve(candidatesChain, {

@@ -95,7 +95,8 @@ export default function EventsScreen() {
     useEffect(() => {
         const parent = navigation.getParent();
         if (!parent) return;
-        const unsubscribe = parent.addListener('tabPress' as const, () => {
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const unsubscribe = (parent as any).addListener('tabPress', () => {
             scrollToTodayRef.current?.();
         });
         return unsubscribe;

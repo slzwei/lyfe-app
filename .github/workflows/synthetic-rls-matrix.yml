@@ -5,8 +5,8 @@ name: Synthetic — RLS authorisation matrix
 
 on:
   workflow_dispatch:
-  # schedule:
-  #   - cron: '0 */6 * * *'
+  schedule:
+    - cron: '0 */6 * * *' # every 6 hours
 
 permissions:
   contents: read
@@ -46,3 +46,12 @@ jobs:
           GITHUB_SERVER_URL: ${{ github.server_url }}
           GITHUB_RUN_ID: ${{ github.run_id }}
         run: node 07-rls-matrix.mjs
+
+      - name: Notify Slack on failure
+        if: failure() && env.SLACK_WEBHOOK != ''
+        env:
+          SLACK_WEBHOOK: ${{ secrets.SLACK_ALERT_WEBHOOK }}
+        run: |
+          curl -sS -X POST -H 'Content-Type: application/json' \
+            -d "{\"text\":\":rotating_light: *Synthetic probe FAILED (security-regression):* ${{ github.workflow }}\n<${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}|View run>\"}" \
+            "$SLACK_WEBHOOK" || true

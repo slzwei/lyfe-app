@@ -10,6 +10,7 @@ interface FormFieldBaseProps {
     error?: string;
     required?: boolean;
     containerStyle?: ViewStyle;
+    testID?: string;
 }
 
 interface FormFieldInputProps extends FormFieldBaseProps {

@@ -82,6 +82,57 @@ Deno.serve(async (req) => {
             });
         }
 
+        // ── Per-admin rate limit + dedup ─────────────────────────────
+        // Compromised admin accounts can otherwise spray notifications to every
+        // user in seconds. We cap at 1/min and 10/day per admin, and accept an
+        // optional dedupKey (sha256 hex of title+body recommended) to swallow
+        // accidental double-clicks of the Send button.
+        const dedupKey =
+            new URL(req.url).searchParams.get('dedupKey') ||
+            (typeof (await req.headers.get('Idempotency-Key')) === 'string'
+                ? req.headers.get('Idempotency-Key')
+                : null);
+        const ONE_MIN_AGO = new Date(Date.now() - 60 * 1000).toISOString();
+        const ONE_DAY_AGO = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
+
+        const { data: recentLog } = await supabase
+            .from('audit_log')
+            .select('id, created_at, new_data')
+            .eq('actor_id', caller.id)
+            .eq('table_name', 'announcement')
+            .gte('created_at', ONE_DAY_AGO)
+            .order('created_at', { ascending: false })
+            .limit(20);
+
+        const last24h = (recentLog || []).length;
+        const lastMin = (recentLog || []).filter((r) => r.created_at >= ONE_MIN_AGO).length;
+        if (lastMin >= 1) {
+            return new Response(JSON.stringify({ error: 'Rate limit exceeded — wait 60s between announcements' }), {
+                status: 429,
+                headers: { 'Content-Type': 'application/json', ...CORS_HEADERS },
+            });
+        }
+        if (last24h >= 10) {
+            return new Response(JSON.stringify({ error: 'Daily announcement limit (10) reached' }), {
+                status: 429,
+                headers: { 'Content-Type': 'application/json', ...CORS_HEADERS },
+            });
+        }
+        // Dedup: same admin + same dedupKey within last 24h is treated as a no-op.
+        if (
+            dedupKey &&
+            (recentLog || []).some(
+                (r) =>
+                    typeof r.new_data === 'object' &&
+                    r.new_data !== null &&
+                    (r.new_data as Record<string, unknown>).dedupKey === dedupKey,
+            )
+        ) {
+            return new Response(JSON.stringify({ sent: 0, deduped: true }), {
+                headers: { 'Content-Type': 'application/json', ...CORS_HEADERS },
+            });
+        }
+
         // ── Fetch all users ──────────────────────────────────────────
         const { data: users } = await supabase.from('users').select('id').eq('is_active', true);
 
@@ -117,6 +168,26 @@ Deno.serve(async (req) => {
                 totalSent += rows.length;
             }
         }
+
+        // Audit log: who, what, when, dedupKey, how many recipients.
+        // Best-effort — don't fail the request if audit_log insert fails.
+        await supabase
+            .from('audit_log')
+            .insert({
+                actor_id: caller.id,
+                table_name: 'announcement',
+                operation: 'INSERT',
+                new_data: {
+                    title: title.trim(),
+                    body: body?.trim() || null,
+                    recipient_count: totalSent,
+                    failed_batches: errors.length,
+                    dedupKey: dedupKey || null,
+                },
+            })
+            .then((r) => {
+                if (r.error) console.error('[send-announcement] audit_log insert:', r.error.message);
+            });
 
         const result: Record<string, unknown> = { sent: totalSent };
         if (errors.length > 0) result.failedBatches = errors.length;

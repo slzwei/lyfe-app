@@ -15,11 +15,6 @@ function maskPhone(phone: string): string {
     return phone.slice(0, 3) + '****' + phone.slice(-4);
 }
 
-function maskEmail(email: string): string {
-    const [local, domain] = email.split('@');
-    return local[0] + '***@' + domain;
-}
-
 function jsonResponse(body: Record<string, unknown>, status = 200) {
     return new Response(JSON.stringify(body), {
         status,
@@ -87,7 +82,18 @@ Deno.serve(async (req) => {
             return jsonResponse({ error: 'Missing signature' }, 401);
         }
 
+        // Body-size cap before req.text() — prevents memory DoS via multi-MB payloads.
+        // Real MKTR payloads are <10KB; 256KB is generous.
+        const MAX_BODY_BYTES = 256 * 1024;
+        const declaredLen = Number(req.headers.get('Content-Length') || '0');
+        if (declaredLen > MAX_BODY_BYTES) {
+            return jsonResponse({ error: 'Request body too large' }, 413);
+        }
+
         const rawBody = await req.text();
+        if (rawBody.length > MAX_BODY_BYTES) {
+            return jsonResponse({ error: 'Request body too large' }, 413);
+        }
 
         const valid = await verifySignature(rawBody, signatureHeader, webhookSecret);
         if (!valid) {
@@ -126,6 +132,26 @@ Deno.serve(async (req) => {
         if (!data?.lead?.externalId) {
             return jsonResponse({ error: 'Missing data.lead.externalId' }, 400);
         }
+
+        // Truncate string fields defensively — prevents an upstream bug or
+        // malicious caller from inserting megabyte-long names/emails.
+        const trim = (v: unknown, max: number): string | undefined => {
+            if (typeof v !== 'string') return undefined;
+            return v.slice(0, max);
+        };
+        const rawLead = data.lead as Record<string, unknown>;
+        const sanitizedLead: Record<string, unknown> = {
+            ...rawLead,
+            firstName: trim(rawLead.firstName, 200),
+            lastName: trim(rawLead.lastName, 200),
+            email: trim(rawLead.email, 320),
+            phone: trim(rawLead.phone, 32),
+            externalId: trim(rawLead.externalId, 200),
+            source: trim(rawLead.source, 100),
+            // transcript already capped to 50k below; leave that field alone here.
+        };
+        // Replace lead in the working set so downstream code uses sanitized values.
+        data.lead = sanitizedLead;
 
         const { lead, routing, campaign, qrTag } = data;
 
@@ -269,9 +295,13 @@ Deno.serve(async (req) => {
                 await supabase.from('notifications').insert({
                     user_id: agentId,
                     type: 'new_lead',
-                    title: `Lead Assigned: ${fullName}`,
+                    // Lock-screen previews show the title — no PII here.
+                    // The agent's name is in the lead detail screen the
+                    // tap deep-links into. data.leadName is preserved for
+                    // any in-app surface that wants to render it post-tap.
+                    title: 'Lead Assigned',
                     body: `From ${campaign?.name || 'MKTR'} via MKTR`,
-                    data: { route: `/(tabs)/leads/${existing.id}`, leadId: existing.id },
+                    data: { route: `/(tabs)/leads/${existing.id}`, leadId: existing.id, leadName: fullName },
                 });
 
                 return jsonResponse({ success: true, leadId: existing.id, reassigned: true });
@@ -349,9 +379,11 @@ Deno.serve(async (req) => {
         await supabase.from('notifications').insert({
             user_id: agentId,
             type: 'new_lead',
-            title: event === 'lead.created' ? `New Lead: ${fullName}` : `Lead Assigned: ${fullName}`,
+            // Lock-screen previews show the title; no PII. Lead name lives
+            // in data.leadName for the post-tap detail screen.
+            title: event === 'lead.created' ? 'New Lead' : 'Lead Assigned',
             body: `From ${campaign?.name || 'MKTR'} via MKTR`,
-            data: { route: `/(tabs)/leads/${leadId}`, leadId },
+            data: { route: `/(tabs)/leads/${leadId}`, leadId, leadName: fullName },
         });
 
         return jsonResponse({ success: true, leadId });

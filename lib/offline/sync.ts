@@ -57,7 +57,7 @@ export class SyncManager {
         };
     }
 
-    private async executeItem(item: QueueItem): Promise<{ error: string | null }> {
+    private async executeItem(item: QueueItem): Promise<{ error: string | null; isAuthError?: boolean }> {
         try {
             const { table, operation, payload, filters } = item;
 
@@ -102,14 +102,19 @@ export class SyncManager {
 
             const result = await Promise.race([
                 query,
-                new Promise<{ error: { message: string } }>((resolve) =>
+                new Promise<{ error: { message: string; status?: number } }>((resolve) =>
                     setTimeout(() => resolve({ error: { message: 'Sync query timed out' } }), EXECUTE_TIMEOUT_MS),
                 ),
             ]);
-            return { error: result.error ? result.error.message : null };
+            if (!result.error) return { error: null };
+            const message = result.error.message ?? '';
+            const status = (result.error as { status?: number }).status;
+            const isAuthError = status === 401 || /jwt|expired|invalid (signature|token)|401/i.test(message);
+            return { error: message, isAuthError };
         } catch (e: unknown) {
             const message = e instanceof Error ? e.message : 'Unknown error during sync';
-            return { error: message };
+            const isAuthError = /jwt|expired|invalid (signature|token)|401/i.test(message);
+            return { error: message, isAuthError };
         }
     }
 
@@ -134,6 +139,14 @@ export class SyncManager {
             // Snapshot the queue to avoid peek/remove races
             const items = await this.queue.getAll();
 
+            // We only attempt one session refresh per sync run. After that, an
+            // auth error means the refresh genuinely failed — likely because
+            // the device has been offline >7 days and the refresh token expired.
+            // In that case we let executeItem's normal retry-count path apply,
+            // and the user will see the lastError surface (which the
+            // NetworkContext UI translates into a "please sign in again" toast).
+            let refreshAttempted = false;
+
             for (const item of items) {
                 // Discard items queued by a different user
                 if (item.userId && currentUserId && item.userId !== currentUserId) {
@@ -153,10 +166,27 @@ export class SyncManager {
                     continue;
                 }
 
-                const { error } = await this.executeItem(item);
+                let result = await this.executeItem(item);
 
-                if (error) {
-                    this.lastError = error;
+                // Auth-error recovery: try a one-shot session refresh, then
+                // re-execute. Do NOT count this against MAX_RETRIES — a stale
+                // JWT isn't a "this row will never insert" signal.
+                if (result.isAuthError && !refreshAttempted) {
+                    refreshAttempted = true;
+                    try {
+                        const { error: refreshErr } = await this.client.auth.refreshSession();
+                        if (!refreshErr) {
+                            result = await this.executeItem(item);
+                        }
+                    } catch {
+                        // Refresh threw — leave result.error as the auth error
+                        // and fall through to the increment-retry path so the
+                        // failure is at least visible.
+                    }
+                }
+
+                if (result.error) {
+                    this.lastError = result.error;
                     await this.queue.incrementRetry(item.id);
                     await this.emitStatus();
                     // Continue processing remaining items instead of blocking

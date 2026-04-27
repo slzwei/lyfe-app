@@ -28,7 +28,11 @@ export function useFilteredList<T extends object>(
             return true;
         });
         if (result.length > 0 && 'updated_at' in result[0]) {
-            return [...result].sort((a, b) => new Date(b.updated_at).getTime() - new Date(a.updated_at).getTime());
+            return [...result].sort((a, b) => {
+                const aTime = new Date((a as { updated_at: string }).updated_at).getTime();
+                const bTime = new Date((b as { updated_at: string }).updated_at).getTime();
+                return bTime - aTime;
+            });
         }
         return result;
     }, [items, search, activeFilter, filterField, searchFields]);

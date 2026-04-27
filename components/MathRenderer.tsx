@@ -161,7 +161,8 @@ function WebMathRenderer({
             scrolling="no"
             onLoad={(e: React.SyntheticEvent<HTMLIFrameElement>) => {
                 try {
-                    const doc = e.target.contentDocument || e.target.contentWindow?.document;
+                    const iframe = e.target as HTMLIFrameElement;
+                    const doc = iframe.contentDocument || iframe.contentWindow?.document;
                     if (doc) {
                         const h = doc.body.scrollHeight;
                         if (h > 0) setHeight(h + 8);

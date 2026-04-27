@@ -56,10 +56,16 @@ export async function checkProximity(
 
     let coords: Location.LocationObjectCoords;
     try {
-        const fix = await Location.getCurrentPositionAsync({
-            accuracy: Location.Accuracy.High,
-        });
-        coords = fix.coords;
+        // Balanced accuracy is ±20-50m on Android (network + sensor fusion,
+        // no full GPS chip activation) — well within the default 100m
+        // radius. Trades ~3-5m worst-case fix for a 5-10x faster first
+        // fix and a noticeable battery win across a roadshow shift.
+        // If a future event uses a tight (<50m) radius, override here.
+        const fix = await Promise.race([
+            Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.Balanced }),
+            new Promise<never>((_, reject) => setTimeout(() => reject(new Error('GPS timeout')), 8000)),
+        ]);
+        coords = (fix as Location.LocationObject).coords;
     } catch {
         return {
             ok: false,
