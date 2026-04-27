@@ -92,6 +92,22 @@ max_enrolled_factors = 10
 enabled = true
 policy = "oneshot"
 
+# Functions called by external systems that authenticate via something other
+# than a Supabase JWT. Without verify_jwt = false, the platform gateway rejects
+# these requests with UNAUTHORIZED_NO_AUTH_HEADER before the function runs.
+
+[functions.receive-mktr-lead]
+# HMAC-SHA256 signature in X-Webhook-Signature (MKTR_WEBHOOK_SECRET).
+verify_jwt = false
+
+[functions.mktr-agents]
+# Custom bearer token (MKTR_API_KEY), not a Supabase-issued JWT.
+verify_jwt = false
+
+[functions.custom-sms-hook]
+# Invoked by Supabase Auth during SMS OTP dispatch — no user JWT exists yet.
+verify_jwt = false
+
 [analytics]
 enabled = false
 
