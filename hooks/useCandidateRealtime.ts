@@ -20,7 +20,7 @@ import { useEffect, useRef } from 'react';
 export function useCandidateRealtime(onUpdate: () => void) {
     const { user } = useAuth();
     const retryCountRef = useRef(0);
-    const retryTimeoutRef = useRef<ReturnType<typeof setTimeout>>();
+    const retryTimeoutRef = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
     const onUpdateRef = useRef(onUpdate);
     onUpdateRef.current = onUpdate;
 

@@ -13,15 +13,17 @@ import { fetchPAManagerIds, fetchPACandidateCount, fetchPAInterviewCount } from 
 import type { AgencyEvent } from '@/types/event';
 import type { ProgrammeWithModules } from '@/types/roadmap';
 import { ACTIVITY_ICONS, type LeadActivity } from '@/types/lead';
+import type { IconName } from '@/types/ui';
 
 export function formatActivities(
     activities: (LeadActivity & { lead_name?: string })[],
-): { id: string; type: string; leadName: string; detail: string; time: string; icon: string }[] {
+): { id: string; type: string; leadName: string; detail: string; time: string; icon: IconName }[] {
     return activities.map((a) => {
         let detail = a.description || '';
         if (a.type === 'status_change' && a.metadata) {
-            const from = a.metadata.from_status || '?';
-            const to = a.metadata.to_status || '?';
+            const meta = a.metadata as Record<string, unknown>;
+            const from = typeof meta.from_status === 'string' ? meta.from_status : '?';
+            const to = typeof meta.to_status === 'string' ? meta.to_status : '?';
             detail = `${from.charAt(0).toUpperCase() + from.slice(1)} \u2192 ${to.charAt(0).toUpperCase() + to.slice(1)}`;
         } else if (a.type === 'created') {
             detail = detail || 'Lead created';
@@ -36,7 +38,7 @@ export function formatActivities(
             leadName: a.lead_name || 'Unknown',
             detail,
             time: timeAgo(a.created_at),
-            icon: ACTIVITY_ICONS[a.type]?.icon || 'ellipse',
+            icon: (ACTIVITY_ICONS[a.type]?.icon || 'ellipse') as IconName,
         };
     });
 }

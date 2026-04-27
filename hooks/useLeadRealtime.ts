@@ -6,7 +6,7 @@ import { useEffect, useRef } from 'react';
 export function useLeadRealtime(onNewLead: (lead: Lead) => void) {
     const { user } = useAuth();
     const retryCountRef = useRef(0);
-    const retryTimeoutRef = useRef<ReturnType<typeof setTimeout>>();
+    const retryTimeoutRef = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
     const onNewLeadRef = useRef(onNewLead);
     onNewLeadRef.current = onNewLead;
 

@@ -97,7 +97,7 @@ export async function fetchCandidates(
     const candidates: RecruitmentCandidate[] = typedRows.map((r) => ({
         id: r.id,
         name: r.name,
-        phone: r.phone,
+        phone: r.phone ?? '',
         email: r.email,
         status: r.status as CandidateStatus,
         assigned_manager_id: r.assigned_manager_id ?? '',
@@ -108,6 +108,7 @@ export async function fetchCandidates(
         resume_url: r.resume_url || null,
         profile_pdf_path: null,
         disc_pdf_path: null,
+        enneagram_pdf_path: null,
         disc_results: null,
         profile_details: null,
         interviews: interviewMap[r.id] || [],
@@ -169,7 +170,7 @@ export async function fetchCandidate(
     const candidate: RecruitmentCandidate = {
         id: row.id,
         name: row.name,
-        phone: row.phone,
+        phone: row.phone ?? '',
         email: row.email,
         status: row.status as CandidateStatus,
         assigned_manager_id: row.assigned_manager_id ?? '',
@@ -281,7 +282,7 @@ export async function createCandidate(
         const candidate: RecruitmentCandidate = {
             id: row.id,
             name: row.name,
-            phone: row.phone,
+            phone: row.phone ?? '',
             email: row.email,
             status: row.status,
             assigned_manager_id: row.assigned_manager_id ?? '',
@@ -292,6 +293,7 @@ export async function createCandidate(
             resume_url: row.resume_url || null,
             profile_pdf_path: null,
             disc_pdf_path: null,
+            enneagram_pdf_path: null,
             disc_results: null,
             profile_details: null,
             interviews: [],
@@ -461,9 +463,7 @@ export async function reassignCandidate(
         const { data: users } = await supabase.from('users').select('id, full_name, role, is_active').in('id', ids);
 
         // Only managers and directors can hold candidates — reject admin/pa/agent/candidate.
-        const newManager = (users || []).find(
-            (u: { id: string; role: string; is_active: boolean }) => u.id === newManagerId,
-        );
+        const newManager = (users || []).find((u) => u.id === newManagerId);
         if (!newManager || !newManager.is_active) {
             return { error: 'Target manager not found or inactive' };
         }
@@ -478,13 +478,14 @@ export async function reassignCandidate(
 
         if (error) return { error: error.message };
 
-        const nameMap = new Map((users || []).map((u: { id: string; full_name: string }) => [u.id, u.full_name]));
+        const nameMap = new Map((users || []).map((u) => [u.id, u.full_name]));
+        const fromName = candidate?.assigned_manager_id ? nameMap.get(candidate.assigned_manager_id) : undefined;
 
         await supabase.from('candidate_activities').insert({
             candidate_id: candidateId,
             user_id: userId,
             type: 'reassignment',
-            note: `Reassigned from ${nameMap.get(candidate?.assigned_manager_id) || 'Unknown'} to ${nameMap.get(newManagerId) || 'Unknown'}`,
+            note: `Reassigned from ${fromName || 'Unknown'} to ${nameMap.get(newManagerId) || 'Unknown'}`,
         });
 
         return { error: null };

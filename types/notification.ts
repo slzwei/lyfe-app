@@ -1,7 +1,7 @@
 /**
  * Notification types for the in-app notification inbox.
  */
-import type { Tables } from './supabase';
+import type { Tables } from './shared/database.types';
 import type { UserRole } from './database';
 import type { IconName } from '@/types/ui';
 

@@ -33,9 +33,9 @@ export default function Touchable({
 }: TouchableProps) {
     return (
         <Pressable
-            style={({ pressed }) => [
-                typeof style === 'function' ? style({ pressed }) : style,
-                Platform.OS === 'ios' && pressed && !disabled ? { opacity: activeOpacity } : undefined,
+            style={(state) => [
+                typeof style === 'function' ? style(state) : style,
+                Platform.OS === 'ios' && state.pressed && !disabled ? { opacity: activeOpacity } : undefined,
             ]}
             android_ripple={
                 Platform.OS === 'android' && !disabled

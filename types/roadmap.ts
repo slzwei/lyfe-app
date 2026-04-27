@@ -1,4 +1,4 @@
-import type { Tables } from './supabase';
+import type { Tables } from './shared/database.types';
 import type { IconName } from '@/types/ui';
 
 // ─── Programme & Module Types ────────────────────────────────────────────────

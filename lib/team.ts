@@ -312,7 +312,8 @@ export async function reassignAgent(agentId: string, newManagerId: string | null
     try {
         const { error } = await supabase.rpc('reassign_agent_upline', {
             p_agent_id: agentId,
-            p_new_manager_id: newManagerId,
+            // RPC accepts null for "clear upline"; generated types model the param as string only.
+            p_new_manager_id: newManagerId as string,
         });
         if (error) return { error: error.message };
         return { error: null };

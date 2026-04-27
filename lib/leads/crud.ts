@@ -66,7 +66,7 @@ export async function createLead(
         return { data: null, error: 'full_name is required' };
     }
 
-    const trimmedSource = typeof input.source === 'string' ? input.source.trim() : '';
+    const trimmedSource = (typeof input.source === 'string' ? input.source.trim() : '') as LeadSource;
     if (!trimmedSource) {
         return { data: null, error: 'source is required' };
     }

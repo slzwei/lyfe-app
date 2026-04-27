@@ -2,7 +2,7 @@
  * Exams service — Supabase CRUD for exam attempts & answers
  */
 import type { ExamPaper, ExamQuestion, PaperStats } from '@/types/exam';
-import type { Json } from '@/types/supabase';
+import type { Json } from '@/types/shared/database.types';
 import type { VarkResults } from '@/constants/vark';
 import type { EnneagramResults } from '@/constants/enneagram';
 import type { DiscResults } from '@/constants/disc';

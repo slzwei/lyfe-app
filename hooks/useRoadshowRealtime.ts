@@ -16,7 +16,7 @@ export function useRoadshowRealtime(
     onNewAttendance: (attendance: RoadshowAttendance) => void,
 ) {
     const retryCountRef = useRef(0);
-    const retryTimeoutRef = useRef<ReturnType<typeof setTimeout>>();
+    const retryTimeoutRef = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
     const onNewActivityRef = useRef(onNewActivity);
     onNewActivityRef.current = onNewActivity;
     const onNewAttendanceRef = useRef(onNewAttendance);
@@ -41,7 +41,7 @@ export function useRoadshowRealtime(
                     (payload: RealtimePostgresInsertPayload<Record<string, unknown>>) => {
                         retryCountRef.current = 0;
                         if (payload.new.user_id !== currentUserIdRef.current) {
-                            onNewActivityRef.current(payload.new as RoadshowActivity);
+                            onNewActivityRef.current(payload.new as unknown as RoadshowActivity);
                         }
                     },
                 )
@@ -56,7 +56,7 @@ export function useRoadshowRealtime(
                     (payload: RealtimePostgresInsertPayload<Record<string, unknown>>) => {
                         retryCountRef.current = 0;
                         if (payload.new.user_id !== currentUserIdRef.current) {
-                            onNewAttendanceRef.current(payload.new as RoadshowAttendance);
+                            onNewAttendanceRef.current(payload.new as unknown as RoadshowAttendance);
                         }
                     },
                 );
