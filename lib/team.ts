@@ -104,14 +104,16 @@ export async function fetchTeamMembers(
         // fails at 100k. The RPC returns one row per agent.
         const userIds = (users as { id: string }[]).map((u) => u.id);
         // RPC name is not yet in generated types until `gen:types` re-runs
-        // post-migration. Cast at the call site; the args + return shape are
-        // documented in 20260427130800_get_team_lead_stats_rpc.sql.
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        const rpc = supabase.rpc as any;
-        const { data: statsRows, error: statsErr } = await rpc('get_team_lead_stats', {
-            p_user_ids: userIds,
-            p_stale_days: 7,
-        });
+        // post-migration. Cast the args at the call site; do NOT detach
+        // `supabase.rpc` into a local — the postgrest client relies on
+        // `this` binding internally and a detached call throws
+        // "Cannot read property 'rest' of undefined".
+        const { data: statsRows, error: statsErr } = await supabase.rpc(
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
+            'get_team_lead_stats' as any,
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
+            { p_user_ids: userIds, p_stale_days: 7 } as any,
+        );
         if (statsErr) {
             captureError(statsErr, { fn: 'getTeamMembers.statsRpc' });
             // Don't fail the whole call — degrade gracefully to zeroed stats.
