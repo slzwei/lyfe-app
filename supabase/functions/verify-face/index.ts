@@ -35,10 +35,35 @@ const MIN_BRIGHTNESS = 30.0;
 const MIN_FACE_AREA = 0.1; // bounding box area as fraction of image
 const OCCLUSION_CONFIDENCE_THRESHOLD = 80.0;
 
-const corsHeaders = {
-    'Access-Control-Allow-Origin': '*',
-    'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
-};
+// Origin allow-list, env-driven. Mobile clients (Expo) don't send an Origin
+// header so CORS does not gate them; this is purely defence for any browser
+// caller that might end up here. We mirror the pattern used by every other
+// auth-required edge function in this fleet.
+const ALLOWED_ORIGINS = (Deno.env.get('ALLOWED_ORIGINS') || '')
+    .split(',')
+    .map((s) => s.trim())
+    .filter(Boolean);
+
+function getCorsOrigin(req: Request): string | null {
+    const origin = req.headers.get('Origin');
+    if (!origin) return null; // Mobile / curl — no CORS headers needed
+    if (ALLOWED_ORIGINS.length === 0) return null;
+    return ALLOWED_ORIGINS.includes(origin) ? origin : null;
+}
+
+function corsHeadersFor(req: Request): Record<string, string> {
+    const allowed = getCorsOrigin(req);
+    if (!allowed) return {};
+    return {
+        'Access-Control-Allow-Origin': allowed,
+        'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
+        Vary: 'Origin',
+    };
+}
+
+// Photo size cap — Rekognition rejects > 5MB; we cap earlier so a malicious
+// caller can't allocate huge buffers in our isolate before being told to leave.
+const MAX_PHOTO_BYTES = 2 * 1024 * 1024;
 
 const rekognition = new RekognitionClient({
     region: Deno.env.get('AWS_REGION') || 'ap-southeast-1',
@@ -114,7 +139,7 @@ function checkFaceQuality(detectResp: any): { ok: true } | ({ ok: false } & Qual
 
 Deno.serve(async (req) => {
     if (req.method === 'OPTIONS') {
-        return new Response('ok', { headers: corsHeaders });
+        return new Response('ok', { headers: corsHeadersFor(req) });
     }
 
     try {
@@ -173,7 +198,16 @@ Deno.serve(async (req) => {
             return jsonResponse({ error: 'Missing photo' }, 400);
         }
 
+        // Cap before decode so a malicious caller can't allocate huge buffers.
+        // Base64 expands ~4/3, so 2MB photo ≈ ~2.7MB encoded.
+        if (typeof photo !== 'string' || photo.length > Math.ceil((MAX_PHOTO_BYTES * 4) / 3)) {
+            return jsonResponse({ error: 'Photo too large' }, 413);
+        }
+
         const photoBytes = base64ToBytes(photo);
+        if (photoBytes.length > MAX_PHOTO_BYTES) {
+            return jsonResponse({ error: 'Photo too large' }, 413);
+        }
 
         if (action === 'register') {
             // Run the same DetectFaces quality gate we use on verify so we never
@@ -242,21 +276,6 @@ Deno.serve(async (req) => {
 
             const refBytes = new Uint8Array(await refData.arrayBuffer());
 
-            // Debug: check JPEG headers (FF D8 FF)
-            const isJpeg = (b: Uint8Array) => b[0] === 0xff && b[1] === 0xd8 && b[2] === 0xff;
-            (globalThis as any).__debug = {
-                ref: {
-                    len: refBytes.length,
-                    jpeg: isJpeg(refBytes),
-                    h: `${refBytes[0]},${refBytes[1]},${refBytes[2]}`,
-                },
-                live: {
-                    len: photoBytes.length,
-                    jpeg: isJpeg(photoBytes),
-                    h: `${photoBytes[0]},${photoBytes[1]},${photoBytes[2]}`,
-                },
-            };
-
             // Run quality detection + face comparison in parallel to keep latency low.
             // DetectFaces is the gate: it catches occluded, blurry, dark, off-frame, or
             // missing faces before we trust the CompareFaces similarity score.
@@ -307,10 +326,9 @@ Deno.serve(async (req) => {
 
         return jsonResponse({ error: 'Invalid action. Use "register" or "verify".' }, 400);
     } catch (err) {
+        // Server-side log preserves full diagnostic; client gets a generic message.
         console.error('verify-face error:', err);
-        const message = err instanceof Error ? `${err.name}: ${err.message}` : String(err);
-        // Include debug info temporarily
-        return jsonResponse({ error: message, debug: (globalThis as any).__debug }, 500);
+        return jsonResponse({ error: 'Verification failed' }, 500);
     }
 });
 
@@ -323,9 +341,14 @@ function base64ToBytes(b64: string): Uint8Array {
     return bytes;
 }
 
+// jsonResponse omits CORS headers — they're attached at the OPTIONS preflight
+// only, and mobile clients (the only legitimate caller) don't send Origin.
+// Browser callers without an allowed origin get same-origin-only access.
 function jsonResponse(data: unknown, status = 200) {
     return new Response(JSON.stringify(data), {
         status,
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        headers: {
+            'Content-Type': 'application/json',
+        },
     });
 }

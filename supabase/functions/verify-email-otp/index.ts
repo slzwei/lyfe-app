@@ -82,24 +82,16 @@ Deno.serve(async (req) => {
         }
         const admin = createClient(supabaseUrl, serviceKey);
 
-        // Rate limit: max 5 verification attempts per user per 10 minutes
-        const tenMinAgo = new Date(Date.now() - 10 * 60 * 1000).toISOString();
-        const { count: attemptCount } = await admin
-            .from('email_otp_codes')
-            .select('id', { count: 'exact', head: true })
-            .eq('user_id', caller.id)
-            .gte('created_at', tenMinAgo);
-
-        // Each send creates 1 record (max 3 per 10 min), so 5 verify attempts
-        // per existing code is generous. If no codes exist, they can't verify.
-        if ((attemptCount ?? 0) === 0) {
-            return jsonResponse({ error: 'No valid verification code found. Please request a new one.' }, 400);
-        }
+        // Brute-force ceiling on the most recent valid OTP. Each wrong guess
+        // bumps failed_attempts on that row; once we cross MAX_ATTEMPTS we
+        // refuse all further verifies for that code (user must request a new
+        // OTP, which is itself rate-limited to 3 sends per 10 min).
+        const MAX_ATTEMPTS = 5;
 
         // Look up the most recent valid OTP for this user + email
         const { data: otpRecord } = await admin
             .from('email_otp_codes')
-            .select('id, code_hash')
+            .select('id, code_hash, failed_attempts')
             .eq('user_id', caller.id)
             .eq('email', normalizedEmail)
             .gte('expires_at', new Date().toISOString())
@@ -111,7 +103,18 @@ Deno.serve(async (req) => {
             return jsonResponse({ error: 'No valid verification code found. Please request a new one.' }, 400);
         }
 
+        if ((otpRecord.failed_attempts ?? 0) >= MAX_ATTEMPTS) {
+            // Burn the code so the attacker can't keep trying. The user can
+            // request a new OTP — that path is itself rate-limited.
+            await admin.from('email_otp_codes').delete().eq('id', otpRecord.id);
+            return jsonResponse({ error: 'Too many incorrect attempts. Please request a new verification code.' }, 429);
+        }
+
         if (!(await timingSafeEqual(otpRecord.code_hash, submittedHash))) {
+            await admin
+                .from('email_otp_codes')
+                .update({ failed_attempts: (otpRecord.failed_attempts ?? 0) + 1 })
+                .eq('id', otpRecord.id);
             return jsonResponse({ error: 'Invalid verification code' }, 400);
         }
 

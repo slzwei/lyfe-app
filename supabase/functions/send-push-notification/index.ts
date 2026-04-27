@@ -138,9 +138,32 @@ Deno.serve(async (req) => {
 
         const pushResult = await pushResponse.json();
 
-        // Check for Expo push errors (e.g. DeviceNotRegistered, InvalidCredentials)
+        // Check for Expo push errors (e.g. DeviceNotRegistered, InvalidCredentials).
+        // For revoked-token errors, null the user's push_token so we stop trying —
+        // otherwise every future notification re-fails and accrues Expo abuse-rate
+        // credits against the whole app. Re-registration happens on next sign-in.
         if (pushResult?.data?.status === 'error') {
-            console.error('[send-push-notification] Expo error:', pushResult.data.message);
+            const errCode: string | undefined = pushResult.data?.details?.error;
+            console.error(
+                '[send-push-notification] Expo error:',
+                pushResult.data.message,
+                'code:',
+                errCode || 'unknown',
+            );
+            const REVOKED = ['DeviceNotRegistered', 'InvalidCredentials', 'MessageTooBig', 'MismatchSenderId'];
+            if (errCode && REVOKED.includes(errCode)) {
+                const { error: clearErr } = await supabase
+                    .from('users')
+                    .update({ push_token: null })
+                    .eq('id', record.user_id);
+                if (clearErr) {
+                    console.error('[send-push-notification] failed to clear stale token:', clearErr.message);
+                }
+            }
+            return new Response(JSON.stringify({ sent: false, error: errCode || 'expo_error' }), {
+                status: 200,
+                headers: { 'Content-Type': 'application/json' },
+            });
         }
 
         return new Response(JSON.stringify({ sent: true }), {

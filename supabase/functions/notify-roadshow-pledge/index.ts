@@ -50,7 +50,12 @@ Deno.serve(async (req) => {
 
         // ── Input validation ───────────────────────────────────────
         const payload: PledgePayload = await req.json();
-        const { eventId, agentId, agentName, pledgedSitdowns, pledgedPitches, pledgedClosed, pledgedAfyc } = payload;
+        const { eventId, pledgedSitdowns, pledgedPitches, pledgedClosed, pledgedAfyc } = payload;
+
+        // SECURITY: agentId + agentName are NOT taken from the body — clients
+        // could otherwise spoof a pledge attributed to another agent. We derive
+        // both from the JWT-validated caller and the users table below.
+        const agentId = caller.id;
 
         if (!eventId || !UUID_RE.test(eventId)) {
             return new Response(JSON.stringify({ error: 'Invalid eventId' }), {
@@ -58,19 +63,6 @@ Deno.serve(async (req) => {
                 headers: { 'Content-Type': 'application/json', ...CORS_HEADERS },
             });
         }
-        if (!agentId || !UUID_RE.test(agentId)) {
-            return new Response(JSON.stringify({ error: 'Invalid agentId' }), {
-                status: 400,
-                headers: { 'Content-Type': 'application/json', ...CORS_HEADERS },
-            });
-        }
-        if (!agentName || typeof agentName !== 'string') {
-            return new Response(JSON.stringify({ error: 'Invalid agentName' }), {
-                status: 400,
-                headers: { 'Content-Type': 'application/json', ...CORS_HEADERS },
-            });
-        }
-        const trimmedAgentName = agentName.trim().slice(0, 100);
         if (typeof pledgedSitdowns !== 'number' || pledgedSitdowns < 0) {
             return new Response(JSON.stringify({ error: 'pledgedSitdowns must be a non-negative number' }), {
                 status: 400,
@@ -98,6 +90,10 @@ Deno.serve(async (req) => {
 
         // ── Service-role client for cross-user data lookups ────────
         const supabase = createClient(Deno.env.get('SUPABASE_URL')!, Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!);
+
+        // Resolve caller's display name from the DB — never trust client value.
+        const { data: callerProfile } = await supabase.from('users').select('full_name').eq('id', caller.id).single();
+        const trimmedAgentName = (callerProfile?.full_name || 'An agent').trim().slice(0, 100);
 
         // Get the event to find creator (T2 manager)
         const { data: event } = await supabase.from('events').select('created_by, title').eq('id', eventId).single();

@@ -131,7 +131,9 @@ Deno.serve(async (req) => {
             managerId = assigned_manager_id;
         }
 
-        // Dedup: check for existing candidate with same phone or email
+        // Normalize phone once: store the same value used for dedup so a `+` prefix
+        // doesn't bypass duplicate detection. SG-strict form is computed separately
+        // below for the member_invitations mirror (which only accepts SG numbers).
         const normalizedPhone = phone.trim().replace(/^\+/, '');
         const { data: existingByPhone } = await admin
             .from('candidates')
@@ -180,7 +182,7 @@ Deno.serve(async (req) => {
             .from('candidates')
             .insert({
                 name: name.trim(),
-                phone: phone.trim(),
+                phone: normalizedPhone,
                 email: email?.trim() || null,
                 notes: notes?.trim() || null,
                 status: 'applied',
@@ -225,18 +227,18 @@ Deno.serve(async (req) => {
         // ── Mirror into member_invitations so Team → Pending reflects the invite.
         // Best-effort: non-SG formats or a pre-existing pending row for this phone
         // skip silently so the primary candidate+invitation flow isn't blocked.
-        const normalizedPhone = normalizeSgPhone(phone);
-        if (normalizedPhone) {
+        const normalizedSgPhone = normalizeSgPhone(phone);
+        if (normalizedSgPhone) {
             const { data: existingMemberInv } = await admin
                 .from('member_invitations')
                 .select('id')
-                .eq('phone', normalizedPhone)
+                .eq('phone', normalizedSgPhone)
                 .eq('status', 'pending')
                 .maybeSingle();
 
             if (!existingMemberInv) {
                 const { error: memberInvErr } = await admin.from('member_invitations').insert({
-                    phone: normalizedPhone,
+                    phone: normalizedSgPhone,
                     full_name: name.trim(),
                     intended_role: 'candidate',
                     status: 'pending',

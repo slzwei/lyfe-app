@@ -319,6 +319,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
             const invStatus = await checkInvitationStatus(profile.id, profile.created_at);
             setSentryUser({ id: session.user.id, phone: session.user.phone, role: profile.role });
             setUser(profile);
+            // Re-register push token on biometric unlock too — covers the
+            // reinstall + biometric-only flow where the OTP path never runs.
+            registerPushToken(session.user.id).catch((e) => {
+                if (__DEV__) console.error('[AuthContext] registerPushToken (biometric) failed:', e);
+            });
             setAuthState((prev) => ({
                 ...prev,
                 session,
@@ -602,7 +607,7 @@ export function useAuth() {
         }),
         ...(biometrics ?? {
             biometricsEnabled: false,
-            authenticateWithBiometrics: async () => ({ success: false }),
+            authenticateWithBiometrics: async (): Promise<{ success: boolean; error?: string }> => ({ success: false }),
             enableBiometrics: async () => false,
             disableBiometrics: async () => {},
         }),
