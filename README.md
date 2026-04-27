@@ -543,3 +543,57 @@ Build profiles are defined in `eas.json`. The production profile auto-increments
 - **No third-party component libraries** — all UI is custom React Native StyleSheet
 - **Icons:** Ionicons exclusively — no emoji in the UI
 - **Typography-driven hierarchy:** no decorative borders; contrast between background layers creates structure
+
+---
+
+## Operations
+
+When something goes wrong in production, start here.
+
+### Incident runbooks
+
+| Symptom | Runbook |
+|---|---|
+| Agents say leads aren't arriving | [docs/runbook-incident-lead-pipeline.md](docs/runbook-incident-lead-pipeline.md) |
+| Supabase is down or degraded | [docs/runbook-incident-supabase-down.md](docs/runbook-incident-supabase-down.md) |
+| A migration broke something | [docs/runbook-bad-migration.md](docs/runbook-bad-migration.md) |
+| Service-role key may be compromised, or scheduled rotation | [docs/runbook-rotate-service-role-key.md](docs/runbook-rotate-service-role-key.md) |
+| Need to rebuild from migrations on a fresh DB | [docs/runbook-resnapshot-initial-schema.md](docs/runbook-resnapshot-initial-schema.md) |
+| Synthetic monitoring playbook | [docs/synthetic-monitoring-runbook.md](docs/synthetic-monitoring-runbook.md) |
+
+### On-call & escalation
+
+- **Primary on-call:** Shawn (shawnleeapps@gmail.com)
+- **Supabase support tier:** Pro plan (24h email support) — log in to Supabase Dashboard → Support
+- **Render dashboard** (MKTR backend): https://dashboard.render.com — `lyfe-mktr-platform` service
+- **Expo / EAS dashboard:** https://expo.dev — login with Apple ID linked to the Apple Team
+- **Apple Developer:** https://developer.apple.com (Team ID Y953XF3N6C)
+- **Singtel CPaaS support** (SIP / SMS issues): https://cpaas.singtel.com — log a ticket with trunk label `sip69992409`
+
+### Production environments
+
+| Service | Identifier | URL |
+|---|---|---|
+| Supabase (prod) | `nvtedkyjwulkzjeoqjgx` | https://nvtedkyjwulkzjeoqjgx.supabase.co |
+| Supabase (staging) | `ajjxkasvikeigapnzdak` | https://ajjxkasvikeigapnzdak.supabase.co |
+| Sentry | `mktr-pte-ltd / apple-ios` | https://sentry.io |
+| Expo project | `e8f2f192-e77b-4673-a00c-4e63478d56d2` | https://expo.dev |
+| MKTR backend | Render service `lyfe-mktr-platform` | https://dashboard.render.com |
+
+### Deploy procedure
+
+1. **Supabase migrations:** apply to staging first via `supabase db push --project-ref ajjxkasvikeigapnzdak`. Smoke-test. Then prod (same command, prod ref).
+2. **Edge functions:** deploy after migrations. `supabase functions deploy <name> --project-ref <ref>` per function.
+3. **Mobile app:** `eas build --profile production --platform all` (iOS + Android). Submit via `eas submit` or via the release CI workflow on tag `v*` push.
+4. **Verify:** trigger a synthetic probe manually after each prod deploy.
+
+### Synthetic monitoring kill switch
+
+If probes go haywire and start spamming alerts, set the GitHub repository
+variable `SYNTHETIC_KILL_SWITCH=true`. All probes immediately exit 0 on
+their next run. Set back to `false` (or unset) to re-enable.
+
+### Compliance
+
+- **PDPA**: see Privacy Policy in-app (`app/(tabs)/profile/privacy.tsx`). Data export endpoint: `supabase/functions/export-user-data`. Delete-account is immediate per PDPA "right to be forgotten."
+- **Data retention**: notifications older than 90 days (read) / 1 year (unread) are auto-pruned by `cleanup_old_notifications` cron.

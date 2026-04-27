@@ -1,0 +1,119 @@
+name: Release
+
+# Triggered on a tag push matching v*. Runs typecheck + tests + lint as a
+# safety gate, then kicks off an EAS Build for the production profile on
+# both iOS and Android. Submission to the App Store / Play Store is left
+# as a separate manual job (workflow_dispatch) so a release can be paused
+# between build and submit if final QA flags an issue.
+#
+# Pre-requisites (set up once):
+#   - GitHub Actions secret EXPO_TOKEN (a personal access token from
+#     https://expo.dev/accounts/<account>/settings/access-tokens)
+#   - eas.json submit.production filled in with appleId / ascAppId /
+#     serviceAccountKeyPath (see docs/runbook-release-pipeline.md)
+#
+# Usage:
+#   git tag v1.4.0 && git push origin v1.4.0
+#   → release-build runs automatically
+#   → after build succeeds, manually trigger release-submit from the
+#     Actions tab if you want to ship to the stores
+
+on:
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch:
+    inputs:
+      submit:
+        description: 'Submit to App Store + Play Store after build (yes/no)'
+        required: true
+        default: 'no'
+        type: choice
+        options:
+          - 'yes'
+          - 'no'
+
+permissions:
+  contents: read
+
+jobs:
+  release-build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      # Block the release if any of the existing CI gates would fail.
+      # The post-merge CI runs these on every PR but a tag could in
+      # principle be pushed against a stale branch — verify here.
+      - name: Lint
+        run: npm run lint
+
+      - name: Type check
+        run: npx tsc --noEmit
+
+      - name: Test
+        run: npx jest --coverage --silent
+
+      - uses: expo/expo-github-action@v8
+        with:
+          eas-version: latest
+          token: ${{ secrets.EXPO_TOKEN }}
+
+      - name: EAS Build (production iOS + Android)
+        run: eas build --profile production --platform all --non-interactive --no-wait
+
+      - name: Notify Slack on completion
+        if: always() && env.SLACK_WEBHOOK != ''
+        env:
+          SLACK_WEBHOOK: ${{ secrets.SLACK_ALERT_WEBHOOK }}
+        run: |
+          STATUS="${{ job.status }}"
+          ICON=":white_check_mark:"
+          [ "$STATUS" = "failure" ] && ICON=":x:"
+          [ "$STATUS" = "cancelled" ] && ICON=":warning:"
+          curl -sS -X POST -H 'Content-Type: application/json' \
+            -d "{\"text\":\"${ICON} Release build *${{ github.ref_name }}* — status: \`${STATUS}\`\n<${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}|View run>\"}" \
+            "$SLACK_WEBHOOK" || true
+
+  release-submit:
+    needs: release-build
+    if: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.submit == 'yes' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - uses: expo/expo-github-action@v8
+        with:
+          eas-version: latest
+          token: ${{ secrets.EXPO_TOKEN }}
+
+      # Submit the latest production build to App Store Connect + Play Store.
+      # Both submissions reference credentials configured in eas.json
+      # submit.production. iOS uses the App Store Connect API key (set as
+      # an EAS secret named EXPO_APPLE_API_KEY); Android uses the Google
+      # service account JSON.
+      - name: Submit iOS to TestFlight
+        run: eas submit --platform ios --profile production --non-interactive --latest
+
+      - name: Submit Android to Play Internal track
+        run: eas submit --platform android --profile production --non-interactive --latest

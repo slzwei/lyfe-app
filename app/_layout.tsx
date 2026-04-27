@@ -63,11 +63,17 @@ function AuthGate({ children }: { children: React.ReactNode }) {
     // screen before the session is restored.
     useNotificationDeepLink({ ready: !isLoading && isAuthenticated });
 
+    // PDPA gate: a user is "consent-complete" once T&C, Privacy, and
+    // Operational Push are all populated. Marketing is optional, NULL
+    // is fine. Existing users are grandfathered via the consent migration.
+    const consentComplete = !!user?.consent_tos_at && !!user?.consent_privacy_at && !!user?.consent_operational_push_at;
+
     useEffect(() => {
         if (isLoading) return;
 
         const inAuthGroup = segments[0] === '(auth)';
         const inOnboarding = segments[0] === 'onboarding';
+        const onConsent = inOnboarding && segments[1] === 'Consent';
 
         if (!isAuthenticated && segments[1] !== 'login') {
             // Not authenticated → redirect to login (from any screen, including rejected)
@@ -77,9 +83,16 @@ function AuthGate({ children }: { children: React.ReactNode }) {
             if (segments[1] !== 'rejected') {
                 router.replace('/(auth)/rejected');
             }
+        } else if (isAuthenticated && user && !consentComplete && !onConsent) {
+            // PDPA: required consents missing → block until they're given.
+            // Sits ahead of every other onboarding gate so we never collect
+            // data before consent is recorded.
+            router.replace('/onboarding/Consent');
         } else if (isAuthenticated && inAuthGroup && invitationStatus !== 'rejected') {
             // Authenticated with valid invitation → proceed
-            if (user?.role === 'candidate' && user.email_verified !== true) {
+            if (user && !consentComplete) {
+                router.replace('/onboarding/Consent');
+            } else if (user?.role === 'candidate' && user.email_verified !== true) {
                 router.replace('/onboarding/EmailVerification');
             } else if (user && user.onboarding_complete !== true) {
                 router.replace('/onboarding/Welcome');
@@ -93,7 +106,7 @@ function AuthGate({ children }: { children: React.ReactNode }) {
             // Authenticated but needs onboarding
             router.replace('/onboarding/Welcome');
         }
-    }, [isAuthenticated, isLoading, invitationStatus, segments, router, user]);
+    }, [isAuthenticated, isLoading, invitationStatus, segments, router, user, consentComplete]);
 
     // Block all rendering until auth state is resolved.
     // This prevents any protected screen from flashing before the redirect fires.

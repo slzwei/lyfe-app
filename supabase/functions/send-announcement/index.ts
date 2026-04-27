@@ -56,7 +56,10 @@ Deno.serve(async (req) => {
         }
 
         // ── Input validation ─────────────────────────────────────────
-        const { title, body } = await req.json();
+        // is_marketing flips the recipient filter from "all active users"
+        // to "active users with consent_marketing_at populated" (PDPA §36).
+        // Default is false so accidental omissions stay operational-safe.
+        const { title, body, is_marketing: isMarketing = false } = await req.json();
         if (!title || typeof title !== 'string' || title.trim().length === 0) {
             return new Response(JSON.stringify({ error: 'title is required' }), {
                 status: 400,
@@ -133,13 +136,27 @@ Deno.serve(async (req) => {
             });
         }
 
-        // ── Fetch all users ──────────────────────────────────────────
-        const { data: users } = await supabase.from('users').select('id').eq('is_active', true);
+        // ── Fetch recipients ─────────────────────────────────────────
+        // Marketing announcements (is_marketing=true) go ONLY to users who
+        // explicitly consented via consent_marketing_at. Operational
+        // announcements go to everyone with operational push consent.
+        // PDPA §36 forbids treating "no response" as consent.
+        let usersQuery = supabase.from('users').select('id').eq('is_active', true);
+        if (isMarketing) {
+            usersQuery = usersQuery.not('consent_marketing_at', 'is', null);
+        } else {
+            // Even operational pushes require operational consent — grandfathered
+            // users have it; brand-new users without it shouldn't get pinged
+            // until they pass the consent gate.
+            usersQuery = usersQuery.not('consent_operational_push_at', 'is', null);
+        }
+        const { data: users } = await usersQuery;
 
         if (!users || users.length === 0) {
-            return new Response(JSON.stringify({ sent: 0 }), {
-                headers: { 'Content-Type': 'application/json', ...CORS_HEADERS },
-            });
+            return new Response(
+                JSON.stringify({ sent: 0, reason: isMarketing ? 'no_consenting_users' : 'no_active_users' }),
+                { headers: { 'Content-Type': 'application/json', ...CORS_HEADERS } },
+            );
         }
 
         // Bulk insert in batches of 500
@@ -183,6 +200,7 @@ Deno.serve(async (req) => {
                     recipient_count: totalSent,
                     failed_batches: errors.length,
                     dedupKey: dedupKey || null,
+                    is_marketing: isMarketing,
                 },
             })
             .then((r) => {

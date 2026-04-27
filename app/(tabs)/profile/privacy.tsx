@@ -26,7 +26,7 @@ const PRIVACY_SECTIONS = [
     {
         icon: 'trash' as const,
         title: 'Data Deletion',
-        body: 'You can request full account deletion at any time by contacting support. All your data will be permanently deleted within 30 days.',
+        body: 'You can delete your account from Settings → Account → Delete Account. Deletion runs immediately: your profile, leads, candidates you created, activity history, and notification preferences are removed. Data retained by law (audit logs of administrative actions) is anonymised. To export your data first, use Settings → Account → Export My Data.',
     },
     {
         icon: 'eye-off' as const,
