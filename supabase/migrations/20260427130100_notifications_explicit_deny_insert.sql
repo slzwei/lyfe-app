@@ -10,6 +10,8 @@
 --
 -- No behavioral change for existing call sites — it just makes intent explicit.
 
+DROP POLICY IF EXISTS notifications_no_anon_insert ON public.notifications;
+
 CREATE POLICY notifications_no_anon_insert
 ON public.notifications
 FOR INSERT

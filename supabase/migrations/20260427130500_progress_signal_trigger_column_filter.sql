@@ -16,6 +16,8 @@
 -- candidates
 -- ─────────────────────────────────────────────────────────────────────
 DROP TRIGGER IF EXISTS trg_candidates_progress_signal ON public.candidates;
+DROP TRIGGER IF EXISTS trg_candidates_progress_signal_ins_del ON public.candidates;
+DROP TRIGGER IF EXISTS trg_candidates_progress_signal_upd ON public.candidates;
 
 CREATE TRIGGER trg_candidates_progress_signal_ins_del
   AFTER INSERT OR DELETE ON public.candidates
@@ -50,6 +52,8 @@ CREATE TRIGGER trg_candidates_progress_signal_upd
 --   logged_by_user_id, created_at, updated_at
 -- ─────────────────────────────────────────────────────────────────────
 DROP TRIGGER IF EXISTS trg_cpa_signal ON public.candidate_paper_attempts;
+DROP TRIGGER IF EXISTS trg_cpa_signal_ins_del ON public.candidate_paper_attempts;
+DROP TRIGGER IF EXISTS trg_cpa_signal_upd ON public.candidate_paper_attempts;
 
 CREATE TRIGGER trg_cpa_signal_ins_del
   AFTER INSERT OR DELETE ON public.candidate_paper_attempts
@@ -75,6 +79,8 @@ CREATE TRIGGER trg_cpa_signal_upd
 --   verified_by_user_id, note, created_at, updated_at
 -- ─────────────────────────────────────────────────────────────────────
 DROP TRIGGER IF EXISTS trg_cm_signal ON public.candidate_milestones;
+DROP TRIGGER IF EXISTS trg_cm_signal_ins_del ON public.candidate_milestones;
+DROP TRIGGER IF EXISTS trg_cm_signal_upd ON public.candidate_milestones;
 
 CREATE TRIGGER trg_cm_signal_ins_del
   AFTER INSERT OR DELETE ON public.candidate_milestones
@@ -102,6 +108,8 @@ CREATE TRIGGER trg_cm_signal_upd
 --   booked_end_date, attended, note, created_at, updated_at
 -- ─────────────────────────────────────────────────────────────────────
 DROP TRIGGER IF EXISTS trg_cpcb_signal ON public.candidate_prep_course_bookings;
+DROP TRIGGER IF EXISTS trg_cpcb_signal_ins_del ON public.candidate_prep_course_bookings;
+DROP TRIGGER IF EXISTS trg_cpcb_signal_upd ON public.candidate_prep_course_bookings;
 
 CREATE TRIGGER trg_cpcb_signal_ins_del
   AFTER INSERT OR DELETE ON public.candidate_prep_course_bookings

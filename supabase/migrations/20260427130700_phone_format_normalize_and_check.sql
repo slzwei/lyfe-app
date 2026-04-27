@@ -50,16 +50,19 @@ WHERE phone IS NOT NULL
 -- on large tables. (Today the tables are small, but the pattern is
 -- correct for the future.)
 
+ALTER TABLE public.users DROP CONSTRAINT IF EXISTS users_phone_format_check;
 ALTER TABLE public.users
     ADD CONSTRAINT users_phone_format_check
     CHECK (phone IS NULL OR phone ~ '^\d{7,15}$') NOT VALID;
 ALTER TABLE public.users VALIDATE CONSTRAINT users_phone_format_check;
 
+ALTER TABLE public.candidates DROP CONSTRAINT IF EXISTS candidates_phone_format_check;
 ALTER TABLE public.candidates
     ADD CONSTRAINT candidates_phone_format_check
     CHECK (phone IS NULL OR phone ~ '^\d{7,15}$') NOT VALID;
 ALTER TABLE public.candidates VALIDATE CONSTRAINT candidates_phone_format_check;
 
+ALTER TABLE public.leads DROP CONSTRAINT IF EXISTS leads_phone_format_check;
 ALTER TABLE public.leads
     ADD CONSTRAINT leads_phone_format_check
     CHECK (phone IS NULL OR phone ~ '^\d{7,15}$') NOT VALID;
