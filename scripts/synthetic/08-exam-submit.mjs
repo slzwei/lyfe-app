@@ -59,26 +59,21 @@ await runProbe(
         const startedAt = new Date(Date.now() - 60_000).toISOString();
         const submittedAt = new Date().toISOString();
 
-        // submit_exam_attempt has gone through three signature revisions:
-        //   * 9-arg  (20260331070000): no p_score/percentage/passed
-        //   * 12-arg (20260404000000): adds p_score/percentage/passed (IGNORED, kept for API compat)
-        //   * 13-arg (20260427130400): adds p_client_idempotency_key
-        // Pass every named arg so PostgREST dispatches to the latest variant —
-        // future migrations that drop older overloads won't break the probe.
+        // submit_exam_attempt — call the 9-arg overload (created by
+        // 20260331070000_phase1_critical_security.sql, still resident on
+        // staging today). The 12-arg / 13-arg variants exist on prod but
+        // staging only has the 9-arg, so we target that for staging-side
+        // probing. PostgREST dispatches by named-param match.
         const { data: rpcResult, error: rpcErr } = await scoped.rpc('submit_exam_attempt', {
             p_user_id: probeAgentUserId,
             p_paper_id: SYN_PROBE_PAPER_ID,
             p_status: 'submitted',
-            p_score: 1,            // ignored server-side
             p_total_questions: 1,
-            p_percentage: 100,     // ignored server-side
-            p_passed: true,        // ignored server-side
             p_started_at: startedAt,
             p_submitted_at: submittedAt,
             p_duration_seconds: 60,
             p_personality_results: null,
             p_answers: [{ question_id: SYN_PROBE_QUESTION_ID, selected_answer: 'B' }],
-            p_client_idempotency_key: `syn-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 11)}`,
         });
 
         if (rpcErr) throw new Error(`submit_exam_attempt rpc: ${rpcErr.message}`);
