@@ -14,6 +14,18 @@ import { supabase } from './supabase';
 /** Default pass threshold when exam_papers.pass_percentage is unavailable */
 const DEFAULT_PASS_PERCENTAGE = 70;
 
+/**
+ * Idempotency key for submit_exam_attempt RPC. Generated once per submit
+ * call so a network-retry from the same submission returns the existing
+ * attempt row instead of creating a duplicate.
+ *
+ * Doesn't need to be cryptographically random — just unique per attempt
+ * across the (user_id, paper_id) tuple. Format: timestamp + 9 random chars.
+ */
+function generateIdempotencyKey(): string {
+    return `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 11)}`;
+}
+
 // ── Fetch Exam Papers with Attempts ──────────────────────────
 
 /**
@@ -130,6 +142,7 @@ export async function submitExamAttempt(
         selected_answer: answers[q.id] || null,
     }));
 
+    const idempotencyKey = generateIdempotencyKey();
     const { data: rpcResult, error: rpcError } = await supabase.rpc('submit_exam_attempt', {
         p_user_id: userId,
         p_paper_id: paperId,
@@ -140,6 +153,9 @@ export async function submitExamAttempt(
         p_duration_seconds: durationSeconds,
         p_personality_results: null,
         p_answers: answerRows,
+        // Re-issued submissions (network retries) with the same key return
+        // the existing attempt row from the RPC instead of inserting a dup.
+        p_client_idempotency_key: idempotencyKey,
     });
 
     if (rpcError) {
@@ -203,6 +219,7 @@ export async function submitVarkAttempt(
         p_duration_seconds: durationSeconds,
         p_personality_results: varkResults as unknown as Json,
         p_answers: answerRows,
+        p_client_idempotency_key: generateIdempotencyKey(),
     });
 
     if (rpcError) {
@@ -267,6 +284,7 @@ export async function submitEnneagramAttempt(
         p_duration_seconds: durationSeconds,
         p_personality_results: enneagramResults as unknown as Json,
         p_answers: answerRows,
+        p_client_idempotency_key: generateIdempotencyKey(),
     });
 
     if (rpcError) {
@@ -324,6 +342,7 @@ export async function submitDiscAttempt(
         p_duration_seconds: durationSeconds,
         p_personality_results: discResults as unknown as Json,
         p_answers: [],
+        p_client_idempotency_key: generateIdempotencyKey(),
     });
 
     if (rpcError) {
