@@ -40,6 +40,12 @@ export type ProximityResult =
           message: string;
           distanceMeters?: number;
           requiredMeters?: number;
+          // Only set when reason === 'permission_denied'. True means the OS
+          // will still re-show the permission dialog on the next request
+          // (Android first-deny). False means the user has to enable
+          // permission in Settings (iOS after any deny, Android "don't ask
+          // again"). Callers branch on this to choose retry vs deep-link.
+          canAskAgain?: boolean;
       };
 
 // ── Low-level helper ───────────────────────────────────────
@@ -53,13 +59,16 @@ export async function checkProximity(
     targetLng: number,
     radiusMetres: number,
 ): Promise<ProximityResult> {
-    const { status } = await Location.requestForegroundPermissionsAsync();
+    const { status, canAskAgain } = await Location.requestForegroundPermissionsAsync();
     if (status !== 'granted') {
         return {
             ok: false,
             reason: 'permission_denied',
-            message: 'Location permission is required to check in. Enable it in Settings.',
+            message: canAskAgain
+                ? 'Location permission is required to check in.'
+                : 'Location permission is required to check in. Enable it in Settings.',
             requiredMeters: radiusMetres,
+            canAskAgain,
         };
     }
 

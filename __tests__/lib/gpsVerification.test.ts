@@ -72,15 +72,30 @@ describe('checkProximity — happy path', () => {
 
 describe('checkProximity — permission + GPS errors', () => {
     it('returns permission_denied when the permission prompt is rejected', async () => {
-        mockedRequestPerm.mockResolvedValueOnce({ status: 'denied' });
+        mockedRequestPerm.mockResolvedValueOnce({ status: 'denied', canAskAgain: false });
 
         const result = await checkProximity(MBS.lat, MBS.lng, 100);
 
         expect(result.ok).toBe(false);
         if (!result.ok) {
             expect(result.reason).toBe('permission_denied');
+            expect(result.canAskAgain).toBe(false);
+            expect(result.message).toContain('Settings');
         }
         expect(mockedGetPosition).not.toHaveBeenCalled();
+    });
+
+    it('omits the Settings hint when the OS can re-prompt (Android first-deny)', async () => {
+        mockedRequestPerm.mockResolvedValueOnce({ status: 'denied', canAskAgain: true });
+
+        const result = await checkProximity(MBS.lat, MBS.lng, 100);
+
+        expect(result.ok).toBe(false);
+        if (!result.ok) {
+            expect(result.reason).toBe('permission_denied');
+            expect(result.canAskAgain).toBe(true);
+            expect(result.message).not.toContain('Settings');
+        }
     });
 
     it('returns location_unavailable when getCurrentPositionAsync rejects', async () => {

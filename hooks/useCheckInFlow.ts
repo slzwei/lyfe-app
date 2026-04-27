@@ -1,5 +1,5 @@
 import { useCallback, useRef, useState } from 'react';
-import { Alert } from 'react-native';
+import { Alert, Linking } from 'react-native';
 import { useRouter } from 'expo-router';
 import type { FaceCaptureResult } from '@/components/face/FaceCaptureFlow';
 import { DEFAULT_PLEDGED_CLOSED, DEFAULT_PLEDGED_PITCHES, DEFAULT_PLEDGED_SITDOWNS } from '@/constants/ui';
@@ -14,6 +14,25 @@ import {
 import { captureError } from '@/lib/sentry';
 import { supabase } from '@/lib/supabase';
 import type { RoadshowConfig } from '@/types/event';
+
+// Surfaced when the proximity check returns `permission_denied`. If the OS
+// will still re-prompt (`canAskAgain` true — typically Android first-deny),
+// we offer an Allow button that re-runs the flow so the system dialog
+// appears. Otherwise (iOS after any deny, or Android "don't ask again"),
+// the only path forward is the OS Settings screen.
+function showPermissionDeniedDialog(canAskAgain: boolean | undefined, retry: () => void) {
+    if (canAskAgain) {
+        Alert.alert('Location Required', 'Lyfe needs your location to confirm you are at the venue.', [
+            { text: 'Cancel', style: 'cancel' },
+            { text: 'Allow', onPress: retry },
+        ]);
+    } else {
+        Alert.alert('Location Required', 'Location permission is disabled. Enable it in Settings to check in.', [
+            { text: 'Cancel', style: 'cancel' },
+            { text: 'Open Settings', onPress: () => Linking.openSettings() },
+        ]);
+    }
+}
 
 interface UseCheckInFlowParams {
     eventId: string | undefined;
@@ -76,7 +95,11 @@ export function useCheckInFlow({
         const proximity = await checkEventProximity(eventId!);
         if (!proximity.ok) {
             setCheckingIn(false);
-            Alert.alert('Out of range', proximity.message);
+            if (proximity.reason === 'permission_denied') {
+                showPermissionDeniedDialog(proximity.canAskAgain, () => handleOpenReturn());
+            } else {
+                Alert.alert('Cannot Check In', proximity.message);
+            }
             return;
         }
 
@@ -115,8 +138,12 @@ export function useCheckInFlow({
         // so the user could walk out of range between phases.
         const proximity = await checkEventProximity(eventId!);
         if (!proximity.ok) {
-            setCheckinError(proximity.message);
             setCheckingIn(false);
+            if (proximity.reason === 'permission_denied') {
+                showPermissionDeniedDialog(proximity.canAskAgain, () => handleConfirmPledge());
+            } else {
+                setCheckinError(proximity.message);
+            }
             return;
         }
 
