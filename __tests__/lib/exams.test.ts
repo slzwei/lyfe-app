@@ -671,12 +671,25 @@ describe('submitEnneagramAttempt', () => {
 // ── submitDiscAttempt ──
 
 describe('submitDiscAttempt', () => {
+    // The mirror write needs the full DiscResults shape (raw + pct), since it
+    // unpacks d_raw/i_raw/s_raw/c_raw + d_pct/i_pct/s_pct/c_pct into the
+    // dedicated disc_results table.
     const DISC_RESULTS = {
-        scores: { D: 25, I: 30, S: 20, C: 25 },
-        percentages: { D: 25, I: 30, S: 20, C: 25 },
-        discType: 'Influencer' as const,
-        totalQuestions: 38,
+        quizType: 'disc' as const,
+        d_raw: 25,
+        i_raw: 30,
+        s_raw: 20,
+        c_raw: 25,
+        d_pct: 25,
+        i_pct: 30,
+        s_pct: 20,
+        c_pct: 25,
+        disc_type: 'Influencer' as const,
         angle: 72,
+        profile_strength: 'moderate' as const,
+        strength_pct: 50,
+        priorities: [],
+        totalQuestions: 38,
     };
 
     it('submits DISC quiz with precomputed results', async () => {
@@ -710,5 +723,101 @@ describe('submitDiscAttempt', () => {
 
         expect(result.data).toBeNull();
         expect(result.error).toBe('RPC failed');
+    });
+
+    it('mirrors result into disc_results table with raw + pct + type fields', async () => {
+        mockSupa.__resetChains();
+        mockSupa.rpc.mockResolvedValueOnce({ data: { attempt_id: 'disc-attempt-2' }, error: null });
+
+        await submitDiscAttempt(
+            { userId: 'u-mirror', paperId: 'p-disc', answers: {}, startedAt: Date.now() - 60_000 },
+            DISC_RESULTS as any,
+        );
+
+        const chain = mockSupa.__getChain('disc_results');
+        const upsertCall = chain.__calls.find((c: any) => c.method === 'upsert');
+        expect(upsertCall).toBeTruthy();
+        expect(upsertCall.args[0]).toMatchObject({
+            user_id: 'u-mirror',
+            d_raw: 25,
+            i_raw: 30,
+            s_raw: 20,
+            c_raw: 25,
+            d_pct: 25,
+            i_pct: 30,
+            s_pct: 20,
+            c_pct: 25,
+            disc_type: 'Influencer',
+            angle: 72,
+        });
+        expect(upsertCall.args[1]).toEqual({ onConflict: 'user_id' });
+    });
+
+    it('still returns success when mirror disc_results upsert fails', async () => {
+        mockSupa.__resetChains();
+        mockSupa.rpc.mockResolvedValueOnce({ data: { attempt_id: 'disc-attempt-3' }, error: null });
+        const chain = mockSupa.__getChain('disc_results');
+        chain.__resolveWith({ data: null, error: { message: 'mirror insert blocked' } });
+
+        const result = await submitDiscAttempt(
+            { userId: 'u-fail-mirror', paperId: 'p-disc', answers: {}, startedAt: Date.now() },
+            DISC_RESULTS as any,
+        );
+
+        // Primary write succeeded — secondary failure is captured (Sentry) but
+        // does not surface to the user.
+        expect(result.error).toBeNull();
+        expect(result.data?.id).toBe('disc-attempt-3');
+    });
+});
+
+describe('submitEnneagramAttempt — result mirror', () => {
+    it('mirrors result into enneagram_results table with primary_type + wing_type', async () => {
+        mockSupa.__resetChains();
+        mockSupa.rpc.mockResolvedValueOnce({ data: { attempt_id: 'enn-attempt-mirror' }, error: null });
+
+        await submitEnneagramAttempt(
+            {
+                userId: 'u-enn',
+                paperId: 'p-enn',
+                questions: ENNEAGRAM_QUESTIONS,
+                answers: { eq1: 'A', eq2: 'B' },
+                status: 'submitted',
+                startedAt: Date.now() - 60_000,
+            },
+            'ENNEAGRAM',
+        );
+
+        const chain = mockSupa.__getChain('enneagram_results');
+        const upsertCall = chain.__calls.find((c: any) => c.method === 'upsert');
+        expect(upsertCall).toBeTruthy();
+        expect(upsertCall.args[0]).toMatchObject({
+            user_id: 'u-enn',
+            primary_type: expect.any(Number),
+            scores: expect.any(Object),
+        });
+        expect(upsertCall.args[1]).toEqual({ onConflict: 'user_id' });
+    });
+
+    it('still returns success when mirror enneagram_results upsert fails', async () => {
+        mockSupa.__resetChains();
+        mockSupa.rpc.mockResolvedValueOnce({ data: { attempt_id: 'enn-attempt-mirror-fail' }, error: null });
+        const chain = mockSupa.__getChain('enneagram_results');
+        chain.__resolveWith({ data: null, error: { message: 'mirror upsert blocked' } });
+
+        const result = await submitEnneagramAttempt(
+            {
+                userId: 'u-enn-fail',
+                paperId: 'p-enn',
+                questions: ENNEAGRAM_QUESTIONS,
+                answers: { eq1: 'A' },
+                status: 'submitted',
+                startedAt: Date.now(),
+            },
+            'ENNEAGRAM',
+        );
+
+        expect(result.error).toBeNull();
+        expect(result.data?.id).toBe('enn-attempt-mirror-fail');
     });
 });

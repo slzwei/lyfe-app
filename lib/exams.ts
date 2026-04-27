@@ -9,6 +9,7 @@ import type { DiscResults } from '@/constants/disc';
 import { computeVarkScores, isVarkResults } from './vark';
 import { computeEnneagramScores, isEnneagramResults } from './enneagram';
 import { isDiscResults } from './disc';
+import { captureError } from './sentry';
 import { supabase } from './supabase';
 
 /** Default pass threshold when exam_papers.pass_percentage is unavailable */
@@ -293,6 +294,13 @@ export async function submitEnneagramAttempt(
 
     const attemptId = (rpcResult as { attempt_id: string }).attempt_id;
 
+    // Mirror the result into the dedicated `enneagram_results` table so manager
+    // views (which read disc_results / enneagram_results, NOT the exam_attempts
+    // JSONB) can see mobile-completed Enneagram quizzes. lyfe-sg writes here
+    // directly; mobile previously only wrote to exam_attempts, leaving the
+    // mobile result invisible to staff.
+    await upsertEnneagramResultMirror(userId, enneagramResults, durationSeconds);
+
     return {
         data: {
             id: attemptId,
@@ -308,6 +316,30 @@ export async function submitEnneagramAttempt(
         },
         error: null,
     };
+}
+
+async function upsertEnneagramResultMirror(
+    userId: string,
+    results: EnneagramResults,
+    durationSeconds: number,
+): Promise<void> {
+    try {
+        const { error } = await supabase.from('enneagram_results').upsert(
+            {
+                user_id: userId,
+                scores: results.scores as unknown as Json,
+                primary_type: Number(results.primaryType),
+                wing_type: results.wing != null ? Number(results.wing) : null,
+                total: results.totalQuestions ?? 0,
+                duration_seconds: durationSeconds,
+                updated_at: new Date().toISOString(),
+            },
+            { onConflict: 'user_id' },
+        );
+        if (error) captureError(error, { fn: 'upsertEnneagramResultMirror', userId });
+    } catch (err) {
+        captureError(err, { fn: 'upsertEnneagramResultMirror', userId });
+    }
 }
 
 // ── Submit DISC / Personality Quiz ────────────────────────────
@@ -351,6 +383,13 @@ export async function submitDiscAttempt(
 
     const attemptId = (rpcResult as { attempt_id: string }).attempt_id;
 
+    // Mirror the result into the dedicated `disc_results` table so manager
+    // views (which read disc_results, NOT the exam_attempts JSONB) can see
+    // mobile-completed DISC quizzes. lyfe-sg writes here directly; mobile
+    // previously only wrote to exam_attempts, leaving the mobile result
+    // invisible to staff.
+    await upsertDiscResultMirror(userId, discResults, durationSeconds);
+
     return {
         data: {
             id: attemptId,
@@ -366,6 +405,31 @@ export async function submitDiscAttempt(
         },
         error: null,
     };
+}
+
+async function upsertDiscResultMirror(userId: string, results: DiscResults, durationSeconds: number): Promise<void> {
+    try {
+        const { error } = await supabase.from('disc_results').upsert(
+            {
+                user_id: userId,
+                d_raw: results.d_raw,
+                i_raw: results.i_raw,
+                s_raw: results.s_raw,
+                c_raw: results.c_raw,
+                d_pct: results.d_pct,
+                i_pct: results.i_pct,
+                s_pct: results.s_pct,
+                c_pct: results.c_pct,
+                disc_type: results.disc_type,
+                angle: results.angle,
+                duration_seconds: durationSeconds,
+            },
+            { onConflict: 'user_id' },
+        );
+        if (error) captureError(error, { fn: 'upsertDiscResultMirror', userId });
+    } catch (err) {
+        captureError(err, { fn: 'upsertDiscResultMirror', userId });
+    }
 }
 
 // ── Fetch Exam Result ────────────────────────────────────────
