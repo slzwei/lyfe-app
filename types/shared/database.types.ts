@@ -855,6 +855,7 @@ export type Database = {
                     created_at: string;
                     email: string;
                     expires_at: string;
+                    failed_attempts: number;
                     id: string;
                     user_id: string;
                 };
@@ -863,6 +864,7 @@ export type Database = {
                     created_at?: string;
                     email: string;
                     expires_at?: string;
+                    failed_attempts?: number;
                     id?: string;
                     user_id: string;
                 };
@@ -871,6 +873,7 @@ export type Database = {
                     created_at?: string;
                     email?: string;
                     expires_at?: string;
+                    failed_attempts?: number;
                     id?: string;
                     user_id?: string;
                 };
@@ -1165,6 +1168,7 @@ export type Database = {
             };
             exam_attempts: {
                 Row: {
+                    client_idempotency_key: string | null;
                     created_at: string | null;
                     duration_seconds: number | null;
                     id: string;
@@ -1180,6 +1184,7 @@ export type Database = {
                     user_id: string;
                 };
                 Insert: {
+                    client_idempotency_key?: string | null;
                     created_at?: string | null;
                     duration_seconds?: number | null;
                     id?: string;
@@ -1195,6 +1200,7 @@ export type Database = {
                     user_id: string;
                 };
                 Update: {
+                    client_idempotency_key?: string | null;
                     created_at?: string | null;
                     duration_seconds?: number | null;
                     id?: string;
@@ -2392,6 +2398,10 @@ export type Database = {
             users: {
                 Row: {
                     avatar_url: string | null;
+                    consent_marketing_at: string | null;
+                    consent_operational_push_at: string | null;
+                    consent_privacy_at: string | null;
+                    consent_tos_at: string | null;
                     created_at: string | null;
                     date_of_birth: string | null;
                     email: string | null;
@@ -2414,6 +2424,10 @@ export type Database = {
                 };
                 Insert: {
                     avatar_url?: string | null;
+                    consent_marketing_at?: string | null;
+                    consent_operational_push_at?: string | null;
+                    consent_privacy_at?: string | null;
+                    consent_tos_at?: string | null;
                     created_at?: string | null;
                     date_of_birth?: string | null;
                     email?: string | null;
@@ -2436,6 +2450,10 @@ export type Database = {
                 };
                 Update: {
                     avatar_url?: string | null;
+                    consent_marketing_at?: string | null;
+                    consent_operational_push_at?: string | null;
+                    consent_privacy_at?: string | null;
+                    consent_tos_at?: string | null;
                     created_at?: string | null;
                     date_of_birth?: string | null;
                     email?: string | null;
@@ -2578,6 +2596,17 @@ export type Database = {
                       }[];
                   }
                 | { Args: { p_is_manager: boolean; p_user_id: string }; Returns: Json };
+            get_team_lead_stats: {
+                Args: { p_stale_days?: number; p_user_ids: string[] };
+                Returns: {
+                    last_updated_at: string;
+                    open_count: number;
+                    stale_count: number;
+                    total_count: number;
+                    user_id: string;
+                    won_count: number;
+                }[];
+            };
             get_team_member_ids: { Args: { superior_id: string }; Returns: string[] };
             list_agents_for_reassign: {
                 Args: never;
@@ -2614,6 +2643,24 @@ export type Database = {
                 | {
                       Args: {
                           p_answers?: Json;
+                          p_duration_seconds: number;
+                          p_paper_id: string;
+                          p_passed: boolean;
+                          p_percentage: number;
+                          p_personality_results?: Json;
+                          p_score: number;
+                          p_started_at: string;
+                          p_status: string;
+                          p_submitted_at: string;
+                          p_total_questions: number;
+                          p_user_id: string;
+                      };
+                      Returns: Json;
+                  }
+                | {
+                      Args: {
+                          p_answers?: Json;
+                          p_client_idempotency_key?: string;
                           p_duration_seconds: number;
                           p_paper_id: string;
                           p_passed: boolean;
@@ -2679,7 +2726,8 @@ export type Database = {
                 | 'email'
                 | 'meeting'
                 | 'follow_up'
-                | 'whatsapp';
+                | 'whatsapp'
+                | 'unassignment';
             lead_source: 'referral' | 'walk_in' | 'online' | 'event' | 'cold_call' | 'other';
             lead_status: 'new' | 'contacted' | 'qualified' | 'proposed' | 'won' | 'lost';
             lifecycle_stage:
@@ -2844,6 +2892,7 @@ export const Constants = {
                 'meeting',
                 'follow_up',
                 'whatsapp',
+                'unassignment',
             ],
             lead_source: ['referral', 'walk_in', 'online', 'event', 'cold_call', 'other'],
             lead_status: ['new', 'contacted', 'qualified', 'proposed', 'won', 'lost'],
