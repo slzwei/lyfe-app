@@ -42,7 +42,6 @@ export async function fetchExamPapersWithAttempts(userId: string): Promise<{
         .from('exam_papers')
         .select('*')
         .eq('is_active', true)
-        .not('code', 'in', '("M5","M9","M9A","HI")')
         .order('display_order');
 
     if (papersError) return { papers: [], stats: {}, error: papersError.message };
