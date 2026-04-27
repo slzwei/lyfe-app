@@ -217,8 +217,11 @@ jest.mock('onnxruntime-react-native', () => ({
 // Mock expo-location
 jest.mock('expo-location', () => ({
     requestForegroundPermissionsAsync: jest.fn().mockResolvedValue({ status: 'granted' }),
-    getCurrentPositionAsync: jest.fn().mockResolvedValue({ coords: { latitude: 0, longitude: 0 } }),
-    Accuracy: { High: 6 },
+    getCurrentPositionAsync: jest.fn().mockResolvedValue({
+        coords: { latitude: 0, longitude: 0, accuracy: 10, mocked: false },
+        timestamp: Date.now(),
+    }),
+    Accuracy: { Lowest: 1, Low: 2, Balanced: 3, High: 6, Highest: 6, BestForNavigation: 6 },
 }));
 
 // Mock AsyncStorage
