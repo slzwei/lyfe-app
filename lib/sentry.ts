@@ -40,7 +40,12 @@ export function initSentry() {
         enabled: !!DSN && !__DEV__,
         environment: __DEV__ ? 'development' : 'production',
         release: `com.shawnlee.lyfe@${Constants.expoConfig?.version ?? '0.0.0'}`,
-        dist: Constants.expoConfig?.extra?.eas?.projectId ?? undefined,
+        // dist must distinguish two builds of the same release (i.e., the
+        // CFBundleVersion / versionCode that EAS auto-increments). The
+        // previous use of projectId was static and made every build look
+        // identical to Sentry, defeating release-comparison and source-map
+        // upload (since Sentry keys source maps by release+dist).
+        dist: Constants.nativeBuildVersion ?? undefined,
         integrations: [navigationIntegration],
         enableAutoSessionTracking: true,
         attachStacktrace: true,

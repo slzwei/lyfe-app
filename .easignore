@@ -1,0 +1,39 @@
+# Files excluded from EAS Build upload context (and thus from the binary).
+# This is in addition to .gitignore — EAS uploads everything tracked unless
+# .easignore overrides.
+
+# ONNX face-detection models — on-device inference path is unused; face
+# verification goes through AWS Rekognition via the verify-face edge
+# function. The two model files together are ~48 MB. Excluding them
+# trims the IPA / APK by the same amount. If on-device inference is
+# reintroduced, remove this line and the matching note in metro.config.js.
+assets/models/
+
+# Local Supabase CLI state (already in .gitignore but listed defensively
+# in case anyone tracks it locally).
+supabase/.temp/
+
+# Test mocks, fixtures, and graphify output never need to ship.
+__tests__/
+__mocks__/
+graphify-out/
+
+# Coverage reports.
+coverage/
+
+# Dev build artifacts.
+build/
+ios/build/
+android/build/
+android/app/build/
+
+# Editor + OS detritus.
+.DS_Store
+*.swp
+.vscode/
+
+# Internal docs aren't needed in the binary.
+docs/
+design/
+brand/
+.maestro/

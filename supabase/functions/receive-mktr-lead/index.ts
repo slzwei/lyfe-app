@@ -295,9 +295,13 @@ Deno.serve(async (req) => {
                 await supabase.from('notifications').insert({
                     user_id: agentId,
                     type: 'new_lead',
-                    title: `Lead Assigned: ${fullName}`,
+                    // Lock-screen previews show the title — no PII here.
+                    // The agent's name is in the lead detail screen the
+                    // tap deep-links into. data.leadName is preserved for
+                    // any in-app surface that wants to render it post-tap.
+                    title: 'Lead Assigned',
                     body: `From ${campaign?.name || 'MKTR'} via MKTR`,
-                    data: { route: `/(tabs)/leads/${existing.id}`, leadId: existing.id },
+                    data: { route: `/(tabs)/leads/${existing.id}`, leadId: existing.id, leadName: fullName },
                 });
 
                 return jsonResponse({ success: true, leadId: existing.id, reassigned: true });
@@ -375,9 +379,11 @@ Deno.serve(async (req) => {
         await supabase.from('notifications').insert({
             user_id: agentId,
             type: 'new_lead',
-            title: event === 'lead.created' ? `New Lead: ${fullName}` : `Lead Assigned: ${fullName}`,
+            // Lock-screen previews show the title; no PII. Lead name lives
+            // in data.leadName for the post-tap detail screen.
+            title: event === 'lead.created' ? 'New Lead' : 'Lead Assigned',
             body: `From ${campaign?.name || 'MKTR'} via MKTR`,
-            data: { route: `/(tabs)/leads/${leadId}`, leadId },
+            data: { route: `/(tabs)/leads/${leadId}`, leadId, leadName: fullName },
         });
 
         return jsonResponse({ success: true, leadId });
