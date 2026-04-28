@@ -36,7 +36,7 @@ export default memo(function LiveEventBar() {
     const pathname = usePathname();
     const insets = useSafeAreaInsets();
     const isPa = user?.role === 'pa';
-    const onEventsTab = pathname.startsWith('/events');
+    const onHomeTab = pathname === '/' || pathname.startsWith('/home');
 
     const [allEvents, setAllEvents] = useState<AgencyEvent[]>([]);
     const [dismissedIds, setDismissedIds] = useState<Set<string>>(new Set());
@@ -85,7 +85,7 @@ export default memo(function LiveEventBar() {
         [allEvents, dismissedIds],
     );
 
-    const isVisible = liveEvents.length > 0 && !onEventsTab;
+    const isVisible = liveEvents.length > 0 && onHomeTab;
 
     // Clamp index when events change
     useEffect(() => {
