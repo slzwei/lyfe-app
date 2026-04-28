@@ -106,7 +106,7 @@ export function useDashboard({ userId, role, isManagerView, isAdminRole }: UseDa
                 isManagerLike && role
                     ? fetchManagerDashboardStats(userId, role)
                     : Promise.resolve({ data: null as ManagerDashboardStats | null, error: null }),
-                !isManagerLike ? fetchUpcomingEvents(userId, 5) : Promise.resolve({ data: [] as AgencyEvent[] }),
+                fetchUpcomingEvents(userId, 5),
             ]);
             if (statsResult.data) setStats(statsResult.data);
             if (activitiesResult.data) setRecentActivities(activitiesResult.data);

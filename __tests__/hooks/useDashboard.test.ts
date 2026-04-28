@@ -101,7 +101,7 @@ function setupManagerMocks() {
     mockFetchLeadStats.mockResolvedValue({ data: defaultStats, error: null });
     mockFetchRecentActivities.mockResolvedValue({ data: defaultActivities, error: null });
     mockFetchManagerDashboardStats.mockResolvedValue({ data: defaultManagerStats, error: null });
-    mockFetchUpcomingEvents.mockResolvedValue({ data: [] });
+    mockFetchUpcomingEvents.mockResolvedValue({ data: defaultEvents });
 }
 
 function setupCandidateMocks() {
@@ -414,7 +414,7 @@ describe('useDashboard', () => {
             expect(result.current.managerStats).toEqual(defaultManagerStats);
         });
 
-        it('does not fetch upcoming events when in manager view', async () => {
+        it('fetches upcoming events for manager view (shown on home)', async () => {
             setupManagerMocks();
             const { result } = renderHook(() => useDashboard(managerParams));
 
@@ -422,9 +422,8 @@ describe('useDashboard', () => {
                 expect(result.current.isLoading).toBe(false);
             });
 
-            // Manager view uses Promise.resolve({ data: [] }) instead of fetchUpcomingEvents
-            expect(mockFetchUpcomingEvents).not.toHaveBeenCalled();
-            expect(result.current.agentEvents).toEqual([]);
+            expect(mockFetchUpcomingEvents).toHaveBeenCalledWith('mgr1', 5);
+            expect(result.current.agentEvents).toEqual(defaultEvents);
         });
     });
 

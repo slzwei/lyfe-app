@@ -6,7 +6,7 @@ import type { LeadPipelineStats, ManagerDashboardStats } from '@/lib/leads';
 import type { ProgrammeWithModules } from '@/types/roadmap';
 import { Ionicons } from '@expo/vector-icons';
 import React from 'react';
-import { StyleSheet, Text, View } from 'react-native';
+import { StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 
 interface Props {
     colors: ThemeColors;
@@ -19,6 +19,9 @@ interface Props {
     paStats: { candidateCount: number; interviewCount: number; eventCount: number };
     currentProgramme: ProgrammeWithModules | undefined;
     candidateRoadmapCount: number;
+    onTeamLeadsPress?: () => void;
+    onCandidatesPress?: () => void;
+    onAgentsPress?: () => void;
 }
 
 function HeroStatsSection({
@@ -32,6 +35,9 @@ function HeroStatsSection({
     paStats,
     currentProgramme,
     candidateRoadmapCount,
+    onTeamLeadsPress,
+    onCandidatesPress,
+    onAgentsPress,
 }: Props) {
     const agentStats = stats || { totalLeads: 0, newThisWeek: 0, conversionRate: 0, activeFollowUps: 0 };
 
@@ -93,28 +99,45 @@ function HeroStatsSection({
     }
 
     if (isAdminRole || isManagerView) {
+        const teamLeadsValue = stats?.totalLeads ?? 0;
+        const heroContent = (
+            <>
+                <Ionicons name="people" size={80} color="rgba(255,255,255,0.15)" style={styles.heroIconBg} />
+                <Text style={[styles.heroStatValue, { color: colors.textInverse }]}>{teamLeadsValue}</Text>
+                <Text style={[styles.heroStatLabel, { color: colors.textInverse, opacity: 0.9 }]}>Team Leads</Text>
+            </>
+        );
         return (
             <View style={styles.heroStatsContainer}>
                 <View style={styles.statsRow}>
-                    <View style={[styles.heroCardPrimary, { backgroundColor: colors.accent }]}>
-                        <Ionicons name="people" size={80} color="rgba(255,255,255,0.15)" style={styles.heroIconBg} />
-                        <Text style={[styles.heroStatValue, { color: colors.textInverse }]}>
-                            {stats?.totalLeads ?? 0}
-                        </Text>
-                        <Text style={[styles.heroStatLabel, { color: colors.textInverse, opacity: 0.9 }]}>
-                            Team Leads
-                        </Text>
-                    </View>
+                    {onTeamLeadsPress ? (
+                        <TouchableOpacity
+                            style={[styles.heroCardPrimary, { backgroundColor: colors.accent }]}
+                            onPress={onTeamLeadsPress}
+                            activeOpacity={0.85}
+                            accessibilityRole="button"
+                            accessibilityLabel={`Team Leads, ${teamLeadsValue}`}
+                            testID="home-hero-team-leads"
+                        >
+                            {heroContent}
+                        </TouchableOpacity>
+                    ) : (
+                        <View style={[styles.heroCardPrimary, { backgroundColor: colors.accent }]}>{heroContent}</View>
+                    )}
                     <View style={styles.statsColumn}>
                         <StatCardSmall
                             label="Candidates"
                             value={(managerStats?.activeCandidates ?? 0).toString()}
                             colors={colors}
+                            onPress={onCandidatesPress}
+                            testID="home-hero-candidates"
                         />
                         <StatCardSmall
                             label="Agents"
                             value={(managerStats?.agentsManaged ?? 0).toString()}
                             colors={colors}
+                            onPress={onAgentsPress}
+                            testID="home-hero-agents"
                         />
                     </View>
                 </View>

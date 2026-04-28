@@ -155,11 +155,11 @@ describe('HomeScreen', () => {
         expect(getByText('Total Leads')).toBeTruthy();
     });
 
-    it('shows lead pipeline for agent', async () => {
+    it('shows upcoming events for agent', async () => {
         setupRole('agent');
         const { getByText } = render(<HomeScreen />);
         await waitFor(() => {
-            expect(getByText('Lead Pipeline')).toBeTruthy();
+            expect(getByText('My Events')).toBeTruthy();
         });
     });
 

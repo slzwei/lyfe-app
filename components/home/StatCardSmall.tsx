@@ -1,23 +1,52 @@
 import { Fonts } from '@/constants/type';
 import type { ThemeColors } from '@/types/theme';
 import React, { memo } from 'react';
-import { StyleSheet, Text, View } from 'react-native';
+import { StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 
 type StatCardSmallProps = {
     label: string;
     value: string;
     colors: ThemeColors;
+    onPress?: () => void;
+    accessibilityLabel?: string;
+    testID?: string;
 };
 
-const StatCardSmall = memo(function StatCardSmall({ label, value, colors }: StatCardSmallProps) {
-    return (
-        <View
-            style={[styles.statCardSmall, { backgroundColor: colors.cardBackground, shadowColor: colors.textPrimary }]}
-        >
+const StatCardSmall = memo(function StatCardSmall({
+    label,
+    value,
+    colors,
+    onPress,
+    accessibilityLabel,
+    testID,
+}: StatCardSmallProps) {
+    const cardStyle = [
+        styles.statCardSmall,
+        { backgroundColor: colors.cardBackground, shadowColor: colors.textPrimary },
+    ];
+    const content = (
+        <>
             <Text style={[styles.statValueSmall, { color: colors.textPrimary }]}>{value}</Text>
             <Text style={[styles.statLabelSmall, { color: colors.textTertiary }]}>{label}</Text>
-        </View>
+        </>
     );
+
+    if (onPress) {
+        return (
+            <TouchableOpacity
+                style={cardStyle}
+                onPress={onPress}
+                activeOpacity={0.7}
+                accessibilityRole="button"
+                accessibilityLabel={accessibilityLabel ?? `${label}, ${value}`}
+                testID={testID}
+            >
+                {content}
+            </TouchableOpacity>
+        );
+    }
+
+    return <View style={cardStyle}>{content}</View>;
 });
 
 export default StatCardSmall;

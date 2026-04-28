@@ -4,9 +4,7 @@ import BiometricsPrompt from '@/components/home/BiometricsPrompt';
 import ErrorBanner from '@/components/ErrorBanner';
 import HeroStatsSection from '@/components/home/HeroStatsSection';
 import HomePipelineSection from '@/components/home/HomePipelineSection';
-import LeadPipelineCard from '@/components/home/LeadPipelineCard';
 import LyfeLogo from '@/components/LyfeLogo';
-import RecentActivityCard from '@/components/home/RecentActivityCard';
 import RoadmapProgressCard from '@/components/home/RoadmapProgressCard';
 import ScreenHeader from '@/components/ScreenHeader';
 import UpcomingEventsCard from '@/components/home/UpcomingEventsCard';
@@ -94,13 +92,11 @@ export default function HomeScreen() {
         refreshing,
         loadDashboardData,
         onRefresh,
-        displayActivities,
     } = useDashboard({ userId: user?.id, role, isManagerView, isAdminRole });
 
     const greeting = useMemo(() => getGreeting(), []);
     const firstName = user?.full_name?.split(' ')[0] || 'there';
 
-    const pipeline = stats?.pipeline || [];
     const currentProgramme = candidateRoadmap.find((p) => !p.isLocked && p.percentage < 100) ?? candidateRoadmap[0];
 
     return (
@@ -183,6 +179,11 @@ export default function HomeScreen() {
                     }}
                     currentProgramme={currentProgramme}
                     candidateRoadmapCount={candidateRoadmap.length}
+                    onTeamLeadsPress={isManagerView || isAdminRole ? () => router.push('/(tabs)/leads') : undefined}
+                    onCandidatesPress={
+                        isManagerView || isAdminRole ? () => router.push('/(tabs)/candidates') : undefined
+                    }
+                    onAgentsPress={isManagerView || isAdminRole ? () => router.push('/(tabs)/team') : undefined}
                 />
 
                 {/* Pipeline triage — for managers, directors, admins. Skips candidates + PAs + agents. */}
@@ -226,7 +227,7 @@ export default function HomeScreen() {
                     />
                 )}
 
-                {!isCandidate && !isPa && !isAdminRole && !isManagerView && (
+                {!isCandidate && !isPa && (
                     <UpcomingEventsCard
                         title="My Events"
                         events={agentEvents}
@@ -234,16 +235,6 @@ export default function HomeScreen() {
                         isLoading={isLoading}
                         onSeeAll={() => router.push('/(tabs)/events')}
                         onEventPress={(id) => router.push(`/(tabs)/home/event/${id}`)}
-                    />
-                )}
-
-                {!isCandidate && !isPa && <LeadPipelineCard pipeline={pipeline} colors={colors} />}
-
-                {!isCandidate && !isPa && (
-                    <RecentActivityCard
-                        activities={displayActivities}
-                        colors={colors}
-                        onSeeAll={() => router.push('/(tabs)/leads')}
                     />
                 )}
             </ScrollView>
