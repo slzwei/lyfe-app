@@ -7,7 +7,7 @@ import { fetchEvents } from '@/lib/events';
 import type { AgencyEvent } from '@/types/event';
 import { useTypedRouter } from '@/hooks/useTypedRouter';
 import { Ionicons } from '@expo/vector-icons';
-import { usePathname } from 'expo-router';
+import { usePathname, useNavigation } from 'expo-router';
 import React, { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
     AccessibilityInfo,
@@ -34,6 +34,7 @@ export default memo(function LiveEventBar() {
     const { user } = useAuth();
     const router = useTypedRouter();
     const pathname = usePathname();
+    const navigation = useNavigation();
     const insets = useSafeAreaInsets();
     const isPa = user?.role === 'pa';
     const onHomeTab = pathname === '/' || pathname.startsWith('/home');
@@ -185,11 +186,22 @@ export default memo(function LiveEventBar() {
         (event: AgencyEvent) => {
             if (isPa) {
                 router.push(`/(tabs)/pa/event/${event.id}`);
-            } else {
-                router.push(`/(tabs)/events/${event.id}`);
+                return;
             }
+            // `initial: false` tells React Navigation to put the events tab's
+            // initial route (calendar) below [eventId] in the stack, so back
+            // pops to the calendar instead of falling through to home.
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
+            (navigation as any).navigate('(tabs)', {
+                screen: 'events',
+                params: {
+                    screen: '[eventId]',
+                    initial: false,
+                    params: { eventId: event.id },
+                },
+            });
         },
-        [isPa, router],
+        [isPa, router, navigation],
     );
 
     const currentEvent = liveEvents[currentIndex];

@@ -24,8 +24,10 @@ jest.mock('@/hooks/useTypedRouter', () => ({
 }));
 
 const mockUsePathname = jest.fn().mockReturnValue('/home');
+const mockNavigate = jest.fn();
 jest.mock('expo-router', () => ({
     useRouter: jest.fn(() => ({ push: jest.fn(), replace: jest.fn(), back: jest.fn() })),
+    useNavigation: jest.fn(() => ({ navigate: mockNavigate, dispatch: jest.fn() })),
     useLocalSearchParams: jest.fn(() => ({})),
     useFocusEffect: jest.fn((cb: () => void) => cb()),
     usePathname: () => mockUsePathname(),
@@ -146,7 +148,17 @@ describe('LiveEventBar', () => {
         await waitFor(() => expect(getByLabelText(/Live Roadshow/)).toBeTruthy());
 
         fireEvent.press(getByLabelText(/Live Roadshow/));
-        expect(mockPush).toHaveBeenCalledWith('/(tabs)/events/evt-42');
+        // Nested navigate with `initial: false` so the events stack includes
+        // the calendar (index) below [eventId] — back returns to calendar
+        // instead of falling through to home.
+        expect(mockNavigate).toHaveBeenCalledWith('(tabs)', {
+            screen: 'events',
+            params: {
+                screen: '[eventId]',
+                initial: false,
+                params: { eventId: 'evt-42' },
+            },
+        });
     });
 
     it('navigates to PA event route for PA role', async () => {
