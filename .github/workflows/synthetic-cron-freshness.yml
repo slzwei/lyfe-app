@@ -1,12 +1,14 @@
 name: Synthetic — cron freshness
 
-# R3: poll cron.job_run_details on staging every 15 min.
+# R3: poll cron.job_run_details on staging hourly.
 # Alerts if any of the four scheduled edge-function cron jobs misses its window.
+# Cadence relaxed from */15 → hourly to fit GH Actions free-tier minutes;
+# detection delay still bounded by the 20-min freshness window in the probe.
 
 on:
   workflow_dispatch:
   schedule:
-    - cron: '*/15 * * * *' # every 15 minutes
+    - cron: '0 * * * *' # hourly
 
 permissions:
   contents: read
