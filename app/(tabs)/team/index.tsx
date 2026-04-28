@@ -34,6 +34,7 @@ const ROLE_LABELS: Record<string, string> = {
     manager: 'Manager',
     agent: 'Agent',
     pa: 'PA',
+    ro: 'RO',
 };
 
 function plural(count: number, singular: string, pluralText = `${singular}s`) {

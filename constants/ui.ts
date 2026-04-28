@@ -50,6 +50,7 @@ export const ROLE_LABELS: Record<string, string> = {
     manager: 'Manager',
     agent: 'Agent',
     pa: 'Personal Assistant',
+    ro: 'Recruitment Officer',
     candidate: 'Candidate',
 };
 
