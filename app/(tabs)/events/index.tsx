@@ -108,8 +108,8 @@ export default function EventsScreen() {
     const [refreshing, setRefreshing] = useState(false);
     const [isLoading, setIsLoading] = useState(true);
 
-    const isPA = user?.role === 'pa' || user?.role === 'admin';
-    const canCreateEvents = user?.role && ['admin', 'director', 'manager', 'pa'].includes(user.role);
+    const isPA = user?.role === 'pa' || user?.role === 'ro' || user?.role === 'admin';
+    const canCreateEvents = user?.role && ['admin', 'director', 'manager', 'pa', 'ro'].includes(user.role);
 
     const [eventError, setEventError] = useState<string | null>(null);
 
@@ -310,7 +310,7 @@ export default function EventsScreen() {
             >
                 <DarkHeroCard glow="terra" glowSize="md">
                     <EventStatusPill status="live" />
-                    <Text style={[styles.liveTitle, { color: colors.textInverse }]}>
+                    <Text style={[styles.liveTitle, { color: '#F4EEE1' }]}>
                         {place}
                         {sub ? (
                             <>

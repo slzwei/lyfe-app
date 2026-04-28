@@ -30,6 +30,7 @@ const ROLE_LABELS: Record<UserRole, string> = {
     manager: 'Manager',
     agent: 'Agent',
     pa: 'PA',
+    ro: 'Recruitment Officer',
     candidate: 'Candidate',
 };
 

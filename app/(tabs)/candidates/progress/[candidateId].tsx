@@ -21,7 +21,8 @@ export default function CandidateProgressScreen() {
     const [notFound, setNotFound] = useState(false);
 
     const role = user?.role ?? '';
-    const canMarkComplete = role === 'admin' || role === 'pa' || role === 'manager' || role === 'director';
+    const canMarkComplete =
+        role === 'admin' || role === 'pa' || role === 'ro' || role === 'manager' || role === 'director';
 
     const loadName = useCallback(async () => {
         if (!candidateId) return;

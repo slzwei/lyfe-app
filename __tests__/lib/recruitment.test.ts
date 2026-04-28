@@ -196,6 +196,38 @@ describe('fetchCandidates', () => {
         expect(result.data[0].assigned_manager_name).toBe('Manager Alice');
         expect(result.data[1].assigned_manager_name).toBe('');
     });
+
+    it('scopes to the bound managers when managerScope is supplied (PA path)', async () => {
+        const candidatesChain = mockSupa.__getChain('candidates');
+        mockResolve(candidatesChain, { data: [CANDIDATE_ROW], error: null });
+
+        const usersChain = mockSupa.__getChain('users');
+        mockResolve(usersChain, { data: [{ id: 'mgr-1', full_name: 'Manager Alice' }], error: null });
+
+        const interviewsChain = mockSupa.__getChain('interviews');
+        mockResolve(interviewsChain, { data: [], error: null });
+
+        await fetchCandidates('pa-1', false, undefined, undefined, ['mgr-1', 'mgr-2']);
+
+        // The candidates query should constrain assigned_manager_id to the bound IDs.
+        expect(candidatesChain.__calls).toContainEqual({
+            method: 'in',
+            args: ['assigned_manager_id', ['mgr-1', 'mgr-2']],
+        });
+        // It must NOT fall back to the eq-self default that bugs out for PAs.
+        expect(candidatesChain.__calls).not.toContainEqual({ method: 'eq', args: ['assigned_manager_id', 'pa-1'] });
+    });
+
+    it('returns zero rows without hitting the DB when managerScope is empty', async () => {
+        const result = await fetchCandidates('pa-1', false, undefined, undefined, []);
+        expect(result.data).toEqual([]);
+        expect(result.hasMore).toBe(false);
+        // No candidates query should have been issued at all.
+        const candidatesChain = mockSupa.__getChain('candidates');
+        expect(candidatesChain.__calls.some((c: { method: string }) => c.method === 'in' || c.method === 'eq')).toBe(
+            false,
+        );
+    });
 });
 
 // ── fetchCandidate ──
@@ -206,7 +238,7 @@ describe('fetchCandidate', () => {
         mockResolve(candidatesChain, { data: CANDIDATE_ROW, error: null });
 
         const usersChain = mockSupa.__getChain('users');
-        mockResolve(usersChain, { data: { full_name: 'Manager Alice' }, error: null });
+        mockResolve(usersChain, { data: [{ id: 'mgr-1', full_name: 'Manager Alice' }], error: null });
 
         const interviewsChain = mockSupa.__getChain('interviews');
         mockResolve(interviewsChain, { data: [INTERVIEW_ROW], error: null });
@@ -215,6 +247,30 @@ describe('fetchCandidate', () => {
         expect(result.data?.name).toBe('Jane Smith');
         expect(result.data?.assigned_manager_name).toBe('Manager Alice');
         expect(result.data?.interviews).toHaveLength(1);
+    });
+
+    it('populates created_by_name when creator differs from assigned manager', async () => {
+        const candidatesChain = mockSupa.__getChain('candidates');
+        mockResolve(candidatesChain, {
+            data: { ...CANDIDATE_ROW, assigned_manager_id: 'mgr-1', created_by_id: 'pa-1' },
+            error: null,
+        });
+
+        const usersChain = mockSupa.__getChain('users');
+        mockResolve(usersChain, {
+            data: [
+                { id: 'mgr-1', full_name: 'Manager Alice' },
+                { id: 'pa-1', full_name: 'PA Priya' },
+            ],
+            error: null,
+        });
+
+        const interviewsChain = mockSupa.__getChain('interviews');
+        mockResolve(interviewsChain, { data: [], error: null });
+
+        const result = await fetchCandidate('cand-1');
+        expect(result.data?.assigned_manager_name).toBe('Manager Alice');
+        expect(result.data?.created_by_name).toBe('PA Priya');
     });
 
     it('returns error when not found', async () => {
@@ -250,7 +306,7 @@ describe('createCandidate', () => {
         });
 
         const usersChain = mockSupa.__getChain('users');
-        mockResolve(usersChain, { data: { full_name: 'Manager Alice' }, error: null });
+        mockResolve(usersChain, { data: [{ id: 'mgr-1', full_name: 'Manager Alice' }], error: null });
 
         const result = await createCandidate(
             { name: 'Jane Smith', phone: '+6598765432', email: null, notes: null },

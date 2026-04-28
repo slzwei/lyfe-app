@@ -34,6 +34,7 @@ export const ROLE_TABS: Record<UserRole, string[]> = {
     manager: ['home', 'leads', 'team', 'events', 'profile'],
     agent: ['home', 'leads', 'events', 'profile'],
     pa: ['home', 'pa', 'events', 'profile'],
+    ro: ['home', 'pa', 'events', 'profile'],
     candidate: ['home', 'roadmap', 'events', 'profile'],
 };
 

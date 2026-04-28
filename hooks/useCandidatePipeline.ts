@@ -27,6 +27,12 @@ export interface UseCandidatePipelineOptions {
     isManagerView?: boolean;
     /** If false, skips fetching altogether (for roles that shouldn't see the pipeline). */
     enabled?: boolean;
+    /**
+     * Optional manager IDs to scope the fetch to (for PAs bound via
+     * pa_manager_assignments). When supplied, overrides the manager/self default
+     * in fetchCandidates.
+     */
+    managerScope?: string[];
 }
 
 export interface UseCandidatePipelineResult {
@@ -49,6 +55,7 @@ const EMPTY_COUNTS: PipelineSnapshot['counts'] = {
 export function useCandidatePipeline({
     isManagerView = false,
     enabled = true,
+    managerScope,
 }: UseCandidatePipelineOptions = {}): UseCandidatePipelineResult {
     const { user } = useAuth();
     const [rows, setRows] = useState<PipelineSnapshot['rows']>([]);
@@ -57,6 +64,10 @@ export function useCandidatePipeline({
     const [isRefreshing, setIsRefreshing] = useState(false);
     const [error, setError] = useState<string | null>(null);
 
+    // Memoize the scope by joining IDs so callers can pass a fresh array each
+    // render without thrashing the load callback's dependency list.
+    const managerScopeKey = managerScope?.slice().sort().join(',');
+
     const load = useCallback(async () => {
         if (!enabled || !user?.id) {
             setIsLoading(false);
@@ -64,13 +75,14 @@ export function useCandidatePipeline({
         }
         setError(null);
         const t0 = Date.now();
-        const snap = await fetchPipelineSnapshot(user.id, isManagerView);
+        const snap = await fetchPipelineSnapshot(user.id, isManagerView, new Date(), managerScope);
         if (snap.error) setError(snap.error);
         setRows(snap.rows);
         setCounts(snap.counts);
         setIsLoading(false);
         pipelineAnalytics.snapshotLoaded(snap.counts, Date.now() - t0);
-    }, [user?.id, isManagerView, enabled]);
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [user?.id, isManagerView, enabled, managerScopeKey]);
 
     useFocusEffect(
         useCallback(() => {

@@ -31,6 +31,11 @@ export default function HeroSection({ candidate, colors, onStatusPress, canReass
         .toUpperCase()
         .slice(0, 2);
 
+    // Only surface "INVITED BY" when it adds info — i.e. the creator isn't the
+    // assigned manager. Common case: PA creates on behalf of a manager.
+    const showInvitedBy =
+        Boolean(candidate.created_by_name) && candidate.created_by_id !== candidate.assigned_manager_id;
+
     return (
         <View style={styles.container}>
             <View style={styles.topRow}>
@@ -92,6 +97,14 @@ export default function HeroSection({ candidate, colors, onStatusPress, canReass
                         {daysSinceCreated}d
                     </Text>
                 </View>
+                {showInvitedBy && (
+                    <View style={styles.metaItem}>
+                        <Text style={[styles.metaLabel, { color: colors.textTertiary }]}>INVITED BY</Text>
+                        <Text style={[styles.metaValue, { color: colors.textPrimary }]} numberOfLines={1}>
+                            {candidate.created_by_name}
+                        </Text>
+                    </View>
+                )}
             </View>
 
             <View style={[styles.rule, { backgroundColor: colors.cardBorder }]} />

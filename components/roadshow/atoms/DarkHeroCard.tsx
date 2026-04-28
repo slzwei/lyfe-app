@@ -29,8 +29,8 @@ export function DarkHeroCard({
     radius = 16,
     style,
 }: DarkHeroCardProps) {
-    const { colors, resolved } = useTheme();
-    const ink = resolved === 'dark' ? colors.surfaceElevated : '#1B1A17';
+    const { resolved } = useTheme();
+    const ink = resolved === 'dark' ? '#332E26' : '#1B1A17';
 
     const glowColor =
         glow === 'terra'

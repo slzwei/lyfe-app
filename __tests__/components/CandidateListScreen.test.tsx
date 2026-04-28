@@ -110,7 +110,9 @@ describe('CandidateListScreen', () => {
 
         expect(getByText('Bob Lim')).toBeTruthy();
         expect(getByText('Charlie Wong')).toBeTruthy();
-        expect(mockFetch).toHaveBeenCalledWith('user-1', false);
+        // PA path passes a managerScope (resolved from pa_manager_assignments). The
+        // supabase mock returns no rows so the scope resolves to an empty array here.
+        expect(mockFetch).toHaveBeenCalledWith('user-1', false, undefined, undefined, []);
     });
 
     it('defaults managers to Pipeline', async () => {
@@ -141,7 +143,11 @@ describe('CandidateListScreen', () => {
             expect(getByText('Schedule BDM interview')).toBeTruthy();
         });
 
-        expect(mockUsePipeline).toHaveBeenCalledWith({ isManagerView: true, enabled: true });
+        expect(mockUsePipeline).toHaveBeenCalledWith({
+            isManagerView: true,
+            managerScope: undefined,
+            enabled: true,
+        });
     });
 
     it('search filters candidates by name', async () => {
@@ -237,7 +243,9 @@ describe('CandidateListScreen', () => {
         render(<CandidateListScreen candidateRoute={(id) => `/candidates/${id}`} addRoute="/add" isManagerView />);
 
         await waitFor(() => {
-            expect(mockFetch).toHaveBeenCalledWith('user-1', true);
+            // Default beforeEach sets role='pa', so the call still includes the
+            // (empty, since supabase is mocked) managerScope.
+            expect(mockFetch).toHaveBeenCalledWith('user-1', true, undefined, undefined, []);
         });
     });
 });

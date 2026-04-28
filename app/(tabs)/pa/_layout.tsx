@@ -6,7 +6,7 @@ import React from 'react';
 
 export default function PaLayout() {
     const { colors } = useTheme();
-    const authorized = useRequireRole('admin', 'pa');
+    const authorized = useRequireRole('admin', 'pa', 'ro');
     const { candidateId } = useGlobalSearchParams<{ candidateId?: string }>();
     if (!authorized) return null;
 

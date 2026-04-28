@@ -10,6 +10,7 @@ import { timeAgo } from '@/lib/dateTime';
 import { fetchUpcomingEvents } from '@/lib/events';
 import { fetchCandidateRoadmap, getCandidateIdForUser } from '@/lib/roadmap';
 import { fetchPAManagerIds, fetchPACandidateCount, fetchPAInterviewCount } from '@/lib/recruitment';
+import { supabase } from '@/lib/supabase';
 import type { AgencyEvent } from '@/types/event';
 import type { ProgrammeWithModules } from '@/types/roadmap';
 import { ACTIVITY_ICONS, type LeadActivity } from '@/types/lead';
@@ -68,6 +69,7 @@ export function useDashboard({ userId, role, isManagerView, isAdminRole }: UseDa
 
     const isCandidate = role === 'candidate';
     const isPa = role === 'pa';
+    const isRo = role === 'ro';
 
     const loadDashboardData = useCallback(async () => {
         if (!userId) return;
@@ -99,6 +101,23 @@ export function useDashboard({ userId, role, isManagerView, isAdminRole }: UseDa
                 });
                 return;
             }
+            if (isRo) {
+                // ROs see all candidates across the agency — global counts.
+                const [{ count: total }, { count: interviews }, eventsResult] = await Promise.all([
+                    supabase.from('candidates').select('id', { count: 'exact', head: true }),
+                    supabase
+                        .from('candidates')
+                        .select('id', { count: 'exact', head: true })
+                        .eq('status', 'interview_scheduled'),
+                    fetchUpcomingEvents(userId, 5),
+                ]);
+                setPaStats({
+                    candidateCount: total ?? 0,
+                    interviewCount: interviews ?? 0,
+                    events: eventsResult.data,
+                });
+                return;
+            }
             const isManagerLike = isManagerView || isAdminRole;
             const [statsResult, activitiesResult, managerStatsResult, eventsResult] = await Promise.all([
                 fetchLeadStats(userId, isManagerLike),
@@ -118,7 +137,7 @@ export function useDashboard({ userId, role, isManagerView, isAdminRole }: UseDa
         } finally {
             setIsLoading(false);
         }
-    }, [userId, isCandidate, isPa, isManagerView, isAdminRole, role]);
+    }, [userId, isCandidate, isPa, isRo, isManagerView, isAdminRole, role]);
 
     useEffect(() => {
         loadDashboardData();

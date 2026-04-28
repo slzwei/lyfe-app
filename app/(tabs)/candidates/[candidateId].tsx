@@ -155,7 +155,8 @@ export default function CandidateDetailScreen() {
     const [licensedError, setLicensedError] = useState<string | null>(null);
 
     const role = user?.role ?? '';
-    const canMarkComplete = role === 'admin' || role === 'pa' || role === 'manager' || role === 'director';
+    const canMarkComplete =
+        role === 'admin' || role === 'pa' || role === 'ro' || role === 'manager' || role === 'director';
     const canConfirmLicensed =
         canVerifyPapers(role as Parameters<typeof canVerifyPapers>[0]) &&
         canManageMilestones(role as Parameters<typeof canManageMilestones>[0]);

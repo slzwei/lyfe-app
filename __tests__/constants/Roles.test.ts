@@ -130,6 +130,39 @@ describe('permission wrappers', () => {
         expect(hasCapability('manager', 'reassign_agents')).toBe(false);
         expect(hasCapability('agent', 'reassign_agents')).toBe(false);
         expect(hasCapability('candidate', 'reassign_agents')).toBe(false);
+        // RO doesn't manage agents — only the candidate side of the pipeline.
+        expect(hasCapability('ro', 'reassign_agents')).toBe(false);
+    });
+});
+
+// ── RO (Recruitment Officer) capabilities ──
+
+describe('ro capabilities', () => {
+    it('can do the candidate-pipeline operations a PA can', () => {
+        expect(hasCapability('ro', 'create_candidates')).toBe(true);
+        expect(hasCapability('ro', 'schedule_interviews')).toBe(true);
+        expect(hasCapability('ro', 'view_candidates')).toBe(true);
+        expect(hasCapability('ro', 'verify_papers')).toBe(true);
+        expect(hasCapability('ro', 'manage_milestones')).toBe(true);
+        expect(hasCapability('ro', 'activate_agent')).toBe(true);
+        expect(hasCapability('ro', 'put_on_hold')).toBe(true);
+        expect(hasCapability('ro', 'reject_candidate')).toBe(true);
+    });
+
+    it('can reassign candidates between managers (unlike PA)', () => {
+        expect(hasCapability('ro', 'reassign_candidates')).toBe(true);
+        expect(hasCapability('pa', 'reassign_candidates')).toBe(false);
+    });
+
+    it('cannot manage agents, leads, team, or admin areas', () => {
+        expect(hasCapability('ro', 'hold_agents')).toBe(false);
+        expect(hasCapability('ro', 'reassign_agents')).toBe(false);
+        expect(hasCapability('ro', 'reassign_leads')).toBe(false);
+        expect(hasCapability('ro', 'reassign_leads_globally')).toBe(false);
+        expect(hasCapability('ro', 'invite_agents')).toBe(false);
+        expect(hasCapability('ro', 'view_admin')).toBe(false);
+        expect(hasCapability('ro', 'view_team')).toBe(false);
+        expect(hasCapability('ro', 'view_leads')).toBe(false);
     });
 });
 
@@ -140,6 +173,7 @@ describe('getVisibleTabs', () => {
         expect(getVisibleTabs('admin')).toEqual(['home', 'leads', 'team', 'events', 'profile']);
         expect(getVisibleTabs('agent')).toEqual(['home', 'leads', 'events', 'profile']);
         expect(getVisibleTabs('pa')).toEqual(['home', 'pa', 'events', 'profile']);
+        expect(getVisibleTabs('ro')).toEqual(['home', 'pa', 'events', 'profile']);
         expect(getVisibleTabs('candidate')).toEqual(['home', 'roadmap', 'events', 'profile']);
     });
 
@@ -174,7 +208,7 @@ describe('getVisibleTabs', () => {
 
 describe('ROLE_TABS', () => {
     it('every role has home and profile', () => {
-        const roles: UserRole[] = ['admin', 'director', 'manager', 'agent', 'pa', 'candidate'];
+        const roles: UserRole[] = ['admin', 'director', 'manager', 'agent', 'pa', 'ro', 'candidate'];
         for (const role of roles) {
             // admin has home+profile, all others too
             if (role === 'admin') {
@@ -193,9 +227,11 @@ describe('ROLE_TABS', () => {
         expect(ROLE_TABS.manager).not.toContain('roadmap');
     });
 
-    it('only pa has pa tab', () => {
+    it('pa and ro share the pa-stack tab; non-pipeline roles do not', () => {
         expect(ROLE_TABS.pa).toContain('pa');
+        expect(ROLE_TABS.ro).toContain('pa');
         expect(ROLE_TABS.agent).not.toContain('pa');
+        expect(ROLE_TABS.candidate).not.toContain('pa');
     });
 });
 

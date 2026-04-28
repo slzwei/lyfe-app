@@ -6,7 +6,7 @@ import React from 'react';
 
 export default function CandidatesLayout() {
     const { colors } = useTheme();
-    const authorized = useRequireRole('admin', 'director', 'manager', 'pa');
+    const authorized = useRequireRole('admin', 'director', 'manager', 'pa', 'ro');
     // useGlobalSearchParams reads the current URL's params. useLocalSearchParams
     // in a layout only exposes the layout's own dynamic segments — candidateId
     // lives on the child route, so we'd get undefined there.

@@ -2745,7 +2745,7 @@ export type Database = {
             product_interest: 'life' | 'health' | 'ilp' | 'general';
             roadshow_activity_type: 'sitdown' | 'pitch' | 'case_closed' | 'check_in' | 'departure';
             stage_type: 'sourced' | 'screening' | 'assessment' | 'interview' | 'offer' | 'hired' | 'custom';
-            user_role: 'admin' | 'director' | 'manager' | 'agent' | 'pa' | 'candidate';
+            user_role: 'admin' | 'director' | 'manager' | 'agent' | 'pa' | 'candidate' | 'ro';
         };
         CompositeTypes: {
             [_ in never]: never;
@@ -2912,7 +2912,7 @@ export const Constants = {
             product_interest: ['life', 'health', 'ilp', 'general'],
             roadshow_activity_type: ['sitdown', 'pitch', 'case_closed', 'check_in', 'departure'],
             stage_type: ['sourced', 'screening', 'assessment', 'interview', 'offer', 'hired', 'custom'],
-            user_role: ['admin', 'director', 'manager', 'agent', 'pa', 'candidate'],
+            user_role: ['admin', 'director', 'manager', 'agent', 'pa', 'candidate', 'ro'],
         },
     },
 } as const;

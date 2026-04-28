@@ -12,6 +12,7 @@ import { useCandidateRealtime } from '@/hooks/useCandidateRealtime';
 import { useTypedRouter } from '@/hooks/useTypedRouter';
 import { pipelineAnalytics } from '@/lib/analytics';
 import { fetchCandidates } from '@/lib/recruitment';
+import { fetchPAManagerIds } from '@/lib/recruitment/pa-helpers';
 import {
     CANDIDATE_FILTER_GROUPS,
     candidateMatchesFilter,
@@ -104,6 +105,29 @@ export function CandidateList({ candidateRoute, isManagerView = false, embedded 
     const [isLoadingAlpha, setIsLoadingAlpha] = useState(true);
     const [errorAlpha, setErrorAlpha] = useState<string | null>(null);
 
+    // Role-derived scoping. PAs see candidates of their bound manager(s);
+    // ROs see all candidates (treated as manager-view). Other roles fall
+    // through to the caller-supplied `isManagerView`.
+    const role = user?.role;
+    const isPa = role === 'pa';
+    const isRo = role === 'ro';
+    const [paManagerScope, setPaManagerScope] = useState<string[] | null>(null);
+    const isResolvingPaScope = isPa && paManagerScope === null;
+
+    useEffect(() => {
+        if (!isPa || !user?.id) return;
+        let cancelled = false;
+        fetchPAManagerIds(user.id).then((ids) => {
+            if (!cancelled) setPaManagerScope(ids);
+        });
+        return () => {
+            cancelled = true;
+        };
+    }, [isPa, user?.id]);
+
+    const effectiveIsManagerView = isRo ? true : isManagerView;
+    const effectiveManagerScope = isPa ? (paManagerScope ?? []) : undefined;
+
     const sortStorageKey = `${SORT_STORAGE_KEY}:${user?.role ?? 'default'}`;
 
     useEffect(() => {
@@ -136,12 +160,21 @@ export function CandidateList({ candidateRoute, isManagerView = false, embedded 
 
     const loadAlpha = useCallback(async () => {
         if (!user?.id) return;
+        // Don't fire while PA scope is still resolving — fetchCandidates would
+        // momentarily see an empty scope and flash a "no candidates" state.
+        if (isResolvingPaScope) return;
         setErrorAlpha(null);
-        const { data, error: fetchError } = await fetchCandidates(user.id, isManagerView);
+        const { data, error: fetchError } = await fetchCandidates(
+            user.id,
+            effectiveIsManagerView,
+            undefined,
+            undefined,
+            effectiveManagerScope,
+        );
         if (fetchError) setErrorAlpha(fetchError);
         else setCandidatesAlpha(data);
         setIsLoadingAlpha(false);
-    }, [user?.id, isManagerView]);
+    }, [user?.id, effectiveIsManagerView, effectiveManagerScope, isResolvingPaScope]);
 
     useFocusEffect(
         useCallback(() => {
@@ -162,8 +195,9 @@ export function CandidateList({ candidateRoute, isManagerView = false, embedded 
         error: pipelineError,
         refresh: refreshPipeline,
     } = useCandidatePipeline({
-        isManagerView,
-        enabled: sortMode === 'urgency',
+        isManagerView: effectiveIsManagerView,
+        managerScope: effectiveManagerScope,
+        enabled: sortMode === 'urgency' && !isResolvingPaScope,
     });
 
     const candidates: RecruitmentCandidate[] =

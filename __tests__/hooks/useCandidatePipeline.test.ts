@@ -80,7 +80,24 @@ describe('useCandidatePipeline', () => {
         expect(result.current.rows).toHaveLength(2);
         expect(result.current.counts['at-risk']).toBe(1);
         expect(result.current.error).toBeNull();
-        expect(mockFetchSnapshot).toHaveBeenCalledWith('user-1', true);
+        expect(mockFetchSnapshot).toHaveBeenCalledWith('user-1', true, expect.any(Date), undefined);
+    });
+
+    it('forwards managerScope to fetchPipelineSnapshot for the PA path', async () => {
+        mockFetchSnapshot.mockResolvedValueOnce({
+            rows: [],
+            counts: { 'at-risk': 0, 'this-week': 0, ready: 0, 'on-track': 0, hidden: 0 },
+            error: null,
+        });
+        renderHook(() =>
+            useCandidatePipeline({ isManagerView: false, enabled: true, managerScope: ['mgr-a', 'mgr-b'] }),
+        );
+        await act(async () => {
+            jest.advanceTimersByTime(1);
+        });
+        await waitFor(() => {
+            expect(mockFetchSnapshot).toHaveBeenCalledWith('user-1', false, expect.any(Date), ['mgr-a', 'mgr-b']);
+        });
     });
 
     it('respects enabled=false by skipping the fetch and clearing the loading flag', async () => {
@@ -148,7 +165,7 @@ describe('useCandidatePipeline', () => {
         await waitFor(() => expect(result.current.isLoading).toBe(false));
 
         // Default isManagerView=false should be passed to the snapshot fetcher.
-        expect(mockFetchSnapshot).toHaveBeenCalledWith('user-1', false);
+        expect(mockFetchSnapshot).toHaveBeenCalledWith('user-1', false, expect.any(Date), undefined);
     });
 
     it('subscribes a realtime callback that triggers a refetch when invoked', async () => {

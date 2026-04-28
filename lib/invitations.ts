@@ -28,10 +28,11 @@ export interface MemberInvitation {
 
 /** Permission matrix: who can invite which roles */
 const INVITABLE_ROLES: Record<string, UserRole[]> = {
-    admin: ['director', 'manager', 'agent', 'pa', 'candidate'],
-    director: ['manager', 'agent', 'pa', 'candidate'],
+    admin: ['director', 'manager', 'agent', 'pa', 'ro', 'candidate'],
+    director: ['manager', 'agent', 'pa', 'ro', 'candidate'],
     manager: ['agent', 'pa', 'candidate'],
     pa: ['candidate'],
+    ro: ['candidate'],
 };
 
 export function getInvitableRoles(callerRole: UserRole): UserRole[] {

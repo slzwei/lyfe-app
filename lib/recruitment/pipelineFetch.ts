@@ -40,6 +40,7 @@ export async function fetchPipelineSnapshot(
     userId: string,
     isManagerView: boolean,
     now: Date = new Date(),
+    managerScope?: string[],
 ): Promise<PipelineSnapshot> {
     const emptyCounts: Record<Urgency, number> = {
         'at-risk': 0,
@@ -49,7 +50,13 @@ export async function fetchPipelineSnapshot(
         hidden: 0,
     };
 
-    const { data: candidates, error: candError } = await fetchCandidates(userId, isManagerView);
+    const { data: candidates, error: candError } = await fetchCandidates(
+        userId,
+        isManagerView,
+        undefined,
+        undefined,
+        managerScope,
+    );
     if (candError) {
         return { rows: [], counts: emptyCounts, error: candError };
     }

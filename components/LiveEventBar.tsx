@@ -36,7 +36,7 @@ export default memo(function LiveEventBar() {
     const pathname = usePathname();
     const navigation = useNavigation();
     const insets = useSafeAreaInsets();
-    const isPa = user?.role === 'pa';
+    const isPa = user?.role === 'pa' || user?.role === 'ro';
     const onHomeTab = pathname === '/' || pathname.startsWith('/home');
 
     const [allEvents, setAllEvents] = useState<AgencyEvent[]>([]);

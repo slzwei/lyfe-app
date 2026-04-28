@@ -129,6 +129,7 @@ export interface RecruitmentCandidate {
     assigned_manager_id: string;
     assigned_manager_name: string;
     created_by_id: string;
+    created_by_name: string | null;
     invite_token: string | null;
     notes: string | null;
     resume_url: string | null;

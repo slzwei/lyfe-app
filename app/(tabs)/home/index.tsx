@@ -77,6 +77,7 @@ export default function HomeScreen() {
     const role = user?.role;
     const isCandidate = role === 'candidate';
     const isPa = role === 'pa';
+    const isRo = role === 'ro';
     const isAdminRole = role === 'admin';
 
     const {
@@ -167,7 +168,7 @@ export default function HomeScreen() {
                 <HeroStatsSection
                     colors={colors}
                     isCandidate={isCandidate}
-                    isPa={isPa}
+                    isPa={isPa || isRo}
                     isManagerView={isManagerView}
                     isAdminRole={isAdminRole}
                     stats={stats}
@@ -186,14 +187,14 @@ export default function HomeScreen() {
                     onAgentsPress={isManagerView || isAdminRole ? () => router.push('/(tabs)/team') : undefined}
                 />
 
-                {/* Pipeline triage — for managers, directors, admins. Skips candidates + PAs + agents. */}
-                {(isManagerView || isAdminRole) && !isCandidate && !isPa && (
+                {/* Pipeline triage — for managers, directors, admins, ROs. Skips candidates + PAs + agents. */}
+                {(isManagerView || isAdminRole || isRo) && !isCandidate && !isPa && (
                     <HomePipelineSection
-                        isManagerView={isManagerView || isAdminRole}
+                        isManagerView={isManagerView || isAdminRole || isRo}
                         onCandidatePress={(id) =>
                             router.push(`/(tabs)/home/candidate/${id}` as Parameters<typeof router.push>[0])
                         }
-                        onSeeAll={() => router.push('/(tabs)/candidates')}
+                        onSeeAll={() => router.push(isRo ? '/(tabs)/pa' : '/(tabs)/candidates')}
                     />
                 )}
 
@@ -216,7 +217,7 @@ export default function HomeScreen() {
                     />
                 )}
 
-                {isPa && (
+                {(isPa || isRo) && (
                     <UpcomingEventsCard
                         title="My Events"
                         events={paStats.events}
@@ -227,7 +228,7 @@ export default function HomeScreen() {
                     />
                 )}
 
-                {!isCandidate && !isPa && (
+                {!isCandidate && !isPa && !isRo && (
                     <UpcomingEventsCard
                         title="My Events"
                         events={agentEvents}

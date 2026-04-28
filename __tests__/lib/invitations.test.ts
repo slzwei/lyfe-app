@@ -11,11 +11,11 @@ const mockSupabase = require('@/lib/supabase').supabase;
 
 describe('getInvitableRoles', () => {
     it('returns correct roles for admin', () => {
-        expect(getInvitableRoles('admin')).toEqual(['director', 'manager', 'agent', 'pa', 'candidate']);
+        expect(getInvitableRoles('admin')).toEqual(['director', 'manager', 'agent', 'pa', 'ro', 'candidate']);
     });
 
     it('returns correct roles for director', () => {
-        expect(getInvitableRoles('director')).toEqual(['manager', 'agent', 'pa', 'candidate']);
+        expect(getInvitableRoles('director')).toEqual(['manager', 'agent', 'pa', 'ro', 'candidate']);
     });
 
     it('returns correct roles for manager', () => {

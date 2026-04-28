@@ -19,7 +19,7 @@ interface CreatePayload {
 }
 
 const LYFE_SG_URL = Deno.env.get('LYFE_SG_URL') || 'https://lyfe.sg';
-const STAFF_ROLES = ['admin', 'director', 'manager', 'pa'];
+const STAFF_ROLES = ['admin', 'director', 'manager', 'pa', 'ro'];
 
 function generateToken(): string {
     const bytes = new Uint8Array(32);

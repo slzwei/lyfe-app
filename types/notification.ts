@@ -70,6 +70,7 @@ export const ROLE_NOTIFICATION_TYPES: Record<UserRole, NotificationType[]> = {
     ],
     agent: ['new_lead', 'lead_reassigned', 'event_reminder', 'roadshow_summary', 'agency_announcement'],
     pa: ['candidate_update', 'candidate_assigned', 'interview_reminder', 'event_reminder', 'agency_announcement'],
+    ro: ['candidate_update', 'candidate_assigned', 'interview_reminder', 'event_reminder', 'agency_announcement'],
     manager: [
         'roadshow_pledge',
         'lead_milestone',

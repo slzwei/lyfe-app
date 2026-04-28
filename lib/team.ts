@@ -11,7 +11,7 @@ import { supabase } from './supabase';
 export interface TeamMember {
     id: string;
     name: string;
-    role: 'manager' | 'agent' | 'director' | 'admin' | 'pa' | 'candidate';
+    role: 'manager' | 'agent' | 'director' | 'admin' | 'pa' | 'ro' | 'candidate';
     phone: string | null;
     email: string | null;
     avatarUrl: string | null;

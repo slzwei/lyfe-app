@@ -246,8 +246,8 @@ export default function ProfileScreen() {
                     <ViewModeCard colors={colors} viewMode={viewMode} onViewModeChange={handleViewModeChange} />
                 )}
 
-                {/* Personality Quizzes — non-candidate, non-PA roles */}
-                {user?.id && user?.role !== 'candidate' && user?.role !== 'pa' && (
+                {/* Personality Quizzes — non-candidate, non-PA, non-RO roles */}
+                {user?.id && user?.role !== 'candidate' && user?.role !== 'pa' && user?.role !== 'ro' && (
                     <PersonalityQuizzesCard colors={colors} userId={user.id} />
                 )}
 

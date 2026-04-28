@@ -61,7 +61,7 @@ export default function AddCandidateScreen() {
     const [showManagerPicker, setShowManagerPicker] = useState(false);
 
     const userRole = user?.role;
-    const isPA = userRole === 'pa';
+    const isPA = userRole === 'pa' || userRole === 'ro';
 
     React.useEffect(() => {
         if (user?.id && userRole) {

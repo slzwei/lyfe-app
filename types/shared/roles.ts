@@ -8,7 +8,7 @@ export type { UserRole, LifecycleStage } from './database';
 
 // ── Staff roles (for auth guards in both apps) ──
 
-export const STAFF_ROLES: UserRole[] = ['pa', 'manager', 'director', 'admin'];
+export const STAFF_ROLES: UserRole[] = ['pa', 'ro', 'manager', 'director', 'admin'];
 
 // ── Capability-Based Permission System ──
 
@@ -94,6 +94,17 @@ export const ROLE_CAPABILITIES: Record<UserRole, Capability[]> = {
         'put_on_hold',
         'reject_candidate',
         'reassign_agents',
+    ],
+    ro: [
+        'create_candidates',
+        'schedule_interviews',
+        'view_candidates',
+        'verify_papers',
+        'manage_milestones',
+        'activate_agent',
+        'put_on_hold',
+        'reject_candidate',
+        'reassign_candidates',
     ],
     candidate: [],
 };
