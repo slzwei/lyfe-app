@@ -44,7 +44,14 @@ const PAGE_SPRING = { damping: 22, stiffness: 250, useNativeDriver: true } as co
 
 export default function LoginScreen() {
     const { colors } = useTheme();
-    const { checkPhoneEligible, signInWithOtp, verifyOtp, authenticateWithBiometrics, biometricsEnabled } = useAuth();
+    const {
+        checkPhoneEligible,
+        signInWithOtp,
+        verifyOtp,
+        authenticateWithBiometrics,
+        biometricsEnabled,
+        pendingBiometricSession,
+    } = useAuth();
 
     const [step, setStep] = useState<'phone' | 'otp'>('phone');
     const [phoneRevealed, setPhoneRevealed] = useState(false);
@@ -93,7 +100,12 @@ export default function LoginScreen() {
         }, 1000);
     };
 
-    const showBiometricButton = biometricsEnabled && biometryType !== 'none' && hasStoredToken;
+    // Show biometric button when we either have a stored token (post-signOut flow)
+    // or there's a live session waiting behind the bio gate (reload flow).
+    // authenticateWithBiometrics() handles both cases — falls back to existing
+    // session in storage when no stored token is present.
+    const showBiometricButton =
+        biometricsEnabled && biometryType !== 'none' && (hasStoredToken || pendingBiometricSession);
     const { label: biometricLabel, icon: biometricIcon } = biometricMeta(biometryType);
 
     /* ── Accordion: ghost button → phone input ── */

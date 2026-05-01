@@ -13,11 +13,29 @@ module.exports = {
     expo: {
         name: 'Lyfe',
         slug: 'lyfe-app',
-        version: '1.3.0',
+        version: '1.3.1',
+        // Lock supported platforms to mobile so `expo export --platform all`
+        // (which is what eas update runs by default) doesn't try to bundle for
+        // web. react-native-pdf has no web fallback and breaks the web bundle.
+        // lyfe-sg is the actual web product — this app is mobile-only.
+        platforms: ['ios', 'android'],
         orientation: 'portrait',
         icon: './assets/images/icon.png',
         scheme: 'lyfeapp',
         userInterfaceStyle: 'automatic',
+        updates: {
+            url: 'https://u.expo.dev/e8f2f192-e77b-4673-a00c-4e63478d56d2',
+            // Native layer checks for updates on cold start; pairs with the
+            // foreground silent-fetch in hooks/useOtaUpdates.ts. fallback=0
+            // means we never block launch on an update — always boot the
+            // cached bundle immediately and apply new ones on next cold start.
+            checkAutomatically: 'ON_LOAD',
+            fallbackToCacheTimeout: 0,
+        },
+        // Bare workflow: runtime version policies aren't supported, so this
+        // must be bumped manually whenever native code or native deps change.
+        // Keep in sync with `version` above for releases that ship a new binary.
+        runtimeVersion: '1.3.1',
         splash: {
             image: './assets/images/splash-icon.png',
             resizeMode: 'contain',
@@ -26,7 +44,7 @@ module.exports = {
         ios: {
             supportsTablet: false,
             bundleIdentifier: 'com.shawnlee.lyfe',
-            appleTeamId: 'Y953XF3N6C',
+            appleTeamId: '35L9ZSS9F9',
             infoPlist: {
                 NSFaceIDUsageDescription: 'Use Face ID to sign in to Lyfe quickly and securely.',
                 NSCameraUsageDescription:
@@ -66,11 +84,6 @@ module.exports = {
                     apiKey: process.env.GOOGLE_MAPS_ANDROID_API_KEY,
                 },
             },
-        },
-        web: {
-            bundler: 'metro',
-            output: 'static',
-            favicon: './assets/images/favicon.png',
         },
         plugins: [
             'expo-router',

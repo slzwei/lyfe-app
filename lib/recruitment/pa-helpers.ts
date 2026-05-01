@@ -19,13 +19,14 @@ export async function fetchPAManagers(paId: string): Promise<User[]> {
     return ((data || []) as { manager: User | null }[]).map((r) => r.manager).filter(Boolean) as User[];
 }
 
-/** Count candidates across a set of manager IDs */
+/** Count active candidates across a set of manager IDs */
 export async function fetchPACandidateCount(managerIds: string[]): Promise<number> {
     if (managerIds.length === 0) return 0;
     const { count } = await supabase
         .from('candidates')
         .select('id', { count: 'exact', head: true })
-        .in('assigned_manager_id', managerIds);
+        .in('assigned_manager_id', managerIds)
+        .in('status', ['applied', 'interview_scheduled', 'interviewed', 'approved', 'exam_prep']);
     return count ?? 0;
 }
 

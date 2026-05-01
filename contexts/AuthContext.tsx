@@ -9,6 +9,7 @@ import {
 } from '@/lib/biometrics';
 import { clearSentryUser, setSentryUser } from '@/lib/sentry';
 import { supabase } from '@/lib/supabase';
+import { OTA_RELOAD_FLAG_KEY } from '@/hooks/useOtaUpdates';
 import type { User } from '@/types/database';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import type { Session } from '@supabase/supabase-js';
@@ -300,6 +301,31 @@ function ProfileProvider({
     return <ProfileContext.Provider value={profileValue}>{children}</ProfileContext.Provider>;
 }
 
+// Supabase's auto-refresh can fail silently when the network is mid-reconnect
+// (e.g., right after backgrounding→foregrounding or an OTA reload), leaving
+// in-memory session null even though the refresh token in storage is valid.
+// Retry an explicit refresh with backoff before declaring the user logged out.
+// Bail early on auth errors — refresh token genuinely invalid means really
+// signed out (revoked elsewhere, expired) and no amount of retrying will help.
+async function restoreSessionWithRetry(): Promise<Session | null> {
+    const initial = await supabase.auth.getSession();
+    if (initial.data.session) return initial.data.session;
+
+    // refreshSession throws on network failure but returns cleanly on auth-level
+    // outcomes (success, invalid token, no token). Only retry on thrown errors.
+    const delays = [0, 1000, 2500];
+    for (const delay of delays) {
+        if (delay > 0) await new Promise((r) => setTimeout(r, delay));
+        try {
+            const { data } = await supabase.auth.refreshSession();
+            return data?.session ?? null;
+        } catch {
+            // network error — keep retrying
+        }
+    }
+    return null;
+}
+
 export function AuthProvider({ children }: { children: React.ReactNode }) {
     const [authState, setAuthState] = useState<AuthState>({
         session: null,
@@ -346,14 +372,21 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     useEffect(() => {
         const initAuth = async () => {
             try {
-                const {
-                    data: { session },
-                } = await supabase.auth.getSession();
+                // If this init follows an OTA-triggered reload, the user already
+                // passed any auth gate in the prior session — skip the biometric
+                // gate so the reload is transparent. Flag is one-shot.
+                const otaReloadFlag = await AsyncStorage.getItem(OTA_RELOAD_FLAG_KEY);
+                const skipBioGate = !!otaReloadFlag;
+                if (skipBioGate) {
+                    await AsyncStorage.removeItem(OTA_RELOAD_FLAG_KEY);
+                }
+
+                const session = await restoreSessionWithRetry();
 
                 const bioEnabled = await isBiometricsEnabled();
                 const bioAvailable = bioEnabled && (await isBiometricsAvailable());
 
-                if (bioEnabled && bioAvailable) {
+                if (bioEnabled && bioAvailable && !skipBioGate) {
                     // Biometric gate: show prompt whether we have a session or a stored refresh token
                     const hasStoredToken = !!(await getBiometricRefreshToken());
                     if (session?.user || hasStoredToken) {

@@ -21,6 +21,7 @@ import { NotificationProvider } from '@/contexts/NotificationContext';
 import { ViewModeProvider } from '@/contexts/ViewModeContext';
 import { useLastSeen } from '@/hooks/useLastSeen';
 import { useNotificationDeepLink } from '@/hooks/useNotificationDeepLink';
+import { useOtaUpdates } from '@/hooks/useOtaUpdates';
 import { initSentry, navigationIntegration, Sentry } from '@/lib/sentry';
 import { KeyboardProvider } from 'react-native-keyboard-controller';
 
@@ -125,6 +126,11 @@ function RootLayoutContent() {
                 screenOptions={{
                     headerShown: false,
                     contentStyle: { backgroundColor: colors.background },
+                    // Disable slide between auth / tabs / onboarding — these are
+                    // app-level state changes, not navigation pushes. Instant
+                    // transitions feel right and avoid the "login flash" on
+                    // OTA reloads when the redirect from / to /(tabs)/home runs.
+                    animation: 'none',
                 }}
             >
                 <Stack.Screen name="(auth)" />
@@ -137,6 +143,8 @@ function RootLayoutContent() {
 
 function RootLayout() {
     const ref = useNavigationContainerRef();
+
+    useOtaUpdates();
 
     useEffect(() => {
         if (ref?.current) {

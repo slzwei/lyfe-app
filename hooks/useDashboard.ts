@@ -104,7 +104,10 @@ export function useDashboard({ userId, role, isManagerView, isAdminRole }: UseDa
             if (isRo) {
                 // ROs see all candidates across the agency — global counts.
                 const [{ count: total }, { count: interviews }, eventsResult] = await Promise.all([
-                    supabase.from('candidates').select('id', { count: 'exact', head: true }),
+                    supabase
+                        .from('candidates')
+                        .select('id', { count: 'exact', head: true })
+                        .in('status', ['applied', 'interview_scheduled', 'interviewed', 'approved', 'exam_prep']),
                     supabase
                         .from('candidates')
                         .select('id', { count: 'exact', head: true })

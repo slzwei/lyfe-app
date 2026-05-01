@@ -185,6 +185,14 @@ export default function HomeScreen() {
                         isManagerView || isAdminRole ? () => router.push('/(tabs)/candidates') : undefined
                     }
                     onAgentsPress={isManagerView || isAdminRole ? () => router.push('/(tabs)/team') : undefined}
+                    onRoadmapPress={isCandidate ? () => router.push('/(tabs)/roadmap') : undefined}
+                    onPaCandidatesPress={isPa || isRo ? () => router.push('/(tabs)/pa') : undefined}
+                    onPaEventsPress={isPa || isRo ? () => router.push('/(tabs)/events') : undefined}
+                    onLeadsPress={
+                        !isCandidate && !isPa && !isRo && !isManagerView && !isAdminRole
+                            ? () => router.push('/(tabs)/leads')
+                            : undefined
+                    }
                 />
 
                 {/* Pipeline triage — for managers, directors, admins, ROs. Skips candidates + PAs + agents. */}
