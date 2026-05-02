@@ -203,14 +203,27 @@ BEGIN
     -- -----------------------------------------------------------------------
     -- 4. Candidates (created by manager, assigned to manager)
     -- -----------------------------------------------------------------------
-    v_cand1_id := gen_random_uuid();
-    v_cand2_id := gen_random_uuid();
+    -- Idempotent: prefer the row that already exists (matched by email,
+    -- which has a partial unique index), otherwise insert. Either way
+    -- v_cand1_id / v_cand2_id end up matching the canonical DB row so
+    -- downstream interviews INSERT succeeds.
+    SELECT id INTO v_cand1_id FROM public.candidates WHERE email = 'emily.chen@test.com';
+    IF v_cand1_id IS NULL THEN
+        v_cand1_id := gen_random_uuid();
+        INSERT INTO public.candidates (id, name, phone, email, status, assigned_manager_id, created_by_id)
+        VALUES (v_cand1_id, 'Emily Chen', '6594444444', 'emily.chen@test.com', 'interview_scheduled', v_manager_id, v_manager_id);
+    ELSE
+        UPDATE public.candidates SET name = 'Emily Chen', phone = '6594444444', assigned_manager_id = v_manager_id WHERE id = v_cand1_id;
+    END IF;
 
-    INSERT INTO public.candidates (id, name, phone, email, status, assigned_manager_id, created_by_id)
-    VALUES
-        (v_cand1_id, 'Emily Chen', '6594444444', 'emily.chen@test.com', 'interview_scheduled', v_manager_id, v_manager_id),
-        (v_cand2_id, 'Kevin Lee', '6595555555', 'kevin.lee@test.com', 'applied', v_manager_id, v_pa_id)
-    ON CONFLICT DO NOTHING;
+    SELECT id INTO v_cand2_id FROM public.candidates WHERE email = 'kevin.lee@test.com';
+    IF v_cand2_id IS NULL THEN
+        v_cand2_id := gen_random_uuid();
+        INSERT INTO public.candidates (id, name, phone, email, status, assigned_manager_id, created_by_id)
+        VALUES (v_cand2_id, 'Kevin Lee', '6595555555', 'kevin.lee@test.com', 'applied', v_manager_id, v_pa_id);
+    ELSE
+        UPDATE public.candidates SET name = 'Kevin Lee', phone = '6595555555', assigned_manager_id = v_manager_id WHERE id = v_cand2_id;
+    END IF;
 
     -- Interview for candidate 1
     INSERT INTO public.interviews (candidate_id, manager_id, scheduled_by_id, datetime, type, location, status)
