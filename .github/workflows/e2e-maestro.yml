@@ -25,6 +25,9 @@ jobs:
       # so Maestro doesn't have to drive the camera / GPS / Rekognition.
       EXPO_PUBLIC_E2E_FACE_BYPASS: '1'
       EXPO_PUBLIC_E2E_LOCATION_BYPASS: '1'
+      # Sentry source-map upload runs as an Xcode build phase but the runner has
+      # no SENTRY_AUTH_TOKEN. Disable it (matches eas.json's development profile).
+      SENTRY_DISABLE_AUTO_UPLOAD: 'true'
 
       # --- Bootstrap script env (admin API + psql connection) ---
       STAGING_SUPABASE_URL: ${{ secrets.STAGING_SUPABASE_URL }}
