@@ -88,13 +88,20 @@ jobs:
         run: node scripts/e2e-bootstrap.mjs
 
       - name: Boot iOS simulator
+        # macos-15 image ships iPhone 16 / 17 / Air / SE — no 15. Match any
+        # base iPhone <number> + space + "(" so we exclude Pro/Pro Max/Plus
+        # variants. Falls back to the first available iPhone if no base model.
         run: |
           xcrun simctl list devices available
-          DEVICE_ID=$(xcrun simctl list devices available | grep "iPhone 15 (" | head -1 | grep -oE '[0-9A-F-]{36}')
+          DEVICE_ID=$(xcrun simctl list devices available | grep -E "^\s+iPhone (1[5-9]|[2-9][0-9]) \(" | head -1 | grep -oE '[0-9A-F-]{36}')
           if [ -z "$DEVICE_ID" ]; then
-            echo "No iPhone 15 simulator found"
+            DEVICE_ID=$(xcrun simctl list devices available | grep -E "^\s+iPhone " | head -1 | grep -oE '[0-9A-F-]{36}')
+          fi
+          if [ -z "$DEVICE_ID" ]; then
+            echo "No iPhone simulator found on this runner image"
             exit 1
           fi
+          echo "Using DEVICE_ID=$DEVICE_ID"
           echo "DEVICE_ID=$DEVICE_ID" >> "$GITHUB_ENV"
           xcrun simctl boot "$DEVICE_ID"
           xcrun simctl bootstatus "$DEVICE_ID" -b
