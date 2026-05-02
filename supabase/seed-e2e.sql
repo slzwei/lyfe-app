@@ -135,8 +135,10 @@ BEGIN
     -- Consents + email_verified ARE pre-set so the auth gate doesn't first
     -- detour through Consent / EmailVerification (those require real email
     -- infrastructure to drive end-to-end and have their own dedicated flows).
+    -- full_name is NOT NULL — use empty string so ProfileSetup's TextInput
+    -- starts blank and the flow's inputText writes the real value cleanly.
     UPDATE public.users SET
-        full_name = NULL,
+        full_name = '',
         role = 'candidate',
         onboarding_complete = false,
         is_active = true,
