@@ -45,6 +45,13 @@ input:
     id: "login-otp-input"
 - inputText: "555555"
 
+# iOS may show a notifications permission prompt after auth completes —
+# AuthContext.fetchOrCreateUser calls Notifications.requestPermissionsAsync.
+# Tap Allow optionally so the prompt doesn't block the home wait below.
+- tapOn:
+    text: "Allow"
+    optional: true
+
 # Land on dashboard.
 - extendedWaitUntil:
     visible:
