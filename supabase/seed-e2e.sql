@@ -36,14 +36,16 @@ DECLARE
     v_cand1_id          UUID;
     v_cand2_id          UUID;
 BEGIN
-    -- Look up auth user IDs by phone
-    SELECT id INTO v_admin_id    FROM auth.users WHERE phone = '+6580000001';
-    SELECT id INTO v_director_id FROM auth.users WHERE phone = '+6580000002';
-    SELECT id INTO v_manager_id  FROM auth.users WHERE phone = '+6580000003';
-    SELECT id INTO v_agent_id    FROM auth.users WHERE phone = '+6580000004';
-    SELECT id INTO v_pa_id       FROM auth.users WHERE phone = '+6580000005';
-    SELECT id INTO v_candidate_id FROM auth.users WHERE phone = '+6580000006';
-    SELECT id INTO v_e2e_candidate_id FROM auth.users WHERE phone = '+6580000007';
+    -- Look up auth user IDs by phone. Match either format ('+6580000001' or
+    -- '6580000001') since Supabase stores OTP-created users with the '+' but
+    -- admin-API-created users without it. REPLACE makes the lookup agnostic.
+    SELECT id INTO v_admin_id         FROM auth.users WHERE REPLACE(phone, '+', '') = '6580000001';
+    SELECT id INTO v_director_id      FROM auth.users WHERE REPLACE(phone, '+', '') = '6580000002';
+    SELECT id INTO v_manager_id       FROM auth.users WHERE REPLACE(phone, '+', '') = '6580000003';
+    SELECT id INTO v_agent_id         FROM auth.users WHERE REPLACE(phone, '+', '') = '6580000004';
+    SELECT id INTO v_pa_id            FROM auth.users WHERE REPLACE(phone, '+', '') = '6580000005';
+    SELECT id INTO v_candidate_id     FROM auth.users WHERE REPLACE(phone, '+', '') = '6580000006';
+    SELECT id INTO v_e2e_candidate_id FROM auth.users WHERE REPLACE(phone, '+', '') = '6580000007';
 
     -- Abort if any mock user hasn't logged in yet
     IF v_admin_id IS NULL THEN RAISE EXCEPTION 'Admin user (+6580000001) not found. Log in first.'; END IF;
