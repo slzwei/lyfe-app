@@ -62,9 +62,9 @@ appId: com.shawnlee.lyfe
     id: "face-capture-e2e-bypass"
 - waitForAnimationToEnd
 
-# Tap-through the success overlay back to event detail.
+# Tap-through the success overlay ("Let's go" button) back to event detail.
 - tapOn:
-    text: "Done"
+    id: "face-capture-success-dismiss"
 - waitForAnimationToEnd
 
 # Final assertion — the post-check-in pledge rings card is now visible.

@@ -120,6 +120,7 @@ function CheckedInOverlay({ onDismiss }: { onDismiss: () => void }) {
                 </Text>
                 <Text style={styles.protoSub}>You're on the booth. Go get them.</Text>
                 <Pressable
+                    testID="face-capture-success-dismiss"
                     onPress={onDismiss}
                     style={({ pressed }) => [
                         styles.protoCta,
@@ -495,6 +496,52 @@ export function FaceCaptureFlow({ mode, onPhotoCaptured, onDismiss, showDebug = 
     }, []);
 
     // ── Render ───────────────────────────────────────────
+
+    const e2eBypassEnabledEarly = process.env.EXPO_PUBLIC_E2E_FACE_BYPASS === '1';
+
+    // E2E test render path — iOS simulators have no camera, so the main
+    // render's <Camera /> would error and the overlays nested inside it
+    // would never display. This dedicated branch shows the bypass button
+    // and the same success/fail overlays the real flow uses.
+    if (e2eBypassEnabledEarly && !device) {
+        return (
+            <View style={{ flex: 1, backgroundColor: '#000' }}>
+                <View
+                    pointerEvents="none"
+                    style={[StyleSheet.absoluteFillObject, { backgroundColor: 'rgba(0,0,0,0.7)' }]}
+                />
+                {!showResult ? (
+                    <Pressable
+                        testID="face-capture-e2e-bypass"
+                        onPress={() => {
+                            straightPhotoRef.current = 'e2e-bypass.jpg';
+                            processPhoto();
+                        }}
+                        style={{
+                            position: 'absolute',
+                            top: insets.top + 80,
+                            alignSelf: 'center',
+                            backgroundColor: '#FFFFFF',
+                            paddingHorizontal: 20,
+                            paddingVertical: 12,
+                            borderRadius: 10,
+                        }}
+                    >
+                        <Text style={{ color: '#000', fontSize: 14, fontWeight: '600' }}>Skip face check (E2E)</Text>
+                    </Pressable>
+                ) : null}
+                {showResult === 'pass' && <CheckedInOverlay onDismiss={handleDismissResult} />}
+                {showResult === 'fail' && (
+                    <FailedOverlay
+                        onDismiss={handleDismissResult}
+                        onRetry={handleRetry}
+                        title={mode === 'register' ? 'Registration Failed' : 'Verification Failed'}
+                        subtitle={failMessage ?? undefined}
+                    />
+                )}
+            </View>
+        );
+    }
 
     if (!device || !hasPermission) {
         return (
