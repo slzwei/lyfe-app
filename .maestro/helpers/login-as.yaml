@@ -36,13 +36,15 @@ input:
 - tapOn:
     id: "login-send-otp-button"
 
-# OTP entry.
+# OTP entry. The actual TextInput is hidden (style: hiddenOtpInput) — the
+# visible affordance is the wrapping TouchableOpacity with
+# accessibilityLabel="OTP input" and a row of digit boxes underneath.
+# Wait for the page heading, then tap the accessibility label to focus
+# the hidden input, then type.
 - extendedWaitUntil:
-    visible:
-      id: "login-otp-input"
+    visible: "Verify your number"
     timeout: 15000
-- tapOn:
-    id: "login-otp-input"
+- tapOn: "OTP input"
 - inputText: "555555"
 
 # iOS may show a notifications permission prompt after auth completes —
