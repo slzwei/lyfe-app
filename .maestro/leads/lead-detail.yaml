@@ -1,42 +1,48 @@
-# Leads: Open lead detail, add note, change status
+# Leads: Open first lead, add note, change status — full assertions.
 appId: com.shawnlee.lyfe
 ---
+
 - runFlow:
     file: ../helpers/login-as.yaml
     env:
       phone: "80000003"
 
-# Navigate to Leads tab (5-tab manager: 30%)
 - tapOn:
-    point: "30%,97%"
-- waitForAnimationToEnd
+    id: "tab-leads"
 - waitForAnimationToEnd
 
-# Tap first lead card
+- extendedWaitUntil:
+    visible:
+      id: "leads-list"
+    timeout: 10000
 - tapOn:
-    point: "50%,30%"
+    id: ".*lead-card-.*"
 - waitForAnimationToEnd
 
-# Add a note
+- assertVisible:
+    id: "lead-status-badge"
+
+# Add a note.
 - tapOn:
     id: "lead-note-action"
-    optional: true
 - waitForAnimationToEnd
 - tapOn:
     id: "lead-note-input-field"
-    optional: true
-- inputText: "E2E test note"
+- inputText: "Lead detail note"
 - tapOn:
     id: "lead-note-input-save"
-    optional: true
 - waitForAnimationToEnd
+- extendedWaitUntil:
+    visible: "Lead detail note"
+    timeout: 5000
 
-# Change status
+# Status → contacted.
 - tapOn:
     id: "lead-status-action"
-    optional: true
 - waitForAnimationToEnd
 - tapOn:
     id: "status-option-contacted"
-    optional: true
 - waitForAnimationToEnd
+- extendedWaitUntil:
+    visible: "Contacted"
+    timeout: 5000

@@ -523,6 +523,12 @@ export function FaceCaptureFlow({ mode, onPhotoCaptured, onDismiss, showDebug = 
 
     const ovalBorder = livenessPassed ? PROTO_COLORS.sage : PROTO_COLORS.terra;
 
+    // E2E bypass — when the build was produced with the env flag set, render
+    // a single button that calls onPhotoCaptured with a dummy path. verifyFace
+    // / registerFace short-circuit on the same flag, so the dummy path is
+    // never read. Camera + Rekognition can't be driven by Maestro otherwise.
+    const e2eBypassEnabled = process.env.EXPO_PUBLIC_E2E_FACE_BYPASS === '1';
+
     return (
         <View style={{ flex: 1 }}>
             {/* Backdrop — tap to cancel */}
@@ -535,6 +541,28 @@ export function FaceCaptureFlow({ mode, onPhotoCaptured, onDismiss, showDebug = 
                 pointerEvents="none"
                 style={[StyleSheet.absoluteFillObject, { backgroundColor: 'rgba(0,0,0,0.7)' }]}
             />
+
+            {e2eBypassEnabled && !processing && !showResult ? (
+                <Pressable
+                    testID="face-capture-e2e-bypass"
+                    onPress={() => {
+                        straightPhotoRef.current = 'e2e-bypass.jpg';
+                        processPhoto();
+                    }}
+                    style={{
+                        position: 'absolute',
+                        top: insets.top + 12,
+                        alignSelf: 'center',
+                        backgroundColor: '#FFFFFF',
+                        paddingHorizontal: 16,
+                        paddingVertical: 8,
+                        borderRadius: 8,
+                        zIndex: 9999,
+                    }}
+                >
+                    <Text style={{ color: '#000', fontSize: 12, fontWeight: '600' }}>Skip face check (E2E)</Text>
+                </Pressable>
+            ) : null}
 
             {/* Bottom sheet shell — stays mounted through processing + result so
                 the Camera never remounts mid-flow. Overlays (Processing / Pass /

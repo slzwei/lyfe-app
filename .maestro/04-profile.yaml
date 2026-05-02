@@ -1,34 +1,36 @@
-# Flow: Profile screen — verify elements and sign out
+# Flow: Profile tab renders, sign-out returns to login.
 appId: com.shawnlee.lyfe
 
 ---
 
-- runFlow: 01-login.yaml
+- runFlow:
+    file: helpers/login-as.yaml
+    env:
+      phone: "80000003"
 
-# --- Navigate to Profile tab (rightmost tab ~90% x) ---
 - tapOn:
-    point: "90%,97%"
+    id: "tab-profile"
 - waitForAnimationToEnd
 
-# --- Verify profile elements ---
 - assertVisible:
     id: "profile-user-hero"
-    optional: true
 
-# --- Sign Out ---
+# Scroll to sign-out and tap it.
 - scrollUntilVisible:
     element:
       id: "profile-sign-out-button"
     direction: DOWN
-
+    timeout: 5000
 - tapOn:
     id: "profile-sign-out-button"
 - waitForAnimationToEnd
 
-- tapOn: "Confirm sign out"
+# Confirm via the modal's testID — accessibilityLabel-only was brittle.
+- tapOn:
+    id: "sign-out-modal-confirm"
 - waitForAnimationToEnd
 
-# Should return to login screen
+# Land back on login.
 - extendedWaitUntil:
     visible:
       id: "login-phone-input"

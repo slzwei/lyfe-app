@@ -24,6 +24,7 @@ export default function SignOutModal({ visible, colors, onCancel, onConfirm }: S
                     </Text>
                     <View style={styles.actions}>
                         <TouchableOpacity
+                            testID="sign-out-modal-cancel"
                             style={[styles.btn, { backgroundColor: colors.surfaceSecondary }]}
                             onPress={onCancel}
                             accessibilityRole="button"
@@ -32,6 +33,7 @@ export default function SignOutModal({ visible, colors, onCancel, onConfirm }: S
                             <Text style={[styles.btnText, { color: colors.textPrimary }]}>Cancel</Text>
                         </TouchableOpacity>
                         <TouchableOpacity
+                            testID="sign-out-modal-confirm"
                             style={[styles.btn, { backgroundColor: colors.danger }]}
                             onPress={onConfirm}
                             accessibilityRole="button"

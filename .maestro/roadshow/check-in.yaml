@@ -1,0 +1,74 @@
+# Roadshow: Agent check-in happy-path.
+#
+# Drives: events tab → live roadshow event → check-in CTA → pledge sheet →
+# face capture (E2E bypass button) → pledge rings card visible after success.
+#
+# Requires: e2e-bootstrap.mjs has run, which:
+#   - Creates the agent (+6580000004) with face_registered_at set.
+#   - Inserts a live roadshow event titled "E2E Live Roadshow" with the agent
+#     listed as an attendee + a roadshow_configs row keyed to it.
+#
+# Bypasses: GPS proximity (EXPO_PUBLIC_E2E_LOCATION_BYPASS=1) + Rekognition
+# face verify (EXPO_PUBLIC_E2E_FACE_BYPASS=1) — both via lib-level env guards.
+appId: com.shawnlee.lyfe
+
+---
+
+- runFlow:
+    file: ../helpers/login-as.yaml
+    env:
+      phone: "80000004"
+
+# Open Events tab and navigate into the live roadshow.
+- tapOn:
+    id: "tab-events"
+- waitForAnimationToEnd
+
+- extendedWaitUntil:
+    visible:
+      id: "events-list"
+    timeout: 10000
+- tapOn: "E2E Live Roadshow"
+- waitForAnimationToEnd
+
+# Detail loads — Check-in CTA should be visible (agent has not yet checked in).
+- extendedWaitUntil:
+    visible:
+      id: "roadshow-checkin-cta"
+    timeout: 10000
+
+# Open pledge sheet.
+- tapOn:
+    id: "roadshow-checkin-cta"
+- waitForAnimationToEnd
+
+- extendedWaitUntil:
+    visible:
+      id: "pledge-sheet-confirm"
+    timeout: 5000
+
+# Confirm pledge → fires GPS gate (bypassed) → opens face capture overlay.
+- tapOn:
+    id: "pledge-sheet-confirm"
+- waitForAnimationToEnd
+
+# E2E bypass button on face overlay → triggers verifyFace (bypassed) → writes
+# the attendance row → success overlay.
+- extendedWaitUntil:
+    visible:
+      id: "face-capture-e2e-bypass"
+    timeout: 10000
+- tapOn:
+    id: "face-capture-e2e-bypass"
+- waitForAnimationToEnd
+
+# Tap-through the success overlay back to event detail.
+- tapOn:
+    text: "Done"
+- waitForAnimationToEnd
+
+# Final assertion — the post-check-in pledge rings card is now visible.
+- extendedWaitUntil:
+    visible:
+      id: "roadshow-pledge-card"
+    timeout: 10000

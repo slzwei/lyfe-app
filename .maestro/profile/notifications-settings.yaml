@@ -1,4 +1,4 @@
-# Flow: Navigate to notification preferences and toggle
+# Profile: Navigate to notification preferences and verify the screen renders.
 appId: com.shawnlee.lyfe
 ---
 
@@ -7,14 +7,12 @@ appId: com.shawnlee.lyfe
     env:
       phone: "80000003"
 
-# Navigate to Profile
 - runFlow:
     file: ../helpers/navigate-to-tab.yaml
     env:
       tab: "profile"
 - waitForAnimationToEnd
 
-# Tap Notifications setting
 - scrollUntilVisible:
     element:
       text: "Notifications"
@@ -24,19 +22,9 @@ appId: com.shawnlee.lyfe
     text: "Notifications"
 - waitForAnimationToEnd
 
-# Verify notification preferences screen
 - assertVisible: "Push Notifications"
-
-# Verify toggle list renders
 - assertVisible: "PUSH NOTIFICATION PREFERENCES"
 
-# Toggle a notification type (first available switch)
-- tapOn:
-    text: "New Lead"
-    optional: true
-- waitForAnimationToEnd
-
-# Verify device settings link exists
 - scrollUntilVisible:
     element:
       text: "Open Device Settings"

@@ -197,6 +197,7 @@ export default function LeadsListScreen() {
 
             {/* Lead List */}
             <FlatList
+                testID="leads-list"
                 data={filteredLeads}
                 keyExtractor={(item) => item.id}
                 contentContainerStyle={styles.listContent}

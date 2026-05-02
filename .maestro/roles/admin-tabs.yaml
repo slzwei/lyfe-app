@@ -1,26 +1,27 @@
-# Roles: Verify admin sees correct tabs (Home, Leads, Team, Events, Profile)
+# Roles: Admin sees Home, Leads, Team, Events, Profile.
 appId: com.shawnlee.lyfe
 ---
+
 - runFlow:
     file: ../helpers/login-as.yaml
     env:
       phone: "80000001"
 
-# Admin has 5 tabs — verify key tabs exist by tapping and checking content
-# Team tab (50%)
-- tapOn:
-    point: "50%,97%"
-- waitForAnimationToEnd
 - assertVisible:
-    text: "Team"
-    optional: true
+    id: "tab-home"
+- assertVisible:
+    id: "tab-leads"
+- assertVisible:
+    id: "tab-team"
+- assertVisible:
+    id: "tab-events"
+- assertVisible:
+    id: "tab-profile"
 
-# Events tab (70%)
-- tapOn:
-    point: "70%,97%"
-- waitForAnimationToEnd
-
-# Leads tab (30%)
-- tapOn:
-    point: "30%,97%"
-- waitForAnimationToEnd
+# Admin should NOT see PA, candidates, or roadmap tabs.
+- assertNotVisible:
+    id: "tab-pa"
+- assertNotVisible:
+    id: "tab-candidates"
+- assertNotVisible:
+    id: "tab-roadmap"

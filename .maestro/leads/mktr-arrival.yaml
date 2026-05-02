@@ -1,0 +1,57 @@
+# Leads: MKTR-sourced lead is visible in notifications + leads list, and tap
+# navigates to the lead detail.
+#
+# What this guards:
+#   - The receive-mktr-lead edge function's downstream contract (the row shape
+#     it writes is consumable by the mobile leads list and the notifications
+#     screen). The webhook itself is covered by .github/workflows/synthetic-mktr-lead-*.yml.
+#   - The notification → lead deep-link path that staff rely on in the field.
+#
+# Requires: e2e-bootstrap.mjs has run, which inserts:
+#   - leads row {source_name='mktr', external_id='e2e-mktr-fixed-001', full_name='E2E MKTR Lead'}
+#   - notifications row {title='New MKTR Lead', user_id=manager}
+appId: com.shawnlee.lyfe
+
+---
+
+- runFlow:
+    file: ../helpers/login-as.yaml
+    env:
+      phone: "80000003"
+
+# --- 1. Notifications bell shows the seeded MKTR notification. ---
+- tapOn:
+    id: "home-notifications-button"
+- waitForAnimationToEnd
+
+- extendedWaitUntil:
+    visible: "New MKTR Lead"
+    timeout: 10000
+
+# Back to home.
+- tapOn:
+    point: "10%,6%"
+- waitForAnimationToEnd
+
+# --- 2. Leads list contains the MKTR lead. ---
+- tapOn:
+    id: "tab-leads"
+- waitForAnimationToEnd
+
+- extendedWaitUntil:
+    visible:
+      id: "leads-list"
+    timeout: 10000
+- extendedWaitUntil:
+    visible: "E2E MKTR Lead"
+    timeout: 10000
+
+# --- 3. Tapping the MKTR lead navigates to the lead detail. ---
+- tapOn: "E2E MKTR Lead"
+- waitForAnimationToEnd
+
+- extendedWaitUntil:
+    visible:
+      id: "lead-status-badge"
+    timeout: 10000
+- assertVisible: "E2E MKTR Lead"

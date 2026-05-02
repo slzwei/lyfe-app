@@ -9,9 +9,10 @@
 --   +6580000001 = admin
 --   +6580000002 = director
 --   +6580000003 = manager
---   +6580000004 = agent
+--   +6580000004 = agent          (face_registered_at set for E2E roadshow flow)
 --   +6580000005 = pa
---   +6580000006 = candidate
+--   +6580000006 = candidate      (onboarding_complete=true)
+--   +6580000007 = e2e candidate  (onboarding_complete=false, used by lifecycle flow)
 -- =============================================================================
 
 -- ---------------------------------------------------------------------------
@@ -19,18 +20,21 @@
 -- ---------------------------------------------------------------------------
 DO $$
 DECLARE
-    v_admin_id      UUID;
-    v_director_id   UUID;
-    v_manager_id    UUID;
-    v_agent_id      UUID;
-    v_pa_id         UUID;
-    v_candidate_id  UUID;
-    v_event_id      UUID;
-    v_lead1_id      UUID;
-    v_lead2_id      UUID;
-    v_lead3_id      UUID;
-    v_cand1_id      UUID;
-    v_cand2_id      UUID;
+    v_admin_id          UUID;
+    v_director_id       UUID;
+    v_manager_id        UUID;
+    v_agent_id          UUID;
+    v_pa_id             UUID;
+    v_candidate_id      UUID;
+    v_e2e_candidate_id  UUID;
+    v_event_id          UUID;
+    v_roadshow_event_id UUID;
+    v_lead1_id          UUID;
+    v_lead2_id          UUID;
+    v_lead3_id          UUID;
+    v_mktr_lead_id      UUID;
+    v_cand1_id          UUID;
+    v_cand2_id          UUID;
 BEGIN
     -- Look up auth user IDs by phone
     SELECT id INTO v_admin_id    FROM auth.users WHERE phone = '+6580000001';
@@ -39,6 +43,7 @@ BEGIN
     SELECT id INTO v_agent_id    FROM auth.users WHERE phone = '+6580000004';
     SELECT id INTO v_pa_id       FROM auth.users WHERE phone = '+6580000005';
     SELECT id INTO v_candidate_id FROM auth.users WHERE phone = '+6580000006';
+    SELECT id INTO v_e2e_candidate_id FROM auth.users WHERE phone = '+6580000007';
 
     -- Abort if any mock user hasn't logged in yet
     IF v_admin_id IS NULL THEN RAISE EXCEPTION 'Admin user (+6580000001) not found. Log in first.'; END IF;
@@ -47,6 +52,7 @@ BEGIN
     IF v_agent_id IS NULL THEN RAISE EXCEPTION 'Agent user (+6580000004) not found. Log in first.'; END IF;
     IF v_pa_id IS NULL THEN RAISE EXCEPTION 'PA user (+6580000005) not found. Log in first.'; END IF;
     IF v_candidate_id IS NULL THEN RAISE EXCEPTION 'Candidate user (+6580000006) not found. Log in first.'; END IF;
+    IF v_e2e_candidate_id IS NULL THEN RAISE EXCEPTION 'E2E candidate user (+6580000007) not found. Log in first.'; END IF;
 
     RAISE NOTICE 'Found all 6 mock users. Seeding E2E data...';
 
@@ -82,7 +88,8 @@ BEGIN
         role = 'agent',
         onboarding_complete = true,
         is_active = true,
-        reports_to = v_manager_id
+        reports_to = v_manager_id,
+        face_registered_at = NOW()
     WHERE id = v_agent_id;
 
     UPDATE public.users SET
@@ -100,6 +107,23 @@ BEGIN
         is_active = true,
         reports_to = NULL
     WHERE id = v_candidate_id;
+
+    -- E2E candidate — used by lifecycle flow. Onboarding NOT complete so the
+    -- flow lands on the welcome screen and walks through it on each run.
+    -- Consents + email_verified ARE pre-set so the auth gate doesn't first
+    -- detour through Consent / EmailVerification (those require real email
+    -- infrastructure to drive end-to-end and have their own dedicated flows).
+    UPDATE public.users SET
+        full_name = NULL,
+        role = 'candidate',
+        onboarding_complete = false,
+        is_active = true,
+        reports_to = NULL,
+        email_verified = true,
+        consent_tos_at = NOW(),
+        consent_privacy_at = NOW(),
+        consent_operational_push_at = NOW()
+    WHERE id = v_e2e_candidate_id;
 
     RAISE NOTICE 'Users updated (roles, names, onboarding_complete).';
 
@@ -124,6 +148,19 @@ BEGIN
         (v_lead3_id, 'Michael Wong', '+6593333333', 'michael.w@test.com', 'event', 'qualified', 'ilp', v_manager_id, v_manager_id)
     ON CONFLICT DO NOTHING;
 
+    -- MKTR lead — simulates a webhook arrival for the manager. Used by the
+    -- E2E mktr-arrival flow which asserts the badge updates + tap navigates.
+    -- source_name='mktr' + external_id is the dedup key the receive-mktr-lead
+    -- edge function uses; recreating with the same external_id is idempotent.
+    v_mktr_lead_id := gen_random_uuid();
+    INSERT INTO public.leads (id, full_name, phone, email, source, source_name, external_id, status, product_interest, assigned_to, created_by)
+    VALUES (v_mktr_lead_id, 'E2E MKTR Lead', '+6597777777', 'e2e-mktr@test.com', 'online', 'mktr', 'e2e-mktr-fixed-001', 'new', 'life', v_manager_id, v_manager_id)
+    ON CONFLICT (external_id, source_name) DO UPDATE SET
+        assigned_to = EXCLUDED.assigned_to,
+        status = 'new',
+        updated_at = NOW()
+    RETURNING id INTO v_mktr_lead_id;
+
     -- Lead activities
     INSERT INTO public.lead_activities (lead_id, user_id, type, description, metadata)
     VALUES
@@ -131,7 +168,8 @@ BEGIN
         (v_lead2_id, v_manager_id, 'created', NULL, '{}'),
         (v_lead2_id, v_agent_id, 'call', 'Called to discuss health plans', '{}'),
         (v_lead3_id, v_manager_id, 'created', NULL, '{}'),
-        (v_lead3_id, v_manager_id, 'note', 'Met at roadshow, very interested in ILP', '{}')
+        (v_lead3_id, v_manager_id, 'note', 'Met at roadshow, very interested in ILP', '{}'),
+        (v_mktr_lead_id, v_manager_id, 'created', 'Arrived via MKTR (E2E fixture)', '{"source":"mktr"}')
     ON CONFLICT DO NOTHING;
 
     RAISE NOTICE 'Leads and activities seeded.';
@@ -161,14 +199,23 @@ BEGIN
     -- -----------------------------------------------------------------------
     v_event_id := gen_random_uuid();
 
-    INSERT INTO public.events (id, title, description, event_type, event_date, start_time, end_time, location, created_by)
+    -- Live roadshow event for the E2E check-in flow. Coordinates are Marina
+    -- Bay Sands (Singapore CBD); the proximity check is bypassed in E2E
+    -- builds via EXPO_PUBLIC_E2E_LOCATION_BYPASS so coords just need to be
+    -- non-null. event_date=TODAY with start_time before NOW and end_time
+    -- after, so the event is "live" when the flow runs.
+    v_roadshow_event_id := gen_random_uuid();
+
+    INSERT INTO public.events (id, title, description, event_type, event_date, start_time, end_time, location, latitude, longitude, location_radius_meters, created_by)
     VALUES
         (v_event_id, 'Weekly Team Meeting', 'Regular team sync', 'team_meeting',
-         CURRENT_DATE + 1, '10:00', '11:00', 'Conference Room A', v_manager_id),
+         CURRENT_DATE + 1, '10:00', '11:00', 'Conference Room A', NULL, NULL, 100, v_manager_id),
         (gen_random_uuid(), 'Product Training', 'ILP product deep dive', 'training',
-         CURRENT_DATE + 3, '14:00', '16:00', 'Training Room B', v_manager_id),
+         CURRENT_DATE + 3, '14:00', '16:00', 'Training Room B', NULL, NULL, 100, v_manager_id),
         (gen_random_uuid(), 'Past Roadshow', 'Completed roadshow event', 'roadshow',
-         CURRENT_DATE - 7, '09:00', '17:00', 'MBS Convention Hall', v_manager_id)
+         CURRENT_DATE - 7, '09:00', '17:00', 'MBS Convention Hall', 1.2834, 103.8607, 100, v_manager_id),
+        (v_roadshow_event_id, 'E2E Live Roadshow', 'Live roadshow for E2E flow', 'roadshow',
+         CURRENT_DATE, '00:01', '23:59', 'MBS Convention Hall', 1.2834, 103.8607, 100, v_manager_id)
     ON CONFLICT DO NOTHING;
 
     -- Add attendees to the team meeting
@@ -180,7 +227,28 @@ BEGIN
         (v_event_id, v_candidate_id, 'attendee')
     ON CONFLICT DO NOTHING;
 
-    RAISE NOTICE 'Events and attendees seeded.';
+    -- Roadshow attendees: agent attends, manager hosts.
+    INSERT INTO public.event_attendees (event_id, user_id, attendee_role)
+    VALUES
+        (v_roadshow_event_id, v_manager_id, 'host'),
+        (v_roadshow_event_id, v_agent_id, 'attendee')
+    ON CONFLICT DO NOTHING;
+
+    -- Roadshow config — required for the check-in flow's pledge sheet to
+    -- pre-populate suggested_*. Idempotent via ON CONFLICT (event_id).
+    INSERT INTO public.roadshow_configs (event_id, weekly_cost, slots_per_day, expected_start_time, late_grace_minutes, suggested_sitdowns, suggested_pitches, suggested_closed)
+    VALUES (v_roadshow_event_id, 1500, 3, '10:00', 15, 5, 3, 1)
+    ON CONFLICT (event_id) DO UPDATE SET
+        weekly_cost = EXCLUDED.weekly_cost,
+        slots_per_day = EXCLUDED.slots_per_day,
+        suggested_sitdowns = EXCLUDED.suggested_sitdowns;
+
+    -- Wipe any prior attendance for the agent on the live roadshow event so
+    -- the flow can re-run from a clean slate.
+    DELETE FROM public.roadshow_attendance
+    WHERE event_id = v_roadshow_event_id AND user_id = v_agent_id;
+
+    RAISE NOTICE 'Events, roadshow config, and attendees seeded.';
 
     -- -----------------------------------------------------------------------
     -- 6. Notifications
@@ -189,7 +257,8 @@ BEGIN
     VALUES
         (v_manager_id, 'New Lead Assigned', 'John Tan has been assigned to your team', 'lead_assigned', false),
         (v_manager_id, 'Interview Tomorrow', 'Emily Chen interview at 10:00 AM', 'interview_reminder', false),
-        (v_agent_id, 'New Lead', 'You have a new lead: John Tan', 'lead_assigned', false)
+        (v_agent_id, 'New Lead', 'You have a new lead: John Tan', 'lead_assigned', false),
+        (v_manager_id, 'New MKTR Lead', 'E2E MKTR Lead just arrived', 'mktr_lead', false)
     ON CONFLICT DO NOTHING;
 
     RAISE NOTICE 'Notifications seeded.';

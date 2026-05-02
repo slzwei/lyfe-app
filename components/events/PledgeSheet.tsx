@@ -231,6 +231,7 @@ function PledgeSheetInner({
                     ) : null}
 
                     <Pressable
+                        testID="pledge-sheet-confirm"
                         onPress={handleConfirmPledge}
                         disabled={checkingIn}
                         style={({ pressed }) => [

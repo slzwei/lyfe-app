@@ -1,4 +1,4 @@
-# Auth: Login as Admin
+# Auth: Login as Admin.
 appId: com.shawnlee.lyfe
 ---
 - runFlow:

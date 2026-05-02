@@ -112,6 +112,13 @@ export async function registerFace(photoPath: string): Promise<FaceRegisterResul
  * @returns match result with similarity percentage and (on failure) a reason code
  */
 export async function verifyFace(photoPath: string): Promise<FaceVerifyResult> {
+    // E2E bypass — fires only when the build was produced with the env flag
+    // explicitly set to '1'. Camera + Rekognition can't be driven by Maestro,
+    // so CI builds short-circuit here without reading the (fake) photo path.
+    if (process.env.EXPO_PUBLIC_E2E_FACE_BYPASS === '1') {
+        return { match: true, similarity: 100, confidence: 100 };
+    }
+
     const base64 = await readPhotoAsBase64(photoPath);
     console.log('[FaceVerify] Sending verify request, base64 length:', base64.length);
 

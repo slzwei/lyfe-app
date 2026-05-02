@@ -1,45 +1,58 @@
-# Flow: Lead lifecycle — navigate to lead, add note, change status
+# Flow: Open a lead, add a note, change status — and assert each landed.
+# Requires: at least one lead exists for the manager. Seeded by `npm run seed`.
 appId: com.shawnlee.lyfe
 
 ---
 
-- runFlow: 01-login.yaml
+- runFlow:
+    file: helpers/login-as.yaml
+    env:
+      phone: "80000003"
 
-# --- Navigate to Leads tab (2nd tab from left ~30% x) ---
+# Navigate to Leads tab via testID.
 - tapOn:
-    point: "30%,97%"
-- waitForAnimationToEnd
+    id: "tab-leads"
 - waitForAnimationToEnd
 
-# --- Tap first lead card ---
+# Wait for the list to render at least one card, then tap the first one.
+# `lead-card-*` is the card testID; `tapOn` matches the first that's visible.
+- extendedWaitUntil:
+    visible:
+      id: "leads-list"
+    timeout: 10000
 - tapOn:
-    point: "50%,30%"
-    optional: true
+    id: ".*lead-card-.*"
 - waitForAnimationToEnd
 
-# --- Lead Detail: Add Note ---
+# Confirm we're on the lead detail.
+- assertVisible:
+    id: "lead-status-badge"
+
+# --- Add a note ---
 - tapOn:
     id: "lead-note-action"
-    optional: true
 - waitForAnimationToEnd
-
 - tapOn:
     id: "lead-note-input-field"
-    optional: true
 - inputText: "E2E test note"
-
 - tapOn:
     id: "lead-note-input-save"
-    optional: true
 - waitForAnimationToEnd
 
-# --- Lead Detail: Change Status ---
+# Assert the note appears in the activity list.
+- extendedWaitUntil:
+    visible: "E2E test note"
+    timeout: 5000
+
+# --- Change status to Contacted ---
 - tapOn:
     id: "lead-status-action"
-    optional: true
 - waitForAnimationToEnd
-
 - tapOn:
     id: "status-option-contacted"
-    optional: true
 - waitForAnimationToEnd
+
+# Assert the status badge reflects the change.
+- extendedWaitUntil:
+    visible: "Contacted"
+    timeout: 5000
