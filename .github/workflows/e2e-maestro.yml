@@ -48,6 +48,14 @@ jobs:
       - name: Install npm deps
         run: npm ci
 
+      # Native dirs are gitignored — generate them from app.config.js. The
+      # postinstall patches in scripts/patch-*.sh have already run as part of
+      # `npm ci` and modify node_modules sources, which prebuild then copies
+      # into ios/. --no-install skips prebuild's auto pod install so we can
+      # cache pods independently in the next step.
+      - name: Expo prebuild (iOS)
+        run: npx expo prebuild --platform ios --no-install --non-interactive
+
       - name: Cache CocoaPods
         uses: actions/cache@v4
         with:
