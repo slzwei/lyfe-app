@@ -67,15 +67,17 @@ BEGIN
     -- ON CONFLICT DO NOTHING ensures every row is present before the
     -- UPDATEs below; reports_to stays NULL here to avoid an FK chicken-and-
     -- egg (the UPDATEs in step 1 set the hierarchy in dependency order).
+    -- Phone columns are constrained to '^\d{7,15}$' (digits only, no '+') by
+    -- the 20260427130700_phone_format_normalize_and_check.sql migration.
     INSERT INTO public.users (id, phone, full_name)
     VALUES
-        (v_admin_id,         '+6580000001', 'Alice Admin'),
-        (v_director_id,      '+6580000002', 'Diana Director'),
-        (v_manager_id,       '+6580000003', 'Rachel Manager'),
-        (v_agent_id,         '+6580000004', 'David Agent'),
-        (v_pa_id,            '+6580000005', 'Priya PA'),
-        (v_candidate_id,     '+6580000006', 'Charlie Candidate'),
-        (v_e2e_candidate_id, '+6580000007', 'E2E Candidate')
+        (v_admin_id,         '6580000001', 'Alice Admin'),
+        (v_director_id,      '6580000002', 'Diana Director'),
+        (v_manager_id,       '6580000003', 'Rachel Manager'),
+        (v_agent_id,         '6580000004', 'David Agent'),
+        (v_pa_id,            '6580000005', 'Priya PA'),
+        (v_candidate_id,     '6580000006', 'Charlie Candidate'),
+        (v_e2e_candidate_id, '6580000007', 'E2E Candidate')
     ON CONFLICT (id) DO NOTHING;
 
     -- -----------------------------------------------------------------------
@@ -167,9 +169,9 @@ BEGIN
 
     INSERT INTO public.leads (id, full_name, phone, email, source, status, product_interest, assigned_to, created_by)
     VALUES
-        (v_lead1_id, 'John Tan', '+6591111111', 'john.tan@test.com', 'referral', 'new', 'life', v_agent_id, v_manager_id),
-        (v_lead2_id, 'Sarah Lim', '+6592222222', 'sarah.lim@test.com', 'online', 'contacted', 'health', v_agent_id, v_manager_id),
-        (v_lead3_id, 'Michael Wong', '+6593333333', 'michael.w@test.com', 'event', 'qualified', 'ilp', v_manager_id, v_manager_id)
+        (v_lead1_id, 'John Tan', '6591111111', 'john.tan@test.com', 'referral', 'new', 'life', v_agent_id, v_manager_id),
+        (v_lead2_id, 'Sarah Lim', '6592222222', 'sarah.lim@test.com', 'online', 'contacted', 'health', v_agent_id, v_manager_id),
+        (v_lead3_id, 'Michael Wong', '6593333333', 'michael.w@test.com', 'event', 'qualified', 'ilp', v_manager_id, v_manager_id)
     ON CONFLICT DO NOTHING;
 
     -- MKTR lead — simulates a webhook arrival for the manager. Used by the
@@ -178,7 +180,7 @@ BEGIN
     -- edge function uses; recreating with the same external_id is idempotent.
     v_mktr_lead_id := gen_random_uuid();
     INSERT INTO public.leads (id, full_name, phone, email, source, source_name, external_id, status, product_interest, assigned_to, created_by)
-    VALUES (v_mktr_lead_id, 'E2E MKTR Lead', '+6597777777', 'e2e-mktr@test.com', 'online', 'mktr', 'e2e-mktr-fixed-001', 'new', 'life', v_manager_id, v_manager_id)
+    VALUES (v_mktr_lead_id, 'E2E MKTR Lead', '6597777777', 'e2e-mktr@test.com', 'online', 'mktr', 'e2e-mktr-fixed-001', 'new', 'life', v_manager_id, v_manager_id)
     ON CONFLICT (external_id, source_name) DO UPDATE SET
         assigned_to = EXCLUDED.assigned_to,
         status = 'new',
@@ -206,8 +208,8 @@ BEGIN
 
     INSERT INTO public.candidates (id, name, phone, email, status, assigned_manager_id, created_by_id)
     VALUES
-        (v_cand1_id, 'Emily Chen', '+6594444444', 'emily.chen@test.com', 'interview_scheduled', v_manager_id, v_manager_id),
-        (v_cand2_id, 'Kevin Lee', '+6595555555', 'kevin.lee@test.com', 'applied', v_manager_id, v_pa_id)
+        (v_cand1_id, 'Emily Chen', '6594444444', 'emily.chen@test.com', 'interview_scheduled', v_manager_id, v_manager_id),
+        (v_cand2_id, 'Kevin Lee', '6595555555', 'kevin.lee@test.com', 'applied', v_manager_id, v_pa_id)
     ON CONFLICT DO NOTHING;
 
     -- Interview for candidate 1
