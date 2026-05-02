@@ -14,7 +14,7 @@ concurrency:
 jobs:
   ios-simulator:
     runs-on: macos-15
-    timeout-minutes: 60
+    timeout-minutes: 90
 
     env:
       # --- Mobile build env (baked in at xcodebuild time) ---
