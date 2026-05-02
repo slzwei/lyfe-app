@@ -80,6 +80,14 @@ BEGIN
         (v_e2e_candidate_id, '6580000007', 'E2E Candidate')
     ON CONFLICT (id) DO NOTHING;
 
+    -- Grandfather the mock users so the check_phone_eligible() RPC treats
+    -- them as pre-invitation-system accounts (created before 2026-03-29).
+    -- Without this, the post-cutoff branch demands an accepted
+    -- member_invitations row + login is blocked with "No account found".
+    UPDATE public.users
+    SET created_at = '2026-01-01T00:00:00Z'
+    WHERE id IN (v_admin_id, v_director_id, v_manager_id, v_agent_id, v_pa_id, v_candidate_id, v_e2e_candidate_id);
+
     -- -----------------------------------------------------------------------
     -- 1. Update user profiles: roles, names, hierarchy, onboarding
     -- -----------------------------------------------------------------------
