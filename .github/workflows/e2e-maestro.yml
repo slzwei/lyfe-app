@@ -13,7 +13,7 @@ concurrency:
 
 jobs:
   ios-simulator:
-    runs-on: macos-14
+    runs-on: macos-15
     timeout-minutes: 60
 
     env:
@@ -71,7 +71,11 @@ jobs:
         run: pod install
 
       - name: Select Xcode
-        run: sudo xcode-select -s /Applications/Xcode_15.4.app
+        # macos-15 ships Xcode 16.x as default; React Native 0.81 needs >= 16.1.
+        # Pick the highest 16.x available so future runner-image bumps don't downgrade.
+        run: |
+          ls /Applications/ | grep -E '^Xcode_16' | sort -V | tail -1 | xargs -I{} sudo xcode-select -s "/Applications/{}"
+          xcodebuild -version
 
       - name: Install psql + Maestro
         run: |
