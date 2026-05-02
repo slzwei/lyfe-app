@@ -1,24 +1,21 @@
-# Events: Browse events list and calendar
+# Events: Browse list and verify list testID renders.
 appId: com.shawnlee.lyfe
 ---
+
 - runFlow:
     file: ../helpers/login-as.yaml
     env:
       phone: "80000003"
 
-# Navigate to Events tab (5-tab manager: 70%)
 - tapOn:
-    point: "70%,97%"
-- waitForAnimationToEnd
+    id: "tab-events"
 - waitForAnimationToEnd
 
-# Verify events screen loaded (calendar or event list visible)
 - assertVisible:
     id: "events-list"
-    optional: true
 
-# Tap an event card if visible
+# Tap an event card if present (id-based regex matches any card row).
 - tapOn:
-    point: "50%,55%"
+    id: ".*events-card-.*"
     optional: true
 - waitForAnimationToEnd

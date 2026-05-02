@@ -147,7 +147,7 @@ function RoadshowLiveT1Inner(props: RoadshowLiveT1Props) {
         <View style={styles.container}>
             {/* ── Check-in bar (dark, with shimmer intent via small indicator) ── */}
             {!hasCheckedIn && !checkedInByManager ? (
-                <Pressable onPress={handleOpenCheckin} disabled={checkingIn}>
+                <Pressable testID="roadshow-checkin-cta" onPress={handleOpenCheckin} disabled={checkingIn}>
                     <DarkHeroCard
                         glow="terra"
                         glowSize="md"
@@ -240,7 +240,10 @@ function RoadshowLiveT1Inner(props: RoadshowLiveT1Props) {
 
             {/* ── Pledge rings card ── */}
             {hasCheckedIn ? (
-                <View style={[styles.card, { backgroundColor: colors.cardBackground, borderColor: colors.cardBorder }]}>
+                <View
+                    testID="roadshow-pledge-card"
+                    style={[styles.card, { backgroundColor: colors.cardBackground, borderColor: colors.cardBorder }]}
+                >
                     <View style={styles.cardHeaderRow}>
                         <Text style={[RoadshowType.statMd, { color: colors.textPrimary }]}>
                             Your{' '}

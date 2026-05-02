@@ -1,76 +1,51 @@
-# Helper: Parameterized login — logs in as any mock user
-# Input: phone (last 8 digits, e.g. "80000003" for manager)
+# Helper: Log in as a mock user via OTP.
+# Input: phone (last 8 digits, e.g. "80000003" for manager).
+#
+# Mock creds (mobile dev mode):
+#   ADMIN     +6580000001
+#   DIRECTOR  +6580000002
+#   MANAGER   +6580000003
+#   AGENT     +6580000004
+#   PA        +6580000005
+#   CANDIDATE +6580000007
+#   OTP       555555 (any of the above)
 appId: com.shawnlee.lyfe
 input:
   phone: "80000003"
+
 ---
 
 - launchApp
 
-# Connect to Metro via deep link (handles dev launcher screen)
-- openLink: "exp+lyfe-app://expo-development-client/?url=http%3A%2F%2Flocalhost%3A8081"
-- waitForAnimationToEnd
-- waitForAnimationToEnd
-- waitForAnimationToEnd
+# If the dev-client launcher is showing (local Metro dev), connect to localhost.
+# Skipped automatically on Release builds (CI) where the launcher isn't visible.
+- runFlow:
+    when:
+      visible: "Connect to Metro"
+    commands:
+      - openLink: "exp+lyfe-app://expo-development-client/?url=http%3A%2F%2Flocalhost%3A8081"
+      - waitForAnimationToEnd
 
-# Dismiss dev menu
-- tapOn:
-    text: "Continue"
-    optional: true
-- waitForAnimationToEnd
-- tapOn:
-    point: "50%,10%"
-    optional: true
-- tapOn:
-    point: "50%,10%"
-    optional: true
-- waitForAnimationToEnd
+# Reach the login screen, signing out if needed.
+- runFlow: ensure-logged-out.yaml
 
-# Go to Home first (leftmost tab, ~10%), then Profile (rightmost ~90%)
-- tapOn:
-    point: "10%,97%"
-    optional: true
-- waitForAnimationToEnd
-
-# Sign out if logged in — navigate to Profile
-- tapOn:
-    point: "90%,97%"
-    optional: true
-- waitForAnimationToEnd
-- scrollUntilVisible:
-    element:
-      id: "profile-sign-out-button"
-    direction: DOWN
-    timeout: 5000
-    optional: true
-- tapOn:
-    id: "profile-sign-out-button"
-    optional: true
-- waitForAnimationToEnd
-- tapOn:
-    text: "Confirm sign out"
-    optional: true
-- waitForAnimationToEnd
-
-# Wait for login screen
-- extendedWaitUntil:
-    visible:
-      id: "login-phone-input"
-    timeout: 15000
-
-# Enter phone and OTP
+# Phone entry.
 - tapOn:
     id: "login-phone-input"
 - inputText: "${phone}"
 - tapOn:
     id: "login-send-otp-button"
+
+# OTP entry.
 - extendedWaitUntil:
-    visible: "Verify your number"
+    visible:
+      id: "login-otp-input"
     timeout: 15000
-- tapOn: "OTP input"
+- tapOn:
+    id: "login-otp-input"
 - inputText: "555555"
 
-# Wait for dashboard
+# Land on dashboard.
 - extendedWaitUntil:
     visible:
       id: "home-scroll-view"

@@ -1,0 +1,125 @@
+name: E2E (Maestro)
+
+# Manual + nightly only at first. Promote to required-status after 2 weeks of stable runs.
+on:
+  workflow_dispatch:
+  schedule:
+    # 02:00 SGT (18:00 UTC) — runs after the day's commits land but before next-day work.
+    - cron: '0 18 * * *'
+
+concurrency:
+  group: e2e-maestro-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  ios-simulator:
+    runs-on: macos-14
+    timeout-minutes: 60
+
+    env:
+      # --- Mobile build env (baked in at xcodebuild time) ---
+      EXPO_PUBLIC_SUPABASE_URL: ${{ secrets.STAGING_SUPABASE_URL }}
+      EXPO_PUBLIC_SUPABASE_ANON_KEY: ${{ secrets.STAGING_SUPABASE_ANON_KEY }}
+      EXPO_PUBLIC_LYFE_SG_DOMAIN: ${{ secrets.STAGING_LYFE_SG_DOMAIN }}
+      # E2E bypass flags — only set in this workflow. Lib functions short-circuit
+      # so Maestro doesn't have to drive the camera / GPS / Rekognition.
+      EXPO_PUBLIC_E2E_FACE_BYPASS: '1'
+      EXPO_PUBLIC_E2E_LOCATION_BYPASS: '1'
+
+      # --- Bootstrap script env (admin API + psql connection) ---
+      STAGING_SUPABASE_URL: ${{ secrets.STAGING_SUPABASE_URL }}
+      STAGING_SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.STAGING_SUPABASE_SERVICE_ROLE_KEY }}
+      STAGING_SUPABASE_DB_URL: ${{ secrets.STAGING_SUPABASE_DB_URL }}
+
+      # --- Maestro flow env (mock OTP creds — match staging custom-sms-hook) ---
+      MOCK_PHONE: '+6580000003'
+      MOCK_OTP: '555555'
+      ADMIN_PHONE: '+6580000001'
+      AGENT_PHONE: '+6580000004'
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Install npm deps
+        run: npm ci
+
+      - name: Cache CocoaPods
+        uses: actions/cache@v4
+        with:
+          path: |
+            ios/Pods
+            ~/.cocoapods/repos
+          key: ${{ runner.os }}-pods-${{ hashFiles('ios/Podfile.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-pods-
+
+      - name: Install pods
+        working-directory: ios
+        run: pod install
+
+      - name: Select Xcode
+        run: sudo xcode-select -s /Applications/Xcode_15.4.app
+
+      - name: Install psql + Maestro
+        run: |
+          # psql is preinstalled on macos-14 runners as part of Postgres.app — verify.
+          which psql || brew install libpq && echo "$(brew --prefix libpq)/bin" >> "$GITHUB_PATH"
+          curl -Ls "https://get.maestro.mobile.dev" | bash
+          echo "$HOME/.maestro/bin" >> "$GITHUB_PATH"
+
+      - name: Bootstrap staging fixtures
+        run: node scripts/e2e-bootstrap.mjs
+
+      - name: Boot iOS simulator
+        run: |
+          xcrun simctl list devices available
+          DEVICE_ID=$(xcrun simctl list devices available | grep "iPhone 15 (" | head -1 | grep -oE '[0-9A-F-]{36}')
+          if [ -z "$DEVICE_ID" ]; then
+            echo "No iPhone 15 simulator found"
+            exit 1
+          fi
+          echo "DEVICE_ID=$DEVICE_ID" >> "$GITHUB_ENV"
+          xcrun simctl boot "$DEVICE_ID"
+          xcrun simctl bootstatus "$DEVICE_ID" -b
+
+      - name: Build .app for simulator
+        run: |
+          set -o pipefail
+          xcodebuild \
+            -workspace ios/Lyfe.xcworkspace \
+            -scheme Lyfe \
+            -configuration Release \
+            -sdk iphonesimulator \
+            -derivedDataPath ios/build \
+            -destination "platform=iOS Simulator,id=$DEVICE_ID" \
+            CODE_SIGNING_ALLOWED=NO \
+            ONLY_ACTIVE_ARCH=NO \
+            build 2>&1 | (xcbeautify || cat)
+
+      - name: Install app on simulator
+        run: |
+          APP_PATH="ios/build/Build/Products/Release-iphonesimulator/Lyfe.app"
+          test -d "$APP_PATH" || (echo "App bundle not found at $APP_PATH" && exit 1)
+          xcrun simctl install "$DEVICE_ID" "$APP_PATH"
+
+      - name: Maestro version
+        run: maestro --version
+
+      - name: Run Maestro flows
+        run: maestro test .maestro/
+
+      - name: Upload Maestro debug output on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: maestro-debug-${{ github.run_id }}
+          path: |
+            ~/.maestro/tests/**/*
+            ~/.maestro/logs/**/*
+          if-no-files-found: warn
+          retention-days: 7

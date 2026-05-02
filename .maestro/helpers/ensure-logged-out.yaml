@@ -1,38 +1,63 @@
-# Helper: Ensure app is on login screen (sign out if already logged in)
-# Handles 3 states: logged-in dashboard, login screen, onboarding screen
+# Helper: Reach the login screen from any state.
+# Idempotent — safe to call when already on the login screen, on the dashboard,
+# or stuck in onboarding. Uses testIDs everywhere except for dev-menu dismissal,
+# which is outside the app and unavoidable via coordinates.
 appId: com.shawnlee.lyfe
 
 ---
 
-- runFlow: dismiss-dev-menu.yaml
-
-# If on onboarding, tap Get Started to reach login
+# Dismiss Expo dev menu / welcome modal if present.
+# These run outside the app, so testIDs aren't available — coordinates are correct here.
 - tapOn:
-    text: "Get Started"
+    text: "Continue"
+    optional: true
+- waitForAnimationToEnd
+- tapOn:
+    point: "50%,10%"
     optional: true
 - waitForAnimationToEnd
 
-# Try to tap Profile in tab bar (rightmost tab)
-- tapOn:
-    point: "90%,97%"
-    optional: true
+# If we're already on the login screen, we're done.
+- runFlow:
+    when:
+      visible:
+        id: "login-phone-input"
+    commands:
+      - waitForAnimationToEnd
 
-# Wait and try to find sign out button
-- waitForAnimationToEnd
-- scrollUntilVisible:
-    element:
-      id: "profile-sign-out-button"
-    direction: DOWN
-    timeout: 5000
-    optional: true
+# If onboarding is showing, walk through Get Started → reach app.
+- runFlow:
+    when:
+      visible:
+        id: "get-started-button"
+    commands:
+      - tapOn:
+          id: "get-started-button"
+      - waitForAnimationToEnd
 
-- tapOn:
-    id: "profile-sign-out-button"
-    optional: true
-- waitForAnimationToEnd
+# If we're on the dashboard, sign out via Profile → Sign Out → confirm modal.
+- runFlow:
+    when:
+      visible:
+        id: "tab-profile"
+    commands:
+      - tapOn:
+          id: "tab-profile"
+      - waitForAnimationToEnd
+      - scrollUntilVisible:
+          element:
+            id: "profile-sign-out-button"
+          direction: DOWN
+          timeout: 5000
+      - tapOn:
+          id: "profile-sign-out-button"
+      - waitForAnimationToEnd
+      - tapOn:
+          id: "sign-out-modal-confirm"
+      - waitForAnimationToEnd
 
-# Confirm sign out in modal
-- tapOn:
-    text: "Confirm sign out"
-    optional: true
-- waitForAnimationToEnd
+# Final assertion — we MUST end on the login screen.
+- extendedWaitUntil:
+    visible:
+      id: "login-phone-input"
+    timeout: 15000

@@ -1,6 +1,5 @@
 # Regression: candidate created via Add Candidate must appear in Team → Pending.
 # Guards the create-candidate edge function's mirror insert into member_invitations.
-# Prereq: Manager logged in
 appId: com.shawnlee.lyfe
 ---
 
@@ -15,13 +14,8 @@ appId: com.shawnlee.lyfe
       tab: "team"
 - waitForAnimationToEnd
 
-# Open Add Candidate
-- tapOn:
-    id: "team-add-candidate-button"
-    optional: true
 - tapOn:
     text: "Add Candidate"
-    optional: true
 - waitForAnimationToEnd
 
 - tapOn:
@@ -40,17 +34,15 @@ appId: com.shawnlee.lyfe
     visible: "Candidate Created"
     timeout: 10000
 
-# Dismiss success modal back to team
+# Dismiss success modal back to team.
 - tapOn:
     text: "Done"
 - waitForAnimationToEnd
 
-# Switch to Pending filter and verify candidate is listed
+# Switch to Pending filter and verify the new candidate is listed.
 - tapOn:
     text: "Pending"
 - waitForAnimationToEnd
-
 - extendedWaitUntil:
     visible: "Pending Regression"
     timeout: 5000
-- assertVisible: "Candidate"

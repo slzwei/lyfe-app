@@ -1,0 +1,81 @@
+# Candidate lifecycle: log in as the E2E candidate (+6580000007), walk
+# through the mobile staff-style onboarding (Welcome → ProfileSetup →
+# ProfilePhoto → AgencyInfo → OnboardingComplete), and assert we land on
+# the dashboard with onboarding_complete flipped.
+#
+# What this guards:
+#   - The auth gate's role-aware routing (candidate with consent +
+#     email_verified pre-set lands on Welcome, not on Consent or
+#     EmailVerification).
+#   - Each onboarding screen renders + advances on continue.
+#   - The OnboardingComplete screen flips users.onboarding_complete and
+#     navigates to /(tabs)/home.
+#
+# Out of scope (deferred to slice 2):
+#   - PDPA Consent flow (requires multi-checkbox tap dance).
+#   - EmailVerification flow (requires real email + OTP infrastructure).
+#   - Web-side invite + DISC (lyfe-sg, not mobile).
+#
+# Requires: e2e-bootstrap.mjs has run, which sets the E2E candidate to
+# onboarding_complete=false + email_verified=true + consents pre-recorded.
+appId: com.shawnlee.lyfe
+
+---
+
+- runFlow:
+    file: ../helpers/login-as.yaml
+    env:
+      phone: "80000007"
+
+# Auth gate routes to /onboarding/Welcome — assert we arrived.
+- extendedWaitUntil:
+    visible:
+      id: "get-started-button"
+    timeout: 20000
+
+- tapOn:
+    id: "get-started-button"
+- waitForAnimationToEnd
+
+# ProfileSetup — name-input is autoFocus.
+- extendedWaitUntil:
+    visible:
+      id: "name-input"
+    timeout: 5000
+- tapOn:
+    id: "name-input"
+- inputText: "E2E Candidate"
+- tapOn:
+    id: "continue-button"
+- waitForAnimationToEnd
+
+# ProfilePhoto — skip avatar, continue.
+- extendedWaitUntil:
+    visible:
+      id: "avatar-button"
+    timeout: 5000
+- tapOn:
+    id: "continue-button"
+- waitForAnimationToEnd
+
+# AgencyInfo — single continue.
+- tapOn:
+    id: "continue-button"
+- waitForAnimationToEnd
+
+# OnboardingComplete — go to dashboard.
+- extendedWaitUntil:
+    visible:
+      id: "go-to-dashboard-button"
+    timeout: 10000
+- tapOn:
+    id: "go-to-dashboard-button"
+- waitForAnimationToEnd
+
+# Assert: we're now on the candidate dashboard. Roadmap tab is candidate-only.
+- extendedWaitUntil:
+    visible:
+      id: "home-scroll-view"
+    timeout: 15000
+- assertVisible:
+    id: "tab-roadmap"

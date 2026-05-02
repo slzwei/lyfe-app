@@ -59,6 +59,13 @@ export async function checkProximity(
     targetLng: number,
     radiusMetres: number,
 ): Promise<ProximityResult> {
+    // E2E bypass — fires only when the build was produced with the env flag
+    // explicitly set to '1'. Native location services and OS permission
+    // prompts can't be driven by Maestro, so CI builds short-circuit here.
+    if (process.env.EXPO_PUBLIC_E2E_LOCATION_BYPASS === '1') {
+        return { ok: true, distanceMeters: 0, requiredMeters: radiusMetres };
+    }
+
     const { status, canAskAgain } = await Location.requestForegroundPermissionsAsync();
     if (status !== 'granted') {
         return {

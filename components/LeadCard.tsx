@@ -44,6 +44,7 @@ function LeadCard({ lead, onPress, lastActivity, agentName }: LeadCardProps) {
 
     return (
         <TouchableOpacity
+            testID={`lead-card-${lead.id}`}
             style={[
                 styles.card,
                 {

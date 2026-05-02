@@ -1,6 +1,4 @@
-# Flow: Verify agent role sees correct tabs
-# Agent should see: Home, Leads, Events, Profile
-# Agent should NOT see: Team, Candidates, PA, Admin, Roadmap
+# Roles: Agent sees Home, Leads, Events, Profile only.
 appId: com.shawnlee.lyfe
 ---
 
@@ -9,7 +7,6 @@ appId: com.shawnlee.lyfe
     env:
       phone: "80000004"
 
-# Verify visible tabs
 - assertVisible:
     id: "tab-home"
 - assertVisible:
@@ -19,17 +16,17 @@ appId: com.shawnlee.lyfe
 - assertVisible:
     id: "tab-profile"
 
-# Verify hidden tabs (href: null hides from tab bar)
+# Hidden tabs — assertNotVisible is strict (no `optional`).
 - assertNotVisible:
     id: "tab-team"
-    optional: true
 - assertNotVisible:
     id: "tab-candidates"
-    optional: true
+- assertNotVisible:
+    id: "tab-pa"
 - assertNotVisible:
     id: "tab-admin"
-    optional: true
+- assertNotVisible:
+    id: "tab-roadmap"
 
-# Verify we're on home dashboard
 - assertVisible:
     id: "home-scroll-view"
