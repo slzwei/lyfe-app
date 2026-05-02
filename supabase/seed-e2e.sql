@@ -59,6 +59,26 @@ BEGIN
     RAISE NOTICE 'Found all 6 mock users. Seeding E2E data...';
 
     -- -----------------------------------------------------------------------
+    -- 0.5. Ensure public.users rows exist for every mock user
+    -- -----------------------------------------------------------------------
+    -- handle_new_user() fires on auth.users INSERT for OTP-flow signups but
+    -- not always for admin-API-created users (depends on trigger + RLS),
+    -- so we cannot assume the public.users mirror row exists. INSERT with
+    -- ON CONFLICT DO NOTHING ensures every row is present before the
+    -- UPDATEs below; reports_to stays NULL here to avoid an FK chicken-and-
+    -- egg (the UPDATEs in step 1 set the hierarchy in dependency order).
+    INSERT INTO public.users (id, phone, full_name)
+    VALUES
+        (v_admin_id,         '+6580000001', 'Alice Admin'),
+        (v_director_id,      '+6580000002', 'Diana Director'),
+        (v_manager_id,       '+6580000003', 'Rachel Manager'),
+        (v_agent_id,         '+6580000004', 'David Agent'),
+        (v_pa_id,            '+6580000005', 'Priya PA'),
+        (v_candidate_id,     '+6580000006', 'Charlie Candidate'),
+        (v_e2e_candidate_id, '+6580000007', 'E2E Candidate')
+    ON CONFLICT (id) DO NOTHING;
+
+    -- -----------------------------------------------------------------------
     -- 1. Update user profiles: roles, names, hierarchy, onboarding
     -- -----------------------------------------------------------------------
     UPDATE public.users SET
