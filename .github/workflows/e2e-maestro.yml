@@ -133,8 +133,28 @@ jobs:
       - name: Maestro version
         run: maestro --version
 
+      # Stream Lyfe app's NSLog output to a file for the duration of the
+      # Maestro run. console.log statements in the React Native app surface
+      # here when not connected to Metro (CI Release builds).
+      - name: Start simulator log capture
+        run: |
+          xcrun simctl spawn "$DEVICE_ID" log stream \
+            --predicate 'processImagePath CONTAINS "Lyfe"' \
+            --style compact \
+            > /tmp/sim.log 2>&1 &
+          echo "LOG_PID=$!" >> "$GITHUB_ENV"
+          sleep 2
+
       - name: Run Maestro flows
         run: maestro test .maestro/
+
+      - name: Stop simulator log capture
+        if: always()
+        run: |
+          if [ -n "$LOG_PID" ]; then
+            kill "$LOG_PID" 2>/dev/null || true
+          fi
+          ls -la /tmp/sim.log 2>/dev/null || echo "no sim.log"
 
       - name: Upload Maestro debug output on failure
         if: failure()
@@ -144,5 +164,6 @@ jobs:
           path: |
             ~/.maestro/tests/**/*
             ~/.maestro/logs/**/*
+            /tmp/sim.log
           if-no-files-found: warn
           retention-days: 7

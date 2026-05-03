@@ -202,7 +202,9 @@ export default function LoginScreen() {
         setError(null);
         setIsLoading(true);
         const cleanedPhone = phone.replace(/\D/g, '');
+        console.log('[E2E_DEBUG] login.handleVerifyOtp calling verifyOtp', `+65${cleanedPhone}`, otpCode);
         const { error: verifyError } = await verifyOtp(`+65${cleanedPhone}`, otpCode);
+        console.log('[E2E_DEBUG] login.handleVerifyOtp result error=', verifyError ? verifyError.message : 'null');
         setIsLoading(false);
         if (verifyError) {
             setError(verifyError.message);
