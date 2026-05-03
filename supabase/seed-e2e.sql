@@ -84,8 +84,14 @@ BEGIN
     -- them as pre-invitation-system accounts (created before 2026-03-29).
     -- Without this, the post-cutoff branch demands an accepted
     -- member_invitations row + login is blocked with "No account found".
+    -- Also backfill PDPA consent timestamps so the auth gate doesn't route
+    -- post-login traffic to /onboarding/Consent (which would prevent
+    -- home-scroll-view from rendering and time out the flows).
     UPDATE public.users
-    SET created_at = '2026-01-01T00:00:00Z'
+    SET created_at = '2026-01-01T00:00:00Z',
+        consent_tos_at = NOW(),
+        consent_privacy_at = NOW(),
+        consent_operational_push_at = NOW()
     WHERE id IN (v_admin_id, v_director_id, v_manager_id, v_agent_id, v_pa_id, v_candidate_id, v_e2e_candidate_id);
 
     -- -----------------------------------------------------------------------
