@@ -54,25 +54,49 @@ const admin = createClient(url, serviceRoleKey, {
 });
 
 async function ensureUser({ phone, label }) {
-    // Paginate through ALL auth users — not just page 1. A staging DB that has
-    // accumulated many runs can exceed 200 users; stopping at page 1 would miss
-    // the existing user and try (and fail) to create a duplicate.
-    const normalizedPhone = phone.replace('+', '');
+    // Paginate through ALL auth users to find every row that matches this phone
+    // (with or without '+' prefix). GoTrue stores phones in E164 form (+prefix),
+    // but older Admin API calls may have stored the bare number. Collecting ALL
+    // matches lets us detect duplicates from prior runs and clean them up so the
+    // seed SQL always resolves to the same UUID that GoTrue OTP signs in as.
+    const normalizedPhone = phone.replace('+', ''); // e.g. '6580000001'
     let page = 1;
-    let existing = null;
+    const allMatches = [];
     let totalScanned = 0;
-    while (!existing) {
+    while (true) {
         const { data, error } = await admin.auth.admin.listUsers({ page, perPage: 200 });
         if (error) throw new Error(`listUsers (page ${page}) failed for ${phone}: ${error.message}`);
         const users = data?.users ?? [];
         totalScanned += users.length;
-        existing = users.find((u) => u.phone === normalizedPhone || u.phone === phone);
-        if (existing || users.length < 200) break; // found or exhausted all pages
+        for (const u of users) {
+            if (u.phone === normalizedPhone || u.phone === phone) allMatches.push(u);
+        }
+        if (users.length < 200) break; // last page
         page++;
     }
-    console.log(`  [ensureUser] scanned ${totalScanned} auth users across ${page} page(s) for ${phone}`);
+    console.log(`  [ensureUser] scanned ${totalScanned} auth users across ${page} page(s) for ${phone} — found ${allMatches.length} match(es)`);
 
-    if (existing) {
+    if (allMatches.length > 1) {
+        // Prefer the E164 (+prefix) user — that is always the one GoTrue OTP
+        // will sign in as. Delete all non-preferred duplicates so the seed SQL
+        // resolves to the same UUID deterministically.
+        const preferred = allMatches.find((u) => u.phone === phone) ?? allMatches[0];
+        const duplicates = allMatches.filter((u) => u.id !== preferred.id);
+        console.log(`⚠  ${label} (${phone}): ${duplicates.length} duplicate(s) found — deleting (keeping id=${preferred.id} phone_stored=${preferred.phone})`);
+        for (const dup of duplicates) {
+            const { error: delErr } = await admin.auth.admin.deleteUser(dup.id);
+            if (delErr) {
+                console.warn(`   could not delete dup id=${dup.id}: ${delErr.message}`);
+            } else {
+                console.log(`   deleted dup id=${dup.id} phone_stored=${dup.phone}`);
+            }
+        }
+        console.log(`✓ ${label} (${phone}) deduplicated — id=${preferred.id} phone_stored=${preferred.phone}`);
+        return preferred.id;
+    }
+
+    if (allMatches.length === 1) {
+        const existing = allMatches[0];
         console.log(`✓ ${label} (${phone}) found — id=${existing.id} phone_stored=${existing.phone}`);
         return existing.id;
     }

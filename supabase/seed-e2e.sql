@@ -37,15 +37,23 @@ DECLARE
     v_cand2_id          UUID;
 BEGIN
     -- Look up auth user IDs by phone. Match either format ('+6580000001' or
-    -- '6580000001') since Supabase stores OTP-created users with the '+' but
-    -- admin-API-created users without it. REPLACE makes the lookup agnostic.
-    SELECT id INTO v_admin_id         FROM auth.users WHERE REPLACE(phone, '+', '') = '6580000001';
-    SELECT id INTO v_director_id      FROM auth.users WHERE REPLACE(phone, '+', '') = '6580000002';
-    SELECT id INTO v_manager_id       FROM auth.users WHERE REPLACE(phone, '+', '') = '6580000003';
-    SELECT id INTO v_agent_id         FROM auth.users WHERE REPLACE(phone, '+', '') = '6580000004';
-    SELECT id INTO v_pa_id            FROM auth.users WHERE REPLACE(phone, '+', '') = '6580000005';
-    SELECT id INTO v_candidate_id     FROM auth.users WHERE REPLACE(phone, '+', '') = '6580000006';
-    SELECT id INTO v_e2e_candidate_id FROM auth.users WHERE REPLACE(phone, '+', '') = '6590000007';
+    -- '6580000001'). Prefer the E164 (+prefix) form — that is what GoTrue OTP
+    -- signs in as — and fall back to created_at ASC to be deterministic if
+    -- both formats somehow coexist (see e2e-bootstrap.mjs ensureUser cleanup).
+    SELECT id INTO v_admin_id         FROM auth.users WHERE REPLACE(phone, '+', '') = '6580000001'
+        ORDER BY CASE WHEN phone LIKE '+%' THEN 0 ELSE 1 END, created_at ASC LIMIT 1;
+    SELECT id INTO v_director_id      FROM auth.users WHERE REPLACE(phone, '+', '') = '6580000002'
+        ORDER BY CASE WHEN phone LIKE '+%' THEN 0 ELSE 1 END, created_at ASC LIMIT 1;
+    SELECT id INTO v_manager_id       FROM auth.users WHERE REPLACE(phone, '+', '') = '6580000003'
+        ORDER BY CASE WHEN phone LIKE '+%' THEN 0 ELSE 1 END, created_at ASC LIMIT 1;
+    SELECT id INTO v_agent_id         FROM auth.users WHERE REPLACE(phone, '+', '') = '6580000004'
+        ORDER BY CASE WHEN phone LIKE '+%' THEN 0 ELSE 1 END, created_at ASC LIMIT 1;
+    SELECT id INTO v_pa_id            FROM auth.users WHERE REPLACE(phone, '+', '') = '6580000005'
+        ORDER BY CASE WHEN phone LIKE '+%' THEN 0 ELSE 1 END, created_at ASC LIMIT 1;
+    SELECT id INTO v_candidate_id     FROM auth.users WHERE REPLACE(phone, '+', '') = '6580000006'
+        ORDER BY CASE WHEN phone LIKE '+%' THEN 0 ELSE 1 END, created_at ASC LIMIT 1;
+    SELECT id INTO v_e2e_candidate_id FROM auth.users WHERE REPLACE(phone, '+', '') = '6590000007'
+        ORDER BY CASE WHEN phone LIKE '+%' THEN 0 ELSE 1 END, created_at ASC LIMIT 1;
 
     -- Diagnostic: detect duplicate auth.users rows per phone (multiple rows
     -- would mean ensureUser created a second user on a prior run, causing the
