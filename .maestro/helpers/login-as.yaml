@@ -59,8 +59,10 @@ input:
     text: "Allow"
     optional: true
 
-# Land on dashboard.
+# Land on dashboard. Allow up to 60s — auth gate has multiple async steps
+# (fetchUserProfile, checkInvitationStatus, registerPushToken) and staging
+# Supabase can be slow on first-tier connections from CI.
 - extendedWaitUntil:
     visible:
       id: "home-scroll-view"
-    timeout: 20000
+    timeout: 60000
