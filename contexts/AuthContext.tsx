@@ -7,6 +7,7 @@ import {
     setBiometricsEnabled,
     storeBiometricRefreshToken,
 } from '@/lib/biometrics';
+import { e2eDebug } from '@/lib/e2eDebugLog';
 import { clearSentryUser, setSentryUser } from '@/lib/sentry';
 import { supabase } from '@/lib/supabase';
 import { OTA_RELOAD_FLAG_KEY } from '@/hooks/useOtaUpdates';
@@ -458,7 +459,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         const {
             data: { subscription },
         } = supabase.auth.onAuthStateChange(async (event, session) => {
-            console.log(
+            e2eDebug(
                 '[E2E_DEBUG] onAuthStateChange event=',
                 event,
                 'hasSession=',
@@ -469,9 +470,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
             if (event === 'INITIAL_SESSION' || event === 'TOKEN_REFRESHED') return;
 
             if (session?.user) {
-                console.log('[E2E_DEBUG] fetching profile for', session.user.id);
+                e2eDebug('[E2E_DEBUG] fetching profile for', session.user.id);
                 const profile = await fetchUserProfile(session.user.id, session.user.phone || null);
-                console.log(
+                e2eDebug(
                     '[E2E_DEBUG] profile result:',
                     profile
                         ? `id=${profile.id}, role=${profile.role}, onboarding=${profile.onboarding_complete}`
@@ -487,7 +488,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
                         phone: session.user.phone,
                         role: profile.role,
                     });
-                    console.log('[E2E_DEBUG] setting authenticated=true, invStatus=', invStatus);
+                    e2eDebug('[E2E_DEBUG] setting authenticated=true, invStatus=', invStatus);
                     setUser(profile);
                     setAuthState((prev) => ({
                         ...prev,
@@ -498,7 +499,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
                         invitationStatus: invStatus,
                     }));
                 } else {
-                    console.log('[E2E_DEBUG] profile NULL — setting rejected');
+                    e2eDebug('[E2E_DEBUG] profile NULL — setting rejected');
                     setUser(null);
                     setAuthState((prev) => ({
                         ...prev,
@@ -510,7 +511,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
                     }));
                 }
             } else {
-                console.log('[E2E_DEBUG] no session — clearing auth');
+                e2eDebug('[E2E_DEBUG] no session — clearing auth');
                 clearSentryUser();
                 setUser(null);
                 setAuthState((prev) => ({
