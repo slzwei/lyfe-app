@@ -54,12 +54,26 @@ const admin = createClient(url, serviceRoleKey, {
 });
 
 async function ensureUser({ phone, label }) {
-    const { data, error } = await admin.auth.admin.listUsers({ page: 1, perPage: 200 });
-    if (error) throw new Error(`listUsers failed for ${phone}: ${error.message}`);
+    // Paginate through ALL auth users — not just page 1. A staging DB that has
+    // accumulated many runs can exceed 200 users; stopping at page 1 would miss
+    // the existing user and try (and fail) to create a duplicate.
+    const normalizedPhone = phone.replace('+', '');
+    let page = 1;
+    let existing = null;
+    let totalScanned = 0;
+    while (!existing) {
+        const { data, error } = await admin.auth.admin.listUsers({ page, perPage: 200 });
+        if (error) throw new Error(`listUsers (page ${page}) failed for ${phone}: ${error.message}`);
+        const users = data?.users ?? [];
+        totalScanned += users.length;
+        existing = users.find((u) => u.phone === normalizedPhone || u.phone === phone);
+        if (existing || users.length < 200) break; // found or exhausted all pages
+        page++;
+    }
+    console.log(`  [ensureUser] scanned ${totalScanned} auth users across ${page} page(s) for ${phone}`);
 
-    const existing = data?.users?.find((u) => u.phone === phone.replace('+', '') || u.phone === phone);
     if (existing) {
-        console.log(`✓ ${label} (${phone}) already exists — id=${existing.id}`);
+        console.log(`✓ ${label} (${phone}) found — id=${existing.id} phone_stored=${existing.phone}`);
         return existing.id;
     }
 
@@ -68,7 +82,7 @@ async function ensureUser({ phone, label }) {
         phone_confirm: true,
     });
     if (createErr) throw new Error(`createUser failed for ${phone}: ${createErr.message}`);
-    console.log(`+ ${label} (${phone}) created — id=${created.user.id}`);
+    console.log(`+ ${label} (${phone}) created — id=${created.user.id} phone_stored=${created.user.phone}`);
     return created.user.id;
 }
 

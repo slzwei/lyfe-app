@@ -77,6 +77,7 @@ async function fetchUserProfile(userId: string, _phone?: string | null): Promise
     for (let attempt = 0; attempt < 3; attempt++) {
         const { data, error } = await supabase.from('users').select('*').eq('id', userId).single();
         if (data) return data as User;
+        e2eDebug('[E2E_DEBUG] fetchUserProfile attempt=', attempt, 'code=', error?.code ?? 'none', 'msg=', error?.message ?? 'none');
         if (error?.code !== 'PGRST116') {
             if (__DEV__) console.error('Error fetching user profile:', error?.message);
             return null;
