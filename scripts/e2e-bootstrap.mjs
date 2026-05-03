@@ -32,7 +32,7 @@ const MOCK_USERS = [
     { phone: '+6580000004', label: 'agent' },
     { phone: '+6580000005', label: 'pa' },
     { phone: '+6580000006', label: 'candidate' },
-    { phone: '+6580000007', label: 'e2e-candidate' },
+    { phone: '+6590000007', label: 'e2e-candidate' },
 ];
 
 const url = process.env.STAGING_SUPABASE_URL;

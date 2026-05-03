@@ -12,7 +12,7 @@
 --   +6580000004 = agent          (face_registered_at set for E2E roadshow flow)
 --   +6580000005 = pa
 --   +6580000006 = candidate      (onboarding_complete=true)
---   +6580000007 = e2e candidate  (onboarding_complete=false, used by lifecycle flow)
+--   +6590000007 = e2e candidate  (onboarding_complete=false, used by lifecycle flow)
 -- =============================================================================
 
 -- ---------------------------------------------------------------------------
@@ -45,7 +45,7 @@ BEGIN
     SELECT id INTO v_agent_id         FROM auth.users WHERE REPLACE(phone, '+', '') = '6580000004';
     SELECT id INTO v_pa_id            FROM auth.users WHERE REPLACE(phone, '+', '') = '6580000005';
     SELECT id INTO v_candidate_id     FROM auth.users WHERE REPLACE(phone, '+', '') = '6580000006';
-    SELECT id INTO v_e2e_candidate_id FROM auth.users WHERE REPLACE(phone, '+', '') = '6580000007';
+    SELECT id INTO v_e2e_candidate_id FROM auth.users WHERE REPLACE(phone, '+', '') = '6590000007';
 
     -- Abort if any mock user hasn't logged in yet
     IF v_admin_id IS NULL THEN RAISE EXCEPTION 'Admin user (+6580000001) not found. Log in first.'; END IF;
@@ -54,7 +54,7 @@ BEGIN
     IF v_agent_id IS NULL THEN RAISE EXCEPTION 'Agent user (+6580000004) not found. Log in first.'; END IF;
     IF v_pa_id IS NULL THEN RAISE EXCEPTION 'PA user (+6580000005) not found. Log in first.'; END IF;
     IF v_candidate_id IS NULL THEN RAISE EXCEPTION 'Candidate user (+6580000006) not found. Log in first.'; END IF;
-    IF v_e2e_candidate_id IS NULL THEN RAISE EXCEPTION 'E2E candidate user (+6580000007) not found. Log in first.'; END IF;
+    IF v_e2e_candidate_id IS NULL THEN RAISE EXCEPTION 'E2E candidate user (+6590000007) not found. Log in first.'; END IF;
 
     RAISE NOTICE 'Found all 6 mock users. Seeding E2E data...';
 
@@ -77,7 +77,7 @@ BEGIN
         (v_agent_id,         '6580000004', 'David Agent'),
         (v_pa_id,            '6580000005', 'Priya PA'),
         (v_candidate_id,     '6580000006', 'Charlie Candidate'),
-        (v_e2e_candidate_id, '6580000007', 'E2E Candidate')
+        (v_e2e_candidate_id, '6590000007', 'E2E Candidate')
     ON CONFLICT (id) DO NOTHING;
 
     -- Grandfather the mock users so the check_phone_eligible() RPC treats
