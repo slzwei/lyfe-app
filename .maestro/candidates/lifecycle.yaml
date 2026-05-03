@@ -1,4 +1,4 @@
-# Candidate lifecycle: log in as the E2E candidate (+6580000007), walk
+# Candidate lifecycle: log in as the E2E candidate (+6590000007), walk
 # through the mobile staff-style onboarding (Welcome → ProfileSetup →
 # ProfilePhoto → AgencyInfo → OnboardingComplete), and assert we land on
 # the dashboard with onboarding_complete flipped.
@@ -25,7 +25,7 @@ appId: com.shawnlee.lyfe
 - runFlow:
     file: ../helpers/login-as.yaml
     env:
-      phone: "80000007"
+      phone: "90000007"
 
 # Auth gate routes to /onboarding/Welcome — assert we arrived.
 - extendedWaitUntil:
