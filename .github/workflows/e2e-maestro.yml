@@ -3,6 +3,8 @@ name: E2E (Maestro)
 # Manual + nightly only at first. Promote to required-status after 2 weeks of stable runs.
 on:
   workflow_dispatch:
+  push:
+    branches: [main]
   schedule:
     # 02:00 SGT (18:00 UTC) — runs after the day's commits land but before next-day work.
     - cron: '0 18 * * *'
