@@ -47,6 +47,19 @@ BEGIN
     SELECT id INTO v_candidate_id     FROM auth.users WHERE REPLACE(phone, '+', '') = '6580000006';
     SELECT id INTO v_e2e_candidate_id FROM auth.users WHERE REPLACE(phone, '+', '') = '6590000007';
 
+    -- Diagnostic: detect duplicate auth.users rows per phone (multiple rows
+    -- would mean ensureUser created a second user on a prior run, causing the
+    -- SELECT INTO above to pick an arbitrary UUID that may not match the seeded
+    -- public.users row — explaining the profile-fetch-returns-NULL symptom).
+    RAISE NOTICE 'DIAG auth.users row counts per phone: 001=%, 002=%, 003=%, 004=%, 005=%, 006=%, 007=%',
+        (SELECT COUNT(*) FROM auth.users WHERE REPLACE(phone, '+', '') = '6580000001'),
+        (SELECT COUNT(*) FROM auth.users WHERE REPLACE(phone, '+', '') = '6580000002'),
+        (SELECT COUNT(*) FROM auth.users WHERE REPLACE(phone, '+', '') = '6580000003'),
+        (SELECT COUNT(*) FROM auth.users WHERE REPLACE(phone, '+', '') = '6580000004'),
+        (SELECT COUNT(*) FROM auth.users WHERE REPLACE(phone, '+', '') = '6580000005'),
+        (SELECT COUNT(*) FROM auth.users WHERE REPLACE(phone, '+', '') = '6580000006'),
+        (SELECT COUNT(*) FROM auth.users WHERE REPLACE(phone, '+', '') = '6590000007');
+
     -- Abort if any mock user hasn't logged in yet
     IF v_admin_id IS NULL THEN RAISE EXCEPTION 'Admin user (+6580000001) not found. Log in first.'; END IF;
     IF v_director_id IS NULL THEN RAISE EXCEPTION 'Director user (+6580000002) not found. Log in first.'; END IF;
@@ -55,6 +68,11 @@ BEGIN
     IF v_pa_id IS NULL THEN RAISE EXCEPTION 'PA user (+6580000005) not found. Log in first.'; END IF;
     IF v_candidate_id IS NULL THEN RAISE EXCEPTION 'Candidate user (+6580000006) not found. Log in first.'; END IF;
     IF v_e2e_candidate_id IS NULL THEN RAISE EXCEPTION 'E2E candidate user (+6590000007) not found. Log in first.'; END IF;
+
+    -- Diagnostic: confirm the resolved UUIDs (compare across runs to detect
+    -- bootstrap creating a new user when it should have found the existing one).
+    RAISE NOTICE 'DIAG resolved UUIDs: admin=%, director=%, manager=%, agent=%, pa=%, candidate=%, e2e_cand=%',
+        v_admin_id, v_director_id, v_manager_id, v_agent_id, v_pa_id, v_candidate_id, v_e2e_candidate_id;
 
     RAISE NOTICE 'Found all 6 mock users. Seeding E2E data...';
 
@@ -164,6 +182,15 @@ BEGIN
         consent_privacy_at = NOW(),
         consent_operational_push_at = NOW()
     WHERE id = v_e2e_candidate_id;
+
+    -- Diagnostic: confirm public.users state for admin after seed (this is the
+    -- row the mobile app fetches via fetchUserProfile — NULL here = profile NULL).
+    RAISE NOTICE 'DIAG public.users admin: id=%, role=%, onboarding=%, consent_tos=%, consent_privacy=%',
+        (SELECT id FROM public.users WHERE id = v_admin_id),
+        (SELECT role FROM public.users WHERE id = v_admin_id),
+        (SELECT onboarding_complete FROM public.users WHERE id = v_admin_id),
+        (SELECT consent_tos_at IS NOT NULL FROM public.users WHERE id = v_admin_id),
+        (SELECT consent_privacy_at IS NOT NULL FROM public.users WHERE id = v_admin_id);
 
     RAISE NOTICE 'Users updated (roles, names, onboarding_complete).';
 
