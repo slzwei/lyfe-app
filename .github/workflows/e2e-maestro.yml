@@ -163,37 +163,27 @@ jobs:
           fi
           ls -la /tmp/sim.log 2>/dev/null || echo "no sim.log"
 
-      # Pull diagnostic breadcrumbs. Two sources:
-      #   1. /tmp/sim.log — captures console.warn from all 5 Maestro flows
-      #      (primary path; survives container reinstall between flows).
-      #   2. e2e-debug.log in the app's Documents — only the LAST flow's
-      #      content (Maestro's launchApp wipes Documents between flows),
-      #      kept as a backup in case sim.log capture missed.
+      # Pull diagnostic breadcrumbs. Each Maestro flow launches a fresh
+      # app process, and lib/e2eDebugLog picks a unique filename per
+      # process (e2e-debug-<unix-ms>.log). Concatenate all of them into
+      # /tmp/app-debug.log so we see what every flow logged.
       - name: Read app-side debug log
         if: always()
         run: |
-          # Filter sim.log to E2E_DEBUG breadcrumbs and dedupe to /tmp/app-debug.log
-          if [ -f /tmp/sim.log ]; then
-            echo "=== sim.log E2E_DEBUG breadcrumbs (cross-flow) ==="
-            grep -E '\[E2E_DEBUG\]' /tmp/sim.log | tee /tmp/app-debug.log || echo "(no E2E_DEBUG lines in sim.log)"
-            echo "=== end ==="
-          else
-            echo "no /tmp/sim.log present"
-          fi
-
-          # Backup: per-flow file from app Documents (last flow only)
           APP_DATA=$(xcrun simctl get_app_container "$DEVICE_ID" com.shawnlee.lyfe data 2>/dev/null || true)
-          DEBUG_FILE="$APP_DATA/Documents/e2e-debug.log"
-          if [ -f "$DEBUG_FILE" ]; then
-            echo "=== app Documents/e2e-debug.log (last flow only) ==="
-            cat "$DEBUG_FILE"
+          DOCS="$APP_DATA/Documents"
+          if [ -d "$DOCS" ]; then
+            echo "=== files in app Documents ==="
+            ls -la "$DOCS" | grep -E "e2e-debug" || echo "(no e2e-debug-* files)"
+            echo "=== concatenated e2e-debug-*.log (one per flow, in time order) ==="
+            : > /tmp/app-debug.log
+            for f in $(ls "$DOCS"/e2e-debug-*.log 2>/dev/null | sort); do
+              echo "--- ${f##*/} ---" | tee -a /tmp/app-debug.log
+              cat "$f" | tee -a /tmp/app-debug.log
+            done
             echo "=== end ==="
-            # If sim.log gave us nothing, fall back to the file
-            if [ ! -s /tmp/app-debug.log ]; then
-              cp "$DEBUG_FILE" /tmp/app-debug.log
-            fi
           else
-            echo "no app debug log at $DEBUG_FILE"
+            echo "no app Documents at $DOCS"
           fi
 
       - name: Upload Maestro debug output on failure
