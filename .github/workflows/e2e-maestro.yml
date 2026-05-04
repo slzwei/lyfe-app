@@ -163,19 +163,35 @@ jobs:
           fi
           ls -la /tmp/sim.log 2>/dev/null || echo "no sim.log"
 
-      # Read the e2e-debug.log file the app wrote to its Documents directory.
-      # console.log is stripped by babel-preset-expo in Release; lib/e2eDebugLog
-      # writes diagnostic breadcrumbs to a file we can read here.
+      # Pull diagnostic breadcrumbs. Two sources:
+      #   1. /tmp/sim.log — captures console.warn from all 5 Maestro flows
+      #      (primary path; survives container reinstall between flows).
+      #   2. e2e-debug.log in the app's Documents — only the LAST flow's
+      #      content (Maestro's launchApp wipes Documents between flows),
+      #      kept as a backup in case sim.log capture missed.
       - name: Read app-side debug log
         if: always()
         run: |
+          # Filter sim.log to E2E_DEBUG breadcrumbs and dedupe to /tmp/app-debug.log
+          if [ -f /tmp/sim.log ]; then
+            echo "=== sim.log E2E_DEBUG breadcrumbs (cross-flow) ==="
+            grep -E '\[E2E_DEBUG\]' /tmp/sim.log | tee /tmp/app-debug.log || echo "(no E2E_DEBUG lines in sim.log)"
+            echo "=== end ==="
+          else
+            echo "no /tmp/sim.log present"
+          fi
+
+          # Backup: per-flow file from app Documents (last flow only)
           APP_DATA=$(xcrun simctl get_app_container "$DEVICE_ID" com.shawnlee.lyfe data 2>/dev/null || true)
           DEBUG_FILE="$APP_DATA/Documents/e2e-debug.log"
           if [ -f "$DEBUG_FILE" ]; then
-            echo "=== app e2e-debug.log ($DEBUG_FILE) ==="
+            echo "=== app Documents/e2e-debug.log (last flow only) ==="
             cat "$DEBUG_FILE"
             echo "=== end ==="
-            cp "$DEBUG_FILE" /tmp/app-debug.log
+            # If sim.log gave us nothing, fall back to the file
+            if [ ! -s /tmp/app-debug.log ]; then
+              cp "$DEBUG_FILE" /tmp/app-debug.log
+            fi
           else
             echo "no app debug log at $DEBUG_FILE"
           fi
