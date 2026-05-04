@@ -47,10 +47,15 @@ input:
 - tapOn: "OTP input"
 - inputText: "555555"
 
-# Tap Verify — the OTP screen no longer auto-submits on the 6th digit;
-# there's an explicit Verify button now.
+# Tap Verify — on Release builds the OTP screen *can* auto-submit on
+# the 6th digit (handleVerifyOtp fires from inputText), in which case
+# Maestro tapping login-verify-button after the screen has transitioned
+# away would fail with "Element not found". Make this optional: if the
+# button is still around, tap it; if not, the next assertion
+# (home-scroll-view) will confirm the user landed on home.
 - tapOn:
     id: "login-verify-button"
+    optional: true
 
 # iOS may show a notifications permission prompt after auth completes —
 # AuthContext.fetchOrCreateUser calls Notifications.requestPermissionsAsync.
