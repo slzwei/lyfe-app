@@ -75,6 +75,32 @@ const INVITATION_SYSTEM_CUTOFF = '2026-03-29T00:00:00Z';
  */
 async function fetchUserProfile(userId: string, _phone?: string | null): Promise<User | null> {
     for (let attempt = 0; attempt < 3; attempt++) {
+        // E2E DIAG: capture the supabase client's session state at the moment
+        // of the request so we can prove whether the JWT is being attached.
+        // The seed-side impersonation test confirmed RLS works when claims are
+        // set, so PGRST116 here means the request is reaching PostgREST as
+        // anon (no/invalid Bearer token).
+        const { data: { session: sess } } = await supabase.auth.getSession();
+        const tokenPrefix = sess?.access_token ? sess.access_token.slice(0, 16) : 'null';
+        e2eDebug(
+            '[E2E_DEBUG] fetchUserProfile pre-attempt=', attempt,
+            'has_session=', !!sess,
+            'session_user_id=', sess?.user?.id ?? 'null',
+            'access_token_prefix=', tokenPrefix,
+        );
+
+        // Run a non-.single() variant to count actual rows visible to this
+        // request — distinguishes "0 rows due to RLS" from any other PGRST116.
+        const { data: rawData, error: rawErr } = await supabase
+            .from('users')
+            .select('id, role')
+            .eq('id', userId);
+        e2eDebug(
+            '[E2E_DEBUG] fetchUserProfile raw-attempt=', attempt,
+            'raw_count=', rawData?.length ?? 0,
+            'raw_err_code=', rawErr?.code ?? 'none',
+        );
+
         const { data, error } = await supabase.from('users').select('*').eq('id', userId).single();
         if (data) return data as User;
         e2eDebug('[E2E_DEBUG] fetchUserProfile attempt=', attempt, 'code=', error?.code ?? 'none', 'msg=', error?.message ?? 'none');
