@@ -74,41 +74,68 @@ const INVITATION_SYSTEM_CUTOFF = '2026-03-29T00:00:00Z';
  * so we retry briefly if the row hasn't appeared yet (race condition).
  */
 async function fetchUserProfile(userId: string, _phone?: string | null): Promise<User | null> {
+    // We had been calling supabase.from('users').select('*').eq('id', userId).single()
+    // but the user-JWT'd request was returning PGRST116 (0 rows) under RLS even
+    // though the seed-side impersonation test proved RLS works correctly when
+    // request.jwt.claims is set. The failure mode is that the supabase-js client
+    // wasn't reliably attaching the user's Bearer token to the request, so
+    // PostgREST treated it as anon and RLS hid the row.
+    //
+    // Fix: bypass supabase-js for this single hot-path call and issue the request
+    // directly with fetch, attaching the Authorization header explicitly. This
+    // also gives us the raw response body if PostgREST rejects the token.
     for (let attempt = 0; attempt < 3; attempt++) {
-        // E2E DIAG: capture the supabase client's session state at the moment
-        // of the request so we can prove whether the JWT is being attached.
-        // The seed-side impersonation test confirmed RLS works when claims are
-        // set, so PGRST116 here means the request is reaching PostgREST as
-        // anon (no/invalid Bearer token).
-        const { data: { session: sess } } = await supabase.auth.getSession();
-        const tokenPrefix = sess?.access_token ? sess.access_token.slice(0, 16) : 'null';
-        e2eDebug(
-            '[E2E_DEBUG] fetchUserProfile pre-attempt=', attempt,
-            'has_session=', !!sess,
-            'session_user_id=', sess?.user?.id ?? 'null',
-            'access_token_prefix=', tokenPrefix,
-        );
-
-        // Run a non-.single() variant to count actual rows visible to this
-        // request — distinguishes "0 rows due to RLS" from any other PGRST116.
-        const { data: rawData, error: rawErr } = await supabase
-            .from('users')
-            .select('id, role')
-            .eq('id', userId);
-        e2eDebug(
-            '[E2E_DEBUG] fetchUserProfile raw-attempt=', attempt,
-            'raw_count=', rawData?.length ?? 0,
-            'raw_err_code=', rawErr?.code ?? 'none',
-        );
-
-        const { data, error } = await supabase.from('users').select('*').eq('id', userId).single();
-        if (data) return data as User;
-        e2eDebug('[E2E_DEBUG] fetchUserProfile attempt=', attempt, 'code=', error?.code ?? 'none', 'msg=', error?.message ?? 'none');
-        if (error?.code !== 'PGRST116') {
-            if (__DEV__) console.error('Error fetching user profile:', error?.message);
+        const { data: { session } } = await supabase.auth.getSession();
+        if (!session?.access_token) {
+            e2eDebug('[E2E_DEBUG] fetchUserProfile attempt=', attempt, 'no_access_token; aborting');
+            if (attempt < 2) {
+                await new Promise((r) => setTimeout(r, 150));
+                continue;
+            }
             return null;
         }
-        // Row not yet created by trigger — wait briefly and retry
+
+        const supaUrl = process.env.EXPO_PUBLIC_SUPABASE_URL;
+        const apikey = process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY;
+        if (!supaUrl || !apikey) {
+            return null;
+        }
+        const url = `${supaUrl}/rest/v1/users?id=eq.${encodeURIComponent(userId)}&select=*`;
+        const tokenPrefix = session.access_token.slice(0, 16);
+        e2eDebug(
+            '[E2E_DEBUG] fetchUserProfile attempt=', attempt,
+            'session_user_id=', session.user?.id ?? 'null',
+            'token_prefix=', tokenPrefix,
+        );
+
+        try {
+            const resp = await fetch(url, {
+                headers: {
+                    apikey,
+                    Authorization: `Bearer ${session.access_token}`,
+                    Accept: 'application/json',
+                    'Accept-Profile': 'public',
+                },
+            });
+            const bodyText = await resp.text();
+            e2eDebug(
+                '[E2E_DEBUG] fetchUserProfile attempt=', attempt,
+                'status=', resp.status,
+                'body_len=', bodyText.length,
+                'body_head=', bodyText.slice(0, 120),
+            );
+
+            if (resp.ok) {
+                const rows = JSON.parse(bodyText) as User[];
+                if (Array.isArray(rows) && rows.length === 1) {
+                    return rows[0];
+                }
+                e2eDebug('[E2E_DEBUG] fetchUserProfile attempt=', attempt, 'unexpected_rows=', rows?.length ?? 'not_array');
+            }
+        } catch (err) {
+            e2eDebug('[E2E_DEBUG] fetchUserProfile attempt=', attempt, 'fetch_err=', String(err));
+        }
+
         if (attempt < 2) await new Promise((r) => setTimeout(r, 150));
     }
     if (__DEV__) console.error('User profile not found after retries');
