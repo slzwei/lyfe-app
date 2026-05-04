@@ -433,3 +433,75 @@ BEGIN
     -- -----------------------------------------------------------------------
     RAISE NOTICE '✅ E2E seed complete. All 6 mock users ready.';
 END $$;
+
+-- ---------------------------------------------------------------------------
+-- 0b. Diagnostic: confirm RLS visibility for the manager on public.leads.
+-- ---------------------------------------------------------------------------
+-- After PR #44, the leads tab still shows 0 rows for the manager despite
+-- the seed inserting 3 leads owned/assigned by the manager. Both supabase-js
+-- and the explicit-fetch fallback returned empty. This test impersonates
+-- the manager's JWT in PostgREST style and SELECTs from public.leads to
+-- confirm whether the manager's user-JWT can see the rows under RLS.
+DO $leads_smoke$
+DECLARE
+    v_manager_id  UUID;
+    v_count_all   INT;
+    v_count_self  INT;
+    v_count_team  INT;
+    v_total_in_db INT;
+BEGIN
+    SELECT id INTO v_manager_id
+    FROM auth.users
+    WHERE REPLACE(phone, '+', '') = '6580000003'
+    ORDER BY CASE WHEN phone LIKE '+%' THEN 0 ELSE 1 END, created_at ASC
+    LIMIT 1;
+
+    -- Service-role baseline: how many leads exist in DB period?
+    SELECT COUNT(*) INTO v_total_in_db FROM public.leads;
+    RAISE NOTICE 'DIAG total leads in DB (service-role): %', v_total_in_db;
+
+    -- Show the rows the seed should have created so we can compare ids.
+    DECLARE rec RECORD;
+    BEGIN
+        FOR rec IN SELECT id, full_name, assigned_to, created_by FROM public.leads ORDER BY created_at LIMIT 10
+        LOOP
+            RAISE NOTICE 'DIAG lead row: id=%, name=%, assigned_to=%, created_by=%',
+                rec.id, rec.full_name, rec.assigned_to, rec.created_by;
+        END LOOP;
+    END;
+
+    -- Impersonate the manager's JWT.
+    PERFORM set_config('request.jwt.claims', json_build_object(
+        'sub', v_manager_id::text,
+        'role', 'authenticated',
+        'aud', 'authenticated'
+    )::text, true);
+    SET LOCAL ROLE authenticated;
+
+    SELECT COUNT(*) INTO v_count_all FROM public.leads;
+    SELECT COUNT(*) INTO v_count_self FROM public.leads WHERE assigned_to = v_manager_id;
+    SELECT COUNT(*) INTO v_count_team FROM public.leads
+        WHERE EXISTS (SELECT 1 FROM public.users u WHERE u.id = leads.assigned_to AND u.reports_to = v_manager_id);
+
+    RAISE NOTICE 'DIAG impersonate-as-manager leads visible (RLS-filtered): all=%, self_assigned=%, team=%',
+        v_count_all, v_count_self, v_count_team;
+
+    -- Show the leads RLS function result for known rows
+    DECLARE rec2 RECORD;
+    BEGIN
+        FOR rec2 IN SELECT id, full_name FROM public.leads
+        LOOP
+            RAISE NOTICE 'DIAG manager can_access_lead(%, ...) for "%": %',
+                rec2.id, rec2.full_name, can_access_lead(
+                    (SELECT assigned_to FROM public.leads WHERE id = rec2.id),
+                    (SELECT created_by  FROM public.leads WHERE id = rec2.id)
+                );
+        END LOOP;
+    END;
+
+    RESET ROLE;
+    PERFORM set_config('request.jwt.claims', '', true);
+EXCEPTION WHEN OTHERS THEN
+    RAISE NOTICE 'DIAG leads impersonation block raised: % %', SQLSTATE, SQLERRM;
+    RESET ROLE;
+END $leads_smoke$;
