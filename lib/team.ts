@@ -62,6 +62,7 @@ export async function fetchTeamMembers(
             .from('users')
             .select('id, full_name, role, phone, email, avatar_url, is_active, created_at')
             .in('role', ['manager', 'agent'])
+            .eq('is_test_data', false)
             .order('full_name', { ascending: true });
 
         if (userRole === 'manager') {
@@ -73,7 +74,8 @@ export async function fetchTeamMembers(
                 .from('users')
                 .select('id')
                 .eq('role', 'manager')
-                .eq('reports_to', userId);
+                .eq('reports_to', userId)
+                .eq('is_test_data', false);
             if (reportsErr) return { data: [], error: reportsErr.message };
 
             const managerIds = ((directReports || []) as { id: string }[]).map((r) => r.id);
@@ -82,7 +84,8 @@ export async function fetchTeamMembers(
             const { data: agentRows, error: agentsErr } = await supabase
                 .from('users')
                 .select('id')
-                .in('reports_to', managerIds);
+                .in('reports_to', managerIds)
+                .eq('is_test_data', false);
             if (agentsErr) return { data: [], error: agentsErr.message };
 
             const agentIds = ((agentRows || []) as { id: string }[]).map((r) => r.id);
@@ -165,7 +168,8 @@ export async function fetchTeamMembers(
                     .select('reports_to')
                     .in('reports_to', managerIds)
                     .eq('role', 'agent')
-                    .eq('is_active', true),
+                    .eq('is_active', true)
+                    .eq('is_test_data', false),
                 supabase.from('candidates').select('assigned_manager_id, status').in('assigned_manager_id', managerIds),
             ]);
 
@@ -296,6 +300,7 @@ export async function fetchReassignableManagers(
             .select('id, full_name, role')
             .in('role', ['manager', 'director'])
             .eq('is_active', true)
+            .eq('is_test_data', false)
             .order('full_name', { ascending: true });
         if (error) return { data: [], error: error.message };
 
@@ -427,7 +432,12 @@ export async function fetchManagerOverview(
                 .from('candidates')
                 .select('id, name, status, stage_entered_at, updated_at')
                 .eq('assigned_manager_id', managerId),
-            supabase.from('users').select('id, full_name, is_active').eq('reports_to', managerId).eq('role', 'agent'),
+            supabase
+                .from('users')
+                .select('id, full_name, is_active')
+                .eq('reports_to', managerId)
+                .eq('role', 'agent')
+                .eq('is_test_data', false),
         ]);
 
         if (managerResult.error) return { data: null, error: managerResult.error.message };
@@ -650,7 +660,8 @@ export async function getTeamPerformance(
             .from('users')
             .select('id, full_name')
             .eq('reports_to', managerId)
-            .eq('is_active', true);
+            .eq('is_active', true)
+            .eq('is_test_data', false);
 
         if (agentsError) return { data: emptyResult, error: agentsError.message };
 

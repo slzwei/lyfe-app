@@ -92,7 +92,8 @@ export async function fetchRecentActivities(
             .select('id')
             .eq('reports_to', userId)
             .eq('role', 'agent')
-            .eq('is_active', true);
+            .eq('is_active', true)
+            .eq('is_test_data', false);
         const agentIds = ((agents || []) as { id: string }[]).map((a) => a.id);
         const { data: teamLeads } = await supabase
             .from('leads')
@@ -161,7 +162,8 @@ export async function getTeamLeadSummary(managerId: string): Promise<{
             .select('id')
             .eq('reports_to', managerId)
             .eq('role', 'agent')
-            .eq('is_active', true);
+            .eq('is_active', true)
+            .eq('is_test_data', false);
 
         if (agentsError) return { ...emptyResult, error: agentsError.message };
 
@@ -242,7 +244,8 @@ export async function fetchManagerDashboardStats(
         .from('users')
         .select('id', { count: 'exact', head: true })
         .eq('role', 'agent')
-        .eq('is_active', true);
+        .eq('is_active', true)
+        .eq('is_test_data', false);
 
     if (userRole === 'manager') {
         agentQuery = agentQuery.eq('reports_to', userId);

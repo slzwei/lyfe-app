@@ -463,6 +463,7 @@ export async function fetchAssignableManagers(
                 .select('id, full_name, role')
                 .in('id', managerIds)
                 .eq('is_active', true)
+                .eq('is_test_data', false)
                 .order('full_name');
 
             return {
@@ -476,6 +477,7 @@ export async function fetchAssignableManagers(
             .select('id, full_name, role')
             .in('role', ['manager', 'director'])
             .eq('is_active', true)
+            .eq('is_test_data', false)
             .neq('id', userId)
             .order('full_name');
 

@@ -883,11 +883,13 @@ export type Database = {
                 Row: {
                     answers: Json;
                     completed_at: string | null;
+                    exam_kind: string;
                     id: string;
                     module_id: string;
                     parts: Json | null;
                     passed: boolean | null;
-                    quiz_id: string;
+                    question_ids: Json | null;
+                    quiz_id: string | null;
                     score: number | null;
                     started_at: string;
                     status: string;
@@ -898,11 +900,13 @@ export type Database = {
                 Insert: {
                     answers?: Json;
                     completed_at?: string | null;
+                    exam_kind?: string;
                     id?: string;
                     module_id: string;
                     parts?: Json | null;
                     passed?: boolean | null;
-                    quiz_id: string;
+                    question_ids?: Json | null;
+                    quiz_id?: string | null;
                     score?: number | null;
                     started_at?: string;
                     status?: string;
@@ -913,11 +917,13 @@ export type Database = {
                 Update: {
                     answers?: Json;
                     completed_at?: string | null;
+                    exam_kind?: string;
                     id?: string;
                     module_id?: string;
                     parts?: Json | null;
                     passed?: boolean | null;
-                    quiz_id?: string;
+                    question_ids?: Json | null;
+                    quiz_id?: string | null;
                     score?: number | null;
                     started_at?: string;
                     status?: string;
@@ -1688,6 +1694,7 @@ export type Database = {
                     id: string;
                     intended_role: Database['public']['Enums']['user_role'];
                     invited_by_id: string;
+                    is_test_data: boolean;
                     notes: string | null;
                     phone: string;
                     status: string;
@@ -1702,6 +1709,7 @@ export type Database = {
                     id?: string;
                     intended_role: Database['public']['Enums']['user_role'];
                     invited_by_id: string;
+                    is_test_data?: boolean;
                     notes?: string | null;
                     phone: string;
                     status?: string;
@@ -1716,6 +1724,7 @@ export type Database = {
                     id?: string;
                     intended_role?: Database['public']['Enums']['user_role'];
                     invited_by_id?: string;
+                    is_test_data?: boolean;
                     notes?: string | null;
                     phone?: string;
                     status?: string;
@@ -2411,6 +2420,7 @@ export type Database = {
                     full_name: string;
                     id: string;
                     is_active: boolean | null;
+                    is_test_data: boolean;
                     last_login_at: string | null;
                     last_seen_at: string | null;
                     lifecycle_stage: Database['public']['Enums']['lifecycle_stage'] | null;
@@ -2437,6 +2447,7 @@ export type Database = {
                     full_name: string;
                     id: string;
                     is_active?: boolean | null;
+                    is_test_data?: boolean;
                     last_login_at?: string | null;
                     last_seen_at?: string | null;
                     lifecycle_stage?: Database['public']['Enums']['lifecycle_stage'] | null;
@@ -2463,6 +2474,7 @@ export type Database = {
                     full_name?: string;
                     id?: string;
                     is_active?: boolean | null;
+                    is_test_data?: boolean;
                     last_login_at?: string | null;
                     last_seen_at?: string | null;
                     lifecycle_stage?: Database['public']['Enums']['lifecycle_stage'] | null;

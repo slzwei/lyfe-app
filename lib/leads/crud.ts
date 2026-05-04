@@ -222,7 +222,12 @@ export async function fetchTeamAgents(
     managerId: string,
     userRole?: string,
 ): Promise<{ data: { id: string; full_name: string }[]; error: string | null }> {
-    let query = supabase.from('users').select('id, full_name').eq('role', 'agent').eq('is_active', true);
+    let query = supabase
+        .from('users')
+        .select('id, full_name')
+        .eq('role', 'agent')
+        .eq('is_active', true)
+        .eq('is_test_data', false);
 
     if (userRole === 'admin' || userRole === 'director') {
         // Directors/admins can reassign to any active agent
