@@ -39,7 +39,7 @@ module.exports = {
         splash: {
             image: './assets/images/splash-icon.png',
             resizeMode: 'contain',
-            backgroundColor: '#FFFFFF',
+            backgroundColor: '#F5F0E6',
         },
         ios: {
             supportsTablet: false,
@@ -63,7 +63,7 @@ module.exports = {
         android: {
             package: 'com.shawnlee.lyfe',
             adaptiveIcon: {
-                backgroundColor: '#E6F4FE',
+                backgroundColor: '#F5F0E6',
                 foregroundImage: './assets/images/android-icon-foreground.png',
                 backgroundImage: './assets/images/android-icon-background.png',
                 monochromeImage: './assets/images/android-icon-monochrome.png',

@@ -11,11 +11,15 @@ interface LyfeLogoProps {
     withPeriod?: boolean;
 }
 
-// Tropic wordmark sizing — Fraunces has normal metrics, no Android clipping workaround needed
+// Canonical tracking ratio for the lyfe. wordmark — derived from the original
+// login-screen value (letterSpacing -0.5 at fontSize 48). Applied as a ratio so
+// every size renders identical optical spacing across screen, splash, and icon.
+const TRACKING_RATIO = -0.5 / 48;
+
 const SIZES: Record<string, TextStyle> = {
-    sm: { fontSize: 20, lineHeight: 24 },
-    md: { fontSize: 32, lineHeight: 36 },
-    lg: { fontSize: 48, lineHeight: 52 },
+    sm: { fontSize: 20, lineHeight: 24, letterSpacing: 20 * TRACKING_RATIO },
+    md: { fontSize: 32, lineHeight: 36, letterSpacing: 32 * TRACKING_RATIO },
+    lg: { fontSize: 48, lineHeight: 52, letterSpacing: 48 * TRACKING_RATIO },
 };
 
 /**
@@ -49,7 +53,5 @@ export default function LyfeLogo({ size = 'md', color, withPeriod = true }: Lyfe
 }
 
 const styles = StyleSheet.create({
-    logo: {
-        letterSpacing: -0.5,
-    },
+    logo: {},
 });
