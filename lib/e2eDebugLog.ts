@@ -23,16 +23,20 @@ export function e2eDebug(...parts: unknown[]) {
     try {
         if (!initialized) {
             initialized = true;
+            // Try reading prior file content. file.text() throws (or
+            // returns empty) if the file doesn't exist; that's how we
+            // detect "first launch ever" vs. "subsequent flow in same
+            // simulator container". Don't rely on file.exists — it's a
+            // method on some expo-file-system/next versions and would
+            // always be truthy as a function reference.
             try {
                 const existing = new File(Paths.document, 'e2e-debug.log');
-                if (existing.exists) {
-                    const prior = existing.text();
-                    if (typeof prior === 'string' && prior.length > 0) {
-                        buffer = prior + `--- new app launch at ${new Date().toISOString()} ---\n`;
-                    }
+                const prior = existing.text();
+                if (typeof prior === 'string' && prior.length > 0) {
+                    buffer = prior + `--- new app launch at ${new Date().toISOString()} ---\n`;
                 }
             } catch {
-                // ignore — fresh start is fine
+                // file didn't exist or couldn't be read — fresh start is fine
             }
         }
         const line = `${new Date().toISOString()} ${parts.map((p) => (typeof p === 'string' ? p : JSON.stringify(p))).join(' ')}\n`;
