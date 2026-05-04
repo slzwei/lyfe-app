@@ -46,6 +46,52 @@ BEGIN
     END LOOP;
 END $diag$;
 
+-- Definitive RLS smoke test: simulate a PostgREST authenticated request as
+-- the admin user and SELECT their own row. If count=1 the RLS is fine and
+-- the issue is client-side (JWT not being attached to requests). If count=0
+-- there's something we still don't see in pg_policies (FORCE RLS, an event
+-- trigger, a view masking the table, etc).
+DO $smoke$
+DECLARE
+    v_admin_id UUID;
+    v_count_self INT;
+    v_count_all INT;
+    v_relrowsecurity BOOL;
+    v_relforcerowsecurity BOOL;
+BEGIN
+    SELECT id INTO v_admin_id
+    FROM auth.users
+    WHERE REPLACE(phone, '+', '') = '6580000001'
+    ORDER BY CASE WHEN phone LIKE '+%' THEN 0 ELSE 1 END, created_at ASC
+    LIMIT 1;
+
+    SELECT relrowsecurity, relforcerowsecurity
+    INTO v_relrowsecurity, v_relforcerowsecurity
+    FROM pg_class
+    WHERE oid = 'public.users'::regclass;
+    RAISE NOTICE 'DIAG public.users RLS: enabled=%, forced=%',
+        v_relrowsecurity, v_relforcerowsecurity;
+
+    -- Impersonate the admin's JWT claims, the same way PostgREST does.
+    PERFORM set_config('request.jwt.claims', json_build_object(
+        'sub', v_admin_id::text,
+        'role', 'authenticated',
+        'aud', 'authenticated'
+    )::text, true);
+    SET LOCAL ROLE authenticated;
+
+    SELECT COUNT(*) INTO v_count_self FROM public.users WHERE id = v_admin_id;
+    SELECT COUNT(*) INTO v_count_all FROM public.users;
+    RAISE NOTICE 'DIAG impersonate-as-admin self-select: count=% (expect 1)', v_count_self;
+    RAISE NOTICE 'DIAG impersonate-as-admin select all (RLS-filtered): count=%', v_count_all;
+
+    RESET ROLE;
+    PERFORM set_config('request.jwt.claims', '', true);
+EXCEPTION WHEN OTHERS THEN
+    RAISE NOTICE 'DIAG impersonation block raised: % %', SQLSTATE, SQLERRM;
+    RESET ROLE;
+END $smoke$;
+
 -- ---------------------------------------------------------------------------
 -- 0. Resolve mock user IDs by phone from auth.users
 -- ---------------------------------------------------------------------------
