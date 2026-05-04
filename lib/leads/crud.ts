@@ -27,6 +27,35 @@ export async function fetchLeads(
     page?: number,
     pageSize: number = 50,
 ): Promise<{ data: Lead[]; error: string | null; hasMore: boolean }> {
+    // E2E DIAG (and probable workaround): on Release/CI the supabase-js
+    // client occasionally fails to attach the user JWT to PostgREST queries
+    // even after onAuthStateChange has fired SIGNED_IN — RLS then sees the
+    // request as anon and returns 0 rows for permissive policies. Mirror
+    // the explicit-fetch pattern used in fetchUserProfile (PR #41/#42) so
+    // we can confirm or rule that out, and to log the response shape if
+    // it's still empty.
+    const { data: { session } } = await supabase.auth.getSession();
+    const e2eEnabled = process.env.EXPO_PUBLIC_E2E_FACE_BYPASS === '1';
+    const log = (...parts: unknown[]) => {
+        if (!e2eEnabled) return;
+        // Lightweight forward to e2eDebug without importing it here to keep
+        // this fix focused. console.log is stripped on Release; the
+        // e2e-debug logger writes to a file readable from CI.
+        try {
+            // eslint-disable-next-line @typescript-eslint/no-require-imports
+            require('../e2eDebugLog').e2eDebug(...parts);
+        } catch {
+            // ignore
+        }
+    };
+
+    log(
+        '[E2E_DEBUG] fetchLeads pre',
+        'has_session=', !!session,
+        'token_prefix=', session?.access_token ? session.access_token.slice(0, 16) : 'null',
+        'isManager=', isManager,
+    );
+
     let query = supabase.from('leads').select('*').order('updated_at', { ascending: false });
 
     if (!isManager) {
@@ -36,7 +65,50 @@ export async function fetchLeads(
     query = applyPageRange(query, page, pageSize);
 
     const { data, error } = await query;
-    if (error) return { data: [], error: friendlyError(error.message, error.code), hasMore: false };
+    if (error) {
+        log('[E2E_DEBUG] fetchLeads error', 'code=', error.code, 'msg=', error.message);
+        return { data: [], error: friendlyError(error.message, error.code), hasMore: false };
+    }
+
+    log('[E2E_DEBUG] fetchLeads ok', 'rows=', data?.length ?? 0);
+
+    // Fallback: if supabase-js returned 0 rows but we have a valid session,
+    // retry with an explicit fetch + Bearer header. If THIS path returns
+    // rows, supabase-js was failing to attach the JWT and the explicit-
+    // fetch wrapper is the workaround we need everywhere.
+    if ((data?.length ?? 0) === 0 && session?.access_token) {
+        const supaUrl = process.env.EXPO_PUBLIC_SUPABASE_URL;
+        const apikey = process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY;
+        if (supaUrl && apikey) {
+            try {
+                const filter = isManager ? '' : `&assigned_to=eq.${encodeURIComponent(userId)}`;
+                const url = `${supaUrl}/rest/v1/leads?select=*&order=updated_at.desc${filter}`;
+                const resp = await fetch(url, {
+                    headers: {
+                        apikey,
+                        Authorization: `Bearer ${session.access_token}`,
+                        Accept: 'application/json',
+                        'Accept-Profile': 'public',
+                    },
+                });
+                const bodyText = await resp.text();
+                log(
+                    '[E2E_DEBUG] fetchLeads explicit-fetch fallback',
+                    'status=', resp.status,
+                    'body_head=', bodyText.slice(0, 120),
+                );
+                if (resp.ok) {
+                    const rows = JSON.parse(bodyText) as Lead[];
+                    if (Array.isArray(rows) && rows.length > 0) {
+                        const { data: paged, hasMore } = resolvePage(rows, page, pageSize);
+                        return { data: paged, error: null, hasMore };
+                    }
+                }
+            } catch (err) {
+                log('[E2E_DEBUG] fetchLeads explicit-fetch err', String(err));
+            }
+        }
+    }
 
     const results = (data || []) as Lead[];
     const { data: paged, hasMore } = resolvePage(results, page, pageSize);
