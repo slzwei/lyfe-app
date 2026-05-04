@@ -1,13 +1,21 @@
 /**
- * E2E debug logger — primary path: console.warn (survives Release builds;
- * babel-preset-expo strips console.log but not warn/error). Captured by the
- * `xcrun simctl spawn ... log stream` running in CI as /tmp/sim.log, which
- * is uploaded as artifact. console.warn output spans all 5 Maestro flows in
- * one stream — solves the "Maestro reinstalls per flow → Documents wiped"
- * problem the file-based logger had.
+ * E2E debug logger — writes per-flow log files to the app's Documents
+ * directory. Maestro launches each flow as a fresh process; each process's
+ * module load picks a unique filename based on Date.now() at startup, so
+ * the 5 flows produce 5 distinct files (no overwrite). The CI workflow
+ * cats all `e2e-debug-*.log` after Maestro finishes.
  *
- * Backup path: keeps writing to e2e-debug.log in the app's Documents
- * directory in case sim.log capture fails. Best-effort.
+ * Why not console.warn / sim.log: tested in PR #48 — console.warn output
+ * does NOT make it into `xcrun simctl spawn ... log stream` on Release
+ * builds. RN routes through RCTLog → a subsystem the predicate filter
+ * doesn't catch.
+ *
+ * Why not single shared file: Maestro re-launches the app per flow, the
+ * Documents directory persists, but the in-memory buffer resets. We
+ * tried "read prior content + append" — the file did appear to exist
+ * across flows but only the LAST flow's content survived, suggesting
+ * either Maestro reinstalls or expo-file-system/next's behavior on
+ * existing files differs from what we expected.
  *
  * Only active when EXPO_PUBLIC_E2E_FACE_BYPASS === '1' (CI builds).
  */
@@ -15,26 +23,21 @@ import { File, Paths } from 'expo-file-system/next';
 
 const enabled = process.env.EXPO_PUBLIC_E2E_FACE_BYPASS === '1';
 
+// Unique per process. Each Maestro flow launches a fresh app process, so
+// each gets its own filename. Format: e2e-debug-<unix-ms>.log
+const launchId = Date.now();
+const filename = `e2e-debug-${launchId}.log`;
+
 let buffer = '';
 
 export function e2eDebug(...parts: unknown[]) {
     if (!enabled) return;
-    const line = `[E2E_DEBUG] ${new Date().toISOString()} ${parts.map((p) => (typeof p === 'string' ? p : JSON.stringify(p))).join(' ')}`;
-
-    // Primary: console.warn (cross-flow visibility via sim.log)
     try {
-        // eslint-disable-next-line no-console
-        console.warn(line);
-    } catch {
-        // never throw from a debug logger
-    }
-
-    // Backup: file write (per-flow, survives if sim.log capture is missing)
-    try {
-        buffer += line + '\n';
-        const file = new File(Paths.document, 'e2e-debug.log');
+        const line = `${new Date().toISOString()} ${parts.map((p) => (typeof p === 'string' ? p : JSON.stringify(p))).join(' ')}\n`;
+        buffer += line;
+        const file = new File(Paths.document, filename);
         file.write(buffer);
     } catch {
-        // ignore
+        // never throw from a debug logger
     }
 }
