@@ -73,46 +73,45 @@ const INVITATION_SYSTEM_CUTOFF = '2026-03-29T00:00:00Z';
  * The handle_new_user DB trigger creates the row on auth signup,
  * so we retry briefly if the row hasn't appeared yet (race condition).
  */
-async function fetchUserProfile(userId: string, _phone?: string | null): Promise<User | null> {
-    // We had been calling supabase.from('users').select('*').eq('id', userId).single()
-    // but the user-JWT'd request was returning PGRST116 (0 rows) under RLS even
-    // though the seed-side impersonation test proved RLS works correctly when
-    // request.jwt.claims is set. The failure mode is that the supabase-js client
-    // wasn't reliably attaching the user's Bearer token to the request, so
-    // PostgREST treated it as anon and RLS hid the row.
-    //
-    // Fix: bypass supabase-js for this single hot-path call and issue the request
-    // directly with fetch, attaching the Authorization header explicitly. This
-    // also gives us the raw response body if PostgREST rejects the token.
-    for (let attempt = 0; attempt < 3; attempt++) {
+async function fetchUserProfile(
+    userId: string,
+    accessToken: string | null,
+    _phone?: string | null,
+): Promise<User | null> {
+    // The previous iteration showed `onAuthStateChange` firing SIGNED_IN with a
+    // valid session.user, but `supabase.auth.getSession()` returning no
+    // access_token in the same JS tick — supabase-js hadn't yet committed the
+    // session internally. So we now require callers to pass the access_token
+    // they already have in hand (from the onAuthStateChange `session` arg, or
+    // from getSession() for the initAuth path). If the caller doesn't have a
+    // token, we fall back to getSession() but that race is the failure mode.
+    let token = accessToken;
+    if (!token) {
         const { data: { session } } = await supabase.auth.getSession();
-        if (!session?.access_token) {
-            e2eDebug('[E2E_DEBUG] fetchUserProfile attempt=', attempt, 'no_access_token; aborting');
-            if (attempt < 2) {
-                await new Promise((r) => setTimeout(r, 150));
-                continue;
-            }
-            return null;
-        }
+        token = session?.access_token ?? null;
+    }
+    if (!token) {
+        e2eDebug('[E2E_DEBUG] fetchUserProfile no token from caller or getSession');
+        return null;
+    }
 
-        const supaUrl = process.env.EXPO_PUBLIC_SUPABASE_URL;
-        const apikey = process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY;
-        if (!supaUrl || !apikey) {
-            return null;
-        }
-        const url = `${supaUrl}/rest/v1/users?id=eq.${encodeURIComponent(userId)}&select=*`;
-        const tokenPrefix = session.access_token.slice(0, 16);
+    const supaUrl = process.env.EXPO_PUBLIC_SUPABASE_URL;
+    const apikey = process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY;
+    if (!supaUrl || !apikey) {
+        return null;
+    }
+    const url = `${supaUrl}/rest/v1/users?id=eq.${encodeURIComponent(userId)}&select=*`;
+
+    for (let attempt = 0; attempt < 3; attempt++) {
         e2eDebug(
             '[E2E_DEBUG] fetchUserProfile attempt=', attempt,
-            'session_user_id=', session.user?.id ?? 'null',
-            'token_prefix=', tokenPrefix,
+            'token_prefix=', token.slice(0, 16),
         );
-
         try {
             const resp = await fetch(url, {
                 headers: {
                     apikey,
-                    Authorization: `Bearer ${session.access_token}`,
+                    Authorization: `Bearer ${token}`,
                     Accept: 'application/json',
                     'Accept-Profile': 'public',
                 },
@@ -130,7 +129,6 @@ async function fetchUserProfile(userId: string, _phone?: string | null): Promise
                 if (Array.isArray(rows) && rows.length === 1) {
                     return rows[0];
                 }
-                e2eDebug('[E2E_DEBUG] fetchUserProfile attempt=', attempt, 'unexpected_rows=', rows?.length ?? 'not_array');
             }
         } catch (err) {
             e2eDebug('[E2E_DEBUG] fetchUserProfile attempt=', attempt, 'fetch_err=', String(err));
@@ -251,7 +249,7 @@ function BiometricsProvider({
                 return { success: false, error: 'Session expired — please sign in with OTP.' };
             }
 
-            const profile = await fetchUserProfile(session.user.id, session.user.phone || null);
+            const profile = await fetchUserProfile(session.user.id, session.access_token, session.user.phone || null);
             if (profile) {
                 await updateLastLogin(session.user.id);
                 syncAuthMetadata().catch((e) => {
@@ -343,7 +341,10 @@ function ProfileProvider({
 
     const refreshUser = useCallback(async () => {
         if (sessionRef.current?.user) {
-            const profile = await fetchUserProfile(sessionRef.current.user.id);
+            const profile = await fetchUserProfile(
+                sessionRef.current.user.id,
+                sessionRef.current.access_token,
+            );
             setUser(profile);
         }
     }, [sessionRef, setUser]);
@@ -458,7 +459,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
                 if (session?.user) {
                     const phone = session.user.phone || null;
-                    const profile = await fetchUserProfile(session.user.id, phone);
+                    const profile = await fetchUserProfile(session.user.id, session.access_token, phone);
                     if (profile) {
                         const invStatus = await checkInvitationStatus(profile.id, profile.created_at);
                         await updateLastLogin(session.user.id);
@@ -525,7 +526,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
             if (session?.user) {
                 e2eDebug('[E2E_DEBUG] fetching profile for', session.user.id);
-                const profile = await fetchUserProfile(session.user.id, session.user.phone || null);
+                const profile = await fetchUserProfile(session.user.id, session.access_token, session.user.phone || null);
                 e2eDebug(
                     '[E2E_DEBUG] profile result:',
                     profile
