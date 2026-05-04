@@ -91,7 +91,13 @@ BEGIN
       'Authorization', 'Bearer ' || v_secret
     ),
     body := v_record,
-    timeout_milliseconds := 5000
+    -- 30s tolerates Render container cold-start (~25s observed during
+    -- deploy under load). Receiver itself responds in <100ms when warm.
+    -- pg_net timeout is purely about waiting for the response — the
+    -- receiver completes and applies the change regardless, so a
+    -- timeout produces a noisy net._http_response row but does not
+    -- corrupt data.
+    timeout_milliseconds := 30000
   );
 
   RETURN NULL;  -- AFTER trigger, return value unused
