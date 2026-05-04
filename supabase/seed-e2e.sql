@@ -16,6 +16,37 @@
 -- =============================================================================
 
 -- ---------------------------------------------------------------------------
+-- 0a. Defensive: normalize public.users RLS so self-select works.
+-- ---------------------------------------------------------------------------
+-- Maestro symptom: profile fetch returns PGRST116 ("0 rows") with the user's
+-- own JWT, even though the seed inserts the row with the matching id and the
+-- service-role diagnostic confirms the row is present. The CI workflow does
+-- not apply migrations to staging — it only seeds — so if staging's RLS has
+-- drifted from 20260305194752_fix_rls_roles_triggers_indexes.sql, the
+-- `users_select_own` policy may be missing or different. Re-create it here
+-- so a freshly OTP-signed-in user can read their own profile row.
+DROP POLICY IF EXISTS users_select_own ON public.users;
+CREATE POLICY users_select_own ON public.users
+    FOR SELECT TO authenticated
+    USING (auth.uid() = id);
+
+-- Diagnostic: dump current RLS policies on public.users so the bootstrap
+-- step's logs show exactly what staging has post-fix. Remove after first
+-- green run.
+DO $diag$
+DECLARE rec RECORD;
+BEGIN
+    FOR rec IN
+        SELECT policyname, cmd, qual::text AS qual
+        FROM pg_policies
+        WHERE schemaname = 'public' AND tablename = 'users'
+        ORDER BY policyname
+    LOOP
+        RAISE NOTICE 'DIAG users policy: name=%, cmd=%, qual=%', rec.policyname, rec.cmd, rec.qual;
+    END LOOP;
+END $diag$;
+
+-- ---------------------------------------------------------------------------
 -- 0. Resolve mock user IDs by phone from auth.users
 -- ---------------------------------------------------------------------------
 DO $$
