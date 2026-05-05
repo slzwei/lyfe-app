@@ -1,5 +1,8 @@
 # Flow: Open a lead, add a note, change status — and assert each landed.
-# Requires: at least one lead exists for the manager. Seeded by `npm run seed`.
+# Login as agent (+6580000004), not manager — manager view shows
+# "Limited actions available" and hides note/status action buttons,
+# so the test must run as the user who actually owns leads in the seed.
+# Requires: at least one lead assigned to the agent (lead1, lead2 are).
 appId: com.shawnlee.lyfe
 
 ---
@@ -7,7 +10,7 @@ appId: com.shawnlee.lyfe
 - runFlow:
     file: helpers/login-as.yaml
     env:
-      phone: "80000003"
+      phone: "80000004"
 
 # Navigate to Leads tab via testID.
 - tapOn:
