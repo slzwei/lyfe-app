@@ -9,6 +9,7 @@ import {
 } from '@/lib/biometrics';
 import { e2eDebug } from '@/lib/e2eDebugLog';
 import { clearSentryUser, setSentryUser } from '@/lib/sentry';
+import { clearCachedSession, setCachedSession } from '@/lib/sessionCache';
 import { supabase } from '@/lib/supabase';
 import { OTA_RELOAD_FLAG_KEY } from '@/hooks/useOtaUpdates';
 import type { User } from '@/types/database';
@@ -85,7 +86,15 @@ async function fetchUserProfile(
     // they already have in hand (from the onAuthStateChange `session` arg, or
     // from getSession() for the initAuth path). If the caller doesn't have a
     // token, we fall back to getSession() but that race is the failure mode.
+    // Prefer the explicit accessToken from the caller. Otherwise consult
+    // the module-level session cache (set by AuthContext on every auth
+    // state change). Fall back to supabase.auth.getSession() only as a
+    // last resort — that path can return null mid-session in RN.
     let token = accessToken;
+    if (!token) {
+        // eslint-disable-next-line @typescript-eslint/no-require-imports
+        token = require('@/lib/sessionCache').getCachedAccessToken();
+    }
     if (!token) {
         const { data: { session } } = await supabase.auth.getSession();
         token = session?.access_token ?? null;
@@ -394,6 +403,19 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
     const sessionRef = useRef<Session | null>(null);
     sessionRef.current = authState.session;
+
+    // Mirror the active session into a module-level cache so hot-path lib
+    // functions (fetchLeads, etc.) can read the access_token directly,
+    // bypassing supabase.auth.getSession() which can return null mid-
+    // session in RN with the chunked SecureStore adapter (see lib/sessionCache).
+    if (authState.session) {
+        setCachedSession({
+            access_token: authState.session.access_token,
+            user_id: authState.session.user?.id ?? null,
+        });
+    } else {
+        clearCachedSession();
+    }
 
     /** Called by BiometricsProvider after successful Face ID */
     const handleBiometricUnlock = useCallback(async (session: Session, profile: User | null) => {
