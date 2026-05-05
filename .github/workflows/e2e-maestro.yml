@@ -151,9 +151,14 @@ jobs:
         # default 60s startup probe on macos-15 runners ("iOS driver not
         # ready in time"). Two recent CI flakes were resolved only by retry.
         # Bump to 180s to absorb cold simulator + xctest install latency.
+        #
+        # Pass each directory containing top-level flows explicitly. Maestro
+        # only discovers .yaml files in the immediate directory passed (it
+        # treats subdirectories as subflow folders), so .maestro/roles/*.yaml
+        # would be invisible if we passed only .maestro/.
         env:
           MAESTRO_DRIVER_STARTUP_TIMEOUT: '180000'
-        run: maestro test .maestro/
+        run: maestro test .maestro/ .maestro/roles/
 
       - name: Stop simulator log capture
         if: always()

@@ -1,0 +1,29 @@
+# Roles: Candidate sees Home, Roadmap, Events, Profile.
+# Uses +6580000006 (onboarding_complete=true) — NOT +6590000007 which is the
+# lifecycle-flow candidate stuck in onboarding.
+appId: com.shawnlee.lyfe
+---
+
+- runFlow:
+    file: ../helpers/login-as.yaml
+    env:
+      phone: "80000006"
+
+- assertVisible:
+    id: "tab-home"
+- assertVisible:
+    id: "tab-roadmap"
+- assertVisible:
+    id: "tab-events"
+- assertVisible:
+    id: "tab-profile"
+
+# Candidate should NOT see staff tabs (leads, team, candidates, pa).
+- assertNotVisible:
+    id: "tab-leads"
+- assertNotVisible:
+    id: "tab-team"
+- assertNotVisible:
+    id: "tab-candidates"
+- assertNotVisible:
+    id: "tab-pa"
