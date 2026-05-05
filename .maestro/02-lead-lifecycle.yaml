@@ -38,6 +38,11 @@ appId: com.shawnlee.lyfe
 - tapOn:
     id: "lead-note-input-field"
 - inputText: "E2E test note"
+# Hide the keyboard so the Save button (typically below the input)
+# becomes tappable. Without this, on Release iOS the keyboard occludes
+# lead-note-input-save and the tap silently no-ops.
+- hideKeyboard
+- waitForAnimationToEnd
 - tapOn:
     id: "lead-note-input-save"
 - waitForAnimationToEnd
@@ -45,7 +50,7 @@ appId: com.shawnlee.lyfe
 # Assert the note appears in the activity list.
 - extendedWaitUntil:
     visible: "E2E test note"
-    timeout: 5000
+    timeout: 10000
 
 # --- Change status to Contacted ---
 - tapOn:

@@ -15,20 +15,18 @@ appId: com.shawnlee.lyfe
 - assertVisible:
     id: "profile-user-hero"
 
-# Scroll until sign-out is visible, then settle before tapping. The
-# previous tight scrollUntilVisible → tapOn pair occasionally raced
-# against momentum scroll on Release builds — the element was found,
-# scroll continued past it, tapOn saw nothing visible. Adding a wait
-# + retry makes this stable.
+# Scroll until "Sign Out" text is visible, then tap by text. testID
+# `profile-sign-out-button` is set on the TouchableOpacity but Maestro
+# on Release iOS builds was not reliably finding it via `id:` — even
+# when the screenshot showed the button on-screen post-scroll. Text-
+# based tapOn matches via accessibilityLabel/text and works reliably.
 - scrollUntilVisible:
     element:
-      id: "profile-sign-out-button"
+      text: "Sign Out"
     direction: DOWN
     timeout: 10000
 - waitForAnimationToEnd
-- tapOn:
-    id: "profile-sign-out-button"
-    retryTapIfNoChange: true
+- tapOn: "Sign Out"
 - waitForAnimationToEnd
 
 # Confirm via the modal's testID — accessibilityLabel-only was brittle.
