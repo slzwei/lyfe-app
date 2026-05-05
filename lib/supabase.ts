@@ -134,11 +134,50 @@ const secureStoreAdapter = {
     },
 };
 
+/**
+ * Custom fetch that overrides the Authorization header with our cached
+ * access_token whenever it's available. Works around an observed bug in
+ * RN where `supabase.auth.getSession()` returns null mid-session (the
+ * chunked SecureStore adapter ↔ supabase-js autoRefreshToken interaction
+ * intermittently clears the in-memory session). Without this, every
+ * `supabase.from(...)` request goes out as anon → RLS hides every row.
+ *
+ * AuthContext mirrors the active session into `lib/sessionCache` on every
+ * auth state change. This fetch shim reads from there.
+ *
+ * Path-specific carve-out: don't touch /auth/* requests — those are how
+ * supabase-js manages the session itself; we don't want to recursively
+ * inject an old/stale token into the auth flow.
+ */
+const customFetch: typeof fetch = (input, init) => {
+    try {
+        // eslint-disable-next-line @typescript-eslint/no-require-imports
+        const { getCachedAccessToken } = require('./sessionCache') as {
+            getCachedAccessToken: () => string | null;
+        };
+        const token = getCachedAccessToken();
+        const url = typeof input === 'string' ? input : input instanceof URL ? input.href : input.url;
+        // Only override on PostgREST/storage/functions paths, not /auth/v1/*
+        const isAuthPath = url.includes('/auth/v1/');
+        if (token && !isAuthPath) {
+            const headers = new Headers(init?.headers);
+            headers.set('Authorization', `Bearer ${token}`);
+            init = { ...init, headers };
+        }
+    } catch {
+        // never break the app over a logger/cache lookup
+    }
+    return fetch(input, init);
+};
+
 export const supabase = createClient<Database>(supabaseUrl, supabaseAnonKey, {
     auth: {
         storage: secureStoreAdapter,
         autoRefreshToken: true,
         persistSession: true,
         detectSessionInUrl: false,
+    },
+    global: {
+        fetch: customFetch,
     },
 });
