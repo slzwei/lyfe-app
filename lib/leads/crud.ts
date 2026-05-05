@@ -5,6 +5,7 @@ import type { Lead, LeadActivityType, LeadSource, LeadStatus, ProductInterest } 
 import { applyPageRange, resolvePage } from '../pagination';
 import { friendlyError } from '../errors';
 import { captureError } from '../sentry';
+import { getCachedAccessToken } from '../sessionCache';
 import { supabase } from '../supabase';
 
 export interface CreateLeadInput {
@@ -44,7 +45,16 @@ export async function fetchLeads(
         }
     };
 
-    const { data: { session } } = await supabase.auth.getSession();
+    // Read from the module-level session cache first (set by AuthContext on
+    // every auth state change). Fall back to supabase.auth.getSession() if
+    // the cache is empty (which shouldn't happen post-login but is defensive).
+    let accessToken: string | null = getCachedAccessToken();
+    if (!accessToken) {
+        const { data: { session } } = await supabase.auth.getSession();
+        accessToken = session?.access_token ?? null;
+    }
+    const sessionLikeUser = accessToken ? { id: userId } : null;
+    const session = accessToken ? { access_token: accessToken, user: sessionLikeUser } : null;
     log(
         '[E2E_DEBUG] fetchLeads pre',
         'has_session=', !!session,
