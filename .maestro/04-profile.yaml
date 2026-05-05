@@ -15,18 +15,19 @@ appId: com.shawnlee.lyfe
 - assertVisible:
     id: "profile-user-hero"
 
-# Scroll until "Sign Out" text is visible, then tap by text. testID
-# `profile-sign-out-button` is set on the TouchableOpacity but Maestro
-# on Release iOS builds was not reliably finding it via `id:` — even
-# when the screenshot showed the button on-screen post-scroll. Text-
-# based tapOn matches via accessibilityLabel/text and works reliably.
+# Scroll until the sign-out button is visible, then tap by its
+# accessibilityLabel ("Sign out of your account"). The button has
+# accessibilityLabel set on the TouchableOpacity, which on iOS replaces
+# the inner Text content in the accessibility tree — so tapping by
+# "Sign Out" text didn't match. Tapping by the full label is the
+# reliable identifier.
 - scrollUntilVisible:
     element:
-      text: "Sign Out"
+      text: "Sign out of your account"
     direction: DOWN
     timeout: 10000
 - waitForAnimationToEnd
-- tapOn: "Sign Out"
+- tapOn: "Sign out of your account"
 - waitForAnimationToEnd
 
 # Confirm via the modal's testID — accessibilityLabel-only was brittle.
