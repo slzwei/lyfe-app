@@ -17,14 +17,25 @@ input:
 
 - launchApp
 
+# Buffer for XCUITest to reattach after launchApp. Without this, the very
+# first viewHierarchy query post-launch can race the driver and return
+# `{"errorMessage":"Application com.shawnlee.lyfe is not running"}`
+# (status 500) even with the app process alive — observed in CI run
+# 25376971848 on the 10th launchApp of a single suite.
+- waitForAnimationToEnd:
+    timeout: 5000
+
 # If the dev-client launcher is showing (local Metro dev), connect to localhost.
 # Skipped automatically on Release builds (CI) where the launcher isn't visible.
+# `optional: true` so a transient XCUITest probe failure on the first
+# viewHierarchy query doesn't kill the entire flow.
 - runFlow:
     when:
       visible: "Connect to Metro"
     commands:
       - openLink: "exp+lyfe-app://expo-development-client/?url=http%3A%2F%2Flocalhost%3A8081"
       - waitForAnimationToEnd
+    optional: true
 
 # Reach the login screen, signing out if needed.
 - runFlow: ensure-logged-out.yaml

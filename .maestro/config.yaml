@@ -12,6 +12,16 @@ flows:
   - "*.yaml"
   - "roles/*.yaml"
 
+# Force the heaviest flow (lead lifecycle: login + navigate + add note +
+# change status) to run FIRST while the simulator is fresh. Maestro's
+# default discovery order put it last — by the 10th launchApp, the iOS
+# XCUITest driver was getting desynced from the app process and viewHierarchy
+# queries returned "Application is not running" even with the app process
+# alive. Running the heavy flow up front avoids that pressure.
+executionOrder:
+  flowsOrder:
+    - 02-lead-lifecycle
+
 # Environment variables for mock mode
 env:
   MOCK_PHONE: "+6580000003"
