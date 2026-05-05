@@ -15,14 +15,20 @@ appId: com.shawnlee.lyfe
 - assertVisible:
     id: "profile-user-hero"
 
-# Scroll to sign-out and tap it.
+# Scroll until sign-out is visible, then settle before tapping. The
+# previous tight scrollUntilVisible → tapOn pair occasionally raced
+# against momentum scroll on Release builds — the element was found,
+# scroll continued past it, tapOn saw nothing visible. Adding a wait
+# + retry makes this stable.
 - scrollUntilVisible:
     element:
       id: "profile-sign-out-button"
     direction: DOWN
-    timeout: 5000
+    timeout: 10000
+- waitForAnimationToEnd
 - tapOn:
     id: "profile-sign-out-button"
+    retryTapIfNoChange: true
 - waitForAnimationToEnd
 
 # Confirm via the modal's testID — accessibilityLabel-only was brittle.
