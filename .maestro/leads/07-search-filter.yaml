@@ -1,0 +1,56 @@
+# Leads: Manager searches by name and filters by status.
+#
+# Validates the search input + filter chip composition. Manager view shows
+# all team leads (own + agent's), so we have a known multi-lead corpus to
+# narrow. John Tan is one of agent's seeded leads — searching "John" should
+# leave him visible while excluding others (Michael Wong, Sarah Lim, MKTR).
+appId: com.shawnlee.lyfe
+---
+
+- runFlow:
+    file: ../helpers/login-as.yaml
+    env:
+      phone: "80000003"
+
+- tapOn:
+    id: "tab-leads"
+- waitForAnimationToEnd
+
+- extendedWaitUntil:
+    visible:
+      id: "leads-list"
+    timeout: 10000
+
+# --- Search by "John" ---
+- tapOn:
+    id: "leads-search-input"
+- inputText: "John"
+- waitForAnimationToEnd
+
+- extendedWaitUntil:
+    visible: "John Tan"
+    timeout: 5000
+- assertNotVisible: "Michael Wong"
+- assertNotVisible: "Sarah Lim"
+
+# Clear search to reset for the filter test.
+- tapOn:
+    accessibilityLabel: "Clear search"
+- waitForAnimationToEnd
+
+# --- Filter by Contacted ---
+# Sarah Lim is seeded as 'contacted' — the only seeded lead in that state.
+# After filtering, she's visible and Michael Wong (qualified) is not.
+- tapOn:
+    id: "leads-filter-chip-contacted"
+- waitForAnimationToEnd
+
+- extendedWaitUntil:
+    visible: "Sarah Lim"
+    timeout: 5000
+- assertNotVisible: "Michael Wong"
+
+# Reset the filter so subsequent flows don't see a narrowed list.
+- tapOn:
+    id: "leads-filter-chip-all"
+- waitForAnimationToEnd

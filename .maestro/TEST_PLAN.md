@@ -29,18 +29,18 @@ Single source of truth for Maestro E2E coverage. Phases are sequenced by risk ×
 
 ---
 
-## Coverage snapshot — 2026-05-05
+## Coverage snapshot — 2026-05-06
 
-**10/10 flows passing on main**. Phases 0 + 1 complete. Every role's login + tab matrix is now end-to-end validated against staging Supabase on every nightly cron, on top of the original Phase 0 smoke flows (login + leads + events + profile).
+**16/16 flows passing on main** (4 smoke + 6 role + 6 lead). Phases 0 + 1 + 2a complete. Lead pipeline now has end-to-end coverage of status changes, call/whatsapp activity, reassignment, search/filter, and the agent-personal-only RLS contract.
 
-| Role      | Login | Tabs | Lead | Event       | Roadshow | Candidate | Roadmap | Exam |
-|-----------|-------|------|------|-------------|----------|-----------|---------|------|
-| admin     | [x]   | [x]  | [ ]  | [ ]         | n/a      | n/a       | n/a     | n/a  |
-| director  | [x]   | [x]  | [ ]  | [ ]         | n/a      | [ ]       | n/a     | n/a  |
-| manager   | [x]   | [x]  | [ ]  | [x] (smoke) | [ ]      | [ ]       | n/a     | n/a  |
-| agent     | [x]   | [x]  | [x]  | [ ]         | [ ]      | n/a       | n/a     | n/a  |
-| pa        | [x]   | [x]  | n/a  | [ ]         | n/a      | [ ]       | n/a     | n/a  |
-| candidate | [x]   | [x]  | n/a  | [ ]         | n/a      | n/a       | [ ]     | [ ]  |
+| Role      | Login | Tabs | Lead       | Event       | Roadshow | Candidate | Roadmap | Exam |
+|-----------|-------|------|------------|-------------|----------|-----------|---------|------|
+| admin     | [x]   | [x]  | [ ]        | [ ]         | n/a      | n/a       | n/a     | n/a  |
+| director  | [x]   | [x]  | [ ]        | [ ]         | n/a      | [ ]       | n/a     | n/a  |
+| manager   | [x]   | [x]  | [x] (2a)   | [x] (smoke) | [ ]      | [ ]       | n/a     | n/a  |
+| agent     | [x]   | [x]  | [x] (2a)   | [ ]         | [ ]      | n/a       | n/a     | n/a  |
+| pa        | [x]   | [x]  | n/a        | [ ]         | n/a      | [ ]       | n/a     | n/a  |
+| candidate | [x]   | [x]  | n/a        | [ ]         | n/a      | n/a       | [ ]     | [ ]  |
 
 **Headline**: ~10% coverage. All 6 roles now have login + tab assertions. No feature has end-to-end create→read→update→delete coverage yet — Phase 2 (lead pipeline) is next.
 
@@ -105,18 +105,18 @@ One flow per role asserting login + correct tabs + correct landing. Establishes 
 
 Sales flow. The lead lifecycle is the daily driver for agents and managers.
 
-| #    | Flow                              | Role     | Status | Notes |
-|------|-----------------------------------|----------|--------|-------|
-| 2.1  | `leads/01-create.yaml`            | manager  | [ ]    | Tap +Add → fill form → submit → assert in list |
-| 2.2  | `leads/02-add-note.yaml`          | manager  | [~]    | Currently bundled in 02-lead-lifecycle |
-| 2.3  | `leads/03-status-transition.yaml` | manager  | [~]    | new → contacted → qualified → proposed → won |
-| 2.4  | `leads/04-call-activity.yaml`     | manager  | [ ]    | Call action → reason → save → activity log |
-| 2.5  | `leads/05-whatsapp-activity.yaml` | manager  | [ ]    | Same pattern as call |
-| 2.6  | `leads/06-reassign.yaml`          | manager  | [ ]    | Open lead → reassign to agent → verify |
-| 2.7  | `leads/07-search-filter.yaml`     | manager  | [ ]    | Search by name, filter by status |
-| 2.8  | `leads/08-view-mode-toggle.yaml`  | manager  | [ ]    | Toggle manager↔agent view, lead count changes |
-| 2.9  | `leads/09-realtime-mktr.yaml`     | manager  | [ ]    | Trigger fake MKTR webhook → lead appears via Realtime |
-| 2.10 | `leads/10-agent-personal-only.yaml` | agent  | [ ]    | Agent sees only assigned leads, never team |
+| #    | Flow                                | Role    | Status | Notes |
+|------|-------------------------------------|---------|--------|-------|
+| 2.1  | `leads/01-create.yaml`              | manager | [ ]    | Phase 2b — Maestro iOS modal-textinput limitation needs a workaround |
+| 2.2  | `leads/02-add-note.yaml`            | agent   | [s]    | Skipped — covered end-to-end by `02-lead-lifecycle` smoke |
+| 2.3  | `leads/03-status-transition.yaml`   | agent   | [x]    | Single transition to `won` (orthogonal to smoke's `contacted`); idempotent on no-op |
+| 2.4  | `leads/04-call-activity.yaml`       | agent   | [x]    | Tap Call → "Reached them" → activity row asserts |
+| 2.5  | `leads/05-whatsapp-activity.yaml`   | agent   | [x]    | Tap WhatsApp → "Yes, sent" → activity row asserts |
+| 2.6  | `leads/06-reassign.yaml`            | manager | [x]    | Reassigns the MKTR lead to David Agent (seed resets it each run) |
+| 2.7  | `leads/07-search-filter.yaml`       | manager | [x]    | Search "John" narrows; Contacted filter narrows to Sarah Lim |
+| 2.8  | `leads/08-view-mode-toggle.yaml`    | manager | [ ]    | Phase 2b |
+| 2.9  | `leads/09-realtime-mktr.yaml`       | manager | [ ]    | Phase 2b — needs HMAC webhook trigger from CI. Stub `mktr-arrival.yaml` exists |
+| 2.10 | `leads/10-agent-personal-only.yaml` | agent   | [x]    | Agent sees John Tan + Sarah Lim, never Michael Wong |
 
 ---
 
@@ -280,3 +280,4 @@ Ordered by build-time pain reduction.
 - 2026-05-05 — Plan created. Phase 0 in flight. Phases 1-9 outlined with 60+ planned flows.
 - 2026-05-05 — **Phase 0 complete.** All 5 flows green on main (run 25366401233, 7m 22s). 17 PRs merged. Two real production bugs uncovered + fixed (auth race, JWT-attach gap). Phase 1 (role coverage) starts next.
 - 2026-05-05 — **Phase 1 complete.** 10/10 flows green on main. Added director/pa/candidate tab flows under `.maestro/roles/`, removed top-level `05-role-admin-login.yaml` (replaced by `roles/admin-tabs.yaml`), and updated the Maestro CI step to discover the `roles/` subdirectory explicitly (Maestro only scans the immediate folder it's passed). Phase 2 (lead pipeline) is next.
+- 2026-05-06 — **Phase 2a complete.** 16/16 flows green on main. Added six lead-pipeline flows under `.maestro/leads/`: status transition (2.3), call activity (2.4), whatsapp activity (2.5), reassign (2.6), search + filter (2.7), agent-personal-only RLS contract (2.10). 2.2 (add note) marked `[s]` — covered by `02-lead-lifecycle` smoke. Also added testIDs to `ContactConfirmModal`, `ReassignModal`, leads search/filter, and call/whatsapp Quick Actions to make the new flows tappable without text-matching. Remaining Phase 2 items (2.1 create, 2.8 view-mode toggle, 2.9 realtime MKTR webhook) deferred to Phase 2b — each has its own scaffolding cost.

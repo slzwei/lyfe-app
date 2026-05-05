@@ -1,0 +1,65 @@
+# Leads: Manager reassigns the MKTR lead to David Agent via the reassign modal.
+#
+# Validates the reassign-action → ReassignModal → agent select → reassignment
+# activity flow. Uses the MKTR lead because:
+#   - It's deduplicated by (external_id, source_name) in seed-e2e.sql with
+#     `ON CONFLICT … DO UPDATE SET assigned_to = EXCLUDED.assigned_to` → the
+#     seed RESETS its assignment back to manager every CI run.
+#   - Manager-owned in initial state, so reassign options will include David Agent
+#     (the only seeded agent reporting to manager).
+#
+# Idempotent across runs (seed resets). Within a run, leaves MKTR assigned
+# to David Agent — agent-personal-only flow doesn't reference MKTR, so no
+# inter-flow dependency.
+appId: com.shawnlee.lyfe
+---
+
+- runFlow:
+    file: ../helpers/login-as.yaml
+    env:
+      phone: "80000003"
+
+- tapOn:
+    id: "tab-leads"
+- waitForAnimationToEnd
+
+- extendedWaitUntil:
+    visible:
+      id: "leads-list"
+    timeout: 10000
+
+# Open the MKTR lead specifically (text-tap by name — there's only one
+# because of the unique (external_id, source_name) seed constraint).
+- tapOn: "E2E MKTR Lead"
+- waitForAnimationToEnd
+
+- extendedWaitUntil:
+    visible:
+      id: "lead-reassign-action"
+    timeout: 10000
+
+# Open the reassign modal.
+- tapOn:
+    id: "lead-reassign-action"
+- waitForAnimationToEnd
+
+# David Agent is the only seeded agent reporting to manager → only option.
+# `accessibilityLabel="Reassign to David Agent"` is more stable than the
+# regex testID since David's UUID changes between staging refreshes.
+- extendedWaitUntil:
+    visible: "Reassign to David Agent"
+    timeout: 5000
+- tapOn: "Reassign to David Agent"
+- waitForAnimationToEnd
+
+# Modal dismisses on selection. Assert we're back on the lead detail
+# (status badge is the most stable element to wait for).
+- extendedWaitUntil:
+    visible:
+      id: "lead-status-badge"
+    timeout: 10000
+
+# Activity feed records the reassignment.
+- extendedWaitUntil:
+    visible: "Reassigned"
+    timeout: 5000

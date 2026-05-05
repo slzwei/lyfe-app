@@ -42,6 +42,7 @@ function ReassignModal({ visible, leadName, agents, colors, onSelect, onClose }:
                             {agents.map((agent) => (
                                 <TouchableOpacity
                                     key={agent.id}
+                                    testID={`lead-reassign-option-${agent.id}`}
                                     style={[styles.agentRow, { borderColor: colors.borderLight }]}
                                     onPress={() => onSelect(agent)}
                                     accessibilityRole="button"

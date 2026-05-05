@@ -1,0 +1,48 @@
+# Leads: Agent transitions a lead's status via the inline picker.
+#
+# Validates the status-action → picker → status-option-X → badge-updates
+# loop. 02-lead-lifecycle already covers "new → contacted"; this exercises
+# a different status (won) so we have orthogonal coverage. Idempotent: if
+# the tapped lead is already 'won' from a prior run, the no-op leaves the
+# badge in 'won' state and the visible-assertion still passes.
+#
+# Logged in as AGENT because the status-action quick action is hidden in
+# manager view (see app/(tabs)/leads/[leadId].tsx — `!isManagerView` gate).
+appId: com.shawnlee.lyfe
+---
+
+- runFlow:
+    file: ../helpers/login-as.yaml
+    env:
+      phone: "80000004"
+
+- tapOn:
+    id: "tab-leads"
+- waitForAnimationToEnd
+
+- extendedWaitUntil:
+    visible:
+      id: "leads-list"
+    timeout: 10000
+
+# Open whichever lead Maestro lands on first. The flow doesn't care which
+# specific lead — only that the status loop works.
+- tapOn:
+    id: ".*lead-card-.*"
+- waitForAnimationToEnd
+- extendedWaitUntil:
+    visible:
+      id: "lead-status-badge"
+    timeout: 10000
+
+# Open status picker, tap 'Won', assert the badge updates.
+- tapOn:
+    id: "lead-status-action"
+- waitForAnimationToEnd
+- tapOn:
+    id: "status-option-won"
+- waitForAnimationToEnd
+
+- extendedWaitUntil:
+    visible: "Won"
+    timeout: 5000

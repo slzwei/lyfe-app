@@ -1,0 +1,49 @@
+# Leads: Agent logs a call activity via the Call quick action → "Reached them".
+#
+# Validates the contact-confirm modal flow and that the activity feed
+# accepts the new row. Activity log assertion uses partial text since the
+# row format includes the lead's phone ("Called 9111 1111 — reached").
+#
+# Idempotent: just adds an activity row each run. No state to reset.
+appId: com.shawnlee.lyfe
+---
+
+- runFlow:
+    file: ../helpers/login-as.yaml
+    env:
+      phone: "80000004"
+
+- tapOn:
+    id: "tab-leads"
+- waitForAnimationToEnd
+
+- extendedWaitUntil:
+    visible:
+      id: "leads-list"
+    timeout: 10000
+
+- tapOn:
+    id: ".*lead-card-.*"
+- waitForAnimationToEnd
+
+- extendedWaitUntil:
+    visible:
+      id: "lead-call-action"
+    timeout: 10000
+
+# Trigger Call → ContactConfirmModal → Reached them.
+- tapOn:
+    id: "lead-call-action"
+- waitForAnimationToEnd
+- extendedWaitUntil:
+    visible:
+      id: "lead-contact-outcome-reached"
+    timeout: 5000
+- tapOn:
+    id: "lead-contact-outcome-reached"
+- waitForAnimationToEnd
+
+# Activity feed renders an entry starting with "Called " for call/reached.
+- extendedWaitUntil:
+    visible: "Called"
+    timeout: 5000

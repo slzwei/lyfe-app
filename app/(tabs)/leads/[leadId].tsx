@@ -279,6 +279,7 @@ export default function LeadDetailScreen() {
                     {/* Quick Actions */}
                     <View style={styles.actionsRow}>
                         <QuickAction
+                            testID="lead-call-action"
                             icon="call"
                             label="Call"
                             color={colors.success}
@@ -288,6 +289,7 @@ export default function LeadDetailScreen() {
                         />
                         <View style={[styles.actionDivider, { backgroundColor: colors.border }]} />
                         <QuickAction
+                            testID="lead-whatsapp-action"
                             icon="logo-whatsapp"
                             label="WhatsApp"
                             color={colors.whatsappGreen}
