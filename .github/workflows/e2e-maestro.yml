@@ -152,13 +152,12 @@ jobs:
         # ready in time"). Two recent CI flakes were resolved only by retry.
         # Bump to 180s to absorb cold simulator + xctest install latency.
         #
-        # Pass each directory containing top-level flows explicitly. Maestro
-        # only discovers .yaml files in the immediate directory passed (it
-        # treats subdirectories as subflow folders), so .maestro/roles/*.yaml
-        # would be invisible if we passed only .maestro/.
+        # Subdirectory discovery is wired up via the `flows:` glob in
+        # .maestro/config.yaml — passing both `.maestro/ .maestro/roles/`
+        # caused Maestro to run the role flows twice (once per path arg).
         env:
           MAESTRO_DRIVER_STARTUP_TIMEOUT: '180000'
-        run: maestro test .maestro/ .maestro/roles/
+        run: maestro test .maestro/
 
       - name: Stop simulator log capture
         if: always()
