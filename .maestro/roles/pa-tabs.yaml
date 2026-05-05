@@ -1,0 +1,28 @@
+# Roles: PA sees Home, Candidates (tab-pa), Events, Profile.
+# Requires a row in pa_manager_assignments (seeded for +6580000005 → manager).
+appId: com.shawnlee.lyfe
+---
+
+- runFlow:
+    file: ../helpers/login-as.yaml
+    env:
+      phone: "80000005"
+
+- assertVisible:
+    id: "tab-home"
+- assertVisible:
+    id: "tab-pa"
+- assertVisible:
+    id: "tab-events"
+- assertVisible:
+    id: "tab-profile"
+
+# PA should NOT see leads, team, the staff-side candidates tab, or roadmap.
+- assertNotVisible:
+    id: "tab-leads"
+- assertNotVisible:
+    id: "tab-team"
+- assertNotVisible:
+    id: "tab-candidates"
+- assertNotVisible:
+    id: "tab-roadmap"

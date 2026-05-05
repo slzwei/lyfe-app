@@ -1,0 +1,27 @@
+# Roles: Director sees Home, Leads, Team, Events, Profile (same shape as admin/manager).
+appId: com.shawnlee.lyfe
+---
+
+- runFlow:
+    file: ../helpers/login-as.yaml
+    env:
+      phone: "80000002"
+
+- assertVisible:
+    id: "tab-home"
+- assertVisible:
+    id: "tab-leads"
+- assertVisible:
+    id: "tab-team"
+- assertVisible:
+    id: "tab-events"
+- assertVisible:
+    id: "tab-profile"
+
+# Director should NOT see PA, candidates, or roadmap tabs.
+- assertNotVisible:
+    id: "tab-pa"
+- assertNotVisible:
+    id: "tab-candidates"
+- assertNotVisible:
+    id: "tab-roadmap"

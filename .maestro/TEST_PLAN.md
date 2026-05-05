@@ -1,0 +1,282 @@
+# Lyfe App E2E Test Plan
+
+Single source of truth for Maestro E2E coverage. Phases are sequenced by risk × value: stabilize first, then breadth (roles), then depth (features), then quality (negative paths + integration).
+
+**Update this file when:**
+- A flow is added / renamed / removed
+- A flow's status changes (e.g. PASSING → FLAKY)
+- A real bug is uncovered by a flow
+- A phase moves to DONE
+
+---
+
+## Conventions
+
+- Each flow lives in `.maestro/<phase>/<NN-name>.yaml`
+- One flow per role × scenario (no implicit setup chaining)
+- All flows seed-independent — relies on `supabase/seed-e2e.sql`
+- Bypass non-deterministic features via `EXPO_PUBLIC_E2E_*` env flags (face, GPS, push)
+- testID convention: `{screen}-{element}` (e.g. `leads-add-button`)
+- Login via `helpers/login-as.yaml` with `phone` env var
+
+## Status legend
+
+- `[ ]` not started
+- `[~]` in progress / flaking
+- `[x]` passing on main, last 3 nightly runs green
+- `[!]` blocked (see notes)
+- `[s]` skipped (intentional, with reason)
+
+---
+
+## Coverage snapshot — 2026-05-05
+
+**10/10 flows passing on main**. Phases 0 + 1 complete. Every role's login + tab matrix is now end-to-end validated against staging Supabase on every nightly cron, on top of the original Phase 0 smoke flows (login + leads + events + profile).
+
+| Role      | Login | Tabs | Lead | Event       | Roadshow | Candidate | Roadmap | Exam |
+|-----------|-------|------|------|-------------|----------|-----------|---------|------|
+| admin     | [x]   | [x]  | [ ]  | [ ]         | n/a      | n/a       | n/a     | n/a  |
+| director  | [x]   | [x]  | [ ]  | [ ]         | n/a      | [ ]       | n/a     | n/a  |
+| manager   | [x]   | [x]  | [ ]  | [x] (smoke) | [ ]      | [ ]       | n/a     | n/a  |
+| agent     | [x]   | [x]  | [x]  | [ ]         | [ ]      | n/a       | n/a     | n/a  |
+| pa        | [x]   | [x]  | n/a  | [ ]         | n/a      | [ ]       | n/a     | n/a  |
+| candidate | [x]   | [x]  | n/a  | [ ]         | n/a      | n/a       | [ ]     | [ ]  |
+
+**Headline**: ~10% coverage. All 6 roles now have login + tab assertions. No feature has end-to-end create→read→update→delete coverage yet — Phase 2 (lead pipeline) is next.
+
+---
+
+## Phase 0 — Stabilize ✅ COMPLETE
+
+Goal: existing 5 flows green and reliable. Achieved 2026-05-05 in run 25366401233 (5/5 in 7m 22s).
+
+- [x] **PR #38** — defensive `users_select_own` RLS recreation
+- [x] **PR #39** — seed-side JWT impersonation diagnostic for `users` (proved RLS is fine)
+- [x] **PR #40** — `fetchUserProfile` session diagnostics
+- [x] **PR #41** — explicit fetch + Bearer header for `fetchUserProfile`
+- [x] **PR #42** — pass `access_token` from `onAuthStateChange` callback (real auth race fix)
+- [x] **PR #43** — make `login-verify-button` tap optional (Maestro auto-submit race)
+- [x] **PR #44** — `fetchLeads` explicit-fetch fallback
+- [x] **PR #45** — seed-side leads impersonation diagnostic + cross-flow debug log
+- [x] **PR #46** — `fetchLeads` via explicit fetch only
+- [x] **PR #47** — `MAESTRO_DRIVER_STARTUP_TIMEOUT=180s` (CI infra flake)
+- [x] **PR #48** — log via console.warn for cross-flow visibility (didn't work, RN strips)
+- [x] **PR #49** — per-flow debug log files (one per Maestro process)
+- [x] **PR #50** — module-level session cache for hot-path JWT access (real bug fix)
+- [x] **PR #51** — supabase client `global.fetch` override injecting cached JWT (real bug fix)
+- [x] **PR #52** — switch lead-lifecycle to agent role + stabilize sign-out tap
+- [x] **PR #53** — defensive customFetch + sign-out by text + hideKeyboard
+- [x] **PR #54** — sign-out tap by accessibilityLabel
+- [x] All 5 flows green on a fresh dispatch (run 25366401233)
+- [ ] All 5 flows green on the next nightly cron (02:00 SGT, `0 18 * * *` UTC)
+- [ ] CocoaPods cache hit reliably (build under 15min instead of 70min)
+- [ ] Remove diagnostic blocks from `seed-e2e.sql` (after first green nightly)
+- [ ] Remove `[E2E_DEBUG]` lines from `fetchUserProfile`, `fetchLeads` (keep the session cache + fetch override — those are real fixes, not diagnostics)
+
+### Real bugs discovered in Phase 0
+
+These are app bugs, not test scaffolding. Both ship to production with this work.
+
+- **Auth race in `fetchUserProfile`** (fixed PR #42) — `supabase.auth.getSession()` immediately after `SIGNED_IN` returns no `access_token` because supabase-js hasn't committed the session yet. Production users on slow phones could land on "rejected" instead of home.
+- **JWT-attach gap on every `supabase.from(...)` query** (fixed PRs #50 + #51) — supabase-js loses its in-memory session ~13s after sign-in (chunked SecureStore adapter ↔ `autoRefreshToken` interaction). Every database query was silently going out as anon → RLS hid every row → users saw empty lists across leads/events/candidates/etc. Fixed via:
+  1. `lib/sessionCache.ts` module-level cache populated by `AuthContext` on every auth state change.
+  2. Custom `global.fetch` shim on the supabase client that injects the cached `Authorization: Bearer` header on every non-auth request.
+
+---
+
+## Phase 1 — Role Coverage (P0)
+
+One flow per role asserting login + correct tabs + correct landing. Establishes the role grid the rest of the suite hangs off. Replaces the current single `05-role-admin-login.yaml`.
+
+| #   | Flow                          | Role      | Phone        | Status |
+|-----|-------------------------------|-----------|--------------|--------|
+| 1.1 | `roles/admin-tabs.yaml`       | admin     | +6580000001  | [x] |
+| 1.2 | `roles/director-tabs.yaml`    | director  | +6580000002  | [x] |
+| 1.3 | `roles/manager-tabs.yaml`     | manager   | +6580000003  | [x] |
+| 1.4 | `roles/agent-tabs.yaml`       | agent     | +6580000004  | [x] |
+| 1.5 | `roles/pa-tabs.yaml`          | pa        | +6580000005  | [x] |
+| 1.6 | `roles/candidate-tabs.yaml`   | candidate | +6580000006  | [x] |
+
+**Per-role assertions:** home-scroll-view visible within 60s, expected tabs visible per `getVisibleTabs` matrix, unexpected tabs NOT visible (e.g. agent doesn't see Team).
+
+---
+
+## Phase 2 — Lead Pipeline (P0)
+
+Sales flow. The lead lifecycle is the daily driver for agents and managers.
+
+| #    | Flow                              | Role     | Status | Notes |
+|------|-----------------------------------|----------|--------|-------|
+| 2.1  | `leads/01-create.yaml`            | manager  | [ ]    | Tap +Add → fill form → submit → assert in list |
+| 2.2  | `leads/02-add-note.yaml`          | manager  | [~]    | Currently bundled in 02-lead-lifecycle |
+| 2.3  | `leads/03-status-transition.yaml` | manager  | [~]    | new → contacted → qualified → proposed → won |
+| 2.4  | `leads/04-call-activity.yaml`     | manager  | [ ]    | Call action → reason → save → activity log |
+| 2.5  | `leads/05-whatsapp-activity.yaml` | manager  | [ ]    | Same pattern as call |
+| 2.6  | `leads/06-reassign.yaml`          | manager  | [ ]    | Open lead → reassign to agent → verify |
+| 2.7  | `leads/07-search-filter.yaml`     | manager  | [ ]    | Search by name, filter by status |
+| 2.8  | `leads/08-view-mode-toggle.yaml`  | manager  | [ ]    | Toggle manager↔agent view, lead count changes |
+| 2.9  | `leads/09-realtime-mktr.yaml`     | manager  | [ ]    | Trigger fake MKTR webhook → lead appears via Realtime |
+| 2.10 | `leads/10-agent-personal-only.yaml` | agent  | [ ]    | Agent sees only assigned leads, never team |
+
+---
+
+## Phase 3 — Events + Roadshow (P0)
+
+Field operations. Roadshow check-in (with face verification) is the most complex feature.
+
+| #   | Flow                              | Role     | Status | Notes |
+|-----|-----------------------------------|----------|--------|-------|
+| 3.1 | `events/01-create.yaml`           | manager  | [ ]    | Date + location + type → submit → in list |
+| 3.2 | `events/02-edit.yaml`             | manager  | [ ]    | Open → edit fields → save |
+| 3.3 | `events/03-pledge.yaml`           | agent    | [ ]    | Pledge → manager gets notification |
+| 3.4 | `events/04-attendees.yaml`        | manager  | [ ]    | View attendee list, mark attended |
+| 3.5 | `roadshow/01-attendance.yaml`     | manager  | [ ]    | Standard check-in (no face) |
+| 3.6 | `roadshow/02-face-checkin.yaml`   | agent    | [ ]    | Face-verified via `EXPO_PUBLIC_E2E_FACE_BYPASS` |
+| 3.7 | `roadshow/03-activity-log.yaml`   | manager  | [ ]    | Log activity during roadshow |
+| 3.8 | `roadshow/04-realtime-update.yaml`| manager  | [ ]    | Two-device: agent checks in, manager sees update |
+
+---
+
+## Phase 4 — Candidate Lifecycle (P0)
+
+Recruitment pipeline. The 1376-line candidate detail screen is the riskiest UI surface in the app.
+
+| #   | Flow                                              | Role     | Status | Notes |
+|-----|---------------------------------------------------|----------|--------|-------|
+| 4.1 | `candidates/01-manager-create.yaml`               | manager  | [ ]    | +Add candidate → form → invitation sent |
+| 4.2 | `candidates/02-pa-create.yaml`                    | pa       | [ ]    | PA creates on behalf of their manager |
+| 4.3 | `candidates/03-detail-sections.yaml`              | manager  | [ ]    | info, interviews, documents, DISC, activities |
+| 4.4 | `candidates/04-schedule-interview.yaml`           | manager  | [ ]    | Date + interviewer → save |
+| 4.5 | `candidates/05-upload-document.yaml`              | manager  | [ ]    | Upload PDF → in documents list |
+| 4.6 | `candidates/06-status-transition.yaml`            | manager  | [ ]    | applied → interview_scheduled → onboarded → ... |
+| 4.7 | `candidates/07-disc-results-view.yaml`            | manager  | [ ]    | Open candidate → DISC card visible |
+| 4.8 | `candidates/08-realtime-disc-complete.yaml`       | manager  | [ ]    | Web candidate completes DISC → mobile updates |
+| 4.9 | `candidates/09-pa-without-manager-blocked.yaml`   | pa       | [ ]    | Negative: PA without `pa_manager_assignments` blocked |
+
+---
+
+## Phase 5 — Training + Assessments (P1)
+
+Candidate-facing. Lower priority due to fewer concurrent users, but personality assessments have known mobile↔web scoring divergence (per memory).
+
+| #   | Flow                                       | Role      | Status | Notes |
+|-----|--------------------------------------------|-----------|--------|-------|
+| 5.1 | `roadmap/01-programmes-list.yaml`          | candidate | [ ]    | List visible, prerequisites respected |
+| 5.2 | `roadmap/02-module-progress.yaml`          | candidate | [ ]    | Mark item complete → progress bar updates |
+| 5.3 | `roadmap/03-prereq-blocked.yaml`           | candidate | [ ]    | Module with unmet prereq is locked |
+| 5.4 | `exams/01-disc-full.yaml`                  | candidate | [ ]    | All 38 questions → submit → results screen |
+| 5.5 | `exams/02-vark-full.yaml`                  | candidate | [ ]    | Same shape, VARK scoring |
+| 5.6 | `exams/03-enneagram-full.yaml`             | candidate | [ ]    | Same shape, Enneagram scoring |
+| 5.7 | `exams/04-disc-autosave.yaml`              | candidate | [ ]    | Answer 5 → kill app → relaunch → answers preserved |
+| 5.8 | `exams/05-mas-paper.yaml`                  | candidate | [ ]    | If MAS paper assigned, take it |
+| 5.9 | `exams/06-mobile-disc-mirrors-web.yaml`    | candidate | [ ]    | Cross-app: mobile DISC mirrors to lyfe-sg |
+
+---
+
+## Phase 6 — Cross-cutting (P1)
+
+Reliability and UX features that span multiple screens.
+
+| #   | Flow                                          | Status | Notes |
+|-----|-----------------------------------------------|--------|-------|
+| 6.1 | `cross/01-push-deep-link.yaml`                | [ ]    | Send push → tap notification → land on screen |
+| 6.2 | `cross/02-biometric-login.yaml`               | [ ]    | First OTP → opt-in biometric → restart → biometric prompt |
+| 6.3 | `cross/03-theme-light.yaml`                   | [ ]    | Force light → assert key colors |
+| 6.4 | `cross/04-theme-dark.yaml`                    | [ ]    | Force dark → assert key colors |
+| 6.5 | `cross/05-offline-queue.yaml`                 | [ ]    | Disable network → make change → re-enable → syncs |
+| 6.6 | `cross/06-realtime-notifications-badge.yaml`  | [ ]    | Trigger notification insert → unread badge increments |
+| 6.7 | `cross/07-realtime-disconnect-recovery.yaml`  | [ ]    | Toggle network 5x → realtime resubscribes |
+
+---
+
+## Phase 7 — Negative paths + Edge cases (P2)
+
+Hardening. Where features either break gracefully or expose ugly errors.
+
+| #   | Flow                                  | Status | Notes |
+|-----|---------------------------------------|--------|-------|
+| 7.1 | `edge/01-empty-leads.yaml`            | [ ]    | Fresh agent with 0 leads → empty state |
+| 7.2 | `edge/02-network-failure-fetch.yaml`  | [ ]    | Block requests → tap leads → error visible, retry works |
+| 7.3 | `edge/03-validation-phone.yaml`       | [ ]    | Enter `123` → submit → friendly error |
+| 7.4 | `edge/04-permission-denial.yaml`      | [ ]    | Agent navigates to /team route → blocked |
+| 7.5 | `edge/05-stale-lead-reassigned.yaml`  | [ ]    | Open lead → server reassigns away → status reflects |
+| 7.6 | `edge/06-text-overflow.yaml`          | [ ]    | Long candidate name → no UI break |
+| 7.7 | `edge/07-otp-wrong-code.yaml`         | [ ]    | Bad OTP → friendly error, retry possible |
+| 7.8 | `edge/08-rejected-state.yaml`         | [ ]    | User without invitation → 'rejected' screen |
+
+---
+
+## Phase 8 — Cross-system integration (P2)
+
+Where lyfe-app meets lyfe-sg or MKTR. Highest-risk integration boundary; today these are tested only by hand.
+
+| #   | Flow                                            | Status | Notes |
+|-----|-------------------------------------------------|--------|-------|
+| 8.1 | `integration/01-mktr-lead-arrival.yaml`         | [ ]    | POST signed webhook → push → tap → lead detail |
+| 8.2 | `integration/02-cross-app-disc.yaml`            | [ ]    | Web candidate completes DISC → mobile manager refresh |
+| 8.3 | `integration/03-cross-app-document.yaml`        | [ ]    | Web upload → mobile sees doc |
+| 8.4 | `integration/04-mktr-agent-sync.yaml`           | [ ]    | Update mobile user phone → MKTR sync mirrors |
+| 8.5 | `integration/05-edge-fn-create-candidate.yaml`  | [ ]    | Mobile invokes create-candidate → atomic insert |
+
+---
+
+## Phase 9 — Performance + Scale (P3)
+
+Catches O(n²) regressions before they hit production.
+
+| #   | Flow                       | Status | Notes |
+|-----|----------------------------|--------|-------|
+| 9.1 | `perf/01-leads-100.yaml`   | [ ]    | 100 leads → smooth scroll, pagination works |
+| 9.2 | `perf/02-candidates-50.yaml` | [ ]  | 50 candidates → detail render < 1s |
+| 9.3 | `perf/03-slow-network.yaml`| [ ]    | 3G simulation → app stays usable, loading states |
+
+---
+
+## Test infrastructure todos
+
+Ordered by build-time pain reduction.
+
+- [ ] Cache built `.app` artifact across runs (currently rebuilt every run, ~50min) — would cut iteration time to ~10min
+- [ ] Use Maestro `pre-built-runner` to skip XCUITest install per run
+- [ ] Run flows in parallel via Maestro shards (`maestro test --shards 3 .maestro/`)
+- [ ] Make `e2e-bootstrap.mjs` clean stale rows from prior test runs (currently 76 leads accumulated; should reset to ~4)
+- [ ] Add `flows/_meta.yaml` with shared `disableRetries: false` and `excludeTags: [skip]`
+- [ ] Tag flows with `@smoke`, `@p0`, `@nightly`, `@weekly` so we can run subsets
+- [ ] Add additional test phones to `seed-e2e.sql` for any phase needing more (e.g. agent2 for reassign tests)
+- [ ] Document in CLAUDE.md: how to add a flow, how to run locally
+- [ ] Add a "flake budget" — if a flow flakes 3x in 7 days, mark `[~]` and revisit
+
+---
+
+## Open questions
+
+- **Onboarding flow** — fires once per user. Worth testing? Probably weekly cadence, not nightly.
+- **Biometric on sim** — TouchID isn't on macOS simulator. Physical-device CI or skip on CI?
+- **Face verification** — `EXPO_PUBLIC_E2E_FACE_BYPASS` exists; does it test the *real* code path or stub it out entirely? Verify before relying on it.
+- **MKTR webhook integration** — does CI signing key match staging? Need a test-only HMAC secret or mock the signature check.
+- **Personality quiz scoring divergence** — memory says mobile vs web DISC scoring drifts. Should this be its own integration test that runs both paths and asserts equality?
+
+---
+
+## Decisions / non-goals
+
+- **NOT** testing the Next.js admin panel from this suite (lyfe-sg owns it).
+- **NOT** testing MKTR backend logic — only `receive-mktr-lead` edge function from the mobile side.
+- **NOT** deeply testing iOS-specific UI (TouchID, FaceID, Live Activities) on CI sims — needs physical device.
+- **NOT** testing in-app purchases, push registration to APNs (Expo only), or App Store review flows.
+
+---
+
+## Cadence
+
+- **Per PR** — `@smoke` flows (~5 min) gate merge to main
+- **Nightly cron 02:00 SGT** — full suite, all `@nightly` flows
+- **Weekly Sunday** — `@weekly` flows including Onboarding and slow performance tests
+
+---
+
+## Change log
+
+- 2026-05-05 — Plan created. Phase 0 in flight. Phases 1-9 outlined with 60+ planned flows.
+- 2026-05-05 — **Phase 0 complete.** All 5 flows green on main (run 25366401233, 7m 22s). 17 PRs merged. Two real production bugs uncovered + fixed (auth race, JWT-attach gap). Phase 1 (role coverage) starts next.
+- 2026-05-05 — **Phase 1 complete.** 10/10 flows green on main. Added director/pa/candidate tab flows under `.maestro/roles/`, removed top-level `05-role-admin-login.yaml` (replaced by `roles/admin-tabs.yaml`), and updated the Maestro CI step to discover the `roles/` subdirectory explicitly (Maestro only scans the immediate folder it's passed). Phase 2 (lead pipeline) is next.
