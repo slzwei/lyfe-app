@@ -150,24 +150,36 @@ const secureStoreAdapter = {
  * inject an old/stale token into the auth flow.
  */
 const customFetch: typeof fetch = (input, init) => {
+    let nextInit = init;
     try {
         // eslint-disable-next-line @typescript-eslint/no-require-imports
         const { getCachedAccessToken } = require('./sessionCache') as {
             getCachedAccessToken: () => string | null;
         };
         const token = getCachedAccessToken();
-        const url = typeof input === 'string' ? input : input instanceof URL ? input.href : input.url;
-        // Only override on PostgREST/storage/functions paths, not /auth/v1/*
-        const isAuthPath = url.includes('/auth/v1/');
-        if (token && !isAuthPath) {
-            const headers = new Headers(init?.headers);
-            headers.set('Authorization', `Bearer ${token}`);
-            init = { ...init, headers };
+        if (token) {
+            // Determine URL string from any of the supported input shapes.
+            let url: string | undefined;
+            if (typeof input === 'string') url = input;
+            else if (typeof URL !== 'undefined' && input instanceof URL) url = input.href;
+            else if (input && typeof (input as Request).url === 'string') url = (input as Request).url;
+
+            // Only override on non-auth paths. /auth/v1/* is supabase-js's
+            // own auth flow; injecting a cached token there would cause
+            // refresh/session calls to use the wrong subject.
+            const isAuthPath = url ? url.includes('/auth/v1/') : false;
+            if (!isAuthPath && url) {
+                const headers = new Headers(init?.headers as HeadersInit | undefined);
+                headers.set('Authorization', `Bearer ${token}`);
+                nextInit = { ...(init || {}), headers };
+            }
         }
     } catch {
-        // never break the app over a logger/cache lookup
+        // never break the app over a logger/cache lookup; fall through with
+        // the unmodified init.
+        nextInit = init;
     }
-    return fetch(input, init);
+    return fetch(input, nextInit);
 };
 
 export const supabase = createClient<Database>(supabaseUrl, supabaseAnonKey, {
