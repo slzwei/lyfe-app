@@ -33,9 +33,13 @@ appId: com.shawnlee.lyfe
 - assertNotVisible: "Michael Wong"
 - assertNotVisible: "Sarah Lim"
 
-# Clear search to reset for the filter test.
+# Clear the search field. Maestro doesn't accept `accessibilityLabel` as
+# a tapOn property — using `eraseText` is more deterministic than tapping
+# the Clear-X button (which only renders when search has content and is
+# rendered as an icon, not text).
 - tapOn:
-    accessibilityLabel: "Clear search"
+    id: "leads-search-input"
+- eraseText: 10
 - waitForAnimationToEnd
 
 # --- Filter by Contacted ---
