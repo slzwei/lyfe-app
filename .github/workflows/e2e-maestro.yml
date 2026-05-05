@@ -14,7 +14,12 @@ concurrency:
 jobs:
   ios-simulator:
     runs-on: macos-15
-    timeout-minutes: 90
+    # Bumped 90 → 120: build phase has been observed at 38–68 min depending
+    # on CocoaPods cache state, and 03-events flaked at 10m vs its usual 3m
+    # in run 25384980079, leaving only 22 min for the final flows before the
+    # 90-min job cap cancelled the run with 8/10 already green. 120 covers
+    # worst-case build + worst-case Maestro phase with headroom.
+    timeout-minutes: 120
 
     env:
       # --- Mobile build env (baked in at xcodebuild time) ---
