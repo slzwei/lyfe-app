@@ -37,6 +37,8 @@ function ContactConfirmModal({ visible, contactType, leadName, colors, onConfirm
                             </Text>
                             <TouchableOpacity
                                 testID="lead-contact-outcome-reached"
+                                accessibilityRole="button"
+                                accessibilityLabel="Reached them"
                                 style={[styles.confirmBtn, { backgroundColor: colors.success }]}
                                 onPress={() => onConfirm('reached')}
                             >
@@ -45,6 +47,8 @@ function ContactConfirmModal({ visible, contactType, leadName, colors, onConfirm
                             </TouchableOpacity>
                             <TouchableOpacity
                                 testID="lead-contact-outcome-no-answer"
+                                accessibilityRole="button"
+                                accessibilityLabel="No answer"
                                 style={[
                                     styles.confirmBtn,
                                     {
@@ -70,6 +74,8 @@ function ContactConfirmModal({ visible, contactType, leadName, colors, onConfirm
                             <Text style={[styles.confirmSubtitle, { color: colors.textSecondary }]}>To {leadName}</Text>
                             <TouchableOpacity
                                 testID="lead-contact-outcome-sent"
+                                accessibilityRole="button"
+                                accessibilityLabel="Yes, sent"
                                 style={[styles.confirmBtn, { backgroundColor: '#25D366' }]}
                                 onPress={() => onConfirm('sent')}
                             >
@@ -78,7 +84,12 @@ function ContactConfirmModal({ visible, contactType, leadName, colors, onConfirm
                             </TouchableOpacity>
                         </>
                     )}
-                    <TouchableOpacity testID="lead-contact-skip" onPress={() => onConfirm('skip')}>
+                    <TouchableOpacity
+                        testID="lead-contact-skip"
+                        accessibilityRole="button"
+                        accessibilityLabel="Skip"
+                        onPress={() => onConfirm('skip')}
+                    >
                         <Text style={[styles.confirmSkip, { color: colors.textTertiary }]}>Skip — don't log</Text>
                     </TouchableOpacity>
                 </View>
