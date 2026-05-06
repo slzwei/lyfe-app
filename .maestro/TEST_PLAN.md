@@ -70,8 +70,8 @@ Goal: existing 5 flows green and reliable. Achieved 2026-05-05 in run 2536640123
 - [x] All 5 flows green on a fresh dispatch (run 25366401233)
 - [ ] All 5 flows green on the next nightly cron (02:00 SGT, `0 18 * * *` UTC)
 - [ ] CocoaPods cache hit reliably (build under 15min instead of 70min)
-- [ ] Remove diagnostic blocks from `seed-e2e.sql` (after first green nightly)
-- [ ] Remove `[E2E_DEBUG]` lines from `fetchUserProfile`, `fetchLeads` (keep the session cache + fetch override — those are real fixes, not diagnostics)
+- [x] Remove diagnostic blocks from `seed-e2e.sql` — stripped 2026-05-06 (DO $diag$ + DO $smoke$ + DO $leads_smoke$ + scattered DIAG NOTICE)
+- [x] Remove `[E2E_DEBUG]` lines from `fetchUserProfile`, `fetchLeads`, login + onAuthStateChange — stripped 2026-05-06 (kept the session cache + global.fetch override — real fixes — and `lib/e2eDebugLog.ts` utility for future use)
 
 ### Real bugs discovered in Phase 0
 

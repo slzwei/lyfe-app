@@ -34,17 +34,6 @@ export async function fetchLeads(
     page?: number,
     pageSize: number = 50,
 ): Promise<{ data: Lead[]; error: string | null; hasMore: boolean }> {
-    const e2eEnabled = process.env.EXPO_PUBLIC_E2E_FACE_BYPASS === '1';
-    const log = (...parts: unknown[]) => {
-        if (!e2eEnabled) return;
-        try {
-            // eslint-disable-next-line @typescript-eslint/no-require-imports
-            require('../e2eDebugLog').e2eDebug(...parts);
-        } catch {
-            // ignore
-        }
-    };
-
     // Read from the module-level session cache first (set by AuthContext on
     // every auth state change). Fall back to supabase.auth.getSession() if
     // the cache is empty (which shouldn't happen post-login but is defensive).
@@ -53,18 +42,10 @@ export async function fetchLeads(
         const { data: { session } } = await supabase.auth.getSession();
         accessToken = session?.access_token ?? null;
     }
-    const sessionLikeUser = accessToken ? { id: userId } : null;
-    const session = accessToken ? { access_token: accessToken, user: sessionLikeUser } : null;
-    log(
-        '[E2E_DEBUG] fetchLeads pre',
-        'has_session=', !!session,
-        'token_prefix=', session?.access_token ? session.access_token.slice(0, 16) : 'null',
-        'isManager=', isManager,
-    );
 
     const supaUrl = process.env.EXPO_PUBLIC_SUPABASE_URL;
     const apikey = process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY;
-    if (!session?.access_token || !supaUrl || !apikey) {
+    if (!accessToken || !supaUrl || !apikey) {
         // No session yet — bail; the auth gate will redirect / re-fetch.
         return { data: [], error: null, hasMore: false };
     }
@@ -76,19 +57,12 @@ export async function fetchLeads(
         const resp = await fetch(url, {
             headers: {
                 apikey,
-                Authorization: `Bearer ${session.access_token}`,
+                Authorization: `Bearer ${accessToken}`,
                 Accept: 'application/json',
                 'Accept-Profile': 'public',
             },
         });
         const bodyText = await resp.text();
-        log(
-            '[E2E_DEBUG] fetchLeads explicit-fetch',
-            'status=', resp.status,
-            'body_len=', bodyText.length,
-            'body_head=', bodyText.slice(0, 200),
-        );
-
         if (!resp.ok) {
             return { data: [], error: friendlyError(bodyText, String(resp.status)), hasMore: false };
         }
@@ -98,7 +72,6 @@ export async function fetchLeads(
         const { data: paged, hasMore } = resolvePage(list, page, pageSize);
         return { data: paged, error: null, hasMore };
     } catch (err) {
-        log('[E2E_DEBUG] fetchLeads explicit-fetch err', String(err));
         captureError(err, { tag: 'fetchLeads' });
         return { data: [], error: friendlyError(String(err)), hasMore: false };
     }
