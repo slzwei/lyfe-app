@@ -174,12 +174,15 @@ export default function LeadDetailScreen() {
         if (!lead.phone) return;
         hasPendingContact.current = true;
         setPendingContact({ type: 'call', phone: lead.phone });
-        // E2E bypass: Linking.openURL backgrounds the app on the iOS sim
-        // (especially `wa.me` → Safari with no WhatsApp installed), so the
-        // ContactConfirmModal lands invisible to Maestro. CI sets this env
-        // to keep the modal foregrounded; production users hit the real
-        // tel:/wa.me handoff path as before.
-        if (process.env.EXPO_PUBLIC_E2E_LINKING_BYPASS !== '1') {
+        // E2E bypass: production opens tel:, the app backgrounds, and the
+        // modal opens via the AppState 'active' listener when the user
+        // returns from the Phone app. On the iOS sim that handoff doesn't
+        // work cleanly (`wa.me` opens Safari, `tel:` is a no-op), so we
+        // open the modal directly. Production users still hit the real
+        // tel: handoff path.
+        if (process.env.EXPO_PUBLIC_E2E_LINKING_BYPASS === '1') {
+            setShowContactConfirm(true);
+        } else {
             Linking.openURL(`tel:${lead.phone.replace(/\s/g, '')}`);
         }
     };
@@ -188,7 +191,9 @@ export default function LeadDetailScreen() {
         if (!lead.phone) return;
         hasPendingContact.current = true;
         setPendingContact({ type: 'whatsapp', phone: lead.phone });
-        if (process.env.EXPO_PUBLIC_E2E_LINKING_BYPASS !== '1') {
+        if (process.env.EXPO_PUBLIC_E2E_LINKING_BYPASS === '1') {
+            setShowContactConfirm(true);
+        } else {
             const phone = lead.phone.replace(/[\s+]/g, '');
             Linking.openURL(`https://wa.me/${phone}`);
         }

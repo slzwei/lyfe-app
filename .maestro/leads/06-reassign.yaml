@@ -49,16 +49,16 @@ appId: com.shawnlee.lyfe
 - waitForAnimationToEnd
 
 # David Agent is the only seeded agent reporting to manager → only option.
-# The agent-row TouchableOpacity has accessibilityLabel="Reassign to {name}"
-# but iOS exposes the inner Text "David Agent" as the matchable text in
-# the accessibility tree (the Text isn't masked here the way LeadCard's
-# `Lead: {name}, Status: {status}` masks its children — likely because
-# this row's accessibilityRole="button" doesn't trigger label-collapse).
-# Tap by text instead.
+# Tap by testID regex — neither "David Agent" (inner Text, masked by parent
+# accessibilityLabel) nor "Reassign to David Agent" (parent label, doesn't
+# match Maestro's text matcher inside this Modal) work. testID is the most
+# stable match once `accessibilityViewIsModal` is set on the Modal.
 - extendedWaitUntil:
-    visible: "David Agent"
+    visible:
+      id: "lead-reassign-option-.*"
     timeout: 15000
-- tapOn: "David Agent"
+- tapOn:
+    id: "lead-reassign-option-.*"
 - waitForAnimationToEnd
 
 # Modal dismisses on selection. Assert we're back on the lead detail
