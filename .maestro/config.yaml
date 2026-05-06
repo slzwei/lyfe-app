@@ -14,9 +14,9 @@ flows:
   - "*.yaml"
   - "roles/*.yaml"
   - "leads/03-status-transition.yaml"
-  - "leads/04-call-activity.yaml"
-  - "leads/05-whatsapp-activity.yaml"
-  - "leads/06-reassign.yaml"
+  # leads/04-call-activity.yaml      — Phase 2b (modal subtree invisible to Maestro)
+  # leads/05-whatsapp-activity.yaml  — Phase 2b (same)
+  # leads/06-reassign.yaml           — Phase 2b (ReassignModal subtree invisible)
   - "leads/07-search-filter.yaml"
   - "leads/10-agent-personal-only.yaml"
 
