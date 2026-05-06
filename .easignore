@@ -27,6 +27,12 @@ ios/build/
 android/build/
 android/app/build/
 
+# Regenerated server-side: Pods come from Podfile.lock via `pod install`,
+# Gradle cache rebuilds from android/build.gradle. Excluding both shaves
+# hundreds of MB off the upload.
+ios/Pods/
+android/.gradle/
+
 # Editor + OS detritus.
 .DS_Store
 *.swp
@@ -34,6 +40,5 @@ android/app/build/
 
 # Internal docs aren't needed in the binary.
 docs/
-design/
 brand/
 .maestro/
