@@ -74,7 +74,7 @@ export function useManagerOverride({ eventId, userId, roadshowConfig, onOverride
                                 closed: overridePledgeClosed,
                                 afyc: Number(overridePledgeAfyc) || 0,
                             };
-                            const { error } = await managerCheckIn(
+                            const { error, alreadyCheckedIn } = await managerCheckIn(
                                 eventId!,
                                 overrideTarget.user_id,
                                 checkedInAt.toISOString(),
@@ -82,11 +82,12 @@ export function useManagerOverride({ eventId, userId, roadshowConfig, onOverride
                                 pledges,
                                 userId!,
                             );
+                            if (alreadyCheckedIn) {
+                                setOverrideError(`${overrideTarget.full_name} just checked in themselves.`);
+                                return;
+                            }
                             if (error) {
-                                const msg = error.includes('unique')
-                                    ? `${overrideTarget.full_name} just checked in themselves.`
-                                    : error;
-                                setOverrideError(msg);
+                                setOverrideError(error);
                                 return;
                             }
                             // Log check_in activity for the agent (fire-and-forget)

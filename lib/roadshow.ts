@@ -3,11 +3,14 @@
  */
 import type { RoadshowActivity, RoadshowActivityType, RoadshowAttendance, RoadshowConfig } from '@/types/event';
 import type { Json } from '@/types/shared/database.types';
+import { friendlyError } from './errors';
 import { applyPageRange, resolvePage } from './pagination';
 import { supabase } from './supabase';
 
 /** PostgREST error code: "no rows found" from .single() */
 const PGRST_NO_ROWS = 'PGRST116';
+/** Postgres error code: unique_violation */
+const PG_UNIQUE_VIOLATION = '23505';
 
 // ── Helpers ──────────────────────────────────────────────────
 
@@ -53,7 +56,7 @@ export async function hasUserCheckedIn(
 
     // PGRST116 = "no rows found" — not an error, just means not checked in
     if (error && error.code !== PGRST_NO_ROWS) {
-        return { data: false, error: error.message };
+        return { data: false, error: friendlyError(error.message, error.code) };
     }
     return { data: !!data, error: null };
 }
@@ -81,7 +84,7 @@ export async function fetchRoadshowConfig(
         .eq('event_id', eventId)
         .single();
 
-    if (error && error.code !== PGRST_NO_ROWS) return { data: null, error: error.message };
+    if (error && error.code !== PGRST_NO_ROWS) return { data: null, error: friendlyError(error.message, error.code) };
     if (!data) return { data: null, error: null };
 
     const costs = computeCosts(data);
@@ -102,7 +105,7 @@ export async function saveRoadshowConfig(
     const { error } = await supabase
         .from('roadshow_configs')
         .upsert({ event_id: eventId, ...input }, { onConflict: 'event_id' });
-    return { error: error ? error.message : null };
+    return { error: error ? friendlyError(error.message, error.code) : null };
 }
 
 // ── Attendance ───────────────────────────────────────────────
@@ -117,7 +120,7 @@ export async function fetchRoadshowAttendance(
         .eq('event_id', eventId)
         .order('checked_in_at', { ascending: true });
 
-    if (error) return { data: [], error: error.message };
+    if (error) return { data: [], error: friendlyError(error.message, error.code) };
 
     interface AttendanceRow {
         id: string;
@@ -162,12 +165,19 @@ export interface PledgeInput {
     afyc: number;
 }
 
+export interface CheckInResult {
+    error: string | null;
+    /** True when the row already exists (unique_violation on event_id+user_id).
+     *  Caller should treat as a successful idempotent check-in, not an error. */
+    alreadyCheckedIn?: boolean;
+}
+
 export async function logRoadshowAttendanceWithPledge(
     eventId: string,
     userId: string,
     lateReason: string | null,
     pledges: PledgeInput,
-): Promise<{ error: string | null }> {
+): Promise<CheckInResult> {
     const { error } = await supabase.from('roadshow_attendance').insert({
         event_id: eventId,
         user_id: userId,
@@ -177,7 +187,9 @@ export async function logRoadshowAttendanceWithPledge(
         pledged_closed: pledges.closed,
         pledged_afyc: pledges.afyc,
     });
-    return { error: error ? error.message : null };
+    if (!error) return { error: null };
+    if (error.code === PG_UNIQUE_VIOLATION) return { error: null, alreadyCheckedIn: true };
+    return { error: friendlyError(error.message, error.code) };
 }
 
 export async function managerCheckIn(
@@ -187,7 +199,7 @@ export async function managerCheckIn(
     lateReason: string | null,
     pledges: PledgeInput,
     managerId: string,
-): Promise<{ error: string | null }> {
+): Promise<CheckInResult> {
     const { error } = await supabase.from('roadshow_attendance').insert({
         event_id: eventId,
         user_id: userId,
@@ -199,7 +211,9 @@ export async function managerCheckIn(
         pledged_closed: pledges.closed,
         pledged_afyc: pledges.afyc,
     });
-    return { error: error ? error.message : null };
+    if (!error) return { error: null };
+    if (error.code === PG_UNIQUE_VIOLATION) return { error: null, alreadyCheckedIn: true };
+    return { error: friendlyError(error.message, error.code) };
 }
 
 // ── Activities ───────────────────────────────────────────────
@@ -218,7 +232,7 @@ export async function fetchRoadshowActivities(
     query = applyPageRange(query, page, pageSize);
 
     const { data, error } = await query;
-    if (error) return { data: [], error: error.message, hasMore: false };
+    if (error) return { data: [], error: friendlyError(error.message, error.code), hasMore: false };
 
     interface ActivityRow {
         id: string;
@@ -266,7 +280,7 @@ export async function logRoadshowActivity(
         .select()
         .single();
 
-    if (error) return { data: null, error: error.message };
+    if (error) return { data: null, error: friendlyError(error.message, error.code) };
     return {
         data: {
             id: data.id,
@@ -283,7 +297,15 @@ export async function logRoadshowActivity(
 // ── Bulk Creation ────────────────────────────────────────────
 
 export async function createRoadshowBulk(
-    events: { title: string; event_date: string; start_time: string; end_time: string; location: string }[],
+    events: {
+        title: string;
+        event_date: string;
+        start_time: string;
+        end_time: string;
+        location: string;
+        latitude: number | null;
+        longitude: number | null;
+    }[],
     config: RoadshowConfigInput,
     attendees: { user_id: string; attendee_role: string }[],
     createdBy: string,
@@ -295,6 +317,6 @@ export async function createRoadshowBulk(
         p_created_by: createdBy,
     });
 
-    if (error) return { data: null, error: error.message };
+    if (error) return { data: null, error: friendlyError(error.message, error.code) };
     return { data: data as { event_ids: string[]; count: number }, error: null };
 }

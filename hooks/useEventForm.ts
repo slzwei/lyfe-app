@@ -202,6 +202,8 @@ export function useEventForm() {
                 start_time: startTime,
                 end_time: endTime ?? '',
                 location: location.trim(),
+                latitude,
+                longitude,
             }));
 
             const { error } = await createRoadshowBulk(

@@ -123,7 +123,8 @@ describe('hasUserCheckedIn', () => {
         mockResolve(chain, { data: null, error: { code: '42P01', message: 'Table does not exist' } });
 
         const result = await hasUserCheckedIn('evt-1', 'u1');
-        expect(result).toEqual({ data: false, error: 'Table does not exist' });
+        expect(result.data).toBe(false);
+        expect(result.error).toBe('Something went wrong. Please try again.');
     });
 
     it('returns { data: false } when data is an empty object (falsy check)', async () => {
@@ -184,7 +185,9 @@ describe('fetchRoadshowConfig', () => {
 
         const result = await fetchRoadshowConfig('evt-1');
         expect(result.data).toBeNull();
-        expect(result.error).toBe('Internal server error');
+        // Errors are translated via friendlyError() before surfacing; we only
+        // assert that an error propagates, not the raw Postgres string.
+        expect(result.error).toBeTruthy();
     });
 
     it('computes costs correctly when slots_per_day is 1', async () => {
@@ -241,10 +244,10 @@ describe('saveRoadshowConfig', () => {
 
     it('returns the error message when upsert fails', async () => {
         const chain = mockSupa.__getChain('roadshow_configs');
-        mockResolve(chain, { error: { message: 'unique constraint violation' } });
+        mockResolve(chain, { error: { code: '23505', message: 'duplicate key' } });
 
         const result = await saveRoadshowConfig('evt-1', CONFIG_INPUT);
-        expect(result.error).toBe('unique constraint violation');
+        expect(result.error).toBe('This record already exists');
     });
 
     it('calls supabase.from with roadshow_configs table', async () => {
@@ -313,7 +316,7 @@ describe('fetchRoadshowAttendance', () => {
 
         const result = await fetchRoadshowAttendance('evt-1');
         expect(result.data).toEqual([]);
-        expect(result.error).toBe('Query timeout');
+        expect(result.error).toBeTruthy();
     });
 
     it('returns empty array and error when data is null with no error', async () => {
@@ -405,12 +408,24 @@ describe('logRoadshowAttendanceWithPledge', () => {
         expect(result.error).toBeNull();
     });
 
-    it('returns error message when insert fails', async () => {
+    it('treats unique_violation as alreadyCheckedIn (race recovery)', async () => {
         const chain = mockSupa.__getChain('roadshow_attendance');
-        mockResolve(chain, { error: { message: 'unique constraint on (event_id, user_id)' } });
+        mockResolve(chain, {
+            error: { code: '23505', message: 'duplicate key value violates unique constraint' },
+        });
 
         const result = await logRoadshowAttendanceWithPledge('evt-1', 'u1', null, PLEDGE_INPUT);
-        expect(result.error).toBe('unique constraint on (event_id, user_id)');
+        expect(result.error).toBeNull();
+        expect(result.alreadyCheckedIn).toBe(true);
+    });
+
+    it('returns friendly error message on non-race insert failure', async () => {
+        const chain = mockSupa.__getChain('roadshow_attendance');
+        mockResolve(chain, { error: { code: '42501', message: 'permission denied' } });
+
+        const result = await logRoadshowAttendanceWithPledge('evt-1', 'u1', null, PLEDGE_INPUT);
+        expect(result.error).toBe('You do not have permission to perform this action');
+        expect(result.alreadyCheckedIn).toBeUndefined();
     });
 
     it('stores a late_reason when provided', async () => {
@@ -456,12 +471,24 @@ describe('managerCheckIn', () => {
         expect(result.error).toBeNull();
     });
 
-    it('returns error message when insert fails', async () => {
+    it('treats unique_violation as alreadyCheckedIn (race recovery)', async () => {
         const chain = mockSupa.__getChain('roadshow_attendance');
-        mockResolve(chain, { error: { message: 'RLS policy violation' } });
+        mockResolve(chain, {
+            error: { code: '23505', message: 'duplicate key value violates unique constraint' },
+        });
 
         const result = await managerCheckIn('evt-1', 'agent-1', '2026-03-15T09:30:00Z', null, PLEDGE_INPUT, 'mgr-1');
-        expect(result.error).toBe('RLS policy violation');
+        expect(result.error).toBeNull();
+        expect(result.alreadyCheckedIn).toBe(true);
+    });
+
+    it('returns friendly error message on non-race insert failure', async () => {
+        const chain = mockSupa.__getChain('roadshow_attendance');
+        mockResolve(chain, { error: { code: '42501', message: 'new row violates row-level security policy' } });
+
+        const result = await managerCheckIn('evt-1', 'agent-1', '2026-03-15T09:30:00Z', null, PLEDGE_INPUT, 'mgr-1');
+        expect(result.error).toBe('You do not have permission to perform this action');
+        expect(result.alreadyCheckedIn).toBeUndefined();
     });
 
     it('passes late_reason when provided', async () => {
@@ -539,7 +566,7 @@ describe('fetchRoadshowActivities', () => {
 
         const result = await fetchRoadshowActivities('evt-1');
         expect(result.data).toEqual([]);
-        expect(result.error).toBe('Permission denied');
+        expect(result.error).toBeTruthy();
         expect(result.hasMore).toBe(false);
     });
 
@@ -645,7 +672,7 @@ describe('logRoadshowActivity', () => {
 
         const result = await logRoadshowActivity('evt-1', 'u1', 'sitdown');
         expect(result.data).toBeNull();
-        expect(result.error).toBe('FK constraint failed');
+        expect(result.error).toBeTruthy();
     });
 
     it('uses provided loggedAt timestamp when passed', async () => {
@@ -764,7 +791,7 @@ describe('createRoadshowBulk', () => {
 
         const result = await createRoadshowBulk(EVENTS, CONFIG_INPUT, ATTENDEES, 'mgr-1');
         expect(result.data).toBeNull();
-        expect(result.error).toBe('RPC execution failed');
+        expect(result.error).toBeTruthy();
     });
 
     it('handles empty events array without error', async () => {

@@ -256,12 +256,21 @@ export function useCheckInFlow({
                 afyc: Number(pledgeAfyc) || 0,
             };
 
-            const { error: logError } = await logRoadshowAttendanceWithPledge(
+            const { error: logError, alreadyCheckedIn } = await logRoadshowAttendanceWithPledge(
                 eventId!,
                 userId!,
                 lateReason || null,
                 pledges,
             );
+            // Race recovery: the upstream hasUserCheckedIn read missed a row
+            // that got inserted between the check and the insert (rapid
+            // double-tap, retry after partial-success, etc). The unique
+            // constraint on (event_id, user_id) is the source of truth — if
+            // it fires, the user IS checked in, so treat as success.
+            if (alreadyCheckedIn) {
+                captureSucceededRef.current = true;
+                return { ok: true };
+            }
             if (logError) {
                 // Throw so FaceCaptureFlow's catch-all renders the fail
                 // overlay with this message. Retry will re-verify (cheap)
