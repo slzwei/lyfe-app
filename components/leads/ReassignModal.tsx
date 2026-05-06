@@ -19,7 +19,13 @@ interface ReassignModalProps {
 
 function ReassignModal({ visible, leadName, agents, colors, onSelect, onClose }: ReassignModalProps) {
     return (
-        <Modal visible={visible} transparent animationType="fade" onRequestClose={onClose}>
+        <Modal
+            visible={visible}
+            transparent
+            animationType="fade"
+            onRequestClose={onClose}
+            accessibilityViewIsModal
+        >
             <TouchableOpacity
                 style={styles.modalOverlay}
                 activeOpacity={1}

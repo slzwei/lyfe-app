@@ -27,11 +27,14 @@ appId: com.shawnlee.lyfe
 - inputText: "John"
 - waitForAnimationToEnd
 
+# Match the LeadCard's accessibilityLabel pattern (`Lead: {name}, Status:...`)
+# with a wildcard — iOS reports the parent's accessibilityLabel as the only
+# text for the subtree, so a bare "John Tan" text match would never hit.
 - extendedWaitUntil:
-    visible: "John Tan"
-    timeout: 5000
-- assertNotVisible: "Michael Wong"
-- assertNotVisible: "Sarah Lim"
+    visible: "Lead: John Tan.*"
+    timeout: 10000
+- assertNotVisible: "Lead: Michael Wong.*"
+- assertNotVisible: "Lead: Sarah Lim.*"
 
 # Clear the search field. Maestro doesn't accept `accessibilityLabel` as
 # a tapOn property — using `eraseText` is more deterministic than tapping
@@ -43,16 +46,19 @@ appId: com.shawnlee.lyfe
 - waitForAnimationToEnd
 
 # --- Filter by Contacted ---
-# Sarah Lim is seeded as 'contacted' — the only seeded lead in that state.
-# After filtering, she's visible and Michael Wong (qualified) is not.
+# Sarah Lim is seeded as 'contacted'. After filtering, she's visible and
+# Michael Wong (qualified) is not. The 02-lead-lifecycle smoke flow may
+# have flipped accumulated leads' statuses around, but Sarah Lim's seed
+# status is 'contacted' and Michael Wong's is 'qualified' for the freshly-
+# seeded copies — so at least one Sarah Lim should remain visible.
 - tapOn:
     id: "leads-filter-chip-contacted"
 - waitForAnimationToEnd
 
 - extendedWaitUntil:
-    visible: "Sarah Lim"
-    timeout: 5000
-- assertNotVisible: "Michael Wong"
+    visible: "Lead: Sarah Lim.*"
+    timeout: 10000
+- assertNotVisible: "Lead: Michael Wong.*"
 
 # Reset the filter so subsequent flows don't see a narrowed list.
 - tapOn:

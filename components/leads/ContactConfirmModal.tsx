@@ -15,7 +15,13 @@ interface ContactConfirmModalProps {
 
 function ContactConfirmModal({ visible, contactType, leadName, colors, onConfirm }: ContactConfirmModalProps) {
     return (
-        <Modal visible={visible} transparent animationType="fade" onRequestClose={() => onConfirm('skip')}>
+        <Modal
+            visible={visible}
+            transparent
+            animationType="fade"
+            onRequestClose={() => onConfirm('skip')}
+            accessibilityViewIsModal
+        >
             <View style={styles.confirmOverlay}>
                 <View style={[styles.confirmSheet, { backgroundColor: colors.cardBackground }]}>
                     {contactType === 'call' ? (

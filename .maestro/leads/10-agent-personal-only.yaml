@@ -20,11 +20,20 @@ appId: com.shawnlee.lyfe
       id: "leads-list"
     timeout: 10000
 
-# Agent should see their seeded leads.
-- assertVisible: "John Tan"
-- assertVisible: "Sarah Lim"
+# Lead names on the list screen aren't directly text-matchable: the
+# LeadCard wraps everything in a TouchableOpacity with
+# `accessibilityLabel="Lead: {name}, Status: {status}"`, which iOS reports
+# as the only accessible text for that subtree. So we match the full
+# accessibilityLabel pattern with a wildcard instead of just the name.
+#
+# Wait for at least one expected lead to render — leads-list (the FlatList)
+# can be visible before items populate.
+- extendedWaitUntil:
+    visible: "Lead: John Tan.*"
+    timeout: 10000
+- assertVisible: "Lead: Sarah Lim.*"
 
 # Agent should NOT see manager-only leads. Michael Wong is seeded with
 # assigned_to=manager and never reassigned by any other flow, so he's
 # the canonical "should never appear in agent's list" reference.
-- assertNotVisible: "Michael Wong"
+- assertNotVisible: "Lead: Michael Wong.*"

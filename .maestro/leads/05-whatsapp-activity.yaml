@@ -29,18 +29,22 @@ appId: com.shawnlee.lyfe
     timeout: 10000
 
 # Trigger WhatsApp → ContactConfirmModal → Yes, sent.
+#
+# Match the modal button by visible TEXT instead of testID — Maestro on
+# iOS 26 + macos-15 doesn't reliably propagate testIDs through RN's
+# <Modal> wrapper to the accessibility tree. Tap-by-text uses the inner
+# <Text> ("Yes, sent") which is always exposed.
 - tapOn:
     id: "lead-whatsapp-action"
 - waitForAnimationToEnd
+
 - extendedWaitUntil:
-    visible:
-      id: "lead-contact-outcome-sent"
-    timeout: 5000
-- tapOn:
-    id: "lead-contact-outcome-sent"
+    visible: "Yes, sent"
+    timeout: 15000
+- tapOn: "Yes, sent"
 - waitForAnimationToEnd
 
 # Activity feed renders an entry starting with "Sent WhatsApp" for sent.
 - extendedWaitUntil:
     visible: "Sent WhatsApp"
-    timeout: 5000
+    timeout: 10000

@@ -32,18 +32,22 @@ appId: com.shawnlee.lyfe
     timeout: 10000
 
 # Trigger Call → ContactConfirmModal → Reached them.
+#
+# Match the modal button by visible TEXT instead of testID — Maestro on
+# iOS 26 + macos-15 doesn't reliably propagate testIDs through RN's
+# <Modal> wrapper to the accessibility tree. Tap-by-text uses the inner
+# <Text> ("Reached them") which is always exposed.
 - tapOn:
     id: "lead-call-action"
 - waitForAnimationToEnd
+
 - extendedWaitUntil:
-    visible:
-      id: "lead-contact-outcome-reached"
-    timeout: 5000
-- tapOn:
-    id: "lead-contact-outcome-reached"
+    visible: "Reached them"
+    timeout: 15000
+- tapOn: "Reached them"
 - waitForAnimationToEnd
 
 # Activity feed renders an entry starting with "Called " for call/reached.
 - extendedWaitUntil:
     visible: "Called"
-    timeout: 5000
+    timeout: 10000

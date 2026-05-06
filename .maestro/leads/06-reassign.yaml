@@ -28,9 +28,14 @@ appId: com.shawnlee.lyfe
       id: "leads-list"
     timeout: 10000
 
-# Open the MKTR lead specifically (text-tap by name — there's only one
-# because of the unique (external_id, source_name) seed constraint).
-- tapOn: "E2E MKTR Lead"
+# Open the MKTR lead specifically. The LeadCard's parent accessibilityLabel
+# is "Lead: {name}, Status: {status}", which masks the inner name Text on
+# iOS — so we tap the accessibilityLabel pattern with a wildcard to ignore
+# the trailing status (which can drift across runs).
+- extendedWaitUntil:
+    visible: "Lead: E2E MKTR Lead.*"
+    timeout: 10000
+- tapOn: "Lead: E2E MKTR Lead.*"
 - waitForAnimationToEnd
 
 - extendedWaitUntil:
@@ -44,11 +49,13 @@ appId: com.shawnlee.lyfe
 - waitForAnimationToEnd
 
 # David Agent is the only seeded agent reporting to manager → only option.
-# `accessibilityLabel="Reassign to David Agent"` is more stable than the
-# regex testID since David's UUID changes between staging refreshes.
+# Match the accessibilityLabel ("Reassign to David Agent") set on the
+# agent-row TouchableOpacity. This needs `accessibilityViewIsModal` on
+# the parent <Modal> to be queryable by iOS XCUITest — added in the
+# accompanying ReassignModal change.
 - extendedWaitUntil:
     visible: "Reassign to David Agent"
-    timeout: 5000
+    timeout: 15000
 - tapOn: "Reassign to David Agent"
 - waitForAnimationToEnd
 
