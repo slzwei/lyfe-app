@@ -49,14 +49,16 @@ appId: com.shawnlee.lyfe
 - waitForAnimationToEnd
 
 # David Agent is the only seeded agent reporting to manager → only option.
-# Match the accessibilityLabel ("Reassign to David Agent") set on the
-# agent-row TouchableOpacity. This needs `accessibilityViewIsModal` on
-# the parent <Modal> to be queryable by iOS XCUITest — added in the
-# accompanying ReassignModal change.
+# The agent-row TouchableOpacity has accessibilityLabel="Reassign to {name}"
+# but iOS exposes the inner Text "David Agent" as the matchable text in
+# the accessibility tree (the Text isn't masked here the way LeadCard's
+# `Lead: {name}, Status: {status}` masks its children — likely because
+# this row's accessibilityRole="button" doesn't trigger label-collapse).
+# Tap by text instead.
 - extendedWaitUntil:
-    visible: "Reassign to David Agent"
+    visible: "David Agent"
     timeout: 15000
-- tapOn: "Reassign to David Agent"
+- tapOn: "David Agent"
 - waitForAnimationToEnd
 
 # Modal dismisses on selection. Assert we're back on the lead detail

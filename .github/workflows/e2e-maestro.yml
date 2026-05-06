@@ -30,6 +30,11 @@ jobs:
       # so Maestro doesn't have to drive the camera / GPS / Rekognition.
       EXPO_PUBLIC_E2E_FACE_BYPASS: '1'
       EXPO_PUBLIC_E2E_LOCATION_BYPASS: '1'
+      # Skip Linking.openURL for tel:/wa.me in lead detail Call/WhatsApp
+      # handlers — they background the app on the iOS sim and hide the
+      # ContactConfirmModal from Maestro. Modal flow itself is what we
+      # want to test; URL handoff is real-device behavior covered by hand.
+      EXPO_PUBLIC_E2E_LINKING_BYPASS: '1'
       # Sentry source-map upload runs as an Xcode build phase but the runner has
       # no SENTRY_AUTH_TOKEN. Disable it (matches eas.json's development profile).
       SENTRY_DISABLE_AUTO_UPLOAD: 'true'
