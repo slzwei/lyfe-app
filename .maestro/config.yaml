@@ -6,11 +6,19 @@ appId: com.shawnlee.lyfe
 
 # Test discovery — Maestro defaults to top-level only when given a folder.
 # We have to opt in to subfolders explicitly via inclusion globs. Files in
-# `helpers/`, `auth/`, `leads/`, etc. are intentionally excluded — they're
-# Phase 2+ scope and their parent flows aren't ready yet.
+# `helpers/` are subflows. Files in `auth/`, `team/`, `candidates/`, `events/`,
+# `profile/`, `roadshow/` are Phase 2+ scope and not yet wired up. Lead flows
+# are listed individually so we can enable Phase 2b items (01-create,
+# 08-view-mode-toggle, 09-realtime-mktr) one at a time as they stabilize.
 flows:
   - "*.yaml"
   - "roles/*.yaml"
+  - "leads/03-status-transition.yaml"
+  # leads/04-call-activity.yaml      — Phase 2b (modal subtree invisible to Maestro)
+  # leads/05-whatsapp-activity.yaml  — Phase 2b (same)
+  # leads/06-reassign.yaml           — Phase 2b (ReassignModal subtree invisible)
+  - "leads/07-search-filter.yaml"
+  - "leads/10-agent-personal-only.yaml"
 
 # Force the heaviest flow (lead lifecycle: login + navigate + add note +
 # change status) to run FIRST while the simulator is fresh. Maestro's

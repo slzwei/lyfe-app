@@ -1,0 +1,67 @@
+# Leads: Manager searches by name and filters by status.
+#
+# Validates the search input + filter chip composition. Manager view shows
+# all team leads (own + agent's), so we have a known multi-lead corpus to
+# narrow. John Tan is one of agent's seeded leads — searching "John" should
+# leave him visible while excluding others (Michael Wong, Sarah Lim, MKTR).
+appId: com.shawnlee.lyfe
+---
+
+- runFlow:
+    file: ../helpers/login-as.yaml
+    env:
+      phone: "80000003"
+
+- tapOn:
+    id: "tab-leads"
+- waitForAnimationToEnd
+
+- extendedWaitUntil:
+    visible:
+      id: "leads-list"
+    timeout: 10000
+
+# --- Search by "John" ---
+- tapOn:
+    id: "leads-search-input"
+- inputText: "John"
+- waitForAnimationToEnd
+
+# Match the LeadCard's accessibilityLabel pattern (`Lead: {name}, Status:...`)
+# with a wildcard — iOS reports the parent's accessibilityLabel as the only
+# text for the subtree, so a bare "John Tan" text match would never hit.
+- extendedWaitUntil:
+    visible: "Lead: John Tan.*"
+    timeout: 10000
+- assertNotVisible: "Lead: Michael Wong.*"
+- assertNotVisible: "Lead: Sarah Lim.*"
+
+# Clear the search field. Maestro doesn't accept `accessibilityLabel` as
+# a tapOn property — using `eraseText` is more deterministic than tapping
+# the Clear-X button (which only renders when search has content and is
+# rendered as an icon, not text).
+- tapOn:
+    id: "leads-search-input"
+- eraseText: 10
+- waitForAnimationToEnd
+
+# --- Filter by Contacted ---
+# Tap the Contacted filter chip and assert at least one Contacted lead
+# (Sarah Lim seed) is still visible. We don't assert the exclusion side
+# (e.g. Michael Wong NOT visible) because staging accumulates lead copies
+# from prior runs — when 02-lead-lifecycle ran as MANAGER (pre-PR-#52)
+# it changed Michael Wong copies' status to 'contacted', so a Contacted-
+# filtered list can legitimately contain leftover Michael Wong rows. The
+# positive side (filter shows the matching leads) is what we care about.
+- tapOn:
+    id: "leads-filter-chip-contacted"
+- waitForAnimationToEnd
+
+- extendedWaitUntil:
+    visible: "Lead: Sarah Lim.*"
+    timeout: 10000
+
+# Reset the filter so subsequent flows don't see a narrowed list.
+- tapOn:
+    id: "leads-filter-chip-all"
+- waitForAnimationToEnd

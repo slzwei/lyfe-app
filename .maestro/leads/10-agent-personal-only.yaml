@@ -1,0 +1,39 @@
+# Leads: Agent (+6580000004) sees ONLY their assigned leads, never team leads.
+#
+# Negative-path guard. Catches RLS or query-scope regressions that would leak
+# manager-owned leads into the agent's list. Agent's seed has John Tan + Sarah Lim
+# assigned to them; Michael Wong is manager-only.
+appId: com.shawnlee.lyfe
+---
+
+- runFlow:
+    file: ../helpers/login-as.yaml
+    env:
+      phone: "80000004"
+
+- tapOn:
+    id: "tab-leads"
+- waitForAnimationToEnd
+
+- extendedWaitUntil:
+    visible:
+      id: "leads-list"
+    timeout: 10000
+
+# Lead names on the list screen aren't directly text-matchable: the
+# LeadCard wraps everything in a TouchableOpacity with
+# `accessibilityLabel="Lead: {name}, Status: {status}"`, which iOS reports
+# as the only accessible text for that subtree. So we match the full
+# accessibilityLabel pattern with a wildcard instead of just the name.
+#
+# Wait for at least one expected lead to render — leads-list (the FlatList)
+# can be visible before items populate.
+- extendedWaitUntil:
+    visible: "Lead: John Tan.*"
+    timeout: 10000
+- assertVisible: "Lead: Sarah Lim.*"
+
+# Agent should NOT see manager-only leads. Michael Wong is seeded with
+# assigned_to=manager and never reassigned by any other flow, so he's
+# the canonical "should never appear in agent's list" reference.
+- assertNotVisible: "Lead: Michael Wong.*"

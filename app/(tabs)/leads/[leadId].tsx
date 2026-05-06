@@ -174,15 +174,29 @@ export default function LeadDetailScreen() {
         if (!lead.phone) return;
         hasPendingContact.current = true;
         setPendingContact({ type: 'call', phone: lead.phone });
-        Linking.openURL(`tel:${lead.phone.replace(/\s/g, '')}`);
+        // E2E bypass: production opens tel:, the app backgrounds, and the
+        // modal opens via the AppState 'active' listener when the user
+        // returns from the Phone app. On the iOS sim that handoff doesn't
+        // work cleanly (`wa.me` opens Safari, `tel:` is a no-op), so we
+        // open the modal directly. Production users still hit the real
+        // tel: handoff path.
+        if (process.env.EXPO_PUBLIC_E2E_LINKING_BYPASS === '1') {
+            setShowContactConfirm(true);
+        } else {
+            Linking.openURL(`tel:${lead.phone.replace(/\s/g, '')}`);
+        }
     };
 
     const handleWhatsApp = () => {
         if (!lead.phone) return;
         hasPendingContact.current = true;
         setPendingContact({ type: 'whatsapp', phone: lead.phone });
-        const phone = lead.phone.replace(/[\s+]/g, '');
-        Linking.openURL(`https://wa.me/${phone}`);
+        if (process.env.EXPO_PUBLIC_E2E_LINKING_BYPASS === '1') {
+            setShowContactConfirm(true);
+        } else {
+            const phone = lead.phone.replace(/[\s+]/g, '');
+            Linking.openURL(`https://wa.me/${phone}`);
+        }
     };
 
     const handleContactConfirm = (outcome: 'reached' | 'no_answer' | 'sent' | 'skip') => {
@@ -279,6 +293,7 @@ export default function LeadDetailScreen() {
                     {/* Quick Actions */}
                     <View style={styles.actionsRow}>
                         <QuickAction
+                            testID="lead-call-action"
                             icon="call"
                             label="Call"
                             color={colors.success}
@@ -288,6 +303,7 @@ export default function LeadDetailScreen() {
                         />
                         <View style={[styles.actionDivider, { backgroundColor: colors.border }]} />
                         <QuickAction
+                            testID="lead-whatsapp-action"
                             icon="logo-whatsapp"
                             label="WhatsApp"
                             color={colors.whatsappGreen}

@@ -1,0 +1,53 @@
+# Leads: Agent logs a call activity via the Call quick action → "Reached them".
+#
+# Validates the contact-confirm modal flow and that the activity feed
+# accepts the new row. Activity log assertion uses partial text since the
+# row format includes the lead's phone ("Called 9111 1111 — reached").
+#
+# Idempotent: just adds an activity row each run. No state to reset.
+appId: com.shawnlee.lyfe
+---
+
+- runFlow:
+    file: ../helpers/login-as.yaml
+    env:
+      phone: "80000004"
+
+- tapOn:
+    id: "tab-leads"
+- waitForAnimationToEnd
+
+- extendedWaitUntil:
+    visible:
+      id: "leads-list"
+    timeout: 10000
+
+- tapOn:
+    id: ".*lead-card-.*"
+- waitForAnimationToEnd
+
+- extendedWaitUntil:
+    visible:
+      id: "lead-call-action"
+    timeout: 10000
+
+# Trigger Call → ContactConfirmModal → Reached them.
+#
+# Match the modal button by visible TEXT instead of testID — Maestro on
+# iOS 26 + macos-15 doesn't reliably propagate testIDs through RN's
+# <Modal> wrapper to the accessibility tree. Tap-by-text uses the inner
+# <Text> ("Reached them") which is always exposed.
+- tapOn:
+    id: "lead-call-action"
+- waitForAnimationToEnd
+
+- extendedWaitUntil:
+    visible: "Reached them"
+    timeout: 15000
+- tapOn: "Reached them"
+- waitForAnimationToEnd
+
+# Activity feed renders an entry starting with "Called " for call/reached.
+- extendedWaitUntil:
+    visible: "Called"
+    timeout: 10000

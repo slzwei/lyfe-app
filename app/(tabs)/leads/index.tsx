@@ -120,6 +120,7 @@ export default function LeadsListScreen() {
                 >
                     <Ionicons name="search" size={18} color={colors.textTertiary} />
                     <TextInput
+                        testID="leads-search-input"
                         style={[styles.searchInput, { color: colors.textPrimary }]}
                         placeholder="Search by name or phone..."
                         placeholderTextColor={colors.textTertiary}
@@ -154,6 +155,7 @@ export default function LeadsListScreen() {
                         const count = counts[item.key] || 0;
                         return (
                             <TouchableOpacity
+                                testID={`leads-filter-chip-${item.key}`}
                                 style={[
                                     styles.filterChip,
                                     {

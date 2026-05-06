@@ -29,20 +29,20 @@ Single source of truth for Maestro E2E coverage. Phases are sequenced by risk ×
 
 ---
 
-## Coverage snapshot — 2026-05-05
+## Coverage snapshot — 2026-05-06
 
-**10/10 flows passing on main**. Phases 0 + 1 complete. Every role's login + tab matrix is now end-to-end validated against staging Supabase on every nightly cron, on top of the original Phase 0 smoke flows (login + leads + events + profile).
+**13/13 flows passing on main** (4 smoke + 6 role + 3 lead). Phases 0 + 1 + 2a complete. Lead pipeline has end-to-end coverage of status transitions (full + smoke), search/filter, and the agent-personal-only RLS contract. Three lead flows (call, whatsapp, reassign) deferred to Phase 2b — they exercise modals from the lead detail screen, and iOS XCUITest can't query the Modal subtree from that parent context (works fine for SignOutModal on the Profile screen with identical structure). Real users with VoiceOver are unaffected — the underlying `accessibilityViewIsModal` + explicit modal-button labels are in place.
 
-| Role      | Login | Tabs | Lead | Event       | Roadshow | Candidate | Roadmap | Exam |
-|-----------|-------|------|------|-------------|----------|-----------|---------|------|
-| admin     | [x]   | [x]  | [ ]  | [ ]         | n/a      | n/a       | n/a     | n/a  |
-| director  | [x]   | [x]  | [ ]  | [ ]         | n/a      | [ ]       | n/a     | n/a  |
-| manager   | [x]   | [x]  | [ ]  | [x] (smoke) | [ ]      | [ ]       | n/a     | n/a  |
-| agent     | [x]   | [x]  | [x]  | [ ]         | [ ]      | n/a       | n/a     | n/a  |
-| pa        | [x]   | [x]  | n/a  | [ ]         | n/a      | [ ]       | n/a     | n/a  |
-| candidate | [x]   | [x]  | n/a  | [ ]         | n/a      | n/a       | [ ]     | [ ]  |
+| Role      | Login | Tabs | Lead       | Event       | Roadshow | Candidate | Roadmap | Exam |
+|-----------|-------|------|------------|-------------|----------|-----------|---------|------|
+| admin     | [x]   | [x]  | [ ]        | [ ]         | n/a      | n/a       | n/a     | n/a  |
+| director  | [x]   | [x]  | [ ]        | [ ]         | n/a      | [ ]       | n/a     | n/a  |
+| manager   | [x]   | [x]  | [x] (2a)   | [x] (smoke) | [ ]      | [ ]       | n/a     | n/a  |
+| agent     | [x]   | [x]  | [x] (2a)   | [ ]         | [ ]      | n/a       | n/a     | n/a  |
+| pa        | [x]   | [x]  | n/a        | [ ]         | n/a      | [ ]       | n/a     | n/a  |
+| candidate | [x]   | [x]  | n/a        | [ ]         | n/a      | n/a       | [ ]     | [ ]  |
 
-**Headline**: ~10% coverage. All 6 roles now have login + tab assertions. No feature has end-to-end create→read→update→delete coverage yet — Phase 2 (lead pipeline) is next.
+**Headline**: ~13% coverage. All 6 roles + lead status/search/agent-only RLS contract. Three Phase 2 flows (call, whatsapp, reassign) deferred to Phase 2b — modal-from-lead-detail not queryable by Maestro on iOS 26.
 
 ---
 
@@ -105,18 +105,18 @@ One flow per role asserting login + correct tabs + correct landing. Establishes 
 
 Sales flow. The lead lifecycle is the daily driver for agents and managers.
 
-| #    | Flow                              | Role     | Status | Notes |
-|------|-----------------------------------|----------|--------|-------|
-| 2.1  | `leads/01-create.yaml`            | manager  | [ ]    | Tap +Add → fill form → submit → assert in list |
-| 2.2  | `leads/02-add-note.yaml`          | manager  | [~]    | Currently bundled in 02-lead-lifecycle |
-| 2.3  | `leads/03-status-transition.yaml` | manager  | [~]    | new → contacted → qualified → proposed → won |
-| 2.4  | `leads/04-call-activity.yaml`     | manager  | [ ]    | Call action → reason → save → activity log |
-| 2.5  | `leads/05-whatsapp-activity.yaml` | manager  | [ ]    | Same pattern as call |
-| 2.6  | `leads/06-reassign.yaml`          | manager  | [ ]    | Open lead → reassign to agent → verify |
-| 2.7  | `leads/07-search-filter.yaml`     | manager  | [ ]    | Search by name, filter by status |
-| 2.8  | `leads/08-view-mode-toggle.yaml`  | manager  | [ ]    | Toggle manager↔agent view, lead count changes |
-| 2.9  | `leads/09-realtime-mktr.yaml`     | manager  | [ ]    | Trigger fake MKTR webhook → lead appears via Realtime |
-| 2.10 | `leads/10-agent-personal-only.yaml` | agent  | [ ]    | Agent sees only assigned leads, never team |
+| #    | Flow                                | Role    | Status | Notes |
+|------|-------------------------------------|---------|--------|-------|
+| 2.1  | `leads/01-create.yaml`              | manager | [ ]    | Phase 2b — Maestro iOS modal-textinput limitation needs a workaround |
+| 2.2  | `leads/02-add-note.yaml`            | agent   | [s]    | Skipped — covered end-to-end by `02-lead-lifecycle` smoke |
+| 2.3  | `leads/03-status-transition.yaml`   | agent   | [x]    | Single transition to `won` (orthogonal to smoke's `contacted`); idempotent on no-op |
+| 2.4  | `leads/04-call-activity.yaml`       | agent   | [~]    | Phase 2b — flow + testIDs ready, modal opens, but iOS XCUITest can't see modal subtree from lead detail (works on profile screen — likely `react-native-keyboard-controller` interaction). YAML lives in `.maestro/leads/` but excluded from discovery glob. |
+| 2.5  | `leads/05-whatsapp-activity.yaml`   | agent   | [~]    | Phase 2b — same root cause as 2.4 |
+| 2.6  | `leads/06-reassign.yaml`            | manager | [~]    | Phase 2b — same root cause; ReassignModal subtree invisible to Maestro from lead detail |
+| 2.7  | `leads/07-search-filter.yaml`       | manager | [x]    | Search "John" narrows; Contacted filter narrows to Sarah Lim |
+| 2.8  | `leads/08-view-mode-toggle.yaml`    | manager | [ ]    | Phase 2b |
+| 2.9  | `leads/09-realtime-mktr.yaml`       | manager | [ ]    | Phase 2b — needs HMAC webhook trigger from CI. Stub `mktr-arrival.yaml` exists |
+| 2.10 | `leads/10-agent-personal-only.yaml` | agent   | [x]    | Agent sees John Tan + Sarah Lim, never Michael Wong |
 
 ---
 
@@ -280,3 +280,4 @@ Ordered by build-time pain reduction.
 - 2026-05-05 — Plan created. Phase 0 in flight. Phases 1-9 outlined with 60+ planned flows.
 - 2026-05-05 — **Phase 0 complete.** All 5 flows green on main (run 25366401233, 7m 22s). 17 PRs merged. Two real production bugs uncovered + fixed (auth race, JWT-attach gap). Phase 1 (role coverage) starts next.
 - 2026-05-05 — **Phase 1 complete.** 10/10 flows green on main. Added director/pa/candidate tab flows under `.maestro/roles/`, removed top-level `05-role-admin-login.yaml` (replaced by `roles/admin-tabs.yaml`), and updated the Maestro CI step to discover the `roles/` subdirectory explicitly (Maestro only scans the immediate folder it's passed). Phase 2 (lead pipeline) is next.
+- 2026-05-06 — **Phase 2a partial: 13/13 green** (4 smoke + 6 role + 3 lead). Shipped status transition (2.3), search + filter (2.7), agent-personal-only RLS contract (2.10). Real production bugs uncovered + fixed along the way: `ContactConfirmModal` and `ReassignModal` were missing `accessibilityViewIsModal` (broke VoiceOver focus) — now fixed; explicit `accessibilityRole="button"` + `accessibilityLabel` added to each modal button for screen-reader clarity. Three flows deferred to Phase 2b: 2.4 (call), 2.5 (whatsapp), 2.6 (reassign) — modal-from-lead-detail isn't queryable by iOS XCUITest (works fine for SignOutModal on Profile screen with identical structure → likely a `react-native-keyboard-controller` parent-context interaction). YAML files exist in `.maestro/leads/` but are excluded from the discovery glob in `config.yaml`. 2.2 (add note) marked `[s]` — covered by `02-lead-lifecycle` smoke. 2.1 (create), 2.8 (view-mode toggle), 2.9 (realtime MKTR) defer per original plan. Also added the `EXPO_PUBLIC_E2E_LINKING_BYPASS` env (skip `Linking.openURL(tel:/wa.me)` so the modal stays foregrounded in CI) — useful for Phase 2b.

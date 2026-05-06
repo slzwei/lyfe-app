@@ -15,7 +15,13 @@ interface ContactConfirmModalProps {
 
 function ContactConfirmModal({ visible, contactType, leadName, colors, onConfirm }: ContactConfirmModalProps) {
     return (
-        <Modal visible={visible} transparent animationType="fade" onRequestClose={() => onConfirm('skip')}>
+        <Modal
+            visible={visible}
+            transparent
+            animationType="fade"
+            onRequestClose={() => onConfirm('skip')}
+            accessibilityViewIsModal
+        >
             <View style={styles.confirmOverlay}>
                 <View style={[styles.confirmSheet, { backgroundColor: colors.cardBackground }]}>
                     {contactType === 'call' ? (
@@ -30,6 +36,9 @@ function ContactConfirmModal({ visible, contactType, leadName, colors, onConfirm
                                 With {leadName}
                             </Text>
                             <TouchableOpacity
+                                testID="lead-contact-outcome-reached"
+                                accessibilityRole="button"
+                                accessibilityLabel="Reached them"
                                 style={[styles.confirmBtn, { backgroundColor: colors.success }]}
                                 onPress={() => onConfirm('reached')}
                             >
@@ -37,6 +46,9 @@ function ContactConfirmModal({ visible, contactType, leadName, colors, onConfirm
                                 <Text style={[styles.confirmBtnText, { color: colors.textInverse }]}>Reached them</Text>
                             </TouchableOpacity>
                             <TouchableOpacity
+                                testID="lead-contact-outcome-no-answer"
+                                accessibilityRole="button"
+                                accessibilityLabel="No answer"
                                 style={[
                                     styles.confirmBtn,
                                     {
@@ -61,6 +73,9 @@ function ContactConfirmModal({ visible, contactType, leadName, colors, onConfirm
                             </Text>
                             <Text style={[styles.confirmSubtitle, { color: colors.textSecondary }]}>To {leadName}</Text>
                             <TouchableOpacity
+                                testID="lead-contact-outcome-sent"
+                                accessibilityRole="button"
+                                accessibilityLabel="Yes, sent"
                                 style={[styles.confirmBtn, { backgroundColor: '#25D366' }]}
                                 onPress={() => onConfirm('sent')}
                             >
@@ -69,7 +84,12 @@ function ContactConfirmModal({ visible, contactType, leadName, colors, onConfirm
                             </TouchableOpacity>
                         </>
                     )}
-                    <TouchableOpacity onPress={() => onConfirm('skip')}>
+                    <TouchableOpacity
+                        testID="lead-contact-skip"
+                        accessibilityRole="button"
+                        accessibilityLabel="Skip"
+                        onPress={() => onConfirm('skip')}
+                    >
                         <Text style={[styles.confirmSkip, { color: colors.textTertiary }]}>Skip — don't log</Text>
                     </TouchableOpacity>
                 </View>

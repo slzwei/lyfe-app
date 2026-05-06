@@ -19,7 +19,13 @@ interface ReassignModalProps {
 
 function ReassignModal({ visible, leadName, agents, colors, onSelect, onClose }: ReassignModalProps) {
     return (
-        <Modal visible={visible} transparent animationType="fade" onRequestClose={onClose}>
+        <Modal
+            visible={visible}
+            transparent
+            animationType="fade"
+            onRequestClose={onClose}
+            accessibilityViewIsModal
+        >
             <TouchableOpacity
                 style={styles.modalOverlay}
                 activeOpacity={1}
@@ -42,6 +48,7 @@ function ReassignModal({ visible, leadName, agents, colors, onSelect, onClose }:
                             {agents.map((agent) => (
                                 <TouchableOpacity
                                     key={agent.id}
+                                    testID={`lead-reassign-option-${agent.id}`}
                                     style={[styles.agentRow, { borderColor: colors.borderLight }]}
                                     onPress={() => onSelect(agent)}
                                     accessibilityRole="button"
