@@ -78,7 +78,21 @@ export async function uploadCandidateDocument(
  */
 export async function getGeneratedPdfUrl(filePath: string): Promise<string | null> {
     const { data, error } = await supabase.storage.from('candidate-pdfs').createSignedUrl(filePath, 3600);
-    if (error || !data?.signedUrl) return null;
+    if (error || !data?.signedUrl) {
+        if (__DEV__) {
+            console.warn('[getGeneratedPdfUrl] failed to sign', {
+                filePath,
+                bucket: 'candidate-pdfs',
+                error: error?.message,
+            });
+        }
+        captureError(error ?? new Error('Failed to sign generated PDF URL'), {
+            fn: 'getGeneratedPdfUrl',
+            filePath,
+            bucket: 'candidate-pdfs',
+        });
+        return null;
+    }
     return data.signedUrl;
 }
 

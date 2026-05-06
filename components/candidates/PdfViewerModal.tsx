@@ -3,10 +3,7 @@ import { Ionicons } from '@expo/vector-icons';
 import React, { useState } from 'react';
 import { ActivityIndicator, Modal, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { WebView } from 'react-native-webview';
-
-const SUPABASE_URL = process.env.EXPO_PUBLIC_SUPABASE_URL ?? '';
-const SUPABASE_ORIGIN = SUPABASE_URL ? new URL(SUPABASE_URL).origin : '';
+import Pdf from 'react-native-pdf';
 
 interface Props {
     visible: boolean;
@@ -19,9 +16,11 @@ interface Props {
 function PdfViewerModal({ visible, pdfUrl, pdfTitle, colors, onClose }: Props) {
     const insets = useSafeAreaInsets();
     const [errorMsg, setErrorMsg] = useState<string | null>(null);
+    const [loading, setLoading] = useState(true);
 
     const handleClose = () => {
         setErrorMsg(null);
+        setLoading(true);
         onClose();
     };
 
@@ -49,25 +48,25 @@ function PdfViewerModal({ visible, pdfUrl, pdfTitle, colors, onClose }: Props) {
                     </View>
                 )}
                 {pdfUrl && !errorMsg && (
-                    <WebView
-                        source={{ uri: pdfUrl }}
-                        style={{ flex: 1 }}
-                        originWhitelist={SUPABASE_ORIGIN ? [SUPABASE_ORIGIN] : ['*']}
-                        startInLoadingState
-                        renderLoading={() => (
-                            <ActivityIndicator size="large" color="#FFF" style={StyleSheet.absoluteFill} />
+                    <View style={{ flex: 1 }}>
+                        <Pdf
+                            source={{ uri: pdfUrl, cache: false }}
+                            style={styles.pdf}
+                            trustAllCerts={false}
+                            onLoadComplete={() => setLoading(false)}
+                            onError={(err) => {
+                                const message = err instanceof Error ? err.message : String(err);
+                                setErrorMsg(message);
+                                setLoading(false);
+                                if (__DEV__) console.warn('[PdfViewer] onError', err);
+                            }}
+                        />
+                        {loading && (
+                            <View style={styles.loadingOverlay} pointerEvents="none">
+                                <ActivityIndicator size="large" color="#FFF" />
+                            </View>
                         )}
-                        onError={(e) => {
-                            const { description, code } = e.nativeEvent;
-                            setErrorMsg(`${description} (code ${code})`);
-                            if (__DEV__) console.warn('[PdfViewer] onError', e.nativeEvent);
-                        }}
-                        onHttpError={(e) => {
-                            const { statusCode, url } = e.nativeEvent;
-                            setErrorMsg(`HTTP ${statusCode} — file not found in this environment's storage.`);
-                            if (__DEV__) console.warn('[PdfViewer] onHttpError', { statusCode, url });
-                        }}
-                    />
+                    </View>
                 )}
             </View>
         </Modal>
@@ -96,6 +95,15 @@ const styles = StyleSheet.create({
         fontWeight: '600',
         textAlign: 'center',
         color: '#FFF',
+    },
+    pdf: {
+        flex: 1,
+        backgroundColor: '#000',
+    },
+    loadingOverlay: {
+        ...StyleSheet.absoluteFillObject,
+        alignItems: 'center',
+        justifyContent: 'center',
     },
     errorBox: {
         flex: 1,

@@ -40,6 +40,14 @@ jest.mock('react-native-webview', () => {
     };
 });
 
+jest.mock('react-native-pdf', () => {
+    const { View } = require('react-native');
+    return {
+        __esModule: true,
+        default: (props: any) => <View testID="mock-pdf-view" {...props} />,
+    };
+});
+
 jest.mock('@/components/WheelPicker', () => {
     const { View } = require('react-native');
     return function MockWheelPicker() {
@@ -499,7 +507,7 @@ describe('PdfViewerModal', () => {
         expect(getByText('Resume')).toBeTruthy();
     });
 
-    it('renders WebView when pdfUrl is provided', () => {
+    it('renders Pdf component when pdfUrl is provided', () => {
         const { getByTestId } = render(
             <PdfViewerModal
                 visible={true}
@@ -509,14 +517,14 @@ describe('PdfViewerModal', () => {
                 onClose={jest.fn()}
             />,
         );
-        expect(getByTestId('mock-webview')).toBeTruthy();
+        expect(getByTestId('mock-pdf-view')).toBeTruthy();
     });
 
-    it('does not render WebView when pdfUrl is null', () => {
+    it('does not render Pdf component when pdfUrl is null', () => {
         const { queryByTestId } = render(
             <PdfViewerModal visible={true} pdfUrl={null} pdfTitle="Resume" colors={colors} onClose={jest.fn()} />,
         );
-        expect(queryByTestId('mock-webview')).toBeNull();
+        expect(queryByTestId('mock-pdf-view')).toBeNull();
     });
 
     it('calls onClose when close button is pressed', () => {

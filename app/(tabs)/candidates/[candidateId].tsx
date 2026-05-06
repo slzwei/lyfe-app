@@ -67,7 +67,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { useFocusEffect, useLocalSearchParams, usePathname } from 'expo-router';
 import { useTypedRouter } from '@/hooks/useTypedRouter';
 import { useSheetAnimation } from '@/hooks/useSheetAnimation';
-import React, { useCallback, useEffect, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useState } from 'react';
 import {
     ActionSheetIOS,
     Alert,
@@ -119,11 +119,8 @@ export default function CandidateDetailScreen() {
     // is the daily-use view (papers, milestones, training state).
     type Tab = 'progress' | 'profile' | 'docs' | 'activity';
     const [tab, setTab] = useState<Tab>('progress');
-    const scrollRef = useRef<ScrollView | null>(null);
     const handleTabChange = useCallback((next: Tab) => {
         setTab(next);
-        // Reset scroll to top on tab change so each tab has its own clean scroll
-        scrollRef.current?.scrollTo({ y: 0, animated: false });
     }, []);
 
     // Papers — tapping a row pushes the attempts screen. Add/edit happens
@@ -933,11 +930,7 @@ export default function CandidateDetailScreen() {
         <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]} edges={['top']}>
             <ScreenHeader showBack backLabel="Back" title={candidate.name} />
 
-            <ScrollView
-                ref={scrollRef}
-                contentContainerStyle={styles.scrollContent}
-                showsVerticalScrollIndicator={false}
-            >
+            <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
                 {/* ── Hero (always visible — candidate identity) ── */}
                 <HeroSection
                     candidate={candidate}
