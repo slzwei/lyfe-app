@@ -96,7 +96,7 @@ export default function InterviewSchedulerSheet({
 }: InterviewSchedulerSheetProps) {
     return (
         <Modal visible={visible} transparent animationType="none" onRequestClose={onDismiss}>
-            <View style={sheetStyles.overlay}>
+            <View style={sheetStyles.overlay} accessibilityViewIsModal>
                 {/* Backdrop */}
                 <Pressable style={StyleSheet.absoluteFill} onPress={onDismiss} />
 
@@ -399,6 +399,7 @@ export default function InterviewSchedulerSheet({
                         )}
 
                         <TouchableOpacity
+                            testID="interview-scheduler-save"
                             style={[
                                 sheetStyles.primaryBtn,
                                 { backgroundColor: colors.warning, opacity: isScheduling ? 0.5 : 1 },

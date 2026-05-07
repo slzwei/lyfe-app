@@ -59,6 +59,7 @@ export default function FormField(props: FormFieldProps) {
     // Input mode: render built-in TextInput
     const { value, onChangeText, placeholder, colors, icon, keyboardType, autoCapitalize } =
         props as FormFieldInputProps;
+    const { testID } = props;
     return (
         <View style={[styles.container, containerStyle]}>
             <Text style={[styles.label, { color: colors.textSecondary }]}>
@@ -77,6 +78,7 @@ export default function FormField(props: FormFieldProps) {
                 >
                     <Ionicons name={icon} size={18} color={error ? colors.danger : colors.textTertiary} />
                     <TextInput
+                        testID={testID}
                         style={[styles.inputWithIcon, { color: colors.textPrimary }]}
                         value={value}
                         onChangeText={onChangeText}
@@ -89,6 +91,7 @@ export default function FormField(props: FormFieldProps) {
                 </View>
             ) : (
                 <TextInput
+                    testID={testID}
                     style={[styles.input, { color: colors.textPrimary }]}
                     value={value}
                     onChangeText={onChangeText}

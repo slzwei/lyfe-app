@@ -1,0 +1,39 @@
+# Candidates: PA opens a candidate from the PA tab and lands on the
+# candidate detail screen with the hero rendered.
+#
+# Validates the PA view of candidates resolves correctly — PA's primary
+# tab is labelled "Candidates" but maps to the `pa` route. The seeded
+# PA (+6580000005) is assigned to the manager (+6580000003) via
+# pa_manager_assignments, so they see the manager's candidates
+# (Emily Chen + Kevin Lee minimally).
+#
+# As with 01-staff-detail, the test taps any candidate-card and asserts
+# the hero rendered, so it tolerates whatever Maestro lands on first.
+appId: com.shawnlee.lyfe
+---
+
+- runFlow:
+    file: ../helpers/login-as.yaml
+    env:
+      phone: "80000005"
+
+- runFlow:
+    file: ../helpers/navigate-to-tab.yaml
+    env:
+      tab: "pa"
+
+- extendedWaitUntil:
+    visible:
+      id: "candidates-list"
+    timeout: 15000
+
+- tapOn:
+    id: ".*candidate-card-.*"
+- waitForAnimationToEnd
+
+- extendedWaitUntil:
+    visible:
+      id: "candidate-hero-name"
+    timeout: 10000
+- assertVisible:
+    id: "candidate-hero-status-badge"

@@ -1,0 +1,50 @@
+# Candidates: Manager opens a candidate from the home hero stat card
+# and lands on the candidate detail screen with the hero rendered.
+#
+# Validates the most common path: open a candidate. Phase 4a asserts only
+# that the detail screen rendered (hero name + status badge testIDs).
+#
+# Manager (+6580000003) does NOT have a direct candidates tab — the
+# `candidates` tab is gated to admin/director and otherwise reachable
+# through home → "Candidates" stat card (`home-hero-candidates` testID).
+# This is intentionally NOT the Team tab path: there is no Candidates
+# segment within Team — the candidate list lives on /(tabs)/candidates.
+#
+# Resilient against staging accumulation: taps the first visible
+# `candidate-card-*`, asserts hero rendered for whichever one Maestro
+# landed on. Specific candidate identity is not asserted at this layer.
+appId: com.shawnlee.lyfe
+---
+
+- runFlow:
+    file: ../helpers/login-as.yaml
+    env:
+      phone: "80000003"
+
+# Open the Candidates list via the hero stat card on home.
+- extendedWaitUntil:
+    visible:
+      id: "home-hero-candidates"
+    timeout: 15000
+- tapOn:
+    id: "home-hero-candidates"
+- waitForAnimationToEnd
+
+- extendedWaitUntil:
+    visible:
+      id: "candidates-list"
+    timeout: 10000
+
+# Open the first candidate card. Specific candidate doesn't matter for
+# this smoke flow — we're asserting the open-detail path works.
+- tapOn:
+    id: ".*candidate-card-.*"
+- waitForAnimationToEnd
+
+# Confirm we're on the candidate detail.
+- extendedWaitUntil:
+    visible:
+      id: "candidate-hero-name"
+    timeout: 10000
+- assertVisible:
+    id: "candidate-hero-status-badge"

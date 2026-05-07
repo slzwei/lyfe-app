@@ -42,12 +42,17 @@ export default function HeroSection({ candidate, colors, onStatusPress, canReass
                 <View style={[styles.initials, { backgroundColor: colors.accentLight }]}>
                     <Text style={[styles.initialsText, { color: colors.accent }]}>{initials}</Text>
                 </View>
-                <Text style={[styles.name, { color: colors.textPrimary }]} numberOfLines={2}>
+                <Text
+                    testID="candidate-hero-name"
+                    style={[styles.name, { color: colors.textPrimary }]}
+                    numberOfLines={2}
+                >
                     {candidate.name}
                 </Text>
             </View>
 
             <TouchableOpacity
+                testID="candidate-hero-status-badge"
                 onPress={onStatusPress}
                 activeOpacity={0.7}
                 style={[styles.statusTag, { borderColor: alphaBorder(statusConfig.color) }]}

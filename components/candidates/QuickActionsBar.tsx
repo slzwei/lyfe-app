@@ -11,6 +11,7 @@ interface QuickActionItem {
     bgColor: string;
     onPress: () => void;
     disabled?: boolean;
+    testID?: string;
 }
 
 interface Props {
@@ -24,6 +25,7 @@ function QuickActionsBar({ actions, colors }: Props) {
             {actions.map((action) => (
                 <TouchableOpacity
                     key={action.label}
+                    testID={action.testID}
                     style={[styles.quickAction, { opacity: action.disabled ? 0.4 : 1 }]}
                     onPress={action.onPress}
                     disabled={action.disabled}

@@ -19,6 +19,9 @@ flows:
   # leads/06-reassign.yaml           — Phase 2b (ReassignModal subtree invisible)
   - "leads/07-search-filter.yaml"
   - "leads/10-agent-personal-only.yaml"
+  # Phase 4a — candidate detail smoke flows (staff + pa).
+  - "candidates/01-staff-detail.yaml"
+  - "candidates/02-pa-detail.yaml"
 
 # Force the heaviest flow (lead lifecycle: login + navigate + add note +
 # change status) to run FIRST while the simulator is fresh. Maestro's

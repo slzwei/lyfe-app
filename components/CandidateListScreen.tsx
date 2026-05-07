@@ -387,6 +387,7 @@ export function CandidateList({ candidateRoute, isManagerView = false, embedded 
             )}
 
             <FlatList
+                testID="candidates-list"
                 data={filteredCandidates}
                 keyExtractor={(item) => item.id}
                 contentContainerStyle={[styles.listContent, embedded && styles.listContentEmbedded]}
