@@ -82,6 +82,7 @@ function CandidateCard({ candidate, onPress, mode = 'directory', nextStep }: Can
 
     return (
         <TouchableOpacity
+            testID={`candidate-card-${candidate.id}`}
             style={[
                 styles.card,
                 {

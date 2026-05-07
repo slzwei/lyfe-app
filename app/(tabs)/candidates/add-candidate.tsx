@@ -148,6 +148,7 @@ export default function AddCandidateScreen() {
                     {/* Form Card */}
                     <View style={[styles.formCard, { backgroundColor: colors.cardBackground }]}>
                         <FormField
+                            testID="add-candidate-name"
                             label="Full Name"
                             value={name}
                             onChangeText={setName}
@@ -159,6 +160,7 @@ export default function AddCandidateScreen() {
                         />
                         <View style={[styles.fieldDivider, { backgroundColor: colors.border }]} />
                         <FormField
+                            testID="add-candidate-phone"
                             label="Phone Number"
                             value={phone}
                             onChangeText={setPhone}
@@ -171,6 +173,7 @@ export default function AddCandidateScreen() {
                         />
                         <View style={[styles.fieldDivider, { backgroundColor: colors.border }]} />
                         <FormField
+                            testID="add-candidate-email"
                             label="Email"
                             value={email}
                             onChangeText={setEmail}
@@ -183,6 +186,7 @@ export default function AddCandidateScreen() {
                         <View style={styles.fieldContainer}>
                             <Text style={[styles.fieldLabel, { color: colors.textSecondary }]}>Notes</Text>
                             <TextInput
+                                testID="add-candidate-notes"
                                 style={[styles.textArea, { color: colors.textPrimary }]}
                                 value={notes}
                                 onChangeText={setNotes}
@@ -334,6 +338,7 @@ export default function AddCandidateScreen() {
                             {managers.map((m) => (
                                 <TouchableOpacity
                                     key={m.id}
+                                    testID={`add-candidate-manager-row-${m.id}`}
                                     style={[
                                         styles.managerOption,
                                         selectedManagerId === m.id && { backgroundColor: colors.accentLight },
@@ -367,7 +372,10 @@ export default function AddCandidateScreen() {
                         <Text style={[styles.modalSubtitle, { color: colors.textTertiary }]}>
                             Share this invite link with {name}:
                         </Text>
-                        <View style={[styles.linkContainer, { backgroundColor: colors.background }]}>
+                        <View
+                            testID="add-candidate-success-link"
+                            style={[styles.linkContainer, { backgroundColor: colors.background }]}
+                        >
                             <Text style={[styles.linkText, { color: colors.accent }]} numberOfLines={1}>
                                 {inviteLink}
                             </Text>
@@ -385,6 +393,7 @@ export default function AddCandidateScreen() {
                             </TouchableOpacity>
                         </View>
                         <TouchableOpacity
+                            testID="add-candidate-success-done"
                             style={[styles.doneButton, { backgroundColor: colors.accent }]}
                             onPress={handleDone}
                         >

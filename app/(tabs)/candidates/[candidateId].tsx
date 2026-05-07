@@ -872,6 +872,7 @@ export default function CandidateDetailScreen() {
             color: colors.success,
             bgColor: colors.successLight,
             onPress: handleCall,
+            testID: 'candidate-action-call',
         },
         {
             icon: 'logo-whatsapp' as const,
@@ -879,6 +880,7 @@ export default function CandidateDetailScreen() {
             color: colors.success,
             bgColor: colors.successLight,
             onPress: handleWhatsApp,
+            testID: 'candidate-action-whatsapp',
         },
         {
             icon: 'calendar' as const,
@@ -886,6 +888,7 @@ export default function CandidateDetailScreen() {
             color: colors.warning,
             bgColor: colors.warningLight,
             onPress: openNewInterview,
+            testID: 'candidate-action-schedule',
         },
         {
             icon: 'create-outline' as const,
@@ -893,6 +896,7 @@ export default function CandidateDetailScreen() {
             color: colors.textTertiary,
             bgColor: colors.surfacePrimary || colors.background,
             onPress: () => setShowNoteSheet(true),
+            testID: 'candidate-action-note',
         },
     ];
 
@@ -968,6 +972,7 @@ export default function CandidateDetailScreen() {
                         return (
                             <TouchableOpacity
                                 key={key}
+                                testID={`candidate-section-nav-${key}`}
                                 onPress={() => handleTabChange(key)}
                                 activeOpacity={0.7}
                                 style={styles.tabButton}
