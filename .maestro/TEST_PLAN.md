@@ -248,6 +248,37 @@ Ordered by build-time pain reduction.
 
 ---
 
+## Coverage limitations — honest read of what 13/13 means
+
+The 13 flows are a real safety net for **login + role + read** paths and a thin slice of the lead pipeline. They are **not** a comprehensive safety net. Areas not covered:
+
+**By feature surface:**
+- **No "create" tested.** Lead, candidate, event, interview, document creation — none.
+- **No realtime cross-app sync.** Web candidate finishes DISC → mobile manager refreshes — untested.
+- **No MKTR pipeline end-to-end.** Webhook → Realtime → push notification → tap-to-detail — untested. (`mktr-arrival.yaml` exists but is excluded from discovery.)
+- **No roadshow / face check-in.** The most complex feature in the app.
+- **No offline behavior.** Offline queue is fragile per CLAUDE.md; still untested.
+- **No notifications.** Push registration, badge counts, deep link from notification — none.
+- **No biometric login.** Hard to test on simulator.
+
+**By technical surface:**
+- **No backend verification.** Tests check the UI, not the database row. Optimistic UI without persistence would pass.
+- **No negative paths.** Network failure, wrong OTP, expired invitation, denied permission — none.
+- **Three lead modal flows had to be deferred** (call, whatsapp, reassign) — modal-from-lead-detail is unteachable to iOS XCUITest with the current `KeyboardAwareScrollView` setup. Real production fixes (`accessibilityViewIsModal`, modal-button labels) are landed; the test-side fix is open.
+- **Single device, single shard.** Multi-device flows (manager sees agent's live action) not possible. No parallelism → 50–80 min runs.
+- **No load/perf tests.** What happens with 1000 leads — unknown.
+- **Simulator-only.** Real iPhone behaviors (FaceID, push, Live Activities) not exercised.
+
+**Database contamination is a known issue.** Staging has 130+ accumulated leads from old test runs. Tests can't make strong "X should NOT be visible" claims without working around this — already cost us the Michael-Wong assertion in 07-search-filter. The `e2e-bootstrap.mjs` cleanup todo (line ~242) addresses this.
+
+**OTP rate-limit is a permanent flake source.** Per-phone Supabase OTP cooldown caused multiple Phase 1 retries. Worked around via `executionOrder` and ordering, not eliminated.
+
+**Biggest gap by business risk:** if MKTR delivers a wrong lead, face check-in falsely accepts/rejects, or view-mode toggle leaks data between roles — none would be caught today. Manual QA still required for anything beyond auth/tabs/basic-list.
+
+**Biggest open technical question:** the `KeyboardAwareScrollView` + RN `<Modal>` + iOS-26 XCUITest interaction. If it's fundamentally unteachable to Maestro, every future modal in lead/candidate detail will hit the same wall.
+
+---
+
 ## Open questions
 
 - **Onboarding flow** — fires once per user. Worth testing? Probably weekly cadence, not nightly.
@@ -255,6 +286,7 @@ Ordered by build-time pain reduction.
 - **Face verification** — `EXPO_PUBLIC_E2E_FACE_BYPASS` exists; does it test the *real* code path or stub it out entirely? Verify before relying on it.
 - **MKTR webhook integration** — does CI signing key match staging? Need a test-only HMAC secret or mock the signature check.
 - **Personality quiz scoring divergence** — memory says mobile vs web DISC scoring drifts. Should this be its own integration test that runs both paths and asserts equality?
+- **Modal-from-detail-screen XCUITest blindness** — Phase 2a Phase 2b's deferred items all hit this. SignOutModal works (Profile screen); ContactConfirmModal+ReassignModal don't (lead detail screen). Hypothesis: `react-native-keyboard-controller`'s `KeyboardAwareScrollView` interferes. Need to: try removing it temporarily on a branch and rerun the deferred flows; if they pass, find a different scroll wrapper or work around it.
 
 ---
 
