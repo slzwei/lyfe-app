@@ -29,20 +29,20 @@ Single source of truth for Maestro E2E coverage. Phases are sequenced by risk ×
 
 ---
 
-## Coverage snapshot — 2026-05-06
+## Coverage snapshot — 2026-05-07
 
-**13/13 flows passing on main** (4 smoke + 6 role + 3 lead). Phases 0 + 1 + 2a complete. Lead pipeline has end-to-end coverage of status transitions (full + smoke), search/filter, and the agent-personal-only RLS contract. Three lead flows (call, whatsapp, reassign) deferred to Phase 2b — they exercise modals from the lead detail screen, and iOS XCUITest can't query the Modal subtree from that parent context (works fine for SignOutModal on the Profile screen with identical structure). Real users with VoiceOver are unaffected — the underlying `accessibilityViewIsModal` + explicit modal-button labels are in place.
+**15/15 flows passing on main** (4 smoke + 6 role + 3 lead + 2 candidate-detail). Phases 0 + 1 + 2a + 4a complete. Lead pipeline has end-to-end coverage of status transitions (full + smoke), search/filter, and the agent-personal-only RLS contract. Candidate detail has thin smoke coverage on staff + PA paths. Three lead flows (call, whatsapp, reassign) deferred to Phase 2b — they exercise modals from the lead detail screen, and iOS XCUITest can't query the Modal subtree from that parent context (works fine for SignOutModal on the Profile screen with identical structure). Real users with VoiceOver are unaffected — the underlying `accessibilityViewIsModal` + explicit modal-button labels are in place.
 
 | Role      | Login | Tabs | Lead       | Event       | Roadshow | Candidate | Roadmap | Exam |
 |-----------|-------|------|------------|-------------|----------|-----------|---------|------|
 | admin     | [x]   | [x]  | [ ]        | [ ]         | n/a      | n/a       | n/a     | n/a  |
 | director  | [x]   | [x]  | [ ]        | [ ]         | n/a      | [ ]       | n/a     | n/a  |
-| manager   | [x]   | [x]  | [x] (2a)   | [x] (smoke) | [ ]      | [ ]       | n/a     | n/a  |
+| manager   | [x]   | [x]  | [x] (2a)   | [x] (smoke) | [ ]      | [x] (4a)  | n/a     | n/a  |
 | agent     | [x]   | [x]  | [x] (2a)   | [ ]         | [ ]      | n/a       | n/a     | n/a  |
-| pa        | [x]   | [x]  | n/a        | [ ]         | n/a      | [ ]       | n/a     | n/a  |
+| pa        | [x]   | [x]  | n/a        | [ ]         | n/a      | [x] (4a)  | n/a     | n/a  |
 | candidate | [x]   | [x]  | n/a        | [ ]         | n/a      | n/a       | [ ]     | [ ]  |
 
-**Headline**: ~13% coverage. All 6 roles + lead status/search/agent-only RLS contract. Three Phase 2 flows (call, whatsapp, reassign) deferred to Phase 2b — modal-from-lead-detail not queryable by Maestro on iOS 26.
+**Headline**: ~15% coverage. All 6 roles + lead status/search/agent-only RLS contract + candidate detail smoke (staff + PA). Three Phase 2 flows (call, whatsapp, reassign) deferred to Phase 2b — modal-from-lead-detail not queryable by Maestro on iOS 26.
 
 ---
 
@@ -139,19 +139,35 @@ Field operations. Roadshow check-in (with face verification) is the most complex
 
 ## Phase 4 — Candidate Lifecycle (P0)
 
-Recruitment pipeline. The 1376-line candidate detail screen is the riskiest UI surface in the app.
+Recruitment pipeline. The 1645-line candidate detail screen is the riskiest UI surface in the app. Sequenced as 4a (foundation + thin smoke) → 4b (mutations) → 4c (realtime + negative paths) per `.maestro/PHASE_4_SPEC.md`.
 
-| #   | Flow                                              | Role     | Status | Notes |
-|-----|---------------------------------------------------|----------|--------|-------|
-| 4.1 | `candidates/01-manager-create.yaml`               | manager  | [ ]    | +Add candidate → form → invitation sent |
-| 4.2 | `candidates/02-pa-create.yaml`                    | pa       | [ ]    | PA creates on behalf of their manager |
-| 4.3 | `candidates/03-detail-sections.yaml`              | manager  | [ ]    | info, interviews, documents, DISC, activities |
-| 4.4 | `candidates/04-schedule-interview.yaml`           | manager  | [ ]    | Date + interviewer → save |
-| 4.5 | `candidates/05-upload-document.yaml`              | manager  | [ ]    | Upload PDF → in documents list |
-| 4.6 | `candidates/06-status-transition.yaml`            | manager  | [ ]    | applied → interview_scheduled → onboarded → ... |
-| 4.7 | `candidates/07-disc-results-view.yaml`            | manager  | [ ]    | Open candidate → DISC card visible |
-| 4.8 | `candidates/08-realtime-disc-complete.yaml`       | manager  | [ ]    | Web candidate completes DISC → mobile updates |
-| 4.9 | `candidates/09-pa-without-manager-blocked.yaml`   | pa       | [ ]    | Negative: PA without `pa_manager_assignments` blocked |
+### Phase 4a — Foundation + thin coverage ✅ COMPLETE
+
+Shipped 2026-05-07 in PR #63. Adds ~30 testIDs across the candidate UI (purely additive) plus two thin smoke flows that open a candidate and assert hero rendered.
+
+| #    | Flow                                              | Role     | Status | Notes |
+|------|---------------------------------------------------|----------|--------|-------|
+| 4a.1 | `candidates/01-staff-detail.yaml`                 | manager  | [x]    | Login → home-hero-candidates → first candidate-card → assert hero name + status badge. Manager has no direct candidates tab. |
+| 4a.2 | `candidates/02-pa-detail.yaml`                    | pa       | [x]    | Login → tab-pa → first candidate-card → assert hero. Seeded PA assigned to seeded manager via pa_manager_assignments. |
+
+### Phase 4b — Mutations
+
+Manager workflows: candidate create, status transitions, interview scheduling, document upload. Needs `EXPO_PUBLIC_E2E_DOCUMENT_BYPASS` env (mirror linking-bypass) since iOS document picker can't be driven from Maestro.
+
+| #    | Flow                                              | Role     | Status | Notes |
+|------|---------------------------------------------------|----------|--------|-------|
+| 4b.1 | `candidates/03-create-from-staff.yaml`            | manager  | [ ]    | +Add → 3 fields → submit → Done modal → date-stamped name to avoid pollution |
+| 4b.2 | `candidates/04-create-from-pa.yaml`               | pa       | [ ]    | Same shape via PA tab; PA must have pa_manager_assignments |
+| 4b.3 | `candidates/05-status-transition.yaml`            | manager  | [ ]    | Walk seeded candidate through 1–2 status states; idempotency pattern |
+| 4b.4 | `candidates/06-schedule-interview.yaml`           | manager  | [ ]    | Open candidate → Schedule Interview → date+time+interviewer → save |
+| 4b.5 | `candidates/07-upload-document.yaml`              | manager  | [ ]    | Document sheet → Attach PDF (needs `EXPO_PUBLIC_E2E_DOCUMENT_BYPASS`) |
+
+### Phase 4c — Realtime + negative paths
+
+| #    | Flow                                              | Role     | Status | Notes |
+|------|---------------------------------------------------|----------|--------|-------|
+| 4c.1 | `candidates/08-realtime-disc-complete.yaml`       | manager  | [ ]    | progress_signals UPDATE → mobile manager's open candidate refreshes DISC card |
+| 4c.2 | `candidates/09-pa-without-manager-blocked.yaml`   | pa       | [ ]    | Negative: PA without pa_manager_assignments blocked from creating candidates |
 
 ---
 
@@ -314,3 +330,4 @@ The 13 flows are a real safety net for **login + role + read** paths and a thin 
 - 2026-05-05 — **Phase 1 complete.** 10/10 flows green on main. Added director/pa/candidate tab flows under `.maestro/roles/`, removed top-level `05-role-admin-login.yaml` (replaced by `roles/admin-tabs.yaml`), and updated the Maestro CI step to discover the `roles/` subdirectory explicitly (Maestro only scans the immediate folder it's passed). Phase 2 (lead pipeline) is next.
 - 2026-05-06 — **Phase 2a partial: 13/13 green** (4 smoke + 6 role + 3 lead). Shipped status transition (2.3), search + filter (2.7), agent-personal-only RLS contract (2.10). Real production bugs uncovered + fixed along the way: `ContactConfirmModal` and `ReassignModal` were missing `accessibilityViewIsModal` (broke VoiceOver focus) — now fixed; explicit `accessibilityRole="button"` + `accessibilityLabel` added to each modal button for screen-reader clarity. Three flows deferred to Phase 2b: 2.4 (call), 2.5 (whatsapp), 2.6 (reassign) — modal-from-lead-detail isn't queryable by iOS XCUITest (works fine for SignOutModal on Profile screen with identical structure → likely a `react-native-keyboard-controller` parent-context interaction). YAML files exist in `.maestro/leads/` but are excluded from the discovery glob in `config.yaml`. 2.2 (add note) marked `[s]` — covered by `02-lead-lifecycle` smoke. 2.1 (create), 2.8 (view-mode toggle), 2.9 (realtime MKTR) defer per original plan. Also added the `EXPO_PUBLIC_E2E_LINKING_BYPASS` env (skip `Linking.openURL(tel:/wa.me)` so the modal stays foregrounded in CI) — useful for Phase 2b.
 - 2026-05-07 — **Phase 0 cleanup landed.** PR #58 merged + main run 25476786695 confirmed 13/13 green (30m 46s). Stripped 224 lines of debug scaffolding across 5 files — kept the real production fixes (`lib/sessionCache.ts` + `lib/supabase.ts` `customFetch` shim) and the `lib/e2eDebugLog.ts` utility for future debugging. Bonus: scheduled cron run 25456336396 (the unattended nightly) was green for the first time, satisfying the Phase 0 nightly-stability checkbox.
+- 2026-05-07 — **Phase 4a complete: 15/15 green.** PR #63 merged (commit c7293063); main confirm took three dispatches (first failed at 03-events with iOS sim desync after 8m 27s; second hit `iOS driver not ready in time` startup timeout; third 25494815232 went green). Both new flows (`candidates/01-staff-detail`, `candidates/02-pa-detail`) passed on every retry — the flakes were pre-existing infra issues that re-surfaced when running on main. Shipped ~30 testIDs across the candidate UI as foundation for 4b/4c (purely additive — `add-candidate-*`, `candidate-hero-*`, `candidate-section-nav-*`, `candidate-action-*`, `candidate-card-*`, `candidates-list`, `interview-scheduler-save`). Also wired `testID` through `FormField`'s `TextInput` (was in props interface but never rendered) and added `accessibilityViewIsModal` to `InterviewSchedulerSheet`'s overlay (Phase 2 modal-tree mitigation, foundation for 4b). Phase 4 table restructured to reflect the 4a/4b/4c split from `.maestro/PHASE_4_SPEC.md`. Phase 4b (mutations) is next.
