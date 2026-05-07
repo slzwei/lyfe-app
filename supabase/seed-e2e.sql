@@ -240,6 +240,14 @@ BEGIN
     -- -----------------------------------------------------------------------
     -- 4. Candidates (created by manager, assigned to manager)
     -- -----------------------------------------------------------------------
+    -- Pre-clean candidates accumulated by Phase 4b create flows (03-create-
+    -- from-staff, 04-create-from-pa). The flows use static phone numbers
+    -- (87654321, 87654322 — no email so no UNIQUE-index dedup), but the
+    -- create-candidate edge function checks for existing rows by phone and
+    -- 409s on conflict. Without this clean-up every CI run after the first
+    -- would fail the create flows. CASCADE deletes attached interviews/docs.
+    DELETE FROM public.candidates WHERE name LIKE 'E2E Phase4b %';
+
     -- Idempotent: prefer the row that already exists (matched by email,
     -- which has a partial unique index), otherwise insert. Either way
     -- v_cand1_id / v_cand2_id end up matching the canonical DB row so
