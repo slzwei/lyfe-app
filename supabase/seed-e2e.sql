@@ -30,68 +30,6 @@ CREATE POLICY users_select_own ON public.users
     FOR SELECT TO authenticated
     USING (auth.uid() = id);
 
--- Diagnostic: dump current RLS policies on public.users so the bootstrap
--- step's logs show exactly what staging has post-fix. Remove after first
--- green run.
-DO $diag$
-DECLARE rec RECORD;
-BEGIN
-    FOR rec IN
-        SELECT policyname, cmd, qual::text AS qual
-        FROM pg_policies
-        WHERE schemaname = 'public' AND tablename = 'users'
-        ORDER BY policyname
-    LOOP
-        RAISE NOTICE 'DIAG users policy: name=%, cmd=%, qual=%', rec.policyname, rec.cmd, rec.qual;
-    END LOOP;
-END $diag$;
-
--- Definitive RLS smoke test: simulate a PostgREST authenticated request as
--- the admin user and SELECT their own row. If count=1 the RLS is fine and
--- the issue is client-side (JWT not being attached to requests). If count=0
--- there's something we still don't see in pg_policies (FORCE RLS, an event
--- trigger, a view masking the table, etc).
-DO $smoke$
-DECLARE
-    v_admin_id UUID;
-    v_count_self INT;
-    v_count_all INT;
-    v_relrowsecurity BOOL;
-    v_relforcerowsecurity BOOL;
-BEGIN
-    SELECT id INTO v_admin_id
-    FROM auth.users
-    WHERE REPLACE(phone, '+', '') = '6580000001'
-    ORDER BY CASE WHEN phone LIKE '+%' THEN 0 ELSE 1 END, created_at ASC
-    LIMIT 1;
-
-    SELECT relrowsecurity, relforcerowsecurity
-    INTO v_relrowsecurity, v_relforcerowsecurity
-    FROM pg_class
-    WHERE oid = 'public.users'::regclass;
-    RAISE NOTICE 'DIAG public.users RLS: enabled=%, forced=%',
-        v_relrowsecurity, v_relforcerowsecurity;
-
-    -- Impersonate the admin's JWT claims, the same way PostgREST does.
-    PERFORM set_config('request.jwt.claims', json_build_object(
-        'sub', v_admin_id::text,
-        'role', 'authenticated',
-        'aud', 'authenticated'
-    )::text, true);
-    SET LOCAL ROLE authenticated;
-
-    SELECT COUNT(*) INTO v_count_self FROM public.users WHERE id = v_admin_id;
-    SELECT COUNT(*) INTO v_count_all FROM public.users;
-    RAISE NOTICE 'DIAG impersonate-as-admin self-select: count=% (expect 1)', v_count_self;
-    RAISE NOTICE 'DIAG impersonate-as-admin select all (RLS-filtered): count=%', v_count_all;
-
-    RESET ROLE;
-    PERFORM set_config('request.jwt.claims', '', true);
-EXCEPTION WHEN OTHERS THEN
-    RAISE NOTICE 'DIAG impersonation block raised: % %', SQLSTATE, SQLERRM;
-    RESET ROLE;
-END $smoke$;
-
 -- ---------------------------------------------------------------------------
 -- 0. Resolve mock user IDs by phone from auth.users
 -- ---------------------------------------------------------------------------
@@ -132,19 +70,6 @@ BEGIN
     SELECT id INTO v_e2e_candidate_id FROM auth.users WHERE REPLACE(phone, '+', '') = '6590000007'
         ORDER BY CASE WHEN phone LIKE '+%' THEN 0 ELSE 1 END, created_at ASC LIMIT 1;
 
-    -- Diagnostic: detect duplicate auth.users rows per phone (multiple rows
-    -- would mean ensureUser created a second user on a prior run, causing the
-    -- SELECT INTO above to pick an arbitrary UUID that may not match the seeded
-    -- public.users row — explaining the profile-fetch-returns-NULL symptom).
-    RAISE NOTICE 'DIAG auth.users row counts per phone: 001=%, 002=%, 003=%, 004=%, 005=%, 006=%, 007=%',
-        (SELECT COUNT(*) FROM auth.users WHERE REPLACE(phone, '+', '') = '6580000001'),
-        (SELECT COUNT(*) FROM auth.users WHERE REPLACE(phone, '+', '') = '6580000002'),
-        (SELECT COUNT(*) FROM auth.users WHERE REPLACE(phone, '+', '') = '6580000003'),
-        (SELECT COUNT(*) FROM auth.users WHERE REPLACE(phone, '+', '') = '6580000004'),
-        (SELECT COUNT(*) FROM auth.users WHERE REPLACE(phone, '+', '') = '6580000005'),
-        (SELECT COUNT(*) FROM auth.users WHERE REPLACE(phone, '+', '') = '6580000006'),
-        (SELECT COUNT(*) FROM auth.users WHERE REPLACE(phone, '+', '') = '6590000007');
-
     -- Abort if any mock user hasn't logged in yet
     IF v_admin_id IS NULL THEN RAISE EXCEPTION 'Admin user (+6580000001) not found. Log in first.'; END IF;
     IF v_director_id IS NULL THEN RAISE EXCEPTION 'Director user (+6580000002) not found. Log in first.'; END IF;
@@ -153,11 +78,6 @@ BEGIN
     IF v_pa_id IS NULL THEN RAISE EXCEPTION 'PA user (+6580000005) not found. Log in first.'; END IF;
     IF v_candidate_id IS NULL THEN RAISE EXCEPTION 'Candidate user (+6580000006) not found. Log in first.'; END IF;
     IF v_e2e_candidate_id IS NULL THEN RAISE EXCEPTION 'E2E candidate user (+6590000007) not found. Log in first.'; END IF;
-
-    -- Diagnostic: confirm the resolved UUIDs (compare across runs to detect
-    -- bootstrap creating a new user when it should have found the existing one).
-    RAISE NOTICE 'DIAG resolved UUIDs: admin=%, director=%, manager=%, agent=%, pa=%, candidate=%, e2e_cand=%',
-        v_admin_id, v_director_id, v_manager_id, v_agent_id, v_pa_id, v_candidate_id, v_e2e_candidate_id;
 
     RAISE NOTICE 'Found all 6 mock users. Seeding E2E data...';
 
@@ -267,15 +187,6 @@ BEGIN
         consent_privacy_at = NOW(),
         consent_operational_push_at = NOW()
     WHERE id = v_e2e_candidate_id;
-
-    -- Diagnostic: confirm public.users state for admin after seed (this is the
-    -- row the mobile app fetches via fetchUserProfile — NULL here = profile NULL).
-    RAISE NOTICE 'DIAG public.users admin: id=%, role=%, onboarding=%, consent_tos=%, consent_privacy=%',
-        (SELECT id FROM public.users WHERE id = v_admin_id),
-        (SELECT role FROM public.users WHERE id = v_admin_id),
-        (SELECT onboarding_complete FROM public.users WHERE id = v_admin_id),
-        (SELECT consent_tos_at IS NOT NULL FROM public.users WHERE id = v_admin_id),
-        (SELECT consent_privacy_at IS NOT NULL FROM public.users WHERE id = v_admin_id);
 
     RAISE NOTICE 'Users updated (roles, names, onboarding_complete).';
 
@@ -434,74 +345,3 @@ BEGIN
     RAISE NOTICE '✅ E2E seed complete. All 6 mock users ready.';
 END $$;
 
--- ---------------------------------------------------------------------------
--- 0b. Diagnostic: confirm RLS visibility for the manager on public.leads.
--- ---------------------------------------------------------------------------
--- After PR #44, the leads tab still shows 0 rows for the manager despite
--- the seed inserting 3 leads owned/assigned by the manager. Both supabase-js
--- and the explicit-fetch fallback returned empty. This test impersonates
--- the manager's JWT in PostgREST style and SELECTs from public.leads to
--- confirm whether the manager's user-JWT can see the rows under RLS.
-DO $leads_smoke$
-DECLARE
-    v_manager_id  UUID;
-    v_count_all   INT;
-    v_count_self  INT;
-    v_count_team  INT;
-    v_total_in_db INT;
-BEGIN
-    SELECT id INTO v_manager_id
-    FROM auth.users
-    WHERE REPLACE(phone, '+', '') = '6580000003'
-    ORDER BY CASE WHEN phone LIKE '+%' THEN 0 ELSE 1 END, created_at ASC
-    LIMIT 1;
-
-    -- Service-role baseline: how many leads exist in DB period?
-    SELECT COUNT(*) INTO v_total_in_db FROM public.leads;
-    RAISE NOTICE 'DIAG total leads in DB (service-role): %', v_total_in_db;
-
-    -- Show the rows the seed should have created so we can compare ids.
-    DECLARE rec RECORD;
-    BEGIN
-        FOR rec IN SELECT id, full_name, assigned_to, created_by FROM public.leads ORDER BY created_at LIMIT 10
-        LOOP
-            RAISE NOTICE 'DIAG lead row: id=%, name=%, assigned_to=%, created_by=%',
-                rec.id, rec.full_name, rec.assigned_to, rec.created_by;
-        END LOOP;
-    END;
-
-    -- Impersonate the manager's JWT.
-    PERFORM set_config('request.jwt.claims', json_build_object(
-        'sub', v_manager_id::text,
-        'role', 'authenticated',
-        'aud', 'authenticated'
-    )::text, true);
-    SET LOCAL ROLE authenticated;
-
-    SELECT COUNT(*) INTO v_count_all FROM public.leads;
-    SELECT COUNT(*) INTO v_count_self FROM public.leads WHERE assigned_to = v_manager_id;
-    SELECT COUNT(*) INTO v_count_team FROM public.leads
-        WHERE EXISTS (SELECT 1 FROM public.users u WHERE u.id = leads.assigned_to AND u.reports_to = v_manager_id);
-
-    RAISE NOTICE 'DIAG impersonate-as-manager leads visible (RLS-filtered): all=%, self_assigned=%, team=%',
-        v_count_all, v_count_self, v_count_team;
-
-    -- Show the leads RLS function result for known rows
-    DECLARE rec2 RECORD;
-    BEGIN
-        FOR rec2 IN SELECT id, full_name FROM public.leads
-        LOOP
-            RAISE NOTICE 'DIAG manager can_access_lead(%, ...) for "%": %',
-                rec2.id, rec2.full_name, can_access_lead(
-                    (SELECT assigned_to FROM public.leads WHERE id = rec2.id),
-                    (SELECT created_by  FROM public.leads WHERE id = rec2.id)
-                );
-        END LOOP;
-    END;
-
-    RESET ROLE;
-    PERFORM set_config('request.jwt.claims', '', true);
-EXCEPTION WHEN OTHERS THEN
-    RAISE NOTICE 'DIAG leads impersonation block raised: % %', SQLSTATE, SQLERRM;
-    RESET ROLE;
-END $leads_smoke$;

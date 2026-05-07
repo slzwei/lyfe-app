@@ -2,7 +2,6 @@ import LyfeLogo from '@/components/LyfeLogo';
 import { useAuth } from '@/contexts/AuthContext';
 import { useTheme } from '@/contexts/ThemeContext';
 import { biometricMeta, getBiometricRefreshToken, getBiometryType, type BiometryType } from '@/lib/biometrics';
-import { e2eDebug } from '@/lib/e2eDebugLog';
 import { Ionicons } from '@expo/vector-icons';
 import { Colors } from '@/constants/Colors';
 import { letterSpacing } from '@/constants/platform';
@@ -203,9 +202,7 @@ export default function LoginScreen() {
         setError(null);
         setIsLoading(true);
         const cleanedPhone = phone.replace(/\D/g, '');
-        e2eDebug('[E2E_DEBUG] login.handleVerifyOtp calling verifyOtp', `+65${cleanedPhone}`, otpCode);
         const { error: verifyError } = await verifyOtp(`+65${cleanedPhone}`, otpCode);
-        e2eDebug('[E2E_DEBUG] login.handleVerifyOtp result error=', verifyError ? verifyError.message : 'null');
         setIsLoading(false);
         if (verifyError) {
             setError(verifyError.message);
