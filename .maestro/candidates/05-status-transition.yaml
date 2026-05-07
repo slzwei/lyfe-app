@@ -1,11 +1,17 @@
-# Candidates: Manager transitions a candidate to "Interviewed" via the
+# Candidates: Manager transitions a candidate to "Approved" via the
 # native iOS ActionSheet (handleStatusPress on candidate detail).
 #
 # Mirrors leads/03-status-transition's idempotency pattern: tap the
 # status badge → action sheet appears → tap the target status by text.
-# If the candidate is already 'Interviewed' from a prior run, no-op
+# If the candidate is already 'Approved' from a prior run, no-op
 # transition still works (applyStatusChange writes the same value
 # back without error).
+#
+# Why "Approved" (not "Interviewed"): two CANDIDATE_STATUS_CONFIG
+# labels share a prefix — "Interview" (interview_scheduled) and
+# "Interviewed" (interviewed). Maestro's `tapOn: "Interviewed"` may
+# substring-match "Interview" first on the iOS ActionSheet and
+# dismiss without changing status. "Approved" has no prefix collision.
 #
 # Uses native ActionSheetIOS rather than a Modal-based picker (unlike
 # leads which use a Modal w/ status-option-X testIDs). Native action
@@ -44,14 +50,14 @@ appId: com.shawnlee.lyfe
     id: "candidate-hero-status-badge"
 - waitForAnimationToEnd
 
-# Pick "Interviewed" by text — works for any starting status.
-- tapOn: "Interviewed"
+# Pick "Approved" by text — no prefix collision with other labels.
+- tapOn: "Approved"
 - waitForAnimationToEnd
 
 # Badge text reflects new status. Use extendedWait so the optimistic
 # UI update has time to render even if the underlying RPC is slow.
 - extendedWaitUntil:
-    visible: "Interviewed"
+    visible: "Approved"
     timeout: 5000
 - assertVisible:
     id: "candidate-hero-status-badge"

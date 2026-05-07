@@ -29,6 +29,9 @@ appId: com.shawnlee.lyfe
     id: "candidates-add-button"
 - waitForAnimationToEnd
 
+# Note: NO hideKeyboard — KeyboardAwareScrollView errors on the
+# standard dismiss action. Tap the next field directly to auto-
+# dismiss; the manager-picker tap below also dismisses keyboard.
 - extendedWaitUntil:
     visible:
       id: "add-candidate-name"
@@ -36,14 +39,13 @@ appId: com.shawnlee.lyfe
 - tapOn:
     id: "add-candidate-name"
 - inputText: "E2E Phase4b Priya"
-- hideKeyboard
 - tapOn:
     id: "add-candidate-phone"
 - inputText: "+65 87654322"
-- hideKeyboard
 - waitForAnimationToEnd
 
-# Pick a manager — PA path requires this.
+# Pick a manager — PA path requires this. Tapping the picker also
+# dismisses any keyboard left over from the phone field.
 - tapOn:
     id: "add-candidate-manager-picker"
 - waitForAnimationToEnd
