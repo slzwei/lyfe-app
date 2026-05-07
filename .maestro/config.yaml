@@ -22,6 +22,12 @@ flows:
   # Phase 4a — candidate detail smoke flows (staff + pa).
   - "candidates/01-staff-detail.yaml"
   - "candidates/02-pa-detail.yaml"
+  # Phase 4b — candidate mutations (create, status, schedule).
+  # 07-upload-document deferred to Phase 4b-tail (needs document-picker bypass).
+  - "candidates/03-create-from-staff.yaml"
+  - "candidates/04-create-from-pa.yaml"
+  - "candidates/05-status-transition.yaml"
+  - "candidates/06-schedule-interview.yaml"
 
 # Force the heaviest flow (lead lifecycle: login + navigate + add note +
 # change status) to run FIRST while the simulator is fresh. Maestro's

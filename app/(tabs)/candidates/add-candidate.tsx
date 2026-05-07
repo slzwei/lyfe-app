@@ -253,6 +253,7 @@ export default function AddCandidateScreen() {
                                     Assign to Manager{isPA ? ' *' : ''}
                                 </Text>
                                 <TouchableOpacity
+                                    testID="add-candidate-manager-picker"
                                     style={[
                                         styles.managerPickerBtn,
                                         { borderColor: errors.manager ? colors.danger : colors.border },

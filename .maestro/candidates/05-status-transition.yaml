@@ -1,0 +1,57 @@
+# Candidates: Manager transitions a candidate to "Interviewed" via the
+# native iOS ActionSheet (handleStatusPress on candidate detail).
+#
+# Mirrors leads/03-status-transition's idempotency pattern: tap the
+# status badge → action sheet appears → tap the target status by text.
+# If the candidate is already 'Interviewed' from a prior run, no-op
+# transition still works (applyStatusChange writes the same value
+# back without error).
+#
+# Uses native ActionSheetIOS rather than a Modal-based picker (unlike
+# leads which use a Modal w/ status-option-X testIDs). Native action
+# sheets are queryable by Maestro via text — no testID needed.
+appId: com.shawnlee.lyfe
+---
+
+- runFlow:
+    file: ../helpers/login-as.yaml
+    env:
+      phone: "80000003"
+
+- extendedWaitUntil:
+    visible:
+      id: "home-hero-candidates"
+    timeout: 15000
+- tapOn:
+    id: "home-hero-candidates"
+- waitForAnimationToEnd
+
+- extendedWaitUntil:
+    visible:
+      id: "candidates-list"
+    timeout: 10000
+- tapOn:
+    id: ".*candidate-card-.*"
+- waitForAnimationToEnd
+
+- extendedWaitUntil:
+    visible:
+      id: "candidate-hero-status-badge"
+    timeout: 10000
+
+# Open status picker (native iOS ActionSheet on iOS).
+- tapOn:
+    id: "candidate-hero-status-badge"
+- waitForAnimationToEnd
+
+# Pick "Interviewed" by text — works for any starting status.
+- tapOn: "Interviewed"
+- waitForAnimationToEnd
+
+# Badge text reflects new status. Use extendedWait so the optimistic
+# UI update has time to render even if the underlying RPC is slow.
+- extendedWaitUntil:
+    visible: "Interviewed"
+    timeout: 5000
+- assertVisible:
+    id: "candidate-hero-status-badge"
