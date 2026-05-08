@@ -22,6 +22,15 @@ flows:
   # Phase 4a — candidate detail smoke flows (staff + pa).
   - "candidates/01-staff-detail.yaml"
   - "candidates/02-pa-detail.yaml"
+  # Phase 4b — candidate mutations (status, schedule). Create + upload deferred.
+  # candidates/03-create-from-staff.yaml — Phase 4b-tail (KeyboardAwareScrollView
+  #   + iOS-26 + Maestro: phone field tap unreliable, 3 retry runs all flaked).
+  # candidates/04-create-from-pa.yaml    — Phase 4b-tail (same; manager-picker
+  #   modal-tree wall too).
+  # candidates/07-upload-document.yaml   — Phase 4b-tail (needs document-picker
+  #   bypass infra).
+  - "candidates/05-status-transition.yaml"
+  - "candidates/06-schedule-interview.yaml"
 
 # Force the heaviest flow (lead lifecycle: login + navigate + add note +
 # change status) to run FIRST while the simulator is fresh. Maestro's

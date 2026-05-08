@@ -253,6 +253,7 @@ export default function AddCandidateScreen() {
                                     Assign to Manager{isPA ? ' *' : ''}
                                 </Text>
                                 <TouchableOpacity
+                                    testID="add-candidate-manager-picker"
                                     style={[
                                         styles.managerPickerBtn,
                                         { borderColor: errors.manager ? colors.danger : colors.border },
@@ -313,7 +314,11 @@ export default function AddCandidateScreen() {
 
             {/* Manager Picker Modal */}
             <Modal visible={showManagerPicker} transparent animationType="fade">
-                <Pressable style={styles.modalOverlay} onPress={() => setShowManagerPicker(false)}>
+                <Pressable
+                    style={styles.modalOverlay}
+                    onPress={() => setShowManagerPicker(false)}
+                    accessibilityViewIsModal
+                >
                     <View style={[styles.modalContent, { backgroundColor: colors.cardBackground, maxHeight: '60%' }]}>
                         <Text style={[styles.modalTitle, { color: colors.textPrimary, marginBottom: 12 }]}>
                             Select Manager
@@ -363,7 +368,7 @@ export default function AddCandidateScreen() {
 
             {/* Success Modal */}
             <Modal visible={showSuccess} transparent animationType="fade">
-                <View style={styles.modalOverlay}>
+                <View style={styles.modalOverlay} accessibilityViewIsModal>
                     <View style={[styles.modalContent, { backgroundColor: colors.cardBackground }]}>
                         <View style={[styles.successIcon, { backgroundColor: colors.successLight }]}>
                             <Ionicons name="checkmark-circle" size={40} color={colors.success} />

@@ -1,0 +1,77 @@
+# Candidates: Manager creates a candidate from the candidates list.
+#
+# Validates the staff happy path: tap +Add → fill name+phone → submit →
+# Done modal → back to list → new candidate visible.
+#
+# Idempotency: name + phone are static so each run creates a new row
+# (no email = no UNIQUE constraint collision per
+# `idx_candidates_email_unique`). Accumulates rows in staging — known
+# limitation per TEST_PLAN.md "Coverage limitations" section. The
+# assertion only checks the static name is visible, which always
+# matches the first occurrence whether 1 or 50 accumulated rows exist.
+appId: com.shawnlee.lyfe
+---
+
+- runFlow:
+    file: ../helpers/login-as.yaml
+    env:
+      phone: "80000003"
+
+# Open candidates list via the home hero stat card.
+- extendedWaitUntil:
+    visible:
+      id: "home-hero-candidates"
+    timeout: 15000
+- tapOn:
+    id: "home-hero-candidates"
+- waitForAnimationToEnd
+
+- extendedWaitUntil:
+    visible:
+      id: "candidates-list"
+    timeout: 10000
+
+# +Add candidate.
+- tapOn:
+    id: "candidates-add-button"
+- waitForAnimationToEnd
+
+# Fill the form (name + phone). Email left blank to skip UNIQUE-index
+# dedup so the flow stays idempotent across reruns.
+#
+# Note: NO hideKeyboard between fields — KeyboardAwareScrollView (from
+# react-native-keyboard-controller) intercepts the standard dismiss
+# action and Maestro errors with "Couldn't hide the keyboard". Tapping
+# the next field via testID auto-dismisses the keyboard for that field
+# transition; the submit button is outside the KAV so stays tappable.
+- extendedWaitUntil:
+    visible:
+      id: "add-candidate-name"
+    timeout: 5000
+- tapOn:
+    id: "add-candidate-name"
+- inputText: "E2E Phase4b Sam"
+- tapOn:
+    id: "add-candidate-phone"
+- inputText: "+65 87654321"
+- waitForAnimationToEnd
+
+- tapOn:
+    id: "add-candidate-submit"
+- waitForAnimationToEnd
+
+# Success modal: dismiss with Done.
+- extendedWaitUntil:
+    visible:
+      id: "add-candidate-success-done"
+    timeout: 15000
+- tapOn:
+    id: "add-candidate-success-done"
+- waitForAnimationToEnd
+
+# Back on the candidates list — new candidate (or accumulated copy) visible.
+- extendedWaitUntil:
+    visible:
+      id: "candidates-list"
+    timeout: 10000
+- assertVisible: "E2E Phase4b Sam"

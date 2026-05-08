@@ -1,0 +1,69 @@
+# Candidates: Manager opens InterviewSchedulerSheet, advances date by
+# one day, and saves. Asserts the sheet dismisses + candidate detail
+# is back in view.
+#
+# RISK: this exercises the modal-from-detail-screen pattern that broke
+# Phase 2 (lead-detail's KeyboardAwareScrollView made modal subtrees
+# invisible to Maestro on iOS 26). Phase 4a added accessibilityViewIsModal
+# to the InterviewSchedulerSheet's overlay as the documented mitigation.
+# If the date / save controls turn out to be unreachable in CI, defer
+# this flow per PHASE_4_SPEC.md guidance ("If a Phase 4 sub-flow hits
+# the modal-tree wall, defer it explicitly rather than chasing").
+#
+# Date strategy: openNewInterview defaults to today @ 10:00 AM. If the
+# CI run wall-clock is past 10 AM, today is in the past and submit
+# triggers an Alert.alert("Date in the past"). Tap "Next day" once to
+# land on tomorrow @ 10 AM — always future regardless of run time.
+appId: com.shawnlee.lyfe
+---
+
+- runFlow:
+    file: ../helpers/login-as.yaml
+    env:
+      phone: "80000003"
+
+- extendedWaitUntil:
+    visible:
+      id: "home-hero-candidates"
+    timeout: 15000
+- tapOn:
+    id: "home-hero-candidates"
+- waitForAnimationToEnd
+
+- extendedWaitUntil:
+    visible:
+      id: "candidates-list"
+    timeout: 10000
+- tapOn:
+    id: ".*candidate-card-.*"
+- waitForAnimationToEnd
+
+- extendedWaitUntil:
+    visible:
+      id: "candidate-hero-name"
+    timeout: 10000
+
+# Open the scheduler sheet.
+- tapOn:
+    id: "candidate-action-schedule"
+- waitForAnimationToEnd
+
+# Advance date to tomorrow. Chevron button uses
+# accessibilityLabel="Next day" — Maestro can tap by accessibility text.
+- extendedWaitUntil:
+    visible:
+      id: "interview-scheduler-save"
+    timeout: 5000
+- tapOn: "Next day"
+- waitForAnimationToEnd
+
+# Save with default time + zoom type (link is optional when blank).
+- tapOn:
+    id: "interview-scheduler-save"
+- waitForAnimationToEnd
+
+# Assert sheet dismissed (proxy: candidate hero is back on top).
+- extendedWaitUntil:
+    visible:
+      id: "candidate-hero-name"
+    timeout: 10000

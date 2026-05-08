@@ -159,14 +159,17 @@ jobs:
         # MAESTRO_DRIVER_STARTUP_TIMEOUT — Maestro's xcodebuild test-without-
         # building install of the XCUITest runner intermittently exceeds the
         # default 60s startup probe on macos-15 runners ("iOS driver not
-        # ready in time"). Two recent CI flakes were resolved only by retry.
-        # Bump to 180s to absorb cold simulator + xctest install latency.
+        # ready in time"). Bumped 60→180s in Phase 0; bumped 180→300s in
+        # Phase 4b after two consecutive driver-startup flakes (runs
+        # 25521856460 + 25524334306) where the driver took ~3min 24s to
+        # come up. 300s leaves headroom without slowing happy paths
+        # (typical driver startup is 30–60s).
         #
         # Subdirectory discovery is wired up via the `flows:` glob in
         # .maestro/config.yaml — passing both `.maestro/ .maestro/roles/`
         # caused Maestro to run the role flows twice (once per path arg).
         env:
-          MAESTRO_DRIVER_STARTUP_TIMEOUT: '180000'
+          MAESTRO_DRIVER_STARTUP_TIMEOUT: '300000'
         run: maestro test .maestro/
 
       - name: Stop simulator log capture

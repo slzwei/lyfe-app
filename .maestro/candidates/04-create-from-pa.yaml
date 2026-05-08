@@ -1,0 +1,72 @@
+# Candidates: PA creates a candidate on behalf of their manager.
+#
+# Same shape as 03-create-from-staff but goes via tab-pa, and the
+# manager picker is REQUIRED (PA must select a manager, validated
+# in add-candidate.tsx via `if (isPA && !selectedManagerId)`).
+#
+# Seed: PA (+6580000005) is assigned to manager (+6580000003) via
+# pa_manager_assignments — the picker shows that one manager. Tap the
+# first available row regardless of which manager appears.
+appId: com.shawnlee.lyfe
+---
+
+- runFlow:
+    file: ../helpers/login-as.yaml
+    env:
+      phone: "80000005"
+
+- runFlow:
+    file: ../helpers/navigate-to-tab.yaml
+    env:
+      tab: "pa"
+
+- extendedWaitUntil:
+    visible:
+      id: "candidates-list"
+    timeout: 15000
+
+- tapOn:
+    id: "candidates-add-button"
+- waitForAnimationToEnd
+
+# Note: NO hideKeyboard — KeyboardAwareScrollView errors on the
+# standard dismiss action. Tap the next field directly to auto-
+# dismiss; the manager-picker tap below also dismisses keyboard.
+- extendedWaitUntil:
+    visible:
+      id: "add-candidate-name"
+    timeout: 5000
+- tapOn:
+    id: "add-candidate-name"
+- inputText: "E2E Phase4b Priya"
+- tapOn:
+    id: "add-candidate-phone"
+- inputText: "+65 87654322"
+- waitForAnimationToEnd
+
+# Pick a manager — PA path requires this. Tapping the picker also
+# dismisses any keyboard left over from the phone field.
+- tapOn:
+    id: "add-candidate-manager-picker"
+- waitForAnimationToEnd
+- tapOn:
+    id: ".*add-candidate-manager-row-.*"
+- waitForAnimationToEnd
+
+- tapOn:
+    id: "add-candidate-submit"
+- waitForAnimationToEnd
+
+- extendedWaitUntil:
+    visible:
+      id: "add-candidate-success-done"
+    timeout: 15000
+- tapOn:
+    id: "add-candidate-success-done"
+- waitForAnimationToEnd
+
+- extendedWaitUntil:
+    visible:
+      id: "candidates-list"
+    timeout: 10000
+- assertVisible: "E2E Phase4b Priya"
