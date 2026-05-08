@@ -29,20 +29,20 @@ Single source of truth for Maestro E2E coverage. Phases are sequenced by risk ×
 
 ---
 
-## Coverage snapshot — 2026-05-07
+## Coverage snapshot — 2026-05-08
 
-**15/15 flows passing on main** (4 smoke + 6 role + 3 lead + 2 candidate-detail). Phases 0 + 1 + 2a + 4a complete. Lead pipeline has end-to-end coverage of status transitions (full + smoke), search/filter, and the agent-personal-only RLS contract. Candidate detail has thin smoke coverage on staff + PA paths. Three lead flows (call, whatsapp, reassign) deferred to Phase 2b — they exercise modals from the lead detail screen, and iOS XCUITest can't query the Modal subtree from that parent context (works fine for SignOutModal on the Profile screen with identical structure). Real users with VoiceOver are unaffected — the underlying `accessibilityViewIsModal` + explicit modal-button labels are in place.
+**17/17 flows passing on main** (4 smoke + 6 role + 3 lead + 4 candidate). Phases 0 + 1 + 2a + 4a + 4b (partial) complete. Lead pipeline has end-to-end coverage of status transitions (full + smoke), search/filter, and the agent-personal-only RLS contract. Candidate coverage now includes detail (manager + PA), status transition (manager via native iOS ActionSheet), and interview scheduling (manager via Modal — Phase 4a's `accessibilityViewIsModal` mitigation held). Three lead flows (call, whatsapp, reassign) deferred to Phase 2b. Three candidate flows (create-from-staff, create-from-pa, upload-document) deferred to Phase 4b-tail — KeyboardAwareScrollView + iOS-26 + Maestro form-input wall plus document picker bypass not yet implemented. Real users with VoiceOver are unaffected — `accessibilityViewIsModal` + explicit modal-button labels are in place.
 
-| Role      | Login | Tabs | Lead       | Event       | Roadshow | Candidate | Roadmap | Exam |
-|-----------|-------|------|------------|-------------|----------|-----------|---------|------|
-| admin     | [x]   | [x]  | [ ]        | [ ]         | n/a      | n/a       | n/a     | n/a  |
-| director  | [x]   | [x]  | [ ]        | [ ]         | n/a      | [ ]       | n/a     | n/a  |
-| manager   | [x]   | [x]  | [x] (2a)   | [x] (smoke) | [ ]      | [x] (4a)  | n/a     | n/a  |
-| agent     | [x]   | [x]  | [x] (2a)   | [ ]         | [ ]      | n/a       | n/a     | n/a  |
-| pa        | [x]   | [x]  | n/a        | [ ]         | n/a      | [x] (4a)  | n/a     | n/a  |
-| candidate | [x]   | [x]  | n/a        | [ ]         | n/a      | n/a       | [ ]     | [ ]  |
+| Role      | Login | Tabs | Lead       | Event       | Roadshow | Candidate                | Roadmap | Exam |
+|-----------|-------|------|------------|-------------|----------|--------------------------|---------|------|
+| admin     | [x]   | [x]  | [ ]        | [ ]         | n/a      | n/a                      | n/a     | n/a  |
+| director  | [x]   | [x]  | [ ]        | [ ]         | n/a      | [ ]                      | n/a     | n/a  |
+| manager   | [x]   | [x]  | [x] (2a)   | [x] (smoke) | [ ]      | [x] (4a + 4b)            | n/a     | n/a  |
+| agent     | [x]   | [x]  | [x] (2a)   | [ ]         | [ ]      | n/a                      | n/a     | n/a  |
+| pa        | [x]   | [x]  | n/a        | [ ]         | n/a      | [x] (4a)                 | n/a     | n/a  |
+| candidate | [x]   | [x]  | n/a        | [ ]         | n/a      | n/a                      | [ ]     | [ ]  |
 
-**Headline**: ~15% coverage. All 6 roles + lead status/search/agent-only RLS contract + candidate detail smoke (staff + PA). Three Phase 2 flows (call, whatsapp, reassign) deferred to Phase 2b — modal-from-lead-detail not queryable by Maestro on iOS 26.
+**Headline**: ~17% coverage. All 6 roles + lead status/search/agent-only RLS contract + candidate detail (staff + PA) + candidate status transition + interview scheduling. Six flows total deferred (3 lead modal-from-detail in 2b; 3 candidate create + upload in 4b-tail).
 
 ---
 
@@ -152,15 +152,15 @@ Shipped 2026-05-07 in PR #63. Adds ~30 testIDs across the candidate UI (purely a
 
 ### Phase 4b — Mutations
 
-Manager workflows: candidate create, status transitions, interview scheduling, document upload. Needs `EXPO_PUBLIC_E2E_DOCUMENT_BYPASS` env (mirror linking-bypass) since iOS document picker can't be driven from Maestro.
+Manager workflows: candidate create, status transitions, interview scheduling, document upload. Status transition + scheduling shipped 2026-05-08 in PR #65; create + upload deferred to **Phase 4b-tail** (KeyboardAwareScrollView + iOS-26 + Maestro form-input wall; document picker bypass not yet implemented).
 
 | #    | Flow                                              | Role     | Status | Notes |
 |------|---------------------------------------------------|----------|--------|-------|
-| 4b.1 | `candidates/03-create-from-staff.yaml`            | manager  | [ ]    | +Add → 3 fields → submit → Done modal → date-stamped name to avoid pollution |
-| 4b.2 | `candidates/04-create-from-pa.yaml`               | pa       | [ ]    | Same shape via PA tab; PA must have pa_manager_assignments |
-| 4b.3 | `candidates/05-status-transition.yaml`            | manager  | [ ]    | Walk seeded candidate through 1–2 status states; idempotency pattern |
-| 4b.4 | `candidates/06-schedule-interview.yaml`           | manager  | [ ]    | Open candidate → Schedule Interview → date+time+interviewer → save |
-| 4b.5 | `candidates/07-upload-document.yaml`              | manager  | [ ]    | Document sheet → Attach PDF (needs `EXPO_PUBLIC_E2E_DOCUMENT_BYPASS`) |
+| 4b.1 | `candidates/03-create-from-staff.yaml`            | manager  | [~]    | **Phase 4b-tail.** YAML in repo, excluded from glob. Three CI runs flaked at form fill + submit-success (KeyboardAwareScrollView swallows phone-field tap; even with `accessibilityViewIsModal` on the success modal). |
+| 4b.2 | `candidates/04-create-from-pa.yaml`               | pa       | [~]    | **Phase 4b-tail.** Same form-input wall + manager-picker Modal subtree wall; mitigation `accessibilityViewIsModal` added but untested (cascading sim-death prevented completion). |
+| 4b.3 | `candidates/05-status-transition.yaml`            | manager  | [x]    | Native iOS `ActionSheetIOS` (queryable by Maestro). Targets "Approved" — no prefix collision with "Interview"/"Interviewed". Idempotent same-status writes. |
+| 4b.4 | `candidates/06-schedule-interview.yaml`           | manager  | [x]    | Phase 4a's `accessibilityViewIsModal` mitigation on `InterviewSchedulerSheet` validated end-to-end. Date bumps to tomorrow via "Next day" accessibilityLabel to avoid "Date in past" alert. |
+| 4b.5 | `candidates/07-upload-document.yaml`              | manager  | [~]    | **Phase 4b-tail.** Needs `EXPO_PUBLIC_E2E_DOCUMENT_BYPASS` (iOS document picker can't be driven from Maestro) plus AddDocumentSheet modal-tree mitigation. Not started. |
 
 ### Phase 4c — Realtime + negative paths
 
@@ -331,3 +331,4 @@ The 13 flows are a real safety net for **login + role + read** paths and a thin 
 - 2026-05-06 — **Phase 2a partial: 13/13 green** (4 smoke + 6 role + 3 lead). Shipped status transition (2.3), search + filter (2.7), agent-personal-only RLS contract (2.10). Real production bugs uncovered + fixed along the way: `ContactConfirmModal` and `ReassignModal` were missing `accessibilityViewIsModal` (broke VoiceOver focus) — now fixed; explicit `accessibilityRole="button"` + `accessibilityLabel` added to each modal button for screen-reader clarity. Three flows deferred to Phase 2b: 2.4 (call), 2.5 (whatsapp), 2.6 (reassign) — modal-from-lead-detail isn't queryable by iOS XCUITest (works fine for SignOutModal on Profile screen with identical structure → likely a `react-native-keyboard-controller` parent-context interaction). YAML files exist in `.maestro/leads/` but are excluded from the discovery glob in `config.yaml`. 2.2 (add note) marked `[s]` — covered by `02-lead-lifecycle` smoke. 2.1 (create), 2.8 (view-mode toggle), 2.9 (realtime MKTR) defer per original plan. Also added the `EXPO_PUBLIC_E2E_LINKING_BYPASS` env (skip `Linking.openURL(tel:/wa.me)` so the modal stays foregrounded in CI) — useful for Phase 2b.
 - 2026-05-07 — **Phase 0 cleanup landed.** PR #58 merged + main run 25476786695 confirmed 13/13 green (30m 46s). Stripped 224 lines of debug scaffolding across 5 files — kept the real production fixes (`lib/sessionCache.ts` + `lib/supabase.ts` `customFetch` shim) and the `lib/e2eDebugLog.ts` utility for future debugging. Bonus: scheduled cron run 25456336396 (the unattended nightly) was green for the first time, satisfying the Phase 0 nightly-stability checkbox.
 - 2026-05-07 — **Phase 4a complete: 15/15 green.** PR #63 merged (commit c7293063); main confirm took three dispatches (first failed at 03-events with iOS sim desync after 8m 27s; second hit `iOS driver not ready in time` startup timeout; third 25494815232 went green). Both new flows (`candidates/01-staff-detail`, `candidates/02-pa-detail`) passed on every retry — the flakes were pre-existing infra issues that re-surfaced when running on main. Shipped ~30 testIDs across the candidate UI as foundation for 4b/4c (purely additive — `add-candidate-*`, `candidate-hero-*`, `candidate-section-nav-*`, `candidate-action-*`, `candidate-card-*`, `candidates-list`, `interview-scheduler-save`). Also wired `testID` through `FormField`'s `TextInput` (was in props interface but never rendered) and added `accessibilityViewIsModal` to `InterviewSchedulerSheet`'s overlay (Phase 2 modal-tree mitigation, foundation for 4b). Phase 4 table restructured to reflect the 4a/4b/4c split from `.maestro/PHASE_4_SPEC.md`. Phase 4b (mutations) is next.
+- 2026-05-08 — **Phase 4b partial: 17/17 green.** PR #65 merged (commit a373cc9). Six dispatches before main went green (4 PR + 1 main; PR retries: hideKeyboard error → modal-tree wall on manager-picker + phone dedup → cascading sim death → driver-startup flake → driver-startup again → 16/17 with pre-existing 02-lead-lifecycle flake → 16/17 with pre-existing admin-tabs OTP flake). Shipped two of five planned 4b flows: `candidates/05-status-transition` (manager via native iOS ActionSheet, "Approved" target chosen to dodge "Interview"/"Interviewed" prefix collision) and `candidates/06-schedule-interview` (manager via Modal — Phase 4a's `accessibilityViewIsModal` mitigation validated end-to-end; date bumped to tomorrow via "Next day" accessibilityLabel to dodge "Date in past" alert). Three flows deferred to **Phase 4b-tail**: `03-create-from-staff`, `04-create-from-pa` (KeyboardAwareScrollView + iOS-26 + Maestro form-input wall — phone field tap unreliable when keyboard up; modal-tree mitigation on manager-picker + success modal added but untested due to cascading sim death), `07-upload-document` (needs `EXPO_PUBLIC_E2E_DOCUMENT_BYPASS` infra; not started). Source changes: 1 testID (`add-candidate-manager-picker`), 2 `accessibilityViewIsModal` props on add-candidate.tsx modals. Infra changes: bumped `MAESTRO_DRIVER_STARTUP_TIMEOUT` 180→300s after two consecutive driver-startup flakes (workflow comment updated); added `DELETE FROM public.candidates WHERE name LIKE 'E2E Phase4b %'` to seed-e2e.sql (unused now since the create flows are deferred — left in for Phase 4b-tail). Pre-existing flakes (02-lead-lifecycle, admin-tabs) admin-merged through per `PHASE_4_SPEC.md`'s "stable own flows" guidance; nightly cron will surface those separately.
