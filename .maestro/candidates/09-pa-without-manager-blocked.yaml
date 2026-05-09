@@ -1,0 +1,47 @@
+# Candidates: PA without pa_manager_assignments must NOT be able to
+# create candidates. Negative-path / RLS-boundary check.
+#
+# Setup (in seed-e2e.sql + e2e-bootstrap.mjs):
+#   pa2 = +6580000008, role='pa', NO row in pa_manager_assignments.
+#
+# Without manager assignments fetchAssignableManagers returns [] for
+# this PA, the manager-picker section in add-candidate.tsx is hidden,
+# and validate() sets errors.manager — but errors.manager only renders
+# inside the picker section, so the submit button used to silently
+# no-op. This PR adds an explicit "no manager" warning banner up
+# front + disables submit when the state is blocked. The flow asserts
+# the warning banner is visible.
+#
+# Why a separate PA: pa1 (+6580000005) IS assigned to the seeded
+# manager, so it fails the precondition. pa2 stays separate so the
+# happy-path PA flows (02-pa-detail, 04-pa-create-deferred) keep
+# working without seed cross-contamination.
+appId: com.shawnlee.lyfe
+---
+
+- runFlow:
+    file: ../helpers/login-as.yaml
+    env:
+      phone: "80000008"
+
+- runFlow:
+    file: ../helpers/navigate-to-tab.yaml
+    env:
+      tab: "pa"
+
+- extendedWaitUntil:
+    visible:
+      id: "candidates-list"
+    timeout: 15000
+
+- tapOn:
+    id: "candidates-add-button"
+- waitForAnimationToEnd
+
+# The warning is shown once managers fetch returns empty — give it a
+# bit of room for the network call.
+- extendedWaitUntil:
+    visible:
+      id: "add-candidate-no-manager-warning"
+    timeout: 10000
+- assertVisible: "No assigned manager"

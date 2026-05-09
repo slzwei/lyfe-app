@@ -40,6 +40,7 @@ DECLARE
     v_manager_id        UUID;
     v_agent_id          UUID;
     v_pa_id             UUID;
+    v_pa2_id            UUID;
     v_candidate_id      UUID;
     v_e2e_candidate_id  UUID;
     v_event_id          UUID;
@@ -65,6 +66,8 @@ BEGIN
         ORDER BY CASE WHEN phone LIKE '+%' THEN 0 ELSE 1 END, created_at ASC LIMIT 1;
     SELECT id INTO v_pa_id            FROM auth.users WHERE REPLACE(phone, '+', '') = '6580000005'
         ORDER BY CASE WHEN phone LIKE '+%' THEN 0 ELSE 1 END, created_at ASC LIMIT 1;
+    SELECT id INTO v_pa2_id           FROM auth.users WHERE REPLACE(phone, '+', '') = '6580000008'
+        ORDER BY CASE WHEN phone LIKE '+%' THEN 0 ELSE 1 END, created_at ASC LIMIT 1;
     SELECT id INTO v_candidate_id     FROM auth.users WHERE REPLACE(phone, '+', '') = '6580000006'
         ORDER BY CASE WHEN phone LIKE '+%' THEN 0 ELSE 1 END, created_at ASC LIMIT 1;
     SELECT id INTO v_e2e_candidate_id FROM auth.users WHERE REPLACE(phone, '+', '') = '6590000007'
@@ -76,10 +79,11 @@ BEGIN
     IF v_manager_id IS NULL THEN RAISE EXCEPTION 'Manager user (+6580000003) not found. Log in first.'; END IF;
     IF v_agent_id IS NULL THEN RAISE EXCEPTION 'Agent user (+6580000004) not found. Log in first.'; END IF;
     IF v_pa_id IS NULL THEN RAISE EXCEPTION 'PA user (+6580000005) not found. Log in first.'; END IF;
+    IF v_pa2_id IS NULL THEN RAISE EXCEPTION 'PA2 user (+6580000008) not found. Log in first.'; END IF;
     IF v_candidate_id IS NULL THEN RAISE EXCEPTION 'Candidate user (+6580000006) not found. Log in first.'; END IF;
     IF v_e2e_candidate_id IS NULL THEN RAISE EXCEPTION 'E2E candidate user (+6590000007) not found. Log in first.'; END IF;
 
-    RAISE NOTICE 'Found all 6 mock users. Seeding E2E data...';
+    RAISE NOTICE 'Found all 7 mock users. Seeding E2E data...';
 
     -- -----------------------------------------------------------------------
     -- 0.5. Ensure public.users rows exist for every mock user
@@ -99,6 +103,7 @@ BEGIN
         (v_manager_id,       '6580000003', 'Rachel Manager'),
         (v_agent_id,         '6580000004', 'David Agent'),
         (v_pa_id,            '6580000005', 'Priya PA'),
+        (v_pa2_id,           '6580000008', 'Naomi PA2'),
         (v_candidate_id,     '6580000006', 'Charlie Candidate'),
         (v_e2e_candidate_id, '6590000007', 'E2E Candidate')
     ON CONFLICT (id) DO NOTHING;
@@ -115,7 +120,7 @@ BEGIN
         consent_tos_at = NOW(),
         consent_privacy_at = NOW(),
         consent_operational_push_at = NOW()
-    WHERE id IN (v_admin_id, v_director_id, v_manager_id, v_agent_id, v_pa_id, v_candidate_id, v_e2e_candidate_id);
+    WHERE id IN (v_admin_id, v_director_id, v_manager_id, v_agent_id, v_pa_id, v_pa2_id, v_candidate_id, v_e2e_candidate_id);
 
     -- -----------------------------------------------------------------------
     -- 1. Update user profiles: roles, names, hierarchy, onboarding
@@ -160,6 +165,18 @@ BEGIN
         is_active = true,
         reports_to = v_manager_id
     WHERE id = v_pa_id;
+
+    -- pa2 — PA without pa_manager_assignments. Used by Phase 4c flow
+    -- 09-pa-without-manager-blocked. Note: NO INSERT into
+    -- pa_manager_assignments below for this user — that absence is the
+    -- precondition the negative-path flow exercises.
+    UPDATE public.users SET
+        full_name = 'Naomi PA2',
+        role = 'pa',
+        onboarding_complete = true,
+        is_active = true,
+        reports_to = v_manager_id
+    WHERE id = v_pa2_id;
 
     UPDATE public.users SET
         full_name = 'Charlie Candidate',
