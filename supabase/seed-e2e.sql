@@ -66,7 +66,7 @@ BEGIN
         ORDER BY CASE WHEN phone LIKE '+%' THEN 0 ELSE 1 END, created_at ASC LIMIT 1;
     SELECT id INTO v_pa_id            FROM auth.users WHERE REPLACE(phone, '+', '') = '6580000005'
         ORDER BY CASE WHEN phone LIKE '+%' THEN 0 ELSE 1 END, created_at ASC LIMIT 1;
-    SELECT id INTO v_pa2_id           FROM auth.users WHERE REPLACE(phone, '+', '') = '6580000008'
+    SELECT id INTO v_pa2_id           FROM auth.users WHERE REPLACE(phone, '+', '') = '6580000101'
         ORDER BY CASE WHEN phone LIKE '+%' THEN 0 ELSE 1 END, created_at ASC LIMIT 1;
     SELECT id INTO v_candidate_id     FROM auth.users WHERE REPLACE(phone, '+', '') = '6580000006'
         ORDER BY CASE WHEN phone LIKE '+%' THEN 0 ELSE 1 END, created_at ASC LIMIT 1;
@@ -79,7 +79,7 @@ BEGIN
     IF v_manager_id IS NULL THEN RAISE EXCEPTION 'Manager user (+6580000003) not found. Log in first.'; END IF;
     IF v_agent_id IS NULL THEN RAISE EXCEPTION 'Agent user (+6580000004) not found. Log in first.'; END IF;
     IF v_pa_id IS NULL THEN RAISE EXCEPTION 'PA user (+6580000005) not found. Log in first.'; END IF;
-    IF v_pa2_id IS NULL THEN RAISE EXCEPTION 'PA2 user (+6580000008) not found. Log in first.'; END IF;
+    IF v_pa2_id IS NULL THEN RAISE EXCEPTION 'PA2 user (+6580000101) not found. Log in first.'; END IF;
     IF v_candidate_id IS NULL THEN RAISE EXCEPTION 'Candidate user (+6580000006) not found. Log in first.'; END IF;
     IF v_e2e_candidate_id IS NULL THEN RAISE EXCEPTION 'E2E candidate user (+6590000007) not found. Log in first.'; END IF;
 
@@ -103,7 +103,7 @@ BEGIN
         (v_manager_id,       '6580000003', 'Rachel Manager'),
         (v_agent_id,         '6580000004', 'David Agent'),
         (v_pa_id,            '6580000005', 'Priya PA'),
-        (v_pa2_id,           '6580000008', 'Naomi PA2'),
+        (v_pa2_id,           '6580000101', 'Naomi PA2'),
         (v_candidate_id,     '6580000006', 'Charlie Candidate'),
         (v_e2e_candidate_id, '6590000007', 'E2E Candidate')
     ON CONFLICT (id) DO NOTHING;
