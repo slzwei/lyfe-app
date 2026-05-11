@@ -33,6 +33,9 @@ const MOCK_USERS = [
     { phone: '+6580000005', label: 'pa' },
     { phone: '+6580000006', label: 'candidate' },
     { phone: '+6590000007', label: 'e2e-candidate' },
+    // pa2 — PA without pa_manager_assignments. Used by Phase 4c flow
+    // 09-pa-without-manager-blocked to verify the negative-path RLS.
+    { phone: '+6580000101', label: 'pa2-no-mgr' },
 ];
 
 const url = process.env.STAGING_SUPABASE_URL;

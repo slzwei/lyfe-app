@@ -57,6 +57,7 @@ export default function AddCandidateScreen() {
     const { isSubmitting: isSaving, guard } = useSubmitGuard();
     const [saveError, setSaveError] = useState<string | null>(null);
     const [managers, setManagers] = useState<AssignableManager[]>([]);
+    const [managersLoaded, setManagersLoaded] = useState(false);
     const [selectedManagerId, setSelectedManagerId] = useState<string>('');
     const [showManagerPicker, setShowManagerPicker] = useState(false);
 
@@ -67,9 +68,16 @@ export default function AddCandidateScreen() {
         if (user?.id && userRole) {
             fetchAssignableManagers(user.id, userRole).then(({ data }) => {
                 setManagers(data);
+                setManagersLoaded(true);
             });
         }
     }, [user?.id, userRole]);
+
+    // PA without any pa_manager_assignments can't create candidates — server-
+    // side validation blocks submission and the manager-picker section isn't
+    // rendered (gated on `managers.length > 0`), so without this banner the
+    // submit button silently no-ops. Surface the state up-front instead.
+    const paBlockedNoManager = isPA && managersLoaded && managers.length === 0;
 
     const selectedManager = managers.find((m) => m.id === selectedManagerId);
 
@@ -144,6 +152,33 @@ export default function AddCandidateScreen() {
                 >
                     {/* Save Error */}
                     {saveError && <ErrorBanner message={saveError} />}
+
+                    {/* PA without an assigned manager — surface the blocked
+                        state up front; without this banner, submit silently
+                        no-ops because the manager-picker section (which is
+                        the only place errors.manager renders) is hidden. */}
+                    {paBlockedNoManager && (
+                        <View
+                            testID="add-candidate-no-manager-warning"
+                            style={[
+                                styles.formCard,
+                                {
+                                    backgroundColor: colors.cardBackground,
+                                    padding: 16,
+                                    borderLeftWidth: 3,
+                                    borderLeftColor: colors.danger,
+                                },
+                            ]}
+                        >
+                            <Text style={{ color: colors.danger, fontWeight: '600', marginBottom: 4 }}>
+                                No assigned manager
+                            </Text>
+                            <Text style={{ color: colors.textSecondary, fontSize: 14, lineHeight: 20 }}>
+                                You don&apos;t have an assigned manager. Contact your admin to be assigned a
+                                manager before creating candidates.
+                            </Text>
+                        </View>
+                    )}
 
                     {/* Form Card */}
                     <View style={[styles.formCard, { backgroundColor: colors.cardBackground }]}>
@@ -295,10 +330,16 @@ export default function AddCandidateScreen() {
                 <View style={styles.submitContainer}>
                     <TouchableOpacity
                         testID="add-candidate-submit"
-                        style={[styles.submitButton, { backgroundColor: colors.accent, opacity: isSaving ? 0.5 : 1 }]}
+                        style={[
+                            styles.submitButton,
+                            {
+                                backgroundColor: colors.accent,
+                                opacity: isSaving || paBlockedNoManager ? 0.5 : 1,
+                            },
+                        ]}
                         onPress={handleSubmit}
                         activeOpacity={0.8}
-                        disabled={isSaving}
+                        disabled={isSaving || paBlockedNoManager}
                     >
                         {isSaving ? (
                             <ActivityIndicator size="small" color={colors.textInverse} />

@@ -31,6 +31,11 @@ flows:
   #   bypass infra).
   - "candidates/05-status-transition.yaml"
   - "candidates/06-schedule-interview.yaml"
+  # Phase 4c — negative path. Realtime DISC (08) deferred — detail
+  # screen lacks progress_signals subscription + Maestro can't trigger
+  # the DB UPDATE mid-flow without new infra.
+  # candidates/08-realtime-disc-complete.yaml — Phase 4c-tail.
+  - "candidates/09-pa-without-manager-blocked.yaml"
 
 # Force the heaviest flow (lead lifecycle: login + navigate + add note +
 # change status) to run FIRST while the simulator is fresh. Maestro's
