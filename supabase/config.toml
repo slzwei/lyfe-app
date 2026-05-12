@@ -108,6 +108,13 @@ verify_jwt = false
 # Invoked by Supabase Auth during SMS OTP dispatch — no user JWT exists yet.
 verify_jwt = false
 
+[functions.send-push-notification]
+# Invoked by the notify_push_dispatcher AFTER INSERT trigger via pg_net.
+# Auth is the X-Webhook-Secret header (vault.send_push_secret); no Supabase
+# JWT exists in the trigger context. Without verify_jwt = false the platform
+# gateway returns UNAUTHORIZED_NO_AUTH_HEADER before the function runs.
+verify_jwt = false
+
 [analytics]
 enabled = false
 

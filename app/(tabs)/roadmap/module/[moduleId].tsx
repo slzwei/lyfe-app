@@ -271,7 +271,7 @@ export default function ModuleDetailScreen() {
                         <WebView
                             source={{ uri: pdfUrl }}
                             style={{ flex: 1 }}
-                            originWhitelist={SUPABASE_ORIGIN ? [SUPABASE_ORIGIN] : ['*']}
+                            originWhitelist={[SUPABASE_ORIGIN]}
                             startInLoadingState={true}
                             renderLoading={() => (
                                 <ActivityIndicator size="large" color={colors.accent} style={StyleSheet.absoluteFill} />
