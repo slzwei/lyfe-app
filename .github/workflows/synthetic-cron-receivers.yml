@@ -1,0 +1,57 @@
+name: Synthetic — cron receivers
+
+# R8: regression guard for the vault-backed cron auth (migration
+# 20260510130000 / Sprint 1 item 1.17). Hits each of the 4 cron-receiver
+# edge functions with the staging CRON_SECRET and asserts 200. If the
+# vault secret or EF env drifts out of sync, this flips red instead of
+# letting the next 58-day silent outage happen.
+#
+# Staging only — prod descoped per zero-prod policy.
+#
+# Schedule offset to ':17' so it doesn't collide with the */5 cron-freshness
+# probe or the */10 edge-options sweep.
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: '17 * * * *'
+
+permissions:
+  contents: read
+  issues: write
+
+jobs:
+  cron-receivers:
+    runs-on: ubuntu-latest
+    environment: synthetic-monitoring
+    timeout-minutes: 5
+
+    steps:
+      - name: Honour kill switch
+        if: ${{ vars.SYNTHETIC_KILL_SWITCH == 'true' }}
+        run: |
+          echo "SYNTHETIC_KILL_SWITCH=true — skipping."
+          exit 0
+
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Install probe dependencies
+        working-directory: scripts/synthetic
+        run: npm ci --no-audit --no-fund
+
+      - name: Run cron-receivers probe
+        working-directory: scripts/synthetic
+        env:
+          STAGING_SUPABASE_URL: ${{ secrets.STAGING_SUPABASE_URL }}
+          STAGING_SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.STAGING_SUPABASE_SERVICE_ROLE_KEY }}
+          STAGING_SUPABASE_ANON_KEY: ${{ secrets.STAGING_SUPABASE_ANON_KEY }}
+          STAGING_CRON_SECRET: ${{ secrets.STAGING_CRON_SECRET }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITHUB_REPOSITORY: ${{ github.repository }}
+          GITHUB_SERVER_URL: ${{ github.server_url }}
+          GITHUB_RUN_ID: ${{ github.run_id }}
+        run: node 10-cron-receivers.mjs
