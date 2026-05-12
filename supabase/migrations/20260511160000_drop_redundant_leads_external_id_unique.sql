@@ -1,0 +1,34 @@
+-- =====================================================================
+-- 1.14 — Drop redundant leads_external_id_unique
+--
+-- WHY:
+--   public.leads has TWO unique constraints (verified via pg_constraint
+--   2026-05-11):
+--     leads_external_id_source_name_key  UNIQUE (external_id, source_name)
+--     leads_external_id_unique           UNIQUE (external_id)
+--
+--   The single-column UNIQUE makes the composite redundant AND is
+--   actively harmful — it blocks any future lead source from reusing
+--   external_id values that MKTR already used. CLAUDE.md MKTR section
+--   states the dedup contract is `external_id + source_name='mktr'`,
+--   confirming the composite is the intended key.
+--
+--   Origin: 00000000000000_initial_schema.sql:260-261 created both.
+--
+-- WHAT:
+--   Drop the single-column constraint. The composite remains and
+--   continues to enforce MKTR dedup.
+--
+-- VERIFY:
+--   After: \d+ public.leads shows only the composite.
+--   Smoke test: INSERT a row with the same external_id as an existing
+--   row but a different source_name → should succeed.
+--
+-- ROLLBACK (only if some unknown caller depends on cross-source
+-- uniqueness — none known):
+--   ALTER TABLE public.leads
+--     ADD CONSTRAINT leads_external_id_unique UNIQUE (external_id);
+-- =====================================================================
+
+ALTER TABLE public.leads
+  DROP CONSTRAINT IF EXISTS leads_external_id_unique;
