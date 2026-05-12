@@ -48,15 +48,25 @@ appId: com.shawnlee.lyfe
       id: "candidate-hero-name"
     timeout: 10000
 
-# Switch to the Docs tab on the candidate detail screen.
+# OnboardingChecklist (7 milestones) renders above the section nav row,
+# pushing candidate-section-nav-docs below the viewport on first paint.
+# Scroll until the docs tab is in view before tapping it.
+- scrollUntilVisible:
+    element:
+      id: "candidate-section-nav-docs"
+    direction: DOWN
+    timeout: 10000
 - tapOn:
     id: "candidate-section-nav-docs"
 - waitForAnimationToEnd
 
-# Open the AddDocumentSheet.
-- extendedWaitUntil:
-    visible:
+# After tab switch, DocumentList renders in the same scrollview. The
+# "Add Document" trigger sits at the bottom of the list; with an empty
+# list it's near viewport edge — defensive scroll to be sure.
+- scrollUntilVisible:
+    element:
       id: "candidate-add-document"
+    direction: DOWN
     timeout: 5000
 - tapOn:
     id: "candidate-add-document"
