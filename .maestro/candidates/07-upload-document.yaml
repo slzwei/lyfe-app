@@ -90,11 +90,14 @@ appId: com.shawnlee.lyfe
 # because Maestro's `visible: <string>` becomes `textRegex` anchored
 # at both ends — bare `e2e-test-` would require the rendered text to
 # be exactly `e2e-test-`.
+#
+# This assertion is sufficient: if the sheet hadn't dismissed, its
+# accessibilityViewIsModal would scope queries away from the doc row;
+# if the DB write had failed, the row wouldn't exist; if the state
+# update had no-op'd, the row wouldn't render. Don't add a hero
+# sanity-check — by the time the doc list shows the new row, the
+# scrollview is anchored to the docs section and the hero is above
+# the viewport.
 - extendedWaitUntil:
     visible: "e2e-test-.*"
     timeout: 10000
-
-# Sanity: candidate hero still on screen (sheet really dismissed, not
-# stuck in an error state).
-- assertVisible:
-    id: "candidate-hero-name"
