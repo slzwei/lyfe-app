@@ -3,7 +3,16 @@ import type { CandidateDocument } from '@/types/recruitment';
 import { DOCUMENT_LABELS } from '@/types/recruitment';
 import { Ionicons } from '@expo/vector-icons';
 import React from 'react';
-import { KeyboardAvoidingView, Modal, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
+import {
+    KeyboardAvoidingView,
+    Modal,
+    Pressable,
+    StyleSheet,
+    Text,
+    TextInput,
+    TouchableOpacity,
+    View,
+} from 'react-native';
 import Animated from 'react-native-reanimated';
 import { KAV_BEHAVIOR, letterSpacing } from '@/constants/platform';
 import { ERROR_BG, ERROR_TEXT } from '@/constants/ui';
@@ -100,6 +109,7 @@ export function DocumentList({
             )}
 
             <TouchableOpacity
+                testID="candidate-add-document"
                 style={[docStyles.addBtn, { borderColor: colors.accent, opacity: !hasDocumentPicker ? 0.4 : 1 }]}
                 onPress={onAddDocument}
                 activeOpacity={0.7}
@@ -144,10 +154,13 @@ export function AddDocumentSheet({
     return (
         <Modal visible={visible} transparent animationType="none" onRequestClose={onClose}>
             <KeyboardAvoidingView style={{ flex: 1 }} behavior={KAV_BEHAVIOR}>
-                <TouchableOpacity style={sheetStyles.overlay} activeOpacity={1} onPress={onClose}>
+                <View style={sheetStyles.overlay} accessibilityViewIsModal>
+                    {/* Backdrop — sibling Pressable so the sheet itself isn't a touch responder
+                        (previous TouchableOpacity-wrap + onStartShouldSetResponder pattern broke
+                        ScrollView interaction; see InterviewSchedulerSheet for the reference). */}
+                    <Pressable style={StyleSheet.absoluteFill} onPress={onClose} />
                     <Animated.View
                         style={[docStyles.addSheet, { backgroundColor: colors.cardBackground }, animatedStyle]}
-                        onStartShouldSetResponder={() => true}
                     >
                         <View style={[sheetStyles.handle, { backgroundColor: colors.border }]} />
                         <Text style={[sheetStyles.sheetTitle, { color: colors.textPrimary }]}>
@@ -177,6 +190,7 @@ export function AddDocumentSheet({
                                     {DOCUMENT_LABELS.map((lbl) => (
                                         <TouchableOpacity
                                             key={lbl}
+                                            testID={`document-label-${lbl}`}
                                             style={[
                                                 docStyles.labelPill,
                                                 {
@@ -247,7 +261,7 @@ export function AddDocumentSheet({
                             </>
                         )}
                     </Animated.View>
-                </TouchableOpacity>
+                </View>
             </KeyboardAvoidingView>
         </Modal>
     );

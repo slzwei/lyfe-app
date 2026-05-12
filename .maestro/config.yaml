@@ -22,15 +22,14 @@ flows:
   # Phase 4a — candidate detail smoke flows (staff + pa).
   - "candidates/01-staff-detail.yaml"
   - "candidates/02-pa-detail.yaml"
-  # Phase 4b — candidate mutations (status, schedule). Create + upload deferred.
+  # Phase 4b — candidate mutations (status, schedule, upload). Create flows deferred.
   # candidates/03-create-from-staff.yaml — Phase 4b-tail (KeyboardAwareScrollView
   #   + iOS-26 + Maestro: phone field tap unreliable, 3 retry runs all flaked).
   # candidates/04-create-from-pa.yaml    — Phase 4b-tail (same; manager-picker
   #   modal-tree wall too).
-  # candidates/07-upload-document.yaml   — Phase 4b-tail (needs document-picker
-  #   bypass infra).
   - "candidates/05-status-transition.yaml"
   - "candidates/06-schedule-interview.yaml"
+  - "candidates/07-upload-document.yaml"
   # Phase 4c — negative path. Realtime DISC (08) deferred — detail
   # screen lacks progress_signals subscription + Maestro can't trigger
   # the DB UPDATE mid-flow without new infra.

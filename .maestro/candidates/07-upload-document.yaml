@@ -1,0 +1,103 @@
+# Candidates: Manager opens AddDocumentSheet on a seeded candidate, taps
+# the "Resume" label pill, lets EXPO_PUBLIC_E2E_DOCUMENT_BYPASS short-
+# circuit the iOS document picker + Supabase storage upload, and asserts
+# the new document lands in the list with the bypass-generated filename
+# pattern `e2e-test-<timestamp>.pdf`.
+#
+# Bypass design (two-point, mirrors EXPO_PUBLIC_E2E_FACE_BYPASS):
+#   - hooks/useDocumentManager.ts:pickAndUploadDocument — skip the native
+#     DocumentPicker.getDocumentAsync (Maestro can't drive iOS native
+#     picker UI), hand stub URI+name to uploadCandidateDocument.
+#   - lib/recruitment/documents.ts:uploadCandidateDocument — skip the
+#     fetch + Supabase storage upload, write only the candidate_documents
+#     DB row with file_url under `e2e-bypass/...`. seed-e2e.sql cleans
+#     those rows at run start so Emily Chen's list isn't polluted.
+#
+# Sheet modal-tree mitigation: AddDocumentSheet was refactored from the
+# TouchableOpacity-overlay + onStartShouldSetResponder pattern (the
+# Phase 2 responder trap that breaks ScrollView interaction inside
+# nested sheets) to the InterviewSchedulerSheet pattern — View w/
+# accessibilityViewIsModal + sibling Pressable backdrop + Animated.View
+# sheet content. Phase 4a established this as the documented mitigation.
+appId: com.shawnlee.lyfe
+---
+
+- runFlow:
+    file: ../helpers/login-as.yaml
+    env:
+      phone: "80000003"
+
+- extendedWaitUntil:
+    visible:
+      id: "home-hero-candidates"
+    timeout: 15000
+- tapOn:
+    id: "home-hero-candidates"
+- waitForAnimationToEnd
+
+- extendedWaitUntil:
+    visible:
+      id: "candidates-list"
+    timeout: 10000
+- tapOn:
+    id: ".*candidate-card-.*"
+- waitForAnimationToEnd
+
+- extendedWaitUntil:
+    visible:
+      id: "candidate-hero-name"
+    timeout: 10000
+
+# OnboardingChecklist (7 milestones) renders above the section nav row,
+# pushing candidate-section-nav-docs below the viewport on first paint.
+# Scroll until the docs tab is in view before tapping it.
+- scrollUntilVisible:
+    element:
+      id: "candidate-section-nav-docs"
+    direction: DOWN
+    timeout: 10000
+- tapOn:
+    id: "candidate-section-nav-docs"
+- waitForAnimationToEnd
+
+# After tab switch, DocumentList renders in the same scrollview. The
+# "Add Document" trigger sits at the bottom of the list; with an empty
+# list it's near viewport edge — defensive scroll to be sure.
+- scrollUntilVisible:
+    element:
+      id: "candidate-add-document"
+    direction: DOWN
+    timeout: 5000
+- tapOn:
+    id: "candidate-add-document"
+- waitForAnimationToEnd
+
+# Tap the "Resume" label pill. Under bypass, onSelectLabel triggers
+# pickAndUploadDocument which short-circuits to a DB insert and the
+# hook then dismisses the sheet via setShowAddDoc(false).
+- extendedWaitUntil:
+    visible:
+      id: "document-label-Resume"
+    timeout: 5000
+- tapOn:
+    id: "document-label-Resume"
+- waitForAnimationToEnd
+
+# Wait for the new row to appear in the list. file_name pattern
+# `e2e-test-<timestamp>.pdf` is distinctive enough to avoid collision
+# with any real PDFs uploaded to Emily Chen via the production path
+# (which the seed cleanup doesn't touch). Wildcard suffix is required
+# because Maestro's `visible: <string>` becomes `textRegex` anchored
+# at both ends — bare `e2e-test-` would require the rendered text to
+# be exactly `e2e-test-`.
+#
+# This assertion is sufficient: if the sheet hadn't dismissed, its
+# accessibilityViewIsModal would scope queries away from the doc row;
+# if the DB write had failed, the row wouldn't exist; if the state
+# update had no-op'd, the row wouldn't render. Don't add a hero
+# sanity-check — by the time the doc list shows the new row, the
+# scrollview is anchored to the docs section and the hero is above
+# the viewport.
+- extendedWaitUntil:
+    visible: "e2e-test-.*"
+    timeout: 10000
