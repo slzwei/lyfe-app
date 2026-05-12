@@ -25,6 +25,7 @@ const TYPE_SUBTITLES: Partial<Record<NotificationType, string>> = {
     interview_updated: 'Interview rescheduled or cancelled',
     interview_reminder: 'Upcoming interview reminders',
     candidate_assigned: 'New candidates added to your team',
+    organic_application: 'New applicants from your public /join-us form',
     agent_invite_accepted: 'Invited agents who joined',
     module_completed: 'Training modules marked complete',
     roadmap_unlocked: 'New programmes unlocked for you',

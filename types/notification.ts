@@ -18,6 +18,7 @@ export type NotificationType =
     | 'interview_scheduled'
     | 'interview_updated'
     | 'candidate_assigned'
+    | 'organic_application'
     | 'agent_invite_accepted'
     | 'module_completed'
     | 'roadmap_unlocked'
@@ -43,6 +44,7 @@ export const NOTIFICATION_TYPE_CONFIG: Record<NotificationType, { icon: IconName
     interview_scheduled: { icon: 'calendar', label: 'Interview Scheduled' },
     interview_updated: { icon: 'calendar-outline', label: 'Interview Updated' },
     candidate_assigned: { icon: 'person-add', label: 'Candidate Assigned' },
+    organic_application: { icon: 'globe', label: 'Public Application' },
     agent_invite_accepted: { icon: 'checkmark-circle', label: 'Invite Accepted' },
     module_completed: { icon: 'checkmark-done', label: 'Module Completed' },
     roadmap_unlocked: { icon: 'lock-open', label: 'Programme Unlocked' },
@@ -90,6 +92,7 @@ export const ROLE_NOTIFICATION_TYPES: Record<UserRole, NotificationType[]> = {
         'interview_scheduled',
         'agent_invite_accepted',
         'new_manager_joined',
+        'organic_application',
         'event_reminder',
         'roadshow_summary',
         'agency_announcement',
@@ -103,6 +106,7 @@ export const ROLE_NOTIFICATION_TYPES: Record<UserRole, NotificationType[]> = {
         'interview_scheduled',
         'agent_invite_accepted',
         'new_manager_joined',
+        'organic_application',
         'event_reminder',
         'roadshow_summary',
         'agency_announcement',
