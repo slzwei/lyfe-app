@@ -86,9 +86,12 @@ appId: com.shawnlee.lyfe
 # Wait for the new row to appear in the list. file_name pattern
 # `e2e-test-<timestamp>.pdf` is distinctive enough to avoid collision
 # with any real PDFs uploaded to Emily Chen via the production path
-# (which the seed cleanup doesn't touch).
+# (which the seed cleanup doesn't touch). Wildcard suffix is required
+# because Maestro's `visible: <string>` becomes `textRegex` anchored
+# at both ends — bare `e2e-test-` would require the rendered text to
+# be exactly `e2e-test-`.
 - extendedWaitUntil:
-    visible: "e2e-test-"
+    visible: "e2e-test-.*"
     timeout: 10000
 
 # Sanity: candidate hero still on screen (sheet really dismissed, not
