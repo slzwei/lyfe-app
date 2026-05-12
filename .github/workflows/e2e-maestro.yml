@@ -35,6 +35,11 @@ jobs:
       # ContactConfirmModal from Maestro. Modal flow itself is what we
       # want to test; URL handoff is real-device behavior covered by hand.
       EXPO_PUBLIC_E2E_LINKING_BYPASS: '1'
+      # Skip the native iOS document picker + Supabase storage upload.
+      # Maestro can't drive the native picker UI; the bypass synthesizes a
+      # stub asset and writes only the candidate_documents DB row (file_url
+      # under `e2e-bypass/...`). Seed-e2e.sql cleans those rows at run start.
+      EXPO_PUBLIC_E2E_DOCUMENT_BYPASS: '1'
       # Sentry source-map upload runs as an Xcode build phase but the runner has
       # no SENTRY_AUTH_TOKEN. Disable it (matches eas.json's development profile).
       SENTRY_DISABLE_AUTO_UPLOAD: 'true'

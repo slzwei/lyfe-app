@@ -265,6 +265,12 @@ BEGIN
     -- would fail the create flows. CASCADE deletes attached interviews/docs.
     DELETE FROM public.candidates WHERE name LIKE 'E2E Phase4b %';
 
+    -- Pre-clean documents accumulated by Phase 4b-tail upload flow
+    -- (07-upload-document). Bypass writes rows with file_url under
+    -- `e2e-bypass/...`; Emily Chen (the test candidate) isn't deleted between
+    -- runs, so her document list would accumulate without this cleanup.
+    DELETE FROM public.candidate_documents WHERE file_url LIKE 'e2e-bypass/%';
+
     -- Idempotent: prefer the row that already exists (matched by email,
     -- which has a partial unique index), otherwise insert. Either way
     -- v_cand1_id / v_cand2_id end up matching the canonical DB row so

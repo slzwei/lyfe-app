@@ -96,18 +96,29 @@ export function useDocumentManager({ candidateId }: UseDocumentManagerParams): D
 
     const pickAndUploadDocument = useCallback(
         async (label: string) => {
-            if (!DocumentPicker) return;
             setAddDocError(null);
-            const result = await DocumentPicker.getDocumentAsync({
-                type: 'application/pdf',
-                copyToCacheDirectory: true,
-            });
-            if (result.canceled || !result.assets[0]) return;
 
-            const asset = result.assets[0];
+            let assetUri: string;
+            let assetName: string;
+            if (process.env.EXPO_PUBLIC_E2E_DOCUMENT_BYPASS === '1') {
+                // Skip the native iOS picker — Maestro can't drive it. The downstream
+                // uploadCandidateDocument has a matching bypass that skips storage I/O.
+                assetUri = 'e2e-bypass://stub';
+                assetName = `e2e-test-${Date.now()}.pdf`;
+            } else {
+                if (!DocumentPicker) return;
+                const result = await DocumentPicker.getDocumentAsync({
+                    type: 'application/pdf',
+                    copyToCacheDirectory: true,
+                });
+                if (result.canceled || !result.assets[0]) return;
+                assetUri = result.assets[0].uri;
+                assetName = result.assets[0].name;
+            }
+
             setAddDocStep('uploading');
 
-            const { data: newDoc, error } = await uploadCandidateDocument(candidateId, label, asset.uri, asset.name);
+            const { data: newDoc, error } = await uploadCandidateDocument(candidateId, label, assetUri, assetName);
             setAddDocStep('label');
             if (newDoc) {
                 setDocuments((prev) => [newDoc, ...prev]);

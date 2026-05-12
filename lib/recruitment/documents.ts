@@ -33,6 +33,23 @@ export async function uploadCandidateDocument(
             return { data: null, error: 'Only PDF files are allowed.' };
         }
 
+        // E2E bypass: iOS document picker can't be driven from Maestro. Skip the
+        // native fetch + Supabase storage upload, write the DB row directly with
+        // a sentinel path (cleanup grep-targets `e2e-bypass/%`).
+        if (process.env.EXPO_PUBLIC_E2E_DOCUMENT_BYPASS === '1') {
+            const safeName = fileName.replace(/[^a-zA-Z0-9._-]/g, '_');
+            const stubPath = `e2e-bypass/${candidateId}/${Date.now()}_${safeName}`;
+            const { data: row, error: insertError } = await supabase
+                .from('candidate_documents')
+                .insert({ candidate_id: candidateId, label, file_url: stubPath, file_name: fileName })
+                .select()
+                .single();
+            if (insertError || !row) {
+                return { data: null, error: insertError?.message ?? 'Failed to save document' };
+            }
+            return { data: row as CandidateDocument, error: null };
+        }
+
         const response = await fetch(fileUri);
         const arrayBuffer = await response.arrayBuffer();
 
