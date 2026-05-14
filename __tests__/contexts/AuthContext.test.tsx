@@ -14,6 +14,11 @@ jest.mock('@/lib/biometrics');
 const mockSupa = supabase as any;
 const mockBio = biometrics as jest.Mocked<typeof biometrics>;
 
+// Required for fetchUserProfile to construct the /rest/v1/users URL.
+// Real values aren't needed — the global.fetch mock intercepts the request.
+process.env.EXPO_PUBLIC_SUPABASE_URL = 'https://test.supabase.co';
+process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY = 'test-anon-key';
+
 function mockResolve(chain: any, value: any) {
     chain.__resolveWith(value);
 }
@@ -35,6 +40,39 @@ const MOCK_PROFILE = {
     created_at: '2026-03-20T00:00:00Z', // before INVITATION_SYSTEM_CUTOFF → grandfathered
 };
 
+/**
+ * `fetchUserProfile` (contexts/AuthContext.tsx:76) was refactored to use raw
+ * fetch() against /rest/v1/users with an explicit Bearer token, bypassing
+ * the supabase client entirely (because supabase-js's session can be
+ * temporarily out-of-sync mid-tick on RN). This means tests that previously
+ * mocked `supabase.from('users')...__resolveWith(...)` no longer intercept
+ * the profile fetch.
+ *
+ * This helper installs a global.fetch mock that returns the given profile
+ * (or a 404-like empty response) for the users-profile URL pattern, while
+ * leaving other fetch URLs unhandled (will throw if hit, which is what we
+ * want for any unexpected network call).
+ *
+ * Call from a test (or beforeEach) BEFORE renderHook:
+ *   mockProfileFetch(MOCK_PROFILE);  // for happy-path
+ *   mockProfileFetch(null);          // for "user row not found"
+ */
+function mockProfileFetch(profile: typeof MOCK_PROFILE | null) {
+    (global as any).fetch = jest.fn(async (url: string | URL | Request) => {
+        const u = typeof url === 'string' ? url : url.toString();
+        if (u.includes('/rest/v1/users')) {
+            return {
+                ok: profile !== null,
+                status: profile !== null ? 200 : 404,
+                text: async () => (profile ? JSON.stringify([profile]) : '[]'),
+                json: async () => (profile ? [profile] : []),
+            } as Response;
+        }
+        // Unmocked URLs — throw to surface unexpected network calls in tests.
+        throw new Error(`Unmocked fetch in test: ${u}`);
+    }) as typeof fetch;
+}
+
 const wrapper = ({ children }: { children: React.ReactNode }) => <AuthProvider>{children}</AuthProvider>;
 
 beforeEach(() => {
@@ -54,6 +92,20 @@ beforeEach(() => {
 
     (AsyncStorage.getItem as jest.Mock).mockResolvedValue(null);
     (AsyncStorage.removeItem as jest.Mock).mockResolvedValue(undefined);
+
+    // Default profile-fetch mock returns MOCK_PROFILE.
+    // Tests for the "no session" / unauthenticated path don't reach fetch
+    // (getSession returns null first), so this default doesn't affect them.
+    // Tests that need a different profile or a 404 should call
+    // mockProfileFetch(...) directly to override.
+    mockProfileFetch(MOCK_PROFILE);
+
+    // Default sessionCache cached token so fetchUserProfile's token hunt
+    // succeeds without falling through to supabase.auth.getSession (which
+    // many tests have mocked to null for the "default unauthenticated"
+    // beforeEach scenario).
+    // No-op: fetchUserProfile prefers caller-supplied accessToken from the
+    // session arg, which all happy-path tests provide via MOCK_SESSION.
 });
 
 // ── Auth basics ──
@@ -437,7 +489,7 @@ describe('AuthContext — user auto-creation', () => {
         const usersChain = mockSupa.__getChain('users');
         mockResolve(usersChain, { data: null, error: { code: 'PGRST116', message: 'No rows' } });
 
-        const { result } = renderHook(() => useAuth(), { wrapper });
+        renderHook(() => useAuth(), { wrapper });
         await act(async () => {});
 
         // Verify that from('users') was called (for insert)
@@ -467,6 +519,9 @@ describe('AuthContext — checkInvitationStatus', () => {
         mockSupa.auth.getSession.mockResolvedValue({ data: { session: MOCK_SESSION } });
 
         const postCutoffProfile = { ...MOCK_PROFILE, created_at: '2026-04-01T00:00:00Z' };
+        // Override profile fetch (raw-fetch path) AND chain (legacy mock,
+        // harmless if untouched).
+        mockProfileFetch(postCutoffProfile);
         const usersChain = mockSupa.__getChain('users');
         mockResolve(usersChain, { data: postCutoffProfile, error: null });
 
@@ -485,6 +540,7 @@ describe('AuthContext — checkInvitationStatus', () => {
         mockSupa.auth.getSession.mockResolvedValue({ data: { session: MOCK_SESSION } });
 
         const postCutoffProfile = { ...MOCK_PROFILE, created_at: '2026-04-01T00:00:00Z' };
+        mockProfileFetch(postCutoffProfile);
         const usersChain = mockSupa.__getChain('users');
         mockResolve(usersChain, { data: postCutoffProfile, error: null });
 
@@ -507,6 +563,7 @@ describe('AuthContext — checkInvitationStatus', () => {
         mockSupa.auth.getSession.mockResolvedValue({ data: { session: MOCK_SESSION } });
 
         const postCutoffProfile = { ...MOCK_PROFILE, created_at: '2026-04-01T00:00:00Z' };
+        mockProfileFetch(postCutoffProfile);
         const usersChain = mockSupa.__getChain('users');
         mockResolve(usersChain, { data: postCutoffProfile, error: null });
 
@@ -557,6 +614,9 @@ describe('AuthContext — onAuthStateChange', () => {
         mockSupa.__resetChains();
         const usersChain = mockSupa.__getChain('users');
         mockResolve(usersChain, { data: null, error: { code: 'PGRST116', message: 'Not found' } });
+        // Profile fetch (raw-fetch path) must also return "not found" — chain
+        // resolution doesn't intercept the new fetch-based path.
+        mockProfileFetch(null);
 
         const consoleSpy = jest.spyOn(console, 'error').mockImplementation();
         await act(async () => {

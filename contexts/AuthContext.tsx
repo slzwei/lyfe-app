@@ -95,7 +95,9 @@ async function fetchUserProfile(
         token = require('@/lib/sessionCache').getCachedAccessToken();
     }
     if (!token) {
-        const { data: { session } } = await supabase.auth.getSession();
+        const {
+            data: { session },
+        } = await supabase.auth.getSession();
         token = session?.access_token ?? null;
     }
     if (!token) {
@@ -183,16 +185,32 @@ async function syncAuthMetadata() {
 async function registerPushToken(userId: string) {
     try {
         const Notifications = await import('expo-notifications');
+        const Constants = (await import('expo-constants')).default;
+
+        // Expo SDK 52+ requires projectId for production / standalone builds.
+        // Without it, getExpoPushTokenAsync returns null on App Store / TestFlight
+        // builds, silently breaking push notifications. Constants.expoConfig.extra
+        // is populated from app.config.js extra block.
+        const projectId = (Constants.expoConfig?.extra as { eas?: { projectId?: string } } | undefined)?.eas?.projectId;
+        if (!projectId) {
+            console.warn('[push] EAS projectId missing — push tokens will not register on production builds');
+            return;
+        }
+
         const { status } = await Notifications.getPermissionsAsync();
         const finalStatus = status === 'granted' ? status : (await Notifications.requestPermissionsAsync()).status;
         if (finalStatus !== 'granted') return;
 
-        const tokenData = await Notifications.getExpoPushTokenAsync();
-        if (!tokenData?.data) return;
+        const tokenData = await Notifications.getExpoPushTokenAsync({ projectId });
+        if (!tokenData?.data) {
+            console.warn('[push] getExpoPushTokenAsync returned no token');
+            return;
+        }
 
         await supabase.from('users').update({ push_token: tokenData.data }).eq('id', userId);
-    } catch {
+    } catch (err) {
         // Push token registration is non-critical — never throw
+        console.warn('[push] registerPushToken failed:', err);
     }
 }
 
@@ -337,10 +355,7 @@ function ProfileProvider({
 
     const refreshUser = useCallback(async () => {
         if (sessionRef.current?.user) {
-            const profile = await fetchUserProfile(
-                sessionRef.current.user.id,
-                sessionRef.current.access_token,
-            );
+            const profile = await fetchUserProfile(sessionRef.current.user.id, sessionRef.current.access_token);
             setUser(profile);
         }
     }, [sessionRef, setUser]);
@@ -526,7 +541,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
             if (event === 'INITIAL_SESSION' || event === 'TOKEN_REFRESHED') return;
 
             if (session?.user) {
-                const profile = await fetchUserProfile(session.user.id, session.access_token, session.user.phone || null);
+                const profile = await fetchUserProfile(
+                    session.user.id,
+                    session.access_token,
+                    session.user.phone || null,
+                );
                 if (profile) {
                     const invStatus = await checkInvitationStatus(profile.id, profile.created_at);
                     registerPushToken(session.user.id).catch((e) => {
