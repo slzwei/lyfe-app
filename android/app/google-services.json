@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "67867039974",
+    "project_id": "lyfe-app-db108",
+    "storage_bucket": "lyfe-app-db108.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:67867039974:android:dfe0537c4f413173f04327",
+        "android_client_info": {
+          "package_name": "com.shawnlee.lyfe"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyCjeZgzihr2-HRyrX9m5pKmQdjvhuaQZi0"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
