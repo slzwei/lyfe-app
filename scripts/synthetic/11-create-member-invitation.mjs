@@ -40,8 +40,34 @@ await runProbe(
             console.log(`[create-member-invitation] self-healed ${preCleanup} orphan row(s)`);
         }
 
+        // Defensive seed-heal: seed.mjs skips existing users, so a probe admin
+        // whose role drifted from 'admin' (e.g. someone reused the account in
+        // a manual test) would silently fail every probe with 403/400. Force
+        // the role back to admin idempotently before signing in.
+        const { data: probeAdminRow, error: lookupErr } = await service
+            .from('users')
+            .select('id, role')
+            .eq('email', PROBE_ADMIN_EMAIL)
+            .maybeSingle();
+        if (lookupErr || !probeAdminRow) {
+            throw new Error(
+                `${PROBE_ADMIN_EMAIL} not found in users table. ` +
+                    `Run \`npm run seed\` in scripts/synthetic/ on staging first.`,
+            );
+        }
+        const { error: metaErr } = await service.auth.admin.updateUserById(probeAdminRow.id, {
+            app_metadata: { role: 'admin', synthetic_probe: true },
+        });
+        if (metaErr) {
+            throw new Error(`failed to reset probe admin app_metadata.role: ${metaErr.message}`);
+        }
+        if (probeAdminRow.role !== 'admin') {
+            await service.from('users').update({ role: 'admin' }).eq('id', probeAdminRow.id);
+            console.log(`[create-member-invitation] healed probe admin role: ${probeAdminRow.role} → admin`);
+        }
+
         // Sign in as the probe admin so the edge function sees role=admin
-        // in app_metadata.
+        // in app_metadata. The JWT picks up the freshly-set metadata above.
         const password = process.env.PROBE_ACCOUNT_PASSWORD;
         if (!password) throw new Error('PROBE_ACCOUNT_PASSWORD is not set.');
         const anon = stagingAnonClient();
