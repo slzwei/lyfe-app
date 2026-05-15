@@ -6,8 +6,8 @@ name: Synthetic — create-member-invitation
 
 on:
   workflow_dispatch:
-  # schedule:
-  #   - cron: '15 * * * *' # hourly, staggered from MKTR probes
+  schedule:
+    - cron: '15 * * * *' # hourly, staggered from MKTR-created (00) probes
 
 permissions:
   contents: read
