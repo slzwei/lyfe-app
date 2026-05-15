@@ -49,8 +49,8 @@ everything.
 |---|---|---|
 | `STAGING_SUPABASE_SERVICE_ROLE_KEY` | All probes fail at connection / telemetry write. | Copy new key into the `synthetic-monitoring` environment. |
 | `STAGING_SUPABASE_ANON_KEY` | Only RLS probes (Phase 3) fail. | Same. |
-| `MKTR_WEBHOOK_SECRET_STAGING` | `receive-mktr-lead` probe 401s. | Rotate in both MKTR and GH. |
-| `MKTR_API_KEY_STAGING` | `mktr-agents` probe 401s. | Same. |
+| `MKTR_WEBHOOK_SECRET_STAGING` | `receive-mktr-lead` probe 401s `Invalid signature`. | Rotate fresh: `NEW=$(openssl rand -hex 32); supabase secrets set MKTR_WEBHOOK_SECRET="$NEW" --project-ref ajjxkasvikeigapnzdak; gh secret set MKTR_WEBHOOK_SECRET_STAGING --env synthetic-monitoring --repo slzwei/lyfe-app --body "$NEW"`. **Pitfall:** `supabase secrets list` shows the SHA256 *digest* (column header is `DIGEST`), NOT the value. You cannot recover the original — always rotate. |
+| `MKTR_API_KEY_STAGING` | `mktr-agents` probe 401s. | Same — rotate fresh; `supabase secrets list` shows digest only. |
 | `SYNTHETIC_GH_TOKEN` | Probes pass but no issues open on failure. | Generate a new fine-grained PAT with `issues:write` only. |
 | `PROBE_ACCOUNT_PASSWORD` | Any probe that signs in as a probe user fails. | Update secret, then run `npm run seed` from `scripts/synthetic/` to update the auth users. |
 
