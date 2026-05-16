@@ -200,13 +200,24 @@ async function setupActivationFixture(service, probeManagerId) {
         app_metadata: { role: 'candidate', synthetic_probe: true },
     });
 
-    // 3. Reset public.users to candidate.
-    await service.from('users').update({
-        role: 'candidate',
-        is_active: true,
-        full_name: PROBE_ACTIVATION_NAME,
-        is_test_data: true,
-    }).eq('id', activationUser.id);
+    // 3. Upsert public.users to candidate state. The auth→public trigger
+    //    sometimes doesn't fire / row may have been cleaned up, so insert
+    //    if missing. Service-role bypasses RLS.
+    const { error: userUpsertErr } = await service.from('users').upsert(
+        {
+            id: activationUser.id,
+            email: PROBE_ACTIVATION_EMAIL,
+            phone: PROBE_ACTIVATION_PHONE,
+            full_name: PROBE_ACTIVATION_NAME,
+            role: 'candidate',
+            is_active: true,
+            is_test_data: true,
+        },
+        { onConflict: 'id' },
+    );
+    if (userUpsertErr) {
+        throw new Error(`upsert public.users for activation user: ${userUpsertErr.message}`);
+    }
 
     // 4. Find or create candidates row.
     let { data: candidate } = await service
