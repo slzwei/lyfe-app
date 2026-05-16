@@ -1,0 +1,64 @@
+name: Synthetic — email OTP
+
+# B1.3: Email verification OTP path. Exercises send-email-otp +
+# verify-email-otp as a pair because the second function consumes state
+# created by the first.
+
+on:
+    workflow_dispatch:
+    schedule:
+        - cron: '45 * * * *' # hourly, staggered (member-invitation=15, activate-agent=30)
+
+permissions:
+    contents: read
+    issues: write
+
+jobs:
+    probe:
+        runs-on: ubuntu-latest
+        environment: synthetic-monitoring
+        timeout-minutes: 5
+        env:
+            SYNTHETIC_KILL_SWITCH: ${{ vars.SYNTHETIC_KILL_SWITCH }}
+
+        steps:
+            - name: Honour kill switch
+              if: ${{ vars.SYNTHETIC_KILL_SWITCH == 'true' }}
+              run: |
+                  echo "SYNTHETIC_KILL_SWITCH=true — skipping."
+                  exit 0
+
+            - if: ${{ vars.SYNTHETIC_KILL_SWITCH != 'true' }}
+              uses: actions/checkout@v4
+            - if: ${{ vars.SYNTHETIC_KILL_SWITCH != 'true' }}
+              uses: actions/setup-node@v4
+              with:
+                  node-version: 20
+
+            - name: Install probe dependencies
+              if: ${{ vars.SYNTHETIC_KILL_SWITCH != 'true' }}
+              working-directory: scripts/synthetic
+              run: npm ci --no-audit --no-fund
+
+            - name: Run email OTP probe
+              if: ${{ vars.SYNTHETIC_KILL_SWITCH != 'true' }}
+              working-directory: scripts/synthetic
+              env:
+                  STAGING_SUPABASE_URL: ${{ secrets.STAGING_SUPABASE_URL }}
+                  STAGING_SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.STAGING_SUPABASE_SERVICE_ROLE_KEY }}
+                  STAGING_SUPABASE_ANON_KEY: ${{ secrets.STAGING_SUPABASE_ANON_KEY }}
+                  PROBE_ACCOUNT_PASSWORD: ${{ secrets.PROBE_ACCOUNT_PASSWORD }}
+                  GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+                  GITHUB_REPOSITORY: ${{ github.repository }}
+                  GITHUB_SERVER_URL: ${{ github.server_url }}
+                  GITHUB_RUN_ID: ${{ github.run_id }}
+              run: node 13-email-otp.mjs
+
+            - name: Notify Slack on failure
+              if: failure() && env.SLACK_WEBHOOK != ''
+              env:
+                  SLACK_WEBHOOK: ${{ secrets.SLACK_ALERT_WEBHOOK }}
+              run: |
+                  curl -sS -X POST -H 'Content-Type: application/json' \
+                    -d "{\"text\":\":rotating_light: *Synthetic probe FAILED:* ${{ github.workflow }}\n<${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}|View run>\"}" \
+                    "$SLACK_WEBHOOK" || true
