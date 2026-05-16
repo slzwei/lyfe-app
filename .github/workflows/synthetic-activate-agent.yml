@@ -7,8 +7,8 @@ name: Synthetic — activate-agent
 
 on:
   workflow_dispatch:
-  # schedule:
-  #   - cron: '30 * * * *' # hourly, staggered
+  schedule:
+    - cron: '30 * * * *' # hourly, staggered (created=00, member-invitation=15, activate-agent=30)
 
 permissions:
   contents: read
