@@ -2,6 +2,7 @@
  * Tests for lib/leads.ts — Lead & Activity service functions
  */
 import { supabase } from '@/lib/supabase';
+import { clearCachedSession, setCachedSession } from '@/lib/sessionCache';
 
 import {
     fetchLeads,
@@ -23,6 +24,7 @@ import {
 jest.mock('@/lib/supabase');
 
 const mockSupa = supabase as any;
+const mockFetch = jest.fn();
 
 function mockResolve(chain: any, value: any) {
     chain.__resolveWith(value);
@@ -59,31 +61,55 @@ const ACTIVITY = {
 beforeEach(() => {
     mockSupa.__resetChains();
     jest.clearAllMocks();
+    clearCachedSession();
 });
 
 // ── fetchLeads ──
 
 describe('fetchLeads', () => {
+    beforeEach(() => {
+        process.env.EXPO_PUBLIC_SUPABASE_URL = 'https://test.supabase.co';
+        process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY = 'test-anon-key';
+        setCachedSession({ access_token: 'mock-token', user_id: 'agent-1' });
+        (global as any).fetch = mockFetch;
+        mockFetch.mockReset();
+    });
+
+    function mockFetchResponse(body: unknown, ok = true, status = 200) {
+        mockFetch.mockResolvedValue({
+            ok,
+            status,
+            text: jest.fn().mockResolvedValue(typeof body === 'string' ? body : JSON.stringify(body)),
+        });
+    }
+
     it('returns leads for agent (filtered by assigned_to)', async () => {
-        const chain = mockSupa.__getChain('leads');
-        mockResolve(chain, { data: [LEAD], error: null });
+        mockFetchResponse([LEAD]);
 
         const result = await fetchLeads('agent-1', false);
         expect(result.data).toHaveLength(1);
         expect(result.error).toBeNull();
+        expect(mockFetch).toHaveBeenCalledWith(
+            expect.stringContaining('assigned_to=eq.agent-1'),
+            expect.objectContaining({
+                headers: expect.objectContaining({
+                    apikey: 'test-anon-key',
+                    Authorization: 'Bearer mock-token',
+                }),
+            }),
+        );
     });
 
     it('returns leads for manager (no assigned_to filter)', async () => {
-        const chain = mockSupa.__getChain('leads');
-        mockResolve(chain, { data: [LEAD, { ...LEAD, id: 'lead-2', assigned_to: 'agent-2' }], error: null });
+        mockFetchResponse([LEAD, { ...LEAD, id: 'lead-2', assigned_to: 'agent-2' }]);
 
         const result = await fetchLeads('mgr-1', true);
         expect(result.data).toHaveLength(2);
+        expect(mockFetch).toHaveBeenCalledWith(expect.not.stringContaining('assigned_to='), expect.any(Object));
     });
 
     it('returns error on failure', async () => {
-        const chain = mockSupa.__getChain('leads');
-        mockResolve(chain, { data: null, error: { message: 'DB error', code: 'PGRST000' } });
+        mockFetchResponse('DB error', false, 500);
 
         const result = await fetchLeads('agent-1', false);
         expect(result.error).toBeTruthy();
@@ -91,8 +117,7 @@ describe('fetchLeads', () => {
     });
 
     it('returns hasMore=false when page not provided (backward compat)', async () => {
-        const chain = mockSupa.__getChain('leads');
-        mockResolve(chain, { data: [LEAD], error: null });
+        mockFetchResponse([LEAD]);
 
         const result = await fetchLeads('agent-1', false);
         expect(result.hasMore).toBe(false);
@@ -101,8 +126,7 @@ describe('fetchLeads', () => {
 
     it('returns hasMore=true when more data exists with pagination', async () => {
         const leads = Array.from({ length: 3 }, (_, i) => ({ ...LEAD, id: `lead-${i}` }));
-        const chain = mockSupa.__getChain('leads');
-        mockResolve(chain, { data: leads, error: null });
+        mockFetchResponse(leads);
 
         const result = await fetchLeads('agent-1', false, 0, 2);
         expect(result.hasMore).toBe(true);
@@ -110,8 +134,7 @@ describe('fetchLeads', () => {
     });
 
     it('returns hasMore=false on last page', async () => {
-        const chain = mockSupa.__getChain('leads');
-        mockResolve(chain, { data: [LEAD], error: null });
+        mockFetchResponse([LEAD]);
 
         const result = await fetchLeads('agent-1', false, 1, 2);
         expect(result.hasMore).toBe(false);

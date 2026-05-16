@@ -17,6 +17,8 @@ jobs:
     runs-on: ubuntu-latest
     environment: synthetic-monitoring
     timeout-minutes: 5
+    env:
+      SYNTHETIC_KILL_SWITCH: ${{ vars.SYNTHETIC_KILL_SWITCH }}
 
     steps:
       - name: Honour kill switch
@@ -25,16 +27,20 @@ jobs:
           echo "SYNTHETIC_KILL_SWITCH=true — skipping."
           exit 0
 
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - if: ${{ vars.SYNTHETIC_KILL_SWITCH != 'true' }}
+        uses: actions/checkout@v4
+      - if: ${{ vars.SYNTHETIC_KILL_SWITCH != 'true' }}
+        uses: actions/setup-node@v4
         with:
           node-version: 20
 
       - name: Install probe dependencies
+        if: ${{ vars.SYNTHETIC_KILL_SWITCH != 'true' }}
         working-directory: scripts/synthetic
         run: npm ci --no-audit --no-fund
 
       - name: Run mktr-agents probe
+        if: ${{ vars.SYNTHETIC_KILL_SWITCH != 'true' }}
         working-directory: scripts/synthetic
         env:
           STAGING_SUPABASE_URL: ${{ secrets.STAGING_SUPABASE_URL }}

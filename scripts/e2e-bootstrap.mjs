@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 /**
- * E2E bootstrap — idempotently creates the seven mock auth users and runs
+ * E2E bootstrap — idempotently creates the eight mock auth users and runs
  * supabase/seed-e2e.sql against the configured Supabase project.
  *
  * Required env:
@@ -14,8 +14,8 @@
  *
  * Usage (CI): invoked by .github/workflows/e2e-maestro.yml.
  *
- * IMPORTANT: only points at staging. Aborts if SUPABASE_URL contains
- * 'nvtedkyjwulkzjeoqjgx' (the production project ref).
+ * IMPORTANT: only points at staging. Aborts unless both STAGING_SUPABASE_URL
+ * and STAGING_SUPABASE_DB_URL contain the staging project ref.
  */
 import { createClient } from '@supabase/supabase-js';
 import { execSync } from 'node:child_process';
@@ -23,6 +23,7 @@ import { readFileSync } from 'node:fs';
 import { resolve, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
+const STAGING_PROJECT_REF = 'ajjxkasvikeigapnzdak';
 const PROD_PROJECT_REF = 'nvtedkyjwulkzjeoqjgx';
 
 const MOCK_USERS = [
@@ -35,7 +36,8 @@ const MOCK_USERS = [
     { phone: '+6590000007', label: 'e2e-candidate' },
     // pa2 — PA without pa_manager_assignments. Used by Phase 4c flow
     // 09-pa-without-manager-blocked to verify the negative-path RLS.
-    { phone: '+6580000101', label: 'pa2-no-mgr' },
+    // Keep this out of the +6580000101..0107 synthetic-probe range.
+    { phone: '+6590000008', label: 'pa2-no-mgr' },
 ];
 
 const url = process.env.STAGING_SUPABASE_URL;
@@ -47,10 +49,21 @@ if (!url || !serviceRoleKey || !dbUrl) {
     process.exit(1);
 }
 
-if (url.includes(PROD_PROJECT_REF)) {
-    console.error(`Refusing to run E2E bootstrap against production (${PROD_PROJECT_REF}).`);
-    process.exit(2);
+function assertStagingRef(value, label) {
+    if (value.includes(PROD_PROJECT_REF)) {
+        console.error(`Refusing to run E2E bootstrap: ${label} contains production ref (${PROD_PROJECT_REF}).`);
+        process.exit(2);
+    }
+    if (!value.includes(STAGING_PROJECT_REF)) {
+        console.error(
+            `Refusing to run E2E bootstrap: ${label} must contain staging ref (${STAGING_PROJECT_REF}).`,
+        );
+        process.exit(2);
+    }
 }
+
+assertStagingRef(url, 'STAGING_SUPABASE_URL');
+assertStagingRef(dbUrl, 'STAGING_SUPABASE_DB_URL');
 
 const admin = createClient(url, serviceRoleKey, {
     auth: { autoRefreshToken: false, persistSession: false },

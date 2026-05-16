@@ -35,7 +35,7 @@ export default function TakeExamScreen() {
     const { colors } = useTheme();
     const { user } = useAuth();
     const router = useTypedRouter();
-    const segments = useSegments();
+    const segments = useSegments() as unknown as string[];
     const tabBase =
         segments[1] === 'roadmap' ? '/(tabs)/roadmap' : segments[1] === 'profile' ? '/(tabs)/profile' : '/(tabs)/exams';
 

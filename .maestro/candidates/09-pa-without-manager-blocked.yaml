@@ -2,7 +2,7 @@
 # create candidates. Negative-path / RLS-boundary check.
 #
 # Setup (in seed-e2e.sql + e2e-bootstrap.mjs):
-#   pa2 = +6580000101, role='pa', NO row in pa_manager_assignments.
+#   pa2 = +6590000008, role='pa', NO row in pa_manager_assignments.
 #
 # Without manager assignments fetchAssignableManagers returns [] for
 # this PA, the manager-picker section in add-candidate.tsx is hidden,
@@ -22,7 +22,7 @@ appId: com.shawnlee.lyfe
 - runFlow:
     file: ../helpers/login-as.yaml
     env:
-      phone: "80000101"
+      phone: "90000008"
 
 - runFlow:
     file: ../helpers/navigate-to-tab.yaml

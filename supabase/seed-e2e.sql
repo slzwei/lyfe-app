@@ -1,7 +1,7 @@
 -- =============================================================================
 -- E2E Test Data Seed Script
 -- =============================================================================
--- Run after all 6 mock users have logged in at least once (to create auth entries).
+-- Run after all 8 mock users have logged in at least once (to create auth entries).
 -- Usage: supabase db execute --file supabase/seed-e2e.sql
 --   or:  psql $DATABASE_URL -f supabase/seed-e2e.sql
 --
@@ -13,6 +13,7 @@
 --   +6580000005 = pa
 --   +6580000006 = candidate      (onboarding_complete=true)
 --   +6590000007 = e2e candidate  (onboarding_complete=false, used by lifecycle flow)
+--   +6590000008 = pa2            (no pa_manager_assignments row; negative-path flow)
 -- =============================================================================
 
 -- ---------------------------------------------------------------------------
@@ -66,7 +67,7 @@ BEGIN
         ORDER BY CASE WHEN phone LIKE '+%' THEN 0 ELSE 1 END, created_at ASC LIMIT 1;
     SELECT id INTO v_pa_id            FROM auth.users WHERE REPLACE(phone, '+', '') = '6580000005'
         ORDER BY CASE WHEN phone LIKE '+%' THEN 0 ELSE 1 END, created_at ASC LIMIT 1;
-    SELECT id INTO v_pa2_id           FROM auth.users WHERE REPLACE(phone, '+', '') = '6580000101'
+    SELECT id INTO v_pa2_id           FROM auth.users WHERE REPLACE(phone, '+', '') = '6590000008'
         ORDER BY CASE WHEN phone LIKE '+%' THEN 0 ELSE 1 END, created_at ASC LIMIT 1;
     SELECT id INTO v_candidate_id     FROM auth.users WHERE REPLACE(phone, '+', '') = '6580000006'
         ORDER BY CASE WHEN phone LIKE '+%' THEN 0 ELSE 1 END, created_at ASC LIMIT 1;
@@ -79,11 +80,11 @@ BEGIN
     IF v_manager_id IS NULL THEN RAISE EXCEPTION 'Manager user (+6580000003) not found. Log in first.'; END IF;
     IF v_agent_id IS NULL THEN RAISE EXCEPTION 'Agent user (+6580000004) not found. Log in first.'; END IF;
     IF v_pa_id IS NULL THEN RAISE EXCEPTION 'PA user (+6580000005) not found. Log in first.'; END IF;
-    IF v_pa2_id IS NULL THEN RAISE EXCEPTION 'PA2 user (+6580000101) not found. Log in first.'; END IF;
+    IF v_pa2_id IS NULL THEN RAISE EXCEPTION 'PA2 user (+6590000008) not found. Log in first.'; END IF;
     IF v_candidate_id IS NULL THEN RAISE EXCEPTION 'Candidate user (+6580000006) not found. Log in first.'; END IF;
     IF v_e2e_candidate_id IS NULL THEN RAISE EXCEPTION 'E2E candidate user (+6590000007) not found. Log in first.'; END IF;
 
-    RAISE NOTICE 'Found all 7 mock users. Seeding E2E data...';
+    RAISE NOTICE 'Found all 8 mock users. Seeding E2E data...';
 
     -- -----------------------------------------------------------------------
     -- 0.5. Ensure public.users rows exist for every mock user
@@ -103,7 +104,7 @@ BEGIN
         (v_manager_id,       '6580000003', 'Rachel Manager'),
         (v_agent_id,         '6580000004', 'David Agent'),
         (v_pa_id,            '6580000005', 'Priya PA'),
-        (v_pa2_id,           '6580000101', 'Naomi PA2'),
+        (v_pa2_id,           '6590000008', 'Naomi PA2'),
         (v_candidate_id,     '6580000006', 'Charlie Candidate'),
         (v_e2e_candidate_id, '6590000007', 'E2E Candidate')
     ON CONFLICT (id) DO NOTHING;
@@ -373,6 +374,5 @@ BEGIN
     -- -----------------------------------------------------------------------
     -- Done
     -- -----------------------------------------------------------------------
-    RAISE NOTICE '✅ E2E seed complete. All 6 mock users ready.';
+    RAISE NOTICE '✅ E2E seed complete. All 8 mock users ready.';
 END $$;
-
