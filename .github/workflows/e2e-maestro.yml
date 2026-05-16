@@ -167,15 +167,39 @@ jobs:
         # ready in time"). Bumped 60→180s in Phase 0; bumped 180→300s in
         # Phase 4b after two consecutive driver-startup flakes (runs
         # 25521856460 + 25524334306) where the driver took ~3min 24s to
-        # come up. 300s leaves headroom without slowing happy paths
-        # (typical driver startup is 30–60s).
+        # come up. Bumped 300→600s after the post-merge validation run
+        # 25961371832 hit the 300s ceiling before any flow started.
+        # Typical driver startup is still 30–60s; the larger ceiling only
+        # affects slow XCUITest runner startup on hosted macOS images.
         #
         # Subdirectory discovery is wired up via the `flows:` glob in
         # .maestro/config.yaml — passing both `.maestro/ .maestro/roles/`
         # caused Maestro to run the role flows twice (once per path arg).
         env:
-          MAESTRO_DRIVER_STARTUP_TIMEOUT: '300000'
-        run: maestro test .maestro/
+          MAESTRO_DRIVER_STARTUP_TIMEOUT: '600000'
+        run: |
+          for attempt in 1 2; do
+            echo "Maestro attempt ${attempt}/2"
+            log="/tmp/maestro-attempt-${attempt}.log"
+
+            set +e
+            maestro test .maestro/ 2>&1 | tee "$log"
+            status=${PIPESTATUS[0]}
+            set -e
+
+            if [ "$status" -eq 0 ]; then
+              exit 0
+            fi
+
+            if grep -q "iOS driver not ready in time" "$log" && [ "$attempt" -lt 2 ]; then
+              echo "Maestro iOS driver startup timed out; retrying once after simulator settles."
+              xcrun simctl bootstatus "$DEVICE_ID" -b
+              sleep 15
+              continue
+            fi
+
+            exit "$status"
+          done
 
       - name: Stop simulator log capture
         if: always()
