@@ -67,6 +67,42 @@ describe('sentry', () => {
         expect(integrationNames).not.toContain('MobileReplay');
     });
 
+    it('redacts PII from events and breadcrumbs before sending', () => {
+        process.env.EXPO_PUBLIC_SENTRY_DSN = 'https://abc@sentry.io/123';
+        jest.resetModules();
+        jest.mock('@sentry/react-native', () => mockSentryModule);
+
+        const { initSentry } = require('@/lib/sentry');
+        const SentryFresh = require('@sentry/react-native');
+
+        initSentry();
+        const initOptions = SentryFresh.init.mock.calls[0][0];
+        const event = initOptions.beforeSend({
+            extra: {
+                lead_email: 'lead@example.com',
+                nested: { agentPhone: '+6599999999', safe: 'kept' },
+                rows: [{ token: 'secret', status: 'new' }],
+            },
+            tags: { staff_full_name: 'Alice Agent', role: 'agent' },
+            contexts: { device: { address: '123 Street', model: 'iPhone' } },
+            request: { data: { otp: '555555', status: 'new' } },
+            user: { id: 'user-1', email: 'agent@example.com' },
+        });
+
+        expect(event.extra.lead_email).toBe('[redacted]');
+        expect(event.extra.nested).toEqual({ agentPhone: '[redacted]', safe: 'kept' });
+        expect(event.extra.rows).toEqual([{ token: '[redacted]', status: 'new' }]);
+        expect(event.tags.staff_full_name).toBe('[redacted]');
+        expect(event.contexts.device).toEqual({ address: '[redacted]', model: 'iPhone' });
+        expect(event.request.data).toEqual({ otp: '[redacted]', status: 'new' });
+        expect(event.user).toEqual({ id: 'user-1' });
+
+        const breadcrumb = initOptions.beforeBreadcrumb({
+            data: { password: 'secret', label: 'tap lead' },
+        });
+        expect(breadcrumb.data).toEqual({ password: '[redacted]', label: 'tap lead' });
+    });
+
     it('re-exports Sentry module', () => {
         const { Sentry: SentryExport } = require('@/lib/sentry');
         expect(SentryExport).toBeDefined();
@@ -94,6 +130,21 @@ describe('sentry', () => {
         const testError = new Error('test error');
         captureError(testError);
 
+        expect(SentryFresh.captureException).toHaveBeenCalledWith(testError);
+    });
+
+    it('captureError attaches context in a scoped report', () => {
+        jest.resetModules();
+        const setExtras = jest.fn();
+        mockSentryModule.withScope.mockImplementationOnce((cb: any) => cb({ setExtras }));
+        jest.mock('@sentry/react-native', () => mockSentryModule);
+        const { captureError } = require('@/lib/sentry');
+        const SentryFresh = require('@sentry/react-native');
+
+        const testError = new Error('test error');
+        captureError(testError, { leadId: 'lead-1', stage: 'assignment' });
+
+        expect(setExtras).toHaveBeenCalledWith({ leadId: 'lead-1', stage: 'assignment' });
         expect(SentryFresh.captureException).toHaveBeenCalledWith(testError);
     });
 
@@ -129,5 +180,6 @@ describe('sentry', () => {
         clearSentryUser();
 
         expect(SentryFresh.setUser).toHaveBeenCalledWith(null);
+        expect(SentryFresh.setTag).toHaveBeenCalledWith('user.role', null);
     });
 });
