@@ -6,8 +6,10 @@ name: Synthetic — email OTP
 
 on:
     workflow_dispatch:
-    schedule:
-        - cron: '45 * * * *' # hourly, staggered (member-invitation=15, activate-agent=30)
+    # Blocked: staging send-email-otp currently lacks AWS SES edge-function
+    # secrets, so the live probe returns 500. Re-enable after issue #75 passes.
+    # schedule:
+    #     - cron: '45 * * * *' # hourly, staggered (member-invitation=15, activate-agent=30)
 
 permissions:
     contents: read
