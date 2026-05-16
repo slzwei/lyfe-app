@@ -9,7 +9,8 @@ you will hit while living with synthetic probes.
 
 1. Open the repo's GitHub Settings → Environments → `synthetic-monitoring`.
 2. Under **Variables**, set `SYNTHETIC_KILL_SWITCH=true`.
-3. Within one workflow cycle all probes exit `0` at their first step.
+3. Within one workflow cycle all probes log the skip and gate checkout,
+   dependency install, and probe execution.
 4. Open a TODO to unset this and fix the probe.
 
 _To disable one probe but not the others_: comment out its `schedule:` block

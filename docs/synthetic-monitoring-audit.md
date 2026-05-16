@@ -38,7 +38,7 @@ The whole probe system is engineered so **no probe can ever touch production**, 
 3. **Sentinel row in `public.synthetic_env_marker`.** Seeded only on staging; every write-path probe aborts if missing.
 4. **Host allowlist in `guardedFetch()`.** Any URL outside `*.ajjxkasvikeigapnzdak.supabase.co` + GitHub API + Sentry is rejected at fetch time.
 5. **R7 descoped from prod.** Edge-function OPTIONS sweep now runs against staging only. No probe reaches prod at all.
-6. **Kill switch.** `SYNTHETIC_KILL_SWITCH=true` in the environment vars exits every workflow at step 0, no PR needed.
+6. **Kill switch.** `SYNTHETIC_KILL_SWITCH=true` in the environment vars gates checkout, dependency install, and probe execution, no PR needed.
 7. **CODEOWNERS on all synthetic paths.** `scripts/synthetic/**`, `.github/workflows/synthetic-*.yml`, `supabase/*synthetic*`, `docs/synthetic-monitoring-*.md` all require owner review.
 
 Residual risk: a compromised GitHub account or deliberate multi-step override. Layers 1, 6, 7 turn these into *intentional* acts, not accidents.

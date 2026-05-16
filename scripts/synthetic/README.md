@@ -75,7 +75,9 @@ missing.
 
 Set an environment variable `SYNTHETIC_KILL_SWITCH=true` on the
 `synthetic-monitoring` GitHub Environment (not a secret — use Variables).
-Every synthetic workflow checks this as its first step and exits if set.
+Every synthetic workflow logs the kill switch as its first step and gates
+checkout, dependency install, and probe execution while it is set. The Node
+guard also receives the same variable as a second layer.
 Flip back to unset or `false` to re-enable.
 
 ## Files
@@ -88,7 +90,7 @@ Flip back to unset or `false` to re-enable.
 | `_lib/alert.mjs` | GitHub Issue alerter: open, comment, close on recovery. |
 | `_lib/run.mjs` | Probe wrapper: timeout, telemetry, alerting, exit code. |
 | `00-hello.mjs` | Phase 0 smoke test. |
-| `seed.mjs` | One-time: create the six probe auth users on staging. |
+| `seed.mjs` | One-time: create the seven probe auth users on staging. |
 | `package.json` | `@supabase/supabase-js` only; isolated from the RN app deps. |
 
 ## Adding a new probe

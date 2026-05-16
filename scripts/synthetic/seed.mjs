@@ -7,7 +7,7 @@
  *
  *     cd scripts/synthetic && npm ci && npm run seed
  *
- * Creates six probe auth users (one per role) via the Supabase Admin API.
+ * Creates seven probe auth users via the Supabase Admin API.
  * Each user has a stable phone number in the reserved synthetic-probe range
  * and a password loaded from PROBE_ACCOUNT_PASSWORD. Users are tagged with
  * user_metadata.synthetic_probe = true so they are easy to identify and
