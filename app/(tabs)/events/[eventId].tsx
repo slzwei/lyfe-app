@@ -94,7 +94,7 @@ export default function EventDetailScreen() {
     const { viewMode, canToggle, setViewMode } = useViewMode();
     const router = useTypedRouter();
     const { eventId } = useLocalSearchParams<{ eventId: string }>();
-    const segments = useSegments();
+    const segments = useSegments() as unknown as string[];
     const entryTab = segments[1] as string | undefined;
     const backLabel =
         entryTab === 'events' ? 'Events' : entryTab === 'home' ? 'Home' : entryTab === 'pa' ? 'Candidates' : 'Back';

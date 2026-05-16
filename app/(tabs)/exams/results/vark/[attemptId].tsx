@@ -24,7 +24,7 @@ export default function VarkResultsScreen() {
     const { attemptId } = useLocalSearchParams<{ attemptId: string }>();
     const { colors } = useTheme();
     const router = useRouter();
-    const segments = useSegments();
+    const segments = useSegments() as unknown as string[];
     const isFromRoadmap = segments[1] === 'roadmap';
     const isFromProfile = segments[1] === 'profile';
 

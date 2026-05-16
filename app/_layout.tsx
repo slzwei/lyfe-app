@@ -55,7 +55,7 @@ SplashScreen.preventAutoHideAsync();
 
 function AuthGate({ children }: { children: React.ReactNode }) {
     const { isAuthenticated, isLoading, invitationStatus, user } = useAuth();
-    const segments = useSegments();
+    const segments = useSegments() as unknown as string[];
     const router = useRouter();
 
     useLastSeen();

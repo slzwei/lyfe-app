@@ -59,10 +59,8 @@ export type { TabRoute };
 export function useTypedRouter() {
     const router = useRouter();
     return {
-        // @ts-expect-error — Expo Router Href type doesn't accept dynamic template strings
-        push: (route: TabRoute | (string & {})) => router.push(route),
-        // @ts-expect-error — Expo Router Href type doesn't accept dynamic template strings
-        replace: (route: TabRoute | (string & {})) => router.replace(route),
+        push: (route: TabRoute | (string & {})) => router.push(route as Parameters<typeof router.push>[0]),
+        replace: (route: TabRoute | (string & {})) => router.replace(route as Parameters<typeof router.replace>[0]),
         back: () => router.back(),
     };
 }

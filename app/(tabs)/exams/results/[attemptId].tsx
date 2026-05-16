@@ -31,7 +31,7 @@ export default function ExamResultsScreen() {
     const { attemptId } = useLocalSearchParams<{ attemptId: string }>();
     const { colors } = useTheme();
     const router = useRouter();
-    const segments = useSegments();
+    const segments = useSegments() as unknown as string[];
     const isFromRoadmap = segments[1] === 'roadmap';
 
     const [result, setResult] = useState<ExamResult | null>(null);

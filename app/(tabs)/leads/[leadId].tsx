@@ -79,7 +79,7 @@ export default function LeadDetailScreen() {
     const { user } = useAuth();
     const { viewMode, canToggle } = useViewMode();
     const router = useRouter();
-    const segments = useSegments();
+    const segments = useSegments() as unknown as string[];
     const backLabel = segments[1] === 'team' ? 'Agent' : segments[1] === 'home' ? 'Back' : 'Leads';
     const isManagerView = canToggle && viewMode === 'manager';
 
