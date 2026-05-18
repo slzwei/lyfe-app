@@ -5,6 +5,7 @@ import type { Lead } from '@/types/lead';
 import type { CandidateStatus } from '@/types/recruitment';
 import { captureError } from './sentry';
 import { supabase } from './supabase';
+import { resolveTeamDataScope } from './teamDataScope';
 
 // ── Types ────────────────────────────────────────────────────
 
@@ -52,17 +53,21 @@ export interface AgentForReassign {
  * Director → sees managers reporting to them + those managers' agents
  * Manager  → sees agents who report to them
  * Admin    → sees all managers + agents
+ * Test users stay in a test-data scope so production staff do not see them,
+ * while test directors/managers can still validate their own hierarchy.
  */
 export async function fetchTeamMembers(
     userId: string,
     userRole: string,
+    includeTestData?: boolean,
 ): Promise<{ data: TeamMember[]; error: string | null }> {
     try {
+        const teamDataScope = includeTestData ?? (await resolveTeamDataScope(userId));
         let query = supabase
             .from('users')
             .select('id, full_name, role, phone, email, avatar_url, is_active, created_at')
             .in('role', ['manager', 'agent'])
-            .eq('is_test_data', false)
+            .eq('is_test_data', teamDataScope)
             .order('full_name', { ascending: true });
 
         if (userRole === 'manager') {
@@ -75,7 +80,7 @@ export async function fetchTeamMembers(
                 .select('id')
                 .eq('role', 'manager')
                 .eq('reports_to', userId)
-                .eq('is_test_data', false);
+                .eq('is_test_data', teamDataScope);
             if (reportsErr) return { data: [], error: reportsErr.message };
 
             const managerIds = ((directReports || []) as { id: string }[]).map((r) => r.id);
@@ -85,7 +90,7 @@ export async function fetchTeamMembers(
                 .from('users')
                 .select('id')
                 .in('reports_to', managerIds)
-                .eq('is_test_data', false);
+                .eq('is_test_data', teamDataScope);
             if (agentsErr) return { data: [], error: agentsErr.message };
 
             const agentIds = ((agentRows || []) as { id: string }[]).map((r) => r.id);
@@ -169,7 +174,7 @@ export async function fetchTeamMembers(
                     .in('reports_to', managerIds)
                     .eq('role', 'agent')
                     .eq('is_active', true)
-                    .eq('is_test_data', false),
+                    .eq('is_test_data', teamDataScope),
                 supabase.from('candidates').select('assigned_manager_id, status').in('assigned_manager_id', managerIds),
             ]);
 
@@ -293,14 +298,17 @@ export async function fetchTeamMember(
  */
 export async function fetchReassignableManagers(
     excludeId?: string | null,
+    scopeUserId?: string | null,
+    includeTestData?: boolean,
 ): Promise<{ data: ReassignableManager[]; error: string | null }> {
     try {
+        const teamDataScope = includeTestData ?? (scopeUserId ? await resolveTeamDataScope(scopeUserId) : false);
         const { data, error } = await supabase
             .from('users')
             .select('id, full_name, role')
             .in('role', ['manager', 'director'])
             .eq('is_active', true)
-            .eq('is_test_data', false)
+            .eq('is_test_data', teamDataScope)
             .order('full_name', { ascending: true });
         if (error) return { data: [], error: error.message };
 
@@ -417,10 +425,12 @@ export async function fetchManagerOverview(
     managerId: string,
     periodDays = 30,
     now: Date = new Date(),
+    includeTestData?: boolean,
 ): Promise<{ data: ManagerOverview | null; error: string | null }> {
     try {
         const periodStart = new Date(now.getTime() - periodDays * 86400000).toISOString();
         const staleCutoff = now.getTime() - 7 * 86400000;
+        const teamDataScope = includeTestData ?? (await resolveTeamDataScope(managerId));
 
         const [managerResult, candidatesResult, agentsResult] = await Promise.all([
             supabase
@@ -437,7 +447,7 @@ export async function fetchManagerOverview(
                 .select('id, full_name, is_active')
                 .eq('reports_to', managerId)
                 .eq('role', 'agent')
-                .eq('is_test_data', false),
+                .eq('is_test_data', teamDataScope),
         ]);
 
         if (managerResult.error) return { data: null, error: managerResult.error.message };
@@ -647,6 +657,7 @@ export interface TeamPerformanceResult {
 export async function getTeamPerformance(
     managerId: string,
     dateRange: { start: string; end: string },
+    includeTestData?: boolean,
 ): Promise<{ data: TeamPerformanceResult; error: string | null }> {
     const emptyResult: TeamPerformanceResult = { agents: [], totalClosed: 0, totalActivities: 0 };
 
@@ -655,13 +666,14 @@ export async function getTeamPerformance(
         if (dateRange.start > dateRange.end) {
             return { data: emptyResult, error: 'Invalid date range: start must be before or equal to end' };
         }
+        const teamDataScope = includeTestData ?? (await resolveTeamDataScope(managerId));
         // Get team agents
         const { data: agents, error: agentsError } = await supabase
             .from('users')
             .select('id, full_name')
             .eq('reports_to', managerId)
             .eq('is_active', true)
-            .eq('is_test_data', false);
+            .eq('is_test_data', teamDataScope);
 
         if (agentsError) return { data: emptyResult, error: agentsError.message };
 

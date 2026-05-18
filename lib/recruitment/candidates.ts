@@ -5,6 +5,7 @@ import type { CandidateStatus, Interview, RecruitmentCandidate } from '@/types/r
 import { applyPageRange, resolvePage } from '../pagination';
 import { captureError } from '../sentry';
 import { supabase } from '../supabase';
+import { resolveTeamDataScope } from '../teamDataScope';
 import { markCandidateLicensed } from './progression';
 
 export interface CreateCandidateInput {
@@ -444,10 +445,12 @@ export async function fetchAssignableManagers(
     userId: string,
     userRole: string,
     excludeManagerId?: string | null,
+    includeTestData?: boolean,
 ): Promise<{ data: AssignableManager[]; error: string | null }> {
     try {
         const filterExcluded = (rows: AssignableManager[]) =>
             excludeManagerId ? rows.filter((m) => m.id !== excludeManagerId) : rows;
+        const teamDataScope = includeTestData ?? (await resolveTeamDataScope(userId));
 
         if (userRole === 'pa') {
             const { data: assignments, error: aErr } = await supabase
@@ -463,7 +466,7 @@ export async function fetchAssignableManagers(
                 .select('id, full_name, role')
                 .in('id', managerIds)
                 .eq('is_active', true)
-                .eq('is_test_data', false)
+                .eq('is_test_data', teamDataScope)
                 .order('full_name');
 
             return {
@@ -477,7 +480,7 @@ export async function fetchAssignableManagers(
             .select('id, full_name, role')
             .in('role', ['manager', 'director'])
             .eq('is_active', true)
-            .eq('is_test_data', false)
+            .eq('is_test_data', teamDataScope)
             .neq('id', userId)
             .order('full_name');
 

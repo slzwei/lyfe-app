@@ -40,7 +40,7 @@ interface AttendeePickerState {
     removeExternal: (key: string) => void;
 }
 
-export function useAttendeePicker(eventType?: string): AttendeePickerState {
+export function useAttendeePicker(eventType?: string, scopeUserId?: string | null): AttendeePickerState {
     const [selectedAttendees, setSelectedAttendees] = useState<SelectedAttendee[]>([]);
     const [showAttendeePicker, setShowAttendeePicker] = useState(false);
     const [pickerTab, setPickerTab] = useState<'team' | 'external'>('team');
@@ -55,11 +55,11 @@ export function useAttendeePicker(eventType?: string): AttendeePickerState {
     const loadUsers = useCallback(async () => {
         setLoadingUsers(true);
         setUsersError(null);
-        const { data, error } = await fetchAllUsers();
+        const { data, error } = await fetchAllUsers(scopeUserId);
         if (error) setUsersError('Failed to load users. Tap to retry.');
         setAllUsers(data);
         setLoadingUsers(false);
-    }, []);
+    }, [scopeUserId]);
 
     useEffect(() => {
         loadUsers();

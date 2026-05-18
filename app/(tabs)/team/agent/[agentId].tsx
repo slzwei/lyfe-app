@@ -57,7 +57,7 @@ export default function AgentDetailScreen() {
         if (!agent) return;
         setReassignVisible(true);
         setReassignLoading(true);
-        const { data, error } = await fetchReassignableManagers(agent.currentManagerId);
+        const { data, error } = await fetchReassignableManagers(agent.currentManagerId, user?.id);
         if (error) {
             Alert.alert('Could not load managers', error);
             setReassignVisible(false);
@@ -66,7 +66,7 @@ export default function AgentDetailScreen() {
         }
         setReassignManagers(data);
         setReassignLoading(false);
-    }, [agent]);
+    }, [agent, user?.id]);
 
     const handleReassignConfirm = useCallback(
         async (manager: ReassignableManager | null) => {

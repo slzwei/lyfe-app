@@ -75,6 +75,10 @@ function AuthGate({ children }: { children: React.ReactNode }) {
         const inAuthGroup = segments[0] === '(auth)';
         const inOnboarding = segments[0] === 'onboarding';
         const onConsent = inOnboarding && segments[1] === 'Consent';
+        const onConsentLegalPage =
+            segments[0] === '(tabs)' &&
+            segments[1] === 'profile' &&
+            (segments[2] === 'terms' || segments[2] === 'privacy');
 
         if (!isAuthenticated && segments[1] !== 'login') {
             // Not authenticated → redirect to login (from any screen, including rejected)
@@ -84,7 +88,7 @@ function AuthGate({ children }: { children: React.ReactNode }) {
             if (segments[1] !== 'rejected') {
                 router.replace('/(auth)/rejected');
             }
-        } else if (isAuthenticated && user && !consentComplete && !onConsent) {
+        } else if (isAuthenticated && user && !consentComplete && !onConsent && !onConsentLegalPage) {
             // PDPA: required consents missing → block until they're given.
             // Sits ahead of every other onboarding gate so we never collect
             // data before consent is recorded.
@@ -100,6 +104,28 @@ function AuthGate({ children }: { children: React.ReactNode }) {
             } else {
                 router.replace('/(tabs)/home');
             }
+        } else if (
+            isAuthenticated &&
+            inOnboarding &&
+            user &&
+            consentComplete &&
+            user.role === 'candidate' &&
+            user.email_verified !== true &&
+            segments[1] !== 'EmailVerification'
+        ) {
+            router.replace('/onboarding/EmailVerification');
+        } else if (
+            isAuthenticated &&
+            inOnboarding &&
+            user &&
+            consentComplete &&
+            user.onboarding_complete === true &&
+            !(user.role === 'candidate' && user.email_verified !== true)
+        ) {
+            // Staff accounts created from member invitations are marked
+            // onboarding-complete by the DB trigger. If consent or a stale route
+            // leaves them inside onboarding, eject them back to the app.
+            router.replace('/(tabs)/home');
         } else if (isAuthenticated && !inOnboarding && user?.role === 'candidate' && user.email_verified !== true) {
             // Candidate needs email verification
             router.replace('/onboarding/EmailVerification');

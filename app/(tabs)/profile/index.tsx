@@ -1,4 +1,3 @@
-import Constants from 'expo-constants';
 import ErrorBanner from '@/components/ErrorBanner';
 import LyfeLogo from '@/components/LyfeLogo';
 import ScreenHeader from '@/components/ScreenHeader';
@@ -17,6 +16,7 @@ import { useAuth } from '@/contexts/AuthContext';
 import { useTheme } from '@/contexts/ThemeContext';
 import { useViewMode, type ViewMode } from '@/contexts/ViewModeContext';
 import { canReassignAgents } from '@/constants/Roles';
+import { buildAppVersionLabel } from '@/lib/appVersion';
 import { getBiometryType, type BiometryType } from '@/lib/biometrics';
 import { pickAndUploadAvatar, removeAvatar, takeAndUploadAvatar } from '@/lib/storage';
 import type { AssignedManager } from '@/types/recruitment';
@@ -25,7 +25,7 @@ import { useTypedRouter } from '@/hooks/useTypedRouter';
 import { supabase } from '@/lib/supabase';
 import { fetchPAManagers } from '@/lib/recruitment';
 import { useFocusEffect } from 'expo-router';
-import React, { useCallback, useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { Alert, Platform, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -53,6 +53,8 @@ export default function ProfileScreen() {
     const [avatarUploading, setAvatarUploading] = useState(false);
     const [biometryType, setBiometryType] = useState<BiometryType>('none');
     const [error, setError] = useState<string | null>(null);
+
+    const appVersionLabel = useMemo(buildAppVersionLabel, []);
 
     // Delete account modal
     const [showDeleteModal, setShowDeleteModal] = useState(false);
@@ -337,9 +339,7 @@ export default function ProfileScreen() {
                     ]}
                 >
                     <LyfeLogo size="sm" />
-                    <Text style={[styles.versionText, { color: colors.textTertiary }]}>
-                        v{Constants.expoConfig?.version ?? '1.0.0'}
-                    </Text>
+                    <Text style={[styles.versionText, { color: colors.textTertiary }]}>{appVersionLabel}</Text>
                 </View>
 
                 {/* Sign Out */}

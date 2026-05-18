@@ -38,7 +38,7 @@ export function useEventForm() {
     const [errors, setErrors] = useState<Record<string, string>>({});
 
     const timePicker = useTimePicker();
-    const attendeePicker = useAttendeePicker(eventType);
+    const attendeePicker = useAttendeePicker(eventType, user?.id);
     const roadshowCfg = useRoadshowConfig();
 
     const { toStartTimeStr, toEndTimeStr, hasEndTime, populateFromEdit } = timePicker;

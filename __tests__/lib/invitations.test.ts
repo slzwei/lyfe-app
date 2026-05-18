@@ -22,6 +22,10 @@ describe('getInvitableRoles', () => {
         expect(getInvitableRoles('manager')).toEqual(['agent', 'pa', 'candidate']);
     });
 
+    it('returns only candidate for ro', () => {
+        expect(getInvitableRoles('ro')).toEqual(['candidate']);
+    });
+
     it('returns only candidate for pa', () => {
         expect(getInvitableRoles('pa')).toEqual(['candidate']);
     });
@@ -41,6 +45,7 @@ describe('canInviteMembers', () => {
         expect(canInviteMembers('director')).toBe(true);
         expect(canInviteMembers('manager')).toBe(true);
         expect(canInviteMembers('pa')).toBe(true);
+        expect(canInviteMembers('ro')).toBe(true);
     });
 
     it('returns false for roles that cannot invite', () => {

@@ -4,6 +4,7 @@
 import { LEAD_STATUSES, type LeadActivity, type LeadStatus } from '@/types/lead';
 import { captureError } from '../sentry';
 import { supabase } from '../supabase';
+import { resolveTeamDataScope } from '../teamDataScope';
 
 export interface LeadPipelineStats {
     totalLeads: number;
@@ -79,6 +80,7 @@ export async function fetchRecentActivities(
     userId: string,
     isManager: boolean,
     limit = 5,
+    includeTestData?: boolean,
 ): Promise<{ data: (LeadActivity & { lead_name?: string })[]; error: string | null }> {
     // Scope lead IDs at the query level instead of post-fetch filtering
     let leadIdFilter: string[] | null = null;
@@ -87,13 +89,14 @@ export async function fetchRecentActivities(
         const { data: userLeads } = await supabase.from('leads').select('id').eq('assigned_to', userId);
         leadIdFilter = ((userLeads || []) as { id: string }[]).map((l) => l.id);
     } else {
+        const teamDataScope = includeTestData ?? (await resolveTeamDataScope(userId));
         const { data: agents } = await supabase
             .from('users')
             .select('id')
             .eq('reports_to', userId)
             .eq('role', 'agent')
             .eq('is_active', true)
-            .eq('is_test_data', false);
+            .eq('is_test_data', teamDataScope);
         const agentIds = ((agents || []) as { id: string }[]).map((a) => a.id);
         const { data: teamLeads } = await supabase
             .from('leads')
@@ -143,7 +146,10 @@ export async function fetchRecentActivities(
 /**
  * Manager dashboard view: count of leads by stage plus recent activity for the team.
  */
-export async function getTeamLeadSummary(managerId: string): Promise<{
+export async function getTeamLeadSummary(
+    managerId: string,
+    includeTestData?: boolean,
+): Promise<{
     data: {
         byStage: { stage: LeadStatus; count: number }[];
         recentActivity: { lead_id: string; lead_name: string; type: string; created_at: string }[];
@@ -157,13 +163,14 @@ export async function getTeamLeadSummary(managerId: string): Promise<{
     };
 
     try {
+        const teamDataScope = includeTestData ?? (await resolveTeamDataScope(managerId));
         const { data: agents, error: agentsError } = await supabase
             .from('users')
             .select('id')
             .eq('reports_to', managerId)
             .eq('role', 'agent')
             .eq('is_active', true)
-            .eq('is_test_data', false);
+            .eq('is_test_data', teamDataScope);
 
         if (agentsError) return { ...emptyResult, error: agentsError.message };
 
@@ -228,7 +235,10 @@ export async function getTeamLeadSummary(managerId: string): Promise<{
 export async function fetchManagerDashboardStats(
     userId: string,
     userRole: string,
+    includeTestData?: boolean,
 ): Promise<{ data: ManagerDashboardStats; error: string | null }> {
+    const teamDataScope = includeTestData ?? (await resolveTeamDataScope(userId));
+
     let candidateQuery = supabase
         .from('candidates')
         .select('id', { count: 'exact', head: true })
@@ -245,7 +255,7 @@ export async function fetchManagerDashboardStats(
         .select('id', { count: 'exact', head: true })
         .eq('role', 'agent')
         .eq('is_active', true)
-        .eq('is_test_data', false);
+        .eq('is_test_data', teamDataScope);
 
     if (userRole === 'manager') {
         agentQuery = agentQuery.eq('reports_to', userId);

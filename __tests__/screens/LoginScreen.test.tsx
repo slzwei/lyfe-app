@@ -159,6 +159,27 @@ describe('LoginScreen', () => {
         });
     });
 
+    it('renders version footer on phone-entry screen', () => {
+        const { getByTestId } = render(<LoginScreen />);
+        const footer = getByTestId('login-version-label');
+        expect(footer).toBeTruthy();
+        const text = footer.props.children as string;
+        expect(typeof text).toBe('string');
+        expect(text).toMatch(/^v/);
+    });
+
+    it('keeps version footer visible after switching to OTP step', async () => {
+        const { getByTestId } = render(<LoginScreen />);
+        fireEvent.changeText(getByTestId('login-phone-input'), '91234567');
+        await act(async () => {
+            fireEvent.press(getByTestId('login-send-otp-button'));
+        });
+        await waitFor(() => {
+            expect(getByTestId('login-otp-input')).toBeTruthy();
+        });
+        expect(getByTestId('login-version-label')).toBeTruthy();
+    });
+
     it('calls authenticateWithBiometrics on biometric press', async () => {
         (useAuth as jest.Mock).mockReturnValue({
             checkPhoneEligible: mockCheckPhoneEligible,

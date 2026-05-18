@@ -5,6 +5,7 @@ import type { AgencyEvent, CreateEventInput, EventAttendee, EventType, ExternalA
 import type { Json } from '@/types/shared/database.types';
 import { applyPageRange, resolvePage } from './pagination';
 import { supabase } from './supabase';
+import { resolveTeamDataScope } from './teamDataScope';
 
 export interface SimpleUser {
     id: string;
@@ -202,12 +203,17 @@ export async function updateEventLocation(
 /**
  * Fetch all non-admin users for the attendee picker.
  */
-export async function fetchAllUsers(): Promise<{ data: SimpleUser[]; error: string | null }> {
+export async function fetchAllUsers(
+    scopeUserId?: string | null,
+    includeTestData?: boolean,
+): Promise<{ data: SimpleUser[]; error: string | null }> {
+    const teamDataScope = includeTestData ?? (scopeUserId ? await resolveTeamDataScope(scopeUserId) : false);
     const { data, error } = await supabase
         .from('users')
         .select('id, full_name, role, avatar_url')
         .neq('role', 'admin')
         .eq('is_active', true)
+        .eq('is_test_data', teamDataScope)
         .order('full_name', { ascending: true });
 
     if (error) return { data: [], error: error.message };

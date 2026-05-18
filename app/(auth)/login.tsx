@@ -1,11 +1,12 @@
 import LyfeLogo from '@/components/LyfeLogo';
 import { useAuth } from '@/contexts/AuthContext';
 import { useTheme } from '@/contexts/ThemeContext';
+import { buildAppVersionLabel } from '@/lib/appVersion';
 import { biometricMeta, getBiometricRefreshToken, getBiometryType, type BiometryType } from '@/lib/biometrics';
 import { Ionicons } from '@expo/vector-icons';
 import { Colors } from '@/constants/Colors';
 import { letterSpacing } from '@/constants/platform';
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import {
     ActivityIndicator,
     Animated,
@@ -52,6 +53,8 @@ export default function LoginScreen() {
         biometricsEnabled,
         pendingBiometricSession,
     } = useAuth();
+
+    const appVersionLabel = useMemo(buildAppVersionLabel, []);
 
     const [step, setStep] = useState<'phone' | 'otp'>('phone');
     const [phoneRevealed, setPhoneRevealed] = useState(false);
@@ -265,10 +268,13 @@ export default function LoginScreen() {
     return (
         <View style={[styles.container, { backgroundColor: colors.accent }]}>
             <SafeAreaView style={styles.safeArea}>
-                <TouchableWithoutFeedback onPress={step === 'phone' ? Keyboard.dismiss : undefined} accessible={false}>
-                    <KeyboardAvoidingView
-                        style={styles.keyboardView}
-                        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+                <KeyboardAvoidingView
+                    style={styles.keyboardView}
+                    behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+                >
+                    <TouchableWithoutFeedback
+                        onPress={step === 'phone' ? Keyboard.dismiss : undefined}
+                        accessible={false}
                     >
                         <View style={styles.content}>
                             <View style={styles.logoContainer}>
@@ -536,8 +542,17 @@ export default function LoginScreen() {
                                 </Animated.View>
                             </View>
                         </View>
-                    </KeyboardAvoidingView>
-                </TouchableWithoutFeedback>
+                    </TouchableWithoutFeedback>
+                </KeyboardAvoidingView>
+
+                <Text
+                    testID="login-version-label"
+                    style={styles.versionFooter}
+                    accessibilityRole="text"
+                    accessibilityLabel={`App version ${appVersionLabel}`}
+                >
+                    {appVersionLabel}
+                </Text>
             </SafeAreaView>
         </View>
     );
@@ -614,6 +629,16 @@ const styles = StyleSheet.create({
     keyboardView: { flex: 1 },
     content: { flex: 1, paddingHorizontal: 32, justifyContent: 'center' },
     logoContainer: { alignItems: 'center', marginBottom: 48 },
+    versionFooter: {
+        color: 'rgba(255,255,255,0.85)',
+        fontSize: 12,
+        fontWeight: '500',
+        lineHeight: 16,
+        textAlign: 'center',
+        paddingHorizontal: 16,
+        paddingTop: 8,
+        paddingBottom: 8,
+    },
     formContainer: {
         width: '100%',
         maxWidth: 400,

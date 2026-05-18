@@ -1,6 +1,6 @@
 /**
  * Unified member invitation edge function.
- * Creates a member_invitation record for any role (candidate through director).
+ * Creates a member_invitation record for permitted invite flows.
  * For candidates, also creates candidates + invitations rows for lyfe-sg compatibility.
  *
  * Auth: Bearer JWT (validates caller role against permission matrix)
@@ -8,6 +8,7 @@
  * Returns: { invitation, invite_url? }
  */
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
+import { canInviteRole, getInvitableRoles } from './permissions.ts';
 
 interface CreatePayload {
     name: string;
@@ -16,14 +17,6 @@ interface CreatePayload {
     assigned_manager_id?: string;
     notes?: string;
 }
-
-// Who can invite whom
-const INVITE_PERMISSIONS: Record<string, string[]> = {
-    admin: ['director', 'manager', 'agent', 'pa', 'candidate'],
-    director: ['manager', 'agent', 'pa', 'candidate'],
-    manager: ['agent', 'pa', 'candidate'],
-    pa: ['candidate'],
-};
 
 const LYFE_SG_URL = Deno.env.get('LYFE_SG_URL') || 'https://lyfe.sg';
 
@@ -86,7 +79,7 @@ Deno.serve(async (req) => {
         }
 
         const callerRole = caller.app_metadata?.role as string;
-        if (!callerRole || !INVITE_PERMISSIONS[callerRole]) {
+        if (!callerRole || getInvitableRoles(callerRole).length === 0) {
             return jsonResponse({ error: 'You do not have permission to invite members' }, 403);
         }
 
@@ -99,8 +92,7 @@ Deno.serve(async (req) => {
         if (!intended_role) return jsonResponse({ error: 'intended_role is required' }, 400);
 
         // Permission check
-        const allowed = INVITE_PERMISSIONS[callerRole];
-        if (!allowed.includes(intended_role)) {
+        if (!canInviteRole(callerRole, intended_role)) {
             return jsonResponse({ error: `${callerRole} cannot invite ${intended_role} role` }, 403);
         }
 
