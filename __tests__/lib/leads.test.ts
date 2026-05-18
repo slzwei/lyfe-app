@@ -421,6 +421,17 @@ describe('fetchTeamAgents', () => {
         expect(result.data).toHaveLength(2);
         expect(result.error).toBeNull();
     });
+
+    it('can scope reassign agents to test-data rows', async () => {
+        const chain = mockSupa.__getChain('users');
+        mockResolve(chain, { data: [{ id: 'a1', full_name: 'Agent 1' }], error: null });
+
+        const result = await fetchTeamAgents('mgr-1', 'manager', true);
+
+        expect(result.data).toHaveLength(1);
+        expect(chain.__calls).toContainEqual({ method: 'eq', args: ['is_test_data', true] });
+        expect(chain.__calls).not.toContainEqual({ method: 'eq', args: ['is_test_data', false] });
+    });
 });
 
 // ── fetchLeadStats (RPC-based) ──
@@ -576,6 +587,20 @@ describe('fetchManagerDashboardStats', () => {
         const result = await fetchManagerDashboardStats('mgr-1', 'manager');
         expect(result.data.activeCandidates).toBe(12);
         expect(result.data.agentsManaged).toBe(5);
+    });
+
+    it('can scope agent counts to test-data rows for test accounts', async () => {
+        const candidatesChain = mockSupa.__getChain('candidates');
+        mockResolve(candidatesChain, { count: 0 });
+
+        const usersChain = mockSupa.__getChain('users');
+        mockResolve(usersChain, { count: 4 });
+
+        const result = await fetchManagerDashboardStats('mgr-1', 'manager', true);
+
+        expect(result.data.agentsManaged).toBe(4);
+        expect(usersChain.__calls).toContainEqual({ method: 'eq', args: ['is_test_data', true] });
+        expect(usersChain.__calls).not.toContainEqual({ method: 'eq', args: ['is_test_data', false] });
     });
 
     it('defaults to 0 when counts are null', async () => {

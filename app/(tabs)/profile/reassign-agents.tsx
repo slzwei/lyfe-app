@@ -57,18 +57,21 @@ export default function ReassignAgentsScreen() {
         setRefreshing(false);
     }, [load]);
 
-    const openPicker = useCallback(async (agent: AgentForReassign) => {
-        setSelectedAgent(agent);
-        setManagersLoading(true);
-        const { data, error: mgrErr } = await fetchReassignableManagers(agent.currentManagerId);
-        setManagersLoading(false);
-        if (mgrErr) {
-            Alert.alert('Could not load managers', mgrErr);
-            setSelectedAgent(null);
-            return;
-        }
-        setManagers(data);
-    }, []);
+    const openPicker = useCallback(
+        async (agent: AgentForReassign) => {
+            setSelectedAgent(agent);
+            setManagersLoading(true);
+            const { data, error: mgrErr } = await fetchReassignableManagers(agent.currentManagerId, user?.id);
+            setManagersLoading(false);
+            if (mgrErr) {
+                Alert.alert('Could not load managers', mgrErr);
+                setSelectedAgent(null);
+                return;
+            }
+            setManagers(data);
+        },
+        [user?.id],
+    );
 
     const handleSelect = useCallback(
         async (manager: ReassignableManager | null) => {

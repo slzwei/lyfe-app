@@ -41,11 +41,12 @@
         "production": {
             "ios": {
                 "appleTeamId": "35L9ZSS9F9",
-                "appleId": "shawnleeapps@gmail.com"
+                "appleId": "shawnleeapps@gmail.com",
+                "ascAppId": "6760253169"
             },
             "android": {
                 "track": "internal",
-                "releaseStatus": "draft"
+                "releaseStatus": "completed"
             }
         }
     }

@@ -67,7 +67,7 @@ export default function OnboardingCompleteScreen() {
                     </Text>
                 </Animated.View>
 
-                {/* Celebratory hero — accent-tinted circle with trophy, asymmetric left-anchor. */}
+                {/* Celebratory hero — left-anchored to align with title */}
                 <Animated.View style={styles.heroBlock} entering={FadeIn.delay(250).duration(700)}>
                     <View style={[styles.iconCircle, { backgroundColor: colors.accentLight }]}>
                         <Ionicons name="sparkles" size={56} color={colors.accent} />
@@ -97,7 +97,7 @@ const styles = StyleSheet.create({
     contentWrap: {
         flex: 1,
         paddingLeft: 24,
-        paddingRight: 32,
+        paddingRight: 24,
         paddingTop: 24,
     },
     eyebrow: {
@@ -130,7 +130,6 @@ const styles = StyleSheet.create({
         flex: 1,
         justifyContent: 'center',
         alignItems: 'flex-start',
-        paddingLeft: 32, // asymmetric indent — more than other screens, adds rhythm variation
     },
     iconCircle: {
         width: 112,

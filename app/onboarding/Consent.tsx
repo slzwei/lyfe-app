@@ -7,7 +7,7 @@ import { supabase } from '@/lib/supabase';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import React, { useState } from 'react';
-import { ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { Modal, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import Animated, { FadeInDown } from 'react-native-reanimated';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
@@ -20,6 +20,54 @@ import { SafeAreaView } from 'react-native-safe-area-context';
  * migration 20260427140000_user_consent_columns.sql; their AuthGate skips
  * this screen because the columns are already populated.
  */
+type LegalView = 'terms' | 'privacy';
+
+const TERMS_SECTIONS = [
+    {
+        title: 'Acceptance of Terms',
+        body: 'By using Lyfe, you agree to these Terms of Service. If you do not agree, do not use the application.',
+    },
+    {
+        title: 'Authorised Use',
+        body: 'Lyfe is for authorised insurance professionals and invited candidates. Sharing your credentials is prohibited.',
+    },
+    {
+        title: 'Data Responsibility',
+        body: 'You are responsible for the accuracy of information you enter and must handle personal data in line with Singapore PDPA requirements.',
+    },
+    {
+        title: 'Account Security',
+        body: 'You are responsible for keeping your account secure. Report suspected unauthorised access immediately.',
+    },
+    {
+        title: 'Service Availability',
+        body: 'Lyfe is provided on an as-is basis. Scheduled maintenance or service issues may temporarily affect access.',
+    },
+];
+
+const PRIVACY_SECTIONS = [
+    {
+        title: 'Data We Collect',
+        body: 'Lyfe collects your name, phone number, email, and activity data to provide the service. Biometric data never leaves your device.',
+    },
+    {
+        title: 'How We Use It',
+        body: 'Your data is used to operate the Lyfe platform, support your role, and send required operational notifications.',
+    },
+    {
+        title: 'Data Storage',
+        body: 'Data is stored securely using Supabase infrastructure. Session tokens are stored securely on your device.',
+    },
+    {
+        title: 'Data Deletion',
+        body: 'You can request account deletion from Settings. Data retained for legal or audit reasons may be anonymised.',
+    },
+    {
+        title: 'Contact',
+        body: 'For questions about privacy or terms, contact support at admin@mktr.sg.',
+    },
+];
+
 export default function ConsentScreen() {
     const { colors } = useTheme();
     const router = useRouter();
@@ -31,6 +79,7 @@ export default function ConsentScreen() {
     const [marketing, setMarketing] = useState(false);
     const [submitting, setSubmitting] = useState(false);
     const [error, setError] = useState<string | null>(null);
+    const [legalView, setLegalView] = useState<LegalView | null>(null);
 
     const allRequiredAccepted = tos && privacy && operationalPush;
 
@@ -61,10 +110,12 @@ export default function ConsentScreen() {
             }
             await refreshUser();
             // After consent, route to whichever onboarding step comes next.
-            // For brand-new candidate flows this is EmailVerification; for
-            // staff flows it's Welcome.
+            // Staff created through member invitations should already be
+            // onboarding-complete and must not enter candidate-style onboarding.
             if (user.role === 'candidate' && user.email_verified !== true) {
                 router.replace('/onboarding/EmailVerification');
+            } else if (user.onboarding_complete === true) {
+                router.replace('/(tabs)/home');
             } else {
                 router.replace('/onboarding/Welcome');
             }
@@ -101,7 +152,7 @@ export default function ConsentScreen() {
                         title="Terms of Service"
                         body="I have read and agree to the Lyfe Terms of Service."
                         linkLabel="Read terms"
-                        linkRoute="/(tabs)/profile/terms"
+                        onLinkPress={() => setLegalView('terms')}
                         colors={colors}
                     />
                     <Divider color={colors.cardBorder} />
@@ -112,7 +163,7 @@ export default function ConsentScreen() {
                         title="Privacy Policy"
                         body="I have read and agree to the Lyfe Privacy Policy and consent to the processing of my personal data as described."
                         linkLabel="Read policy"
-                        linkRoute="/(tabs)/profile/privacy"
+                        onLinkPress={() => setLegalView('privacy')}
                         colors={colors}
                     />
                     <Divider color={colors.cardBorder} />
@@ -163,6 +214,8 @@ export default function ConsentScreen() {
                     Required: Terms, Privacy, and Operational notifications.
                 </Text>
             </View>
+
+            <LegalModal legalView={legalView} colors={colors} onClose={() => setLegalView(null)} />
         </SafeAreaView>
     );
 }
@@ -174,13 +227,12 @@ interface RowProps {
     title: string;
     body: string;
     linkLabel?: string;
-    linkRoute?: string;
+    onLinkPress?: () => void;
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     colors: any;
 }
 
-function ConsentRow({ checked, onToggle, required, title, body, linkLabel, linkRoute, colors }: RowProps) {
-    const router = useRouter();
+function ConsentRow({ checked, onToggle, required, title, body, linkLabel, onLinkPress, colors }: RowProps) {
     return (
         <View style={styles.row}>
             <TouchableOpacity
@@ -208,12 +260,8 @@ function ConsentRow({ checked, onToggle, required, title, body, linkLabel, linkR
                     )}
                 </View>
                 <Text style={[styles.rowBody, { color: colors.textSecondary }]}>{body}</Text>
-                {linkLabel && linkRoute ? (
-                    <TouchableOpacity
-                        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-                        onPress={() => router.push(linkRoute as any)}
-                        accessibilityRole="link"
-                    >
+                {linkLabel && onLinkPress ? (
+                    <TouchableOpacity onPress={onLinkPress} accessibilityRole="link">
                         <Text style={[styles.link, { color: colors.accent }]}>{linkLabel}</Text>
                     </TouchableOpacity>
                 ) : null}
@@ -224,6 +272,54 @@ function ConsentRow({ checked, onToggle, required, title, body, linkLabel, linkR
 
 function Divider({ color }: { color: string }) {
     return <View style={[styles.divider, { backgroundColor: color }]} />;
+}
+
+function LegalModal({
+    legalView,
+    colors,
+    onClose,
+}: {
+    legalView: LegalView | null;
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    colors: any;
+    onClose: () => void;
+}) {
+    const sections = legalView === 'terms' ? TERMS_SECTIONS : PRIVACY_SECTIONS;
+    const title = legalView === 'terms' ? 'Terms of Service' : 'Privacy Policy';
+    const meta = legalView === 'terms' ? 'Effective date: 1 January 2026' : 'Last updated: March 2026';
+
+    return (
+        <Modal
+            visible={legalView !== null}
+            animationType="slide"
+            presentationStyle="pageSheet"
+            onRequestClose={onClose}
+        >
+            <SafeAreaView style={[styles.modalContainer, { backgroundColor: colors.background }]}>
+                <View style={[styles.modalHeader, { borderBottomColor: colors.border }]}>
+                    <Text style={[styles.modalTitle, { color: colors.textPrimary }]}>{title}</Text>
+                    <TouchableOpacity
+                        onPress={onClose}
+                        accessibilityRole="button"
+                        accessibilityLabel={`Close ${title}`}
+                        style={[styles.closeButton, { backgroundColor: colors.cardBackground }]}
+                    >
+                        <Ionicons name="close" size={20} color={colors.textPrimary} />
+                    </TouchableOpacity>
+                </View>
+
+                <ScrollView contentContainerStyle={styles.legalContent} showsVerticalScrollIndicator={false}>
+                    <Text style={[styles.legalMeta, { color: colors.textTertiary }]}>{meta}</Text>
+                    {sections.map((section) => (
+                        <View key={section.title} style={styles.legalSection}>
+                            <Text style={[styles.legalHeading, { color: colors.textPrimary }]}>{section.title}</Text>
+                            <Text style={[styles.legalBody, { color: colors.textSecondary }]}>{section.body}</Text>
+                        </View>
+                    ))}
+                </ScrollView>
+            </SafeAreaView>
+        </Modal>
+    );
 }
 
 const styles = StyleSheet.create({
@@ -336,5 +432,55 @@ const styles = StyleSheet.create({
         fontSize: 13,
         marginTop: 12,
         textAlign: 'center',
+    },
+    modalContainer: { flex: 1 },
+    modalHeader: {
+        minHeight: 56,
+        paddingLeft: 20,
+        paddingRight: 12,
+        borderBottomWidth: StyleSheet.hairlineWidth,
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'space-between',
+    },
+    modalTitle: {
+        fontFamily: Fonts.sansBold,
+        fontSize: 17,
+        fontWeight: '700',
+    },
+    closeButton: {
+        width: 36,
+        height: 36,
+        borderRadius: 18,
+        alignItems: 'center',
+        justifyContent: 'center',
+    },
+    legalContent: {
+        paddingHorizontal: 24,
+        paddingTop: 20,
+        paddingBottom: 40,
+        maxWidth: 640,
+        width: '100%',
+        alignSelf: 'center',
+    },
+    legalMeta: {
+        fontFamily: Fonts.sans,
+        fontSize: 13,
+        lineHeight: 18,
+        marginBottom: 24,
+    },
+    legalSection: { marginBottom: 24 },
+    legalHeading: {
+        fontFamily: Fonts.sansBold,
+        fontSize: 17,
+        fontWeight: '700',
+        lineHeight: 22,
+        marginBottom: 8,
+        letterSpacing: letterSpacing(-0.3),
+    },
+    legalBody: {
+        fontFamily: Fonts.sans,
+        fontSize: 15,
+        lineHeight: 23,
     },
 });

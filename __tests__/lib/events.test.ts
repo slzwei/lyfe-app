@@ -194,6 +194,20 @@ describe('fetchAllUsers', () => {
         expect(result.data).toHaveLength(2);
         expect(result.error).toBeNull();
     });
+
+    it('can scope attendee picker users to test-data rows', async () => {
+        const chain = mockSupa.__getChain('users');
+        mockResolve(chain, {
+            data: [{ id: 'u1', full_name: 'Alice', role: 'agent', avatar_url: null }],
+            error: null,
+        });
+
+        const result = await fetchAllUsers(null, true);
+
+        expect(result.data).toHaveLength(1);
+        expect(chain.__calls).toContainEqual({ method: 'eq', args: ['is_test_data', true] });
+        expect(chain.__calls).not.toContainEqual({ method: 'eq', args: ['is_test_data', false] });
+    });
 });
 
 // ── hasUserCheckedIn ──

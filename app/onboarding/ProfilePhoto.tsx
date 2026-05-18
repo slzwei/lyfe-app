@@ -78,7 +78,7 @@ export default function ProfilePhotoScreen() {
                     </Text>
                 </Animated.View>
 
-                {/* Avatar placed asymmetrically, not dead-center */}
+                {/* Avatar visual — left-anchored to align with title */}
                 <Animated.View style={styles.heroBlock} entering={FadeInDown.delay(120).springify().duration(600)}>
                     <TouchableOpacity
                         style={styles.avatarArea}
@@ -174,7 +174,7 @@ const styles = StyleSheet.create({
     contentWrap: {
         flex: 1,
         paddingLeft: 24,
-        paddingRight: 32,
+        paddingRight: 24,
         paddingTop: 24,
     },
     eyebrow: {
@@ -207,7 +207,6 @@ const styles = StyleSheet.create({
         flex: 1,
         justifyContent: 'center',
         alignItems: 'flex-start',
-        paddingLeft: 24, // asymmetric left-indent
     },
     avatarArea: {
         alignItems: 'center',

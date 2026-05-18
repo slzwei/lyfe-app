@@ -712,6 +712,21 @@ describe('fetchAssignableManagers', () => {
         expect(result.data).toHaveLength(1);
     });
 
+    it('can scope assignable managers to test-data rows', async () => {
+        const usersChain = mockSupa.__getChain('users');
+        mockResolve(usersChain, {
+            data: [{ id: 'mgr-2', full_name: 'Alice', role: 'manager' }],
+            error: null,
+        });
+
+        const result = await fetchAssignableManagers('mgr-1', 'manager', null, true);
+
+        expect(result.error).toBeNull();
+        expect(result.data).toHaveLength(1);
+        expect(usersChain.__calls).toContainEqual({ method: 'eq', args: ['is_test_data', true] });
+        expect(usersChain.__calls).not.toContainEqual({ method: 'eq', args: ['is_test_data', false] });
+    });
+
     it('returns error on manager query failure', async () => {
         const usersChain = mockSupa.__getChain('users');
         mockResolve(usersChain, { data: null, error: { message: 'DB error' } });

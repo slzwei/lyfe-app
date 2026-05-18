@@ -7,6 +7,7 @@ import { friendlyError } from '../errors';
 import { captureError } from '../sentry';
 import { getCachedAccessToken } from '../sessionCache';
 import { supabase } from '../supabase';
+import { resolveTeamDataScope } from '../teamDataScope';
 
 export interface CreateLeadInput {
     full_name: string;
@@ -39,7 +40,9 @@ export async function fetchLeads(
     // the cache is empty (which shouldn't happen post-login but is defensive).
     let accessToken: string | null = getCachedAccessToken();
     if (!accessToken) {
-        const { data: { session } } = await supabase.auth.getSession();
+        const {
+            data: { session },
+        } = await supabase.auth.getSession();
         accessToken = session?.access_token ?? null;
     }
 
@@ -183,13 +186,15 @@ export async function updateLeadStatus(
 export async function fetchTeamAgents(
     managerId: string,
     userRole?: string,
+    includeTestData?: boolean,
 ): Promise<{ data: { id: string; full_name: string }[]; error: string | null }> {
+    const teamDataScope = includeTestData ?? (await resolveTeamDataScope(managerId));
     let query = supabase
         .from('users')
         .select('id, full_name')
         .eq('role', 'agent')
         .eq('is_active', true)
-        .eq('is_test_data', false);
+        .eq('is_test_data', teamDataScope);
 
     if (userRole === 'admin' || userRole === 'director') {
         // Directors/admins can reassign to any active agent

@@ -3,7 +3,13 @@
  */
 import { supabase } from '@/lib/supabase';
 
-import { fetchTeamMembers, fetchTeamMember, getTeamPerformance, fetchManagerOverview } from '@/lib/team';
+import {
+    fetchTeamMembers,
+    fetchTeamMember,
+    fetchReassignableManagers,
+    getTeamPerformance,
+    fetchManagerOverview,
+} from '@/lib/team';
 
 jest.mock('@/lib/supabase');
 
@@ -135,6 +141,19 @@ describe('fetchTeamMembers', () => {
         const result = await fetchTeamMembers('mgr-1', 'manager');
         expect(result.data).toEqual([]);
         expect(result.error).toBeNull();
+    });
+
+    it('can scope team members to test-data rows for test accounts', async () => {
+        const usersChain = mockSupa.__getChain('users');
+        mockResolve(usersChain, { data: [USER_AGENT], error: null });
+        mockTeamStatsRpc([]);
+
+        const result = await fetchTeamMembers('mgr-1', 'manager', true);
+
+        expect(result.error).toBeNull();
+        expect(result.data).toHaveLength(1);
+        expect(usersChain.__calls).toContainEqual({ method: 'eq', args: ['is_test_data', true] });
+        expect(usersChain.__calls).not.toContainEqual({ method: 'eq', args: ['is_test_data', false] });
     });
 
     it('returns error on query failure', async () => {
@@ -311,6 +330,25 @@ describe('fetchTeamMember', () => {
     });
 });
 
+// ── fetchReassignableManagers ──
+
+describe('fetchReassignableManagers', () => {
+    it('can scope manager picker results to test-data rows', async () => {
+        const usersChain = mockSupa.__getChain('users');
+        mockResolve(usersChain, {
+            data: [{ id: 'mgr-2', full_name: 'Manager Two', role: 'manager' }],
+            error: null,
+        });
+
+        const result = await fetchReassignableManagers(null, null, true);
+
+        expect(result.error).toBeNull();
+        expect(result.data).toEqual([{ id: 'mgr-2', fullName: 'Manager Two', role: 'manager' }]);
+        expect(usersChain.__calls).toContainEqual({ method: 'eq', args: ['is_test_data', true] });
+        expect(usersChain.__calls).not.toContainEqual({ method: 'eq', args: ['is_test_data', false] });
+    });
+});
+
 // ── getTeamPerformance ──
 
 describe('getTeamPerformance', () => {
@@ -357,6 +395,23 @@ describe('getTeamPerformance', () => {
         expect(bob.leadsClosed).toBe(1);
         expect(bob.leadsWon).toBe(1);
         expect(bob.activitiesLogged).toBe(1);
+    });
+
+    it('can scope analytics agents to test-data rows', async () => {
+        const usersChain = mockSupa.__getChain('users');
+        mockResolve(usersChain, { data: [{ id: 'agent-1', full_name: 'Agent Alice' }], error: null });
+
+        const leadsChain = mockSupa.__getChain('leads');
+        mockResolve(leadsChain, { data: [], error: null });
+
+        const activitiesChain = mockSupa.__getChain('lead_activities');
+        mockResolve(activitiesChain, { data: [], error: null });
+
+        const result = await getTeamPerformance('mgr-1', { start: '2026-03-01', end: '2026-03-08' }, true);
+
+        expect(result.error).toBeNull();
+        expect(usersChain.__calls).toContainEqual({ method: 'eq', args: ['is_test_data', true] });
+        expect(usersChain.__calls).not.toContainEqual({ method: 'eq', args: ['is_test_data', false] });
     });
 
     it('returns empty result when no agents', async () => {
@@ -457,6 +512,26 @@ describe('fetchManagerOverview', () => {
         const pipeline = result.data!.candidatePipeline;
         expect(pipeline.outstandingTotal).toBe(2);
         expect(pipeline.byStage).toEqual({ applied: 1, interviewed: 1 });
+    });
+
+    it('can scope manager roster agents to test-data rows', async () => {
+        const usersChain = mockSupa.__getChain('users');
+        mockResolve(usersChain, { data: MANAGER_ROW, error: null });
+
+        const candidatesChain = mockSupa.__getChain('candidates');
+        mockResolve(candidatesChain, { data: [], error: null });
+
+        const leadsChain = mockSupa.__getChain('leads');
+        mockResolve(leadsChain, { data: [], error: null });
+
+        const activitiesChain = mockSupa.__getChain('lead_activities');
+        mockResolve(activitiesChain, { data: [], error: null });
+
+        const result = await fetchManagerOverview('mgr-1', 30, NOW, true);
+
+        expect(result.error).toBeNull();
+        expect(usersChain.__calls).toContainEqual({ method: 'eq', args: ['is_test_data', true] });
+        expect(usersChain.__calls).not.toContainEqual({ method: 'eq', args: ['is_test_data', false] });
     });
 
     it('sorts recently-updated candidates by oldest stage_entered_at first', async () => {

@@ -1,5 +1,6 @@
 import { renderHook, act, waitFor } from '@testing-library/react-native';
 import { useAttendeePicker } from '@/hooks/useAttendeePicker';
+import { fetchAllUsers } from '@/lib/events';
 
 jest.mock('@/lib/supabase');
 jest.mock('@/lib/events', () => ({
@@ -14,10 +15,20 @@ jest.mock('@/lib/events', () => ({
 }));
 
 describe('useAttendeePicker', () => {
+    beforeEach(() => {
+        jest.clearAllMocks();
+    });
+
     it('loads users on mount', async () => {
         const { result } = renderHook(() => useAttendeePicker());
         await waitFor(() => expect(result.current.loadingUsers).toBe(false));
         expect(result.current.filteredUsers).toHaveLength(3);
+    });
+
+    it('passes the current user id to the scoped user loader', async () => {
+        const { result } = renderHook(() => useAttendeePicker('training', 'user-1'));
+        await waitFor(() => expect(result.current.loadingUsers).toBe(false));
+        expect(fetchAllUsers).toHaveBeenCalledWith('user-1');
     });
 
     it('toggleAttendee adds and removes', async () => {

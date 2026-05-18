@@ -3,7 +3,6 @@
  */
 import React from 'react';
 import { render, waitFor } from '@testing-library/react-native';
-import { Text } from 'react-native';
 
 // Need to require after all mocks are set up
 import RootLayout from '@/app/_layout';
@@ -20,6 +19,7 @@ jest.mock('@/lib/sentry', () => ({
 jest.mock('@/contexts/ThemeContext', () => ({
     ThemeProvider: ({ children }: any) => children,
     useTheme: () => ({
+        // eslint-disable-next-line @typescript-eslint/no-require-imports
         colors: require('@/constants/Colors').Colors.light,
         isDark: false,
         mode: 'light',
@@ -43,6 +43,9 @@ jest.mock('@/components/AppErrorBoundary', () => {
 jest.mock('@/hooks/useLastSeen', () => ({
     useLastSeen: jest.fn(),
 }));
+jest.mock('@/hooks/useNotificationDeepLink', () => ({
+    useNotificationDeepLink: jest.fn(),
+}));
 
 // Mock fonts as loaded
 jest.mock('expo-font', () => ({
@@ -58,7 +61,11 @@ jest.mock('@/contexts/AuthContext', () => ({
 
 // Use the global expo-router mock from jest.setup.js but override useSegments and useRouter
 const mockReplace = jest.fn();
-const mockSegments = jest.fn<string[], []>(() => ['(tabs)']);
+const consentFields = {
+    consent_tos_at: '2026-05-18T00:00:00.000Z',
+    consent_privacy_at: '2026-05-18T00:00:00.000Z',
+    consent_operational_push_at: '2026-05-18T00:00:00.000Z',
+};
 
 // Access the global mock's functions to override them per-test
 const expoRouter = jest.requireMock('expo-router');
@@ -77,7 +84,7 @@ describe('RootLayout', () => {
             isAuthenticated: true,
             isLoading: false,
             invitationStatus: 'valid',
-            user: { id: 'u1', role: 'agent', email_verified: true, onboarding_complete: true },
+            user: { id: 'u1', role: 'agent', email_verified: true, onboarding_complete: true, ...consentFields },
         });
 
         const { getByTestId } = render(<RootLayout />);
@@ -92,7 +99,7 @@ describe('RootLayout', () => {
             user: null,
         });
 
-        const { toJSON } = render(<RootLayout />);
+        render(<RootLayout />);
         // AuthGate returns null during loading — Stack is not rendered
         // The RootLayout still renders providers but AuthGate blocks content
     });
@@ -135,7 +142,7 @@ describe('RootLayout', () => {
             isAuthenticated: true,
             isLoading: false,
             invitationStatus: 'valid',
-            user: { id: 'u1', role: 'candidate', email_verified: false, onboarding_complete: true },
+            user: { id: 'u1', role: 'candidate', email_verified: false, onboarding_complete: true, ...consentFields },
         });
 
         render(<RootLayout />);
@@ -151,7 +158,7 @@ describe('RootLayout', () => {
             isAuthenticated: true,
             isLoading: false,
             invitationStatus: 'valid',
-            user: { id: 'u1', role: 'agent', email_verified: true, onboarding_complete: false },
+            user: { id: 'u1', role: 'agent', email_verified: true, onboarding_complete: false, ...consentFields },
         });
 
         render(<RootLayout />);
@@ -167,7 +174,7 @@ describe('RootLayout', () => {
             isAuthenticated: true,
             isLoading: false,
             invitationStatus: 'valid',
-            user: { id: 'u1', role: 'agent', email_verified: true, onboarding_complete: true },
+            user: { id: 'u1', role: 'agent', email_verified: true, onboarding_complete: true, ...consentFields },
         });
 
         render(<RootLayout />);
@@ -183,7 +190,7 @@ describe('RootLayout', () => {
             isAuthenticated: true,
             isLoading: false,
             invitationStatus: 'valid',
-            user: { id: 'u1', role: 'candidate', email_verified: false, onboarding_complete: true },
+            user: { id: 'u1', role: 'candidate', email_verified: false, onboarding_complete: true, ...consentFields },
         });
 
         render(<RootLayout />);
@@ -199,13 +206,45 @@ describe('RootLayout', () => {
             isAuthenticated: true,
             isLoading: false,
             invitationStatus: 'valid',
-            user: { id: 'u1', role: 'agent', email_verified: true, onboarding_complete: false },
+            user: { id: 'u1', role: 'agent', email_verified: true, onboarding_complete: false, ...consentFields },
         });
 
         render(<RootLayout />);
 
         await waitFor(() => {
             expect(mockReplace).toHaveBeenCalledWith('/onboarding/Welcome');
+        });
+    });
+
+    it('redirects onboarding-complete staff out of onboarding', async () => {
+        (useSegments as jest.Mock).mockReturnValue(['onboarding', 'Welcome']);
+        mockUseAuth.mockReturnValue({
+            isAuthenticated: true,
+            isLoading: false,
+            invitationStatus: 'valid',
+            user: { id: 'u1', role: 'ro', email_verified: true, onboarding_complete: true, ...consentFields },
+        });
+
+        render(<RootLayout />);
+
+        await waitFor(() => {
+            expect(mockReplace).toHaveBeenCalledWith('/(tabs)/home');
+        });
+    });
+
+    it('redirects unverified candidates to email verification from onboarding', async () => {
+        (useSegments as jest.Mock).mockReturnValue(['onboarding', 'Welcome']);
+        mockUseAuth.mockReturnValue({
+            isAuthenticated: true,
+            isLoading: false,
+            invitationStatus: 'valid',
+            user: { id: 'u1', role: 'candidate', email_verified: false, onboarding_complete: true, ...consentFields },
+        });
+
+        render(<RootLayout />);
+
+        await waitFor(() => {
+            expect(mockReplace).toHaveBeenCalledWith('/onboarding/EmailVerification');
         });
     });
 });
