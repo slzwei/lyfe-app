@@ -15,7 +15,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
  *   - Eyebrow step counter (top-left, warm grey caps)
  *   - Left-anchored title with ONE italic serif accent word
  *   - Subtitle with maxWidth for readability
- *   - Hero visual block (asymmetrically placed — not centered)
+ *   - Hero visual block centered in the remaining space
  *   - Footer-anchored primary CTA
  *   - FadeInDown spring entrance on hero + delayed fade-in on content
  */
@@ -36,7 +36,7 @@ export default function WelcomeScreen() {
                     </Text>
                 </Animated.View>
 
-                {/* Asymmetric hero: icon offset from center, not dead-centered */}
+                {/* Hero visual — left-anchored to align with title */}
                 <Animated.View style={styles.heroBlock} entering={FadeInDown.delay(120).springify().duration(600)}>
                     <View style={[styles.iconCircle, { backgroundColor: colors.accentLight }]}>
                         <Ionicons name="shield-checkmark" size={64} color={colors.accent} />
@@ -63,11 +63,10 @@ const styles = StyleSheet.create({
     container: {
         flex: 1,
     },
-    // Asymmetric padding: extra right-side breathing room breaks the centered bias
     contentWrap: {
         flex: 1,
         paddingLeft: 24,
-        paddingRight: 32,
+        paddingRight: 24,
         paddingTop: 24,
     },
     eyebrow: {
@@ -96,12 +95,10 @@ const styles = StyleSheet.create({
         lineHeight: 24,
         maxWidth: 440,
     },
-    // Hero is flex:1 so it fills remaining space with the icon asymmetrically placed
     heroBlock: {
         flex: 1,
         justifyContent: 'center',
-        alignItems: 'flex-start', // left-anchored, not centered
-        paddingLeft: 16, // slight indent — off-grid
+        alignItems: 'flex-start',
     },
     iconCircle: {
         width: 120,

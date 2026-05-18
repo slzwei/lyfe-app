@@ -387,10 +387,10 @@ const styles = StyleSheet.create({
         fontSize: 14,
         fontWeight: '600',
     },
-    // Decorative icon anchored bottom-right — breaks vertical symmetry
+    // Decorative icon anchored bottom-left — aligned to title anchor
     iconBlock: {
         marginTop: 40,
-        alignItems: 'flex-end',
-        paddingRight: 8,
+        alignItems: 'flex-start',
+        paddingLeft: 8,
     },
 });
