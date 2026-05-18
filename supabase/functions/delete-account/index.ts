@@ -387,10 +387,14 @@ Deno.serve(async (req) => {
 
         // ══════════════════════════════════════════════════════════
         // Phase 7: member_invitations cleanup
+        // accepted_by_id → delete the invitation. With the acceptor gone
+        // the row has no audit value and would otherwise show as an
+        // orphaned "ghost" row in the staff admin Staff Invites list.
+        // assigned_manager_id is nullable and may sit on rows we still
+        // want to keep — null out for audit.
+        // invited_by_id is NOT NULL → delete sent rows.
         // ══════════════════════════════════════════════════════════
-        await track('member_invitations.accepted_by_id', () =>
-            nullOut(admin, 'member_invitations', 'accepted_by_id', 'accepted_by_id', uid),
-        );
+        await track('member_invitations.accepted_by_id', () => del(admin, 'member_invitations', 'accepted_by_id', uid));
         await track('member_invitations.assigned_manager_id', () =>
             nullOut(admin, 'member_invitations', 'assigned_manager_id', 'assigned_manager_id', uid),
         );
