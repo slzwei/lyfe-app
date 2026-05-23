@@ -11,6 +11,7 @@ import {
     type CreateCandidateInput,
 } from '@/lib/recruitment';
 import { useSubmitGuard } from '@/hooks/useSubmitGuard';
+import { normalizeSgPhone } from '@/lib/phone';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import React, { useState } from 'react';
@@ -54,6 +55,7 @@ export default function AddCandidateScreen() {
     const [errors, setErrors] = useState<Record<string, string>>({});
     const [showSuccess, setShowSuccess] = useState(false);
     const [inviteLink, setInviteLink] = useState('');
+    const [successMessage, setSuccessMessage] = useState('');
     const { isSubmitting: isSaving, guard } = useSubmitGuard();
     const [saveError, setSaveError] = useState<string | null>(null);
     const [managers, setManagers] = useState<AssignableManager[]>([]);
@@ -86,7 +88,19 @@ export default function AddCandidateScreen() {
     const validate = (): boolean => {
         const newErrors: Record<string, string> = {};
         if (!name.trim()) newErrors.name = 'Name is required';
-        if (!phone.trim()) newErrors.phone = 'Phone number is required';
+
+        const trimmedPhone = phone.trim();
+        if (!trimmedPhone) {
+            newErrors.phone = 'Phone number is required';
+        } else if (!normalizeSgPhone(trimmedPhone)) {
+            newErrors.phone = 'Enter a valid Singapore mobile number';
+        }
+
+        const trimmedEmail = email.trim();
+        if (trimmedEmail && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(trimmedEmail)) {
+            newErrors.email = 'Enter a valid email address';
+        }
+
         if (isPA && !selectedManagerId) newErrors.manager = 'Please select a manager';
         setErrors(newErrors);
         return Object.keys(newErrors).length === 0;
@@ -102,15 +116,23 @@ export default function AddCandidateScreen() {
                 return;
             }
 
+            // Normalize before submit; the Edge Function is the final guard.
+            const trimmedEmail = email.trim();
             const input: CreateCandidateInput = {
                 name: name.trim(),
-                phone: phone.trim(),
-                email: email.trim() || null,
+                phone: normalizeSgPhone(phone.trim()) ?? phone.trim(),
+                email: trimmedEmail || null,
                 notes: notes.trim() || null,
                 assigned_manager_id: selectedManagerId || undefined,
             };
 
-            const { data: newCandidate, inviteToken, error } = await createCandidate(input, user.id);
+            const {
+                data: newCandidate,
+                inviteToken,
+                inviteUrl,
+                emailSent,
+                error,
+            } = await createCandidate(input, user.id);
             if (error || !newCandidate) {
                 setSaveError(error ?? 'Failed to create candidate');
                 return;
@@ -120,12 +142,26 @@ export default function AddCandidateScreen() {
                 uploadCandidateDocument(newCandidate.id, 'Resume', resumeFile.uri, resumeFile.name);
             }
 
-            if (!inviteToken) {
+            // Prefer the canonical URL returned by the Edge Function; fall back
+            // to rebuilding it locally from the token.
+            const link = inviteUrl ?? (inviteToken ? getInviteUrl(inviteToken) : '');
+            if (!link) {
                 setSaveError('Candidate created, but the invite link was not generated.');
                 return;
             }
 
-            setInviteLink(getInviteUrl(inviteToken));
+            // Success copy distinguishes: email sent, email failed, no email.
+            if (trimmedEmail && emailSent) {
+                setSuccessMessage(`Invitation email sent to ${trimmedEmail}. You can also copy the link below.`);
+            } else if (trimmedEmail) {
+                // Email was provided but the send failed (SES error or not
+                // configured) — fall back to a manual-link message.
+                setSuccessMessage('Candidate created, but the email was not sent. Copy and send this link manually.');
+            } else {
+                setSuccessMessage('No email was sent. Copy and send this invite link manually.');
+            }
+
+            setInviteLink(link);
             setShowSuccess(true);
         });
 
@@ -174,8 +210,8 @@ export default function AddCandidateScreen() {
                                 No assigned manager
                             </Text>
                             <Text style={{ color: colors.textSecondary, fontSize: 14, lineHeight: 20 }}>
-                                You don&apos;t have an assigned manager. Contact your admin to be assigned a
-                                manager before creating candidates.
+                                You don&apos;t have an assigned manager. Contact your admin to be assigned a manager
+                                before creating candidates.
                             </Text>
                         </View>
                     )}
@@ -214,6 +250,7 @@ export default function AddCandidateScreen() {
                             onChangeText={setEmail}
                             placeholder="email@example.com"
                             keyboardType="email-address"
+                            error={errors.email}
                             colors={colors}
                             containerStyle={candidateFieldStyle}
                         />
@@ -415,8 +452,11 @@ export default function AddCandidateScreen() {
                             <Ionicons name="checkmark-circle" size={40} color={colors.success} />
                         </View>
                         <Text style={[styles.modalTitle, { color: colors.textPrimary }]}>Candidate Created</Text>
-                        <Text style={[styles.modalSubtitle, { color: colors.textTertiary }]}>
-                            Share this invite link with {name}:
+                        <Text
+                            testID="add-candidate-success-message"
+                            style={[styles.modalSubtitle, { color: colors.textTertiary }]}
+                        >
+                            {successMessage}
                         </Text>
                         <View
                             testID="add-candidate-success-link"

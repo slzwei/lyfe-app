@@ -198,6 +198,12 @@ Deno.serve(async (req) => {
         }
 
         // ── For candidates: also create candidates + invitations rows ──
+        // NOTE: New candidate invite UX in lyfe-app goes through the
+        // `create-candidate` edge function (which also sends the invite email
+        // and returns email status). This branch is kept only for backward
+        // compatibility with older app bundles that still reach this route —
+        // it intentionally does not send email. It returns `invite_url` so any
+        // such older client can still surface a copyable link.
         let inviteUrl: string | null = null;
 
         if (intended_role === 'candidate') {
