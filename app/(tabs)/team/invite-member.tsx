@@ -6,7 +6,7 @@ import { createMemberInvitation, getInvitableRoles } from '@/lib/invitations';
 import { fetchAssignableManagers, type AssignableManager } from '@/lib/recruitment';
 import { useSubmitGuard } from '@/hooks/useSubmitGuard';
 import { Ionicons } from '@expo/vector-icons';
-import { usePathname, useRouter } from 'expo-router';
+import { useRouter } from 'expo-router';
 import React, { useEffect, useMemo, useState } from 'react';
 import {
     ActivityIndicator,
@@ -38,7 +38,6 @@ export default function InviteMemberScreen() {
     const { colors } = useTheme();
     const { user } = useAuth();
     const router = useRouter();
-    const pathname = usePathname();
     const { isSubmitting, guard } = useSubmitGuard();
 
     const [name, setName] = useState('');
@@ -58,10 +57,14 @@ export default function InviteMemberScreen() {
     const [loadingManagers, setLoadingManagers] = useState(false);
 
     const callerRole = (user?.role ?? 'agent') as UserRole;
-    const invitableRoles = useMemo(() => {
-        const roles = getInvitableRoles(callerRole);
-        return pathname.includes('/team/') ? roles.filter((role) => role !== 'candidate') : roles;
-    }, [callerRole, pathname]);
+    // This is the staff invitation screen (shared by /team, /home and /pa
+    // routes). Candidate invites have their own flow — the Add Candidate
+    // screen, which sends the invite email and surfaces email status — so
+    // `candidate` is never offered here regardless of route.
+    const invitableRoles = useMemo(
+        () => getInvitableRoles(callerRole).filter((role) => role !== 'candidate'),
+        [callerRole],
+    );
 
     // Auto-select when the current route/role only has one invite option.
     useEffect(() => {

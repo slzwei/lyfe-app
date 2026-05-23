@@ -17,6 +17,14 @@ export interface CreateCandidateInput {
 }
 
 /**
+ * Archive scope for candidate list queries.
+ *  - 'active'   — exclude archived candidates (default for every pipeline view)
+ *  - 'archived' — only archived candidates (the Archived filter)
+ *  - 'all'      — no archive filter
+ */
+export type CandidateArchiveMode = 'active' | 'archived' | 'all';
+
+/**
  * Fetch candidates. Managers see all; agents see only their assigned candidates.
  *
  * `managerScope` overrides the default scoping when supplied: filters to
@@ -30,8 +38,15 @@ export async function fetchCandidates(
     page?: number,
     pageSize: number = 50,
     managerScope?: string[],
+    archiveMode: CandidateArchiveMode = 'active',
 ): Promise<{ data: RecruitmentCandidate[]; error: string | null; hasMore: boolean }> {
     let query = supabase.from('candidates').select('*').order('updated_at', { ascending: false });
+
+    if (archiveMode === 'active') {
+        query = query.is('archived_at', null);
+    } else if (archiveMode === 'archived') {
+        query = query.not('archived_at', 'is', null);
+    }
 
     if (managerScope !== undefined) {
         if (managerScope.length === 0) {
@@ -62,6 +77,8 @@ export async function fetchCandidates(
         rejected_at: string | null;
         rejected_reason: string | null;
         rejected_by_user_id: string | null;
+        archived_at: string | null;
+        archived_by_id: string | null;
         created_at: string;
         updated_at: string;
     }[];
@@ -134,6 +151,8 @@ export async function fetchCandidates(
         rejected_at: r.rejected_at ?? null,
         rejected_reason: r.rejected_reason ?? null,
         rejected_by_user_id: r.rejected_by_user_id ?? null,
+        archived_at: r.archived_at ?? null,
+        archived_by_id: r.archived_by_id ?? null,
         created_at: r.created_at,
         updated_at: r.updated_at,
     }));
@@ -221,6 +240,8 @@ export async function fetchCandidate(
         rejected_at: row.rejected_at ?? null,
         rejected_reason: row.rejected_reason ?? null,
         rejected_by_user_id: row.rejected_by_user_id ?? null,
+        archived_at: row.archived_at ?? null,
+        archived_by_id: row.archived_by_id ?? null,
         disc_results: discRow
             ? {
                   d_pct: discRow.d_pct,
@@ -277,13 +298,27 @@ export async function fetchCandidate(
 export async function createCandidate(
     input: CreateCandidateInput,
     userId: string,
-): Promise<{ data: RecruitmentCandidate | null; inviteToken: string | null; error: string | null }> {
+): Promise<{
+    data: RecruitmentCandidate | null;
+    inviteToken: string | null;
+    inviteUrl: string | null;
+    emailSent: boolean;
+    emailError: string | null;
+    error: string | null;
+}> {
     try {
         const {
             data: { session },
         } = await supabase.auth.getSession();
         if (!session?.access_token) {
-            return { data: null, inviteToken: null, error: 'No active session' };
+            return {
+                data: null,
+                inviteToken: null,
+                inviteUrl: null,
+                emailSent: false,
+                emailError: null,
+                error: 'No active session',
+            };
         }
 
         const supabaseUrl = process.env.EXPO_PUBLIC_SUPABASE_URL || '';
@@ -304,10 +339,28 @@ export async function createCandidate(
 
         const result = await response.json();
         if (!response.ok) {
-            return { data: null, inviteToken: null, error: result.error || 'Failed to create candidate' };
+            return {
+                data: null,
+                inviteToken: null,
+                inviteUrl: null,
+                emailSent: false,
+                emailError: null,
+                error: result.error || 'Failed to create candidate',
+            };
         }
 
         const row = result.candidate;
+        const inviteUrl =
+            typeof result.invite_url === 'string' && result.invite_url.length > 0 ? result.invite_url : null;
+        const inviteToken =
+            typeof result.invite_token === 'string' && result.invite_token.length > 0
+                ? result.invite_token
+                : typeof row?.invite_token === 'string' && row.invite_token.length > 0
+                  ? row.invite_token
+                  : extractInviteTokenFromUrl(result.invite_url);
+        const emailSent = result.email_sent === true;
+        const emailError =
+            typeof result.email_error === 'string' && result.email_error.length > 0 ? result.email_error : null;
 
         // Fetch manager + creator names for the optimistic response (single query).
         const optimisticUserIds = Array.from(
@@ -350,18 +403,36 @@ export async function createCandidate(
             rejected_at: row.rejected_at ?? null,
             rejected_reason: row.rejected_reason ?? null,
             rejected_by_user_id: row.rejected_by_user_id ?? null,
+            archived_at: row.archived_at ?? null,
+            archived_by_id: row.archived_by_id ?? null,
             created_at: row.created_at ?? '',
             updated_at: row.updated_at ?? '',
         };
 
-        return { data: candidate, inviteToken: result.invite_token, error: null };
+        return { data: candidate, inviteToken, inviteUrl, emailSent, emailError, error: null };
     } catch (err: unknown) {
         captureError(err, { fn: 'createCandidate' });
         return {
             data: null,
             inviteToken: null,
+            inviteUrl: null,
+            emailSent: false,
+            emailError: null,
             error: err instanceof Error ? err.message : 'Failed to create candidate',
         };
+    }
+}
+
+function extractInviteTokenFromUrl(inviteUrl: unknown): string | null {
+    if (typeof inviteUrl !== 'string' || inviteUrl.length === 0) return null;
+
+    const match = inviteUrl.match(/[?&]token=([^&#]+)/);
+    if (!match?.[1]) return null;
+
+    try {
+        return decodeURIComponent(match[1]);
+    } catch {
+        return match[1];
     }
 }
 
@@ -678,5 +749,78 @@ export async function activateAgent(
     } catch (err: unknown) {
         captureError(err, { fn: 'activateAgent' });
         return { error: err instanceof Error ? err.message : 'Activation failed' };
+    }
+}
+
+/**
+ * Archive or unarchive a candidate via the set_candidate_archived RPC.
+ * The RPC self-authorizes (staff role + candidate access) and mirrors the
+ * archive state onto any linked invitation.
+ */
+export async function archiveCandidate(
+    candidateId: string,
+    archived: boolean,
+): Promise<{ archivedAt: string | null; error: string | null }> {
+    const { data, error } = await supabase.rpc('set_candidate_archived', {
+        p_candidate_id: candidateId,
+        p_archived: archived,
+    });
+    if (error) return { archivedAt: null, error: error.message };
+    const row = Array.isArray(data) ? data[0] : data;
+    return { archivedAt: (row?.archived_at as string | null) ?? null, error: null };
+}
+
+/**
+ * Permanently delete a candidate via the delete-candidate edge function.
+ * The function enforces caller auth, team access, and delete eligibility:
+ * a candidate who has completed registration + quiz must be archived instead,
+ * which surfaces here as `code === 'candidate_completed_profile_and_quiz'`.
+ */
+export async function deleteCandidate(
+    candidateId: string,
+): Promise<{ ok: boolean; error: string | null; code: string | null; warning: string | null }> {
+    try {
+        const {
+            data: { session },
+        } = await supabase.auth.getSession();
+        if (!session?.access_token) {
+            return { ok: false, error: 'Not authenticated', code: null, warning: null };
+        }
+        const supabaseUrl = process.env.EXPO_PUBLIC_SUPABASE_URL || '';
+        const response = await fetch(`${supabaseUrl}/functions/v1/delete-candidate`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                Authorization: `Bearer ${session.access_token}`,
+            },
+            body: JSON.stringify({ candidate_id: candidateId }),
+        });
+        const result = await response.json().catch(() => ({}));
+        if (!response.ok) {
+            return {
+                ok: false,
+                error: (result?.error as string) || `Delete failed (HTTP ${response.status})`,
+                code: (result?.code as string | undefined) ?? null,
+                warning: null,
+            };
+        }
+        const warnings = Array.isArray(result?.warnings) ? (result.warnings as string[]) : [];
+        return {
+            ok: true,
+            error: null,
+            code: null,
+            warning:
+                warnings.length > 0
+                    ? 'Candidate deleted. Some files or the linked login account may need manual cleanup.'
+                    : null,
+        };
+    } catch (err: unknown) {
+        captureError(err, { fn: 'deleteCandidate' });
+        return {
+            ok: false,
+            error: err instanceof Error ? err.message : 'Failed to delete candidate',
+            code: null,
+            warning: null,
+        };
     }
 }

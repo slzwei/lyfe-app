@@ -10,6 +10,8 @@ import {
     updateCandidateStatus,
     rejectCandidate,
     activateAgent,
+    archiveCandidate,
+    deleteCandidate,
     addCandidateActivity,
     fetchAssignableManagers,
     reassignCandidate,
@@ -230,6 +232,151 @@ describe('fetchCandidates', () => {
     });
 });
 
+// ── fetchCandidates: archive scope ──
+
+describe('fetchCandidates archive scope', () => {
+    function primeChains() {
+        mockResolve(mockSupa.__getChain('candidates'), { data: [CANDIDATE_ROW], error: null });
+        mockResolve(mockSupa.__getChain('users'), { data: [{ id: 'mgr-1', full_name: 'Manager Alice' }], error: null });
+        mockResolve(mockSupa.__getChain('interviews'), { data: [], error: null });
+    }
+
+    it('excludes archived candidates by default (active mode)', async () => {
+        primeChains();
+        await fetchCandidates('mgr-1', true);
+        expect(mockSupa.__getChain('candidates').__calls).toContainEqual({
+            method: 'is',
+            args: ['archived_at', null],
+        });
+    });
+
+    it('fetches only archived candidates when archiveMode is "archived"', async () => {
+        primeChains();
+        await fetchCandidates('mgr-1', true, undefined, undefined, undefined, 'archived');
+        expect(mockSupa.__getChain('candidates').__calls).toContainEqual({
+            method: 'not',
+            args: ['archived_at', 'is', null],
+        });
+    });
+
+    it('applies no archive filter when archiveMode is "all"', async () => {
+        primeChains();
+        await fetchCandidates('mgr-1', true, undefined, undefined, undefined, 'all');
+        const calls = mockSupa.__getChain('candidates').__calls;
+        expect(calls).not.toContainEqual({ method: 'is', args: ['archived_at', null] });
+        expect(calls).not.toContainEqual({ method: 'not', args: ['archived_at', 'is', null] });
+    });
+});
+
+// ── archiveCandidate ──
+
+describe('archiveCandidate', () => {
+    it('calls the set_candidate_archived RPC and returns the new archived_at', async () => {
+        mockSupa.rpc = jest.fn().mockResolvedValue({
+            data: [{ candidate_id: 'cand-1', archived_at: '2026-05-22T00:00:00Z', archived_by_id: 'mgr-1' }],
+            error: null,
+        });
+        const result = await archiveCandidate('cand-1', true);
+        expect(result.error).toBeNull();
+        expect(result.archivedAt).toBe('2026-05-22T00:00:00Z');
+        expect(mockSupa.rpc).toHaveBeenCalledWith('set_candidate_archived', {
+            p_candidate_id: 'cand-1',
+            p_archived: true,
+        });
+    });
+
+    it('passes p_archived=false when unarchiving', async () => {
+        mockSupa.rpc = jest.fn().mockResolvedValue({
+            data: [{ candidate_id: 'cand-1', archived_at: null, archived_by_id: null }],
+            error: null,
+        });
+        const result = await archiveCandidate('cand-1', false);
+        expect(result.error).toBeNull();
+        expect(result.archivedAt).toBeNull();
+        expect(mockSupa.rpc).toHaveBeenCalledWith('set_candidate_archived', {
+            p_candidate_id: 'cand-1',
+            p_archived: false,
+        });
+    });
+
+    it('surfaces an RPC error', async () => {
+        mockSupa.rpc = jest.fn().mockResolvedValue({ data: null, error: { message: 'Insufficient permissions' } });
+        const result = await archiveCandidate('cand-1', true);
+        expect(result.error).toBe('Insufficient permissions');
+        expect(result.archivedAt).toBeNull();
+    });
+});
+
+// ── deleteCandidate ──
+
+describe('deleteCandidate', () => {
+    beforeEach(() => {
+        mockFetch.mockReset();
+        mockSupa.auth = {
+            getSession: jest.fn().mockResolvedValue({ data: { session: { access_token: 'tok' } } }),
+        };
+    });
+
+    it('returns an error when not authenticated', async () => {
+        mockSupa.auth.getSession.mockResolvedValue({ data: { session: null } });
+        const result = await deleteCandidate('cand-1');
+        expect(result.ok).toBe(false);
+        expect(result.error).toMatch(/auth/i);
+        expect(mockFetch).not.toHaveBeenCalled();
+    });
+
+    it('calls the delete-candidate edge function with candidate_id + bearer', async () => {
+        mockFetch.mockResolvedValueOnce({
+            ok: true,
+            status: 200,
+            json: async () => ({ ok: true, candidate_id: 'cand-1', auth_deleted_count: 1, storage_failed_count: 0 }),
+        });
+        const result = await deleteCandidate('cand-1');
+        expect(result.ok).toBe(true);
+        expect(result.error).toBeNull();
+        expect(mockFetch).toHaveBeenCalledWith(
+            expect.stringContaining('/functions/v1/delete-candidate'),
+            expect.objectContaining({
+                method: 'POST',
+                headers: expect.objectContaining({ Authorization: 'Bearer tok' }),
+                body: JSON.stringify({ candidate_id: 'cand-1' }),
+            }),
+        );
+    });
+
+    it('exposes the "archive instead" code on a completed-candidate 409', async () => {
+        mockFetch.mockResolvedValueOnce({
+            ok: false,
+            status: 409,
+            json: async () => ({
+                code: 'candidate_completed_profile_and_quiz',
+                error: 'This candidate has completed registration and quiz. Archive them instead of deleting.',
+            }),
+        });
+        const result = await deleteCandidate('cand-1');
+        expect(result.ok).toBe(false);
+        expect(result.code).toBe('candidate_completed_profile_and_quiz');
+    });
+
+    it('returns a warning when the server reports cleanup warnings', async () => {
+        mockFetch.mockResolvedValueOnce({
+            ok: true,
+            status: 200,
+            json: async () => ({ ok: true, candidate_id: 'cand-1', warnings: ['auth abc: failed'] }),
+        });
+        const result = await deleteCandidate('cand-1');
+        expect(result.ok).toBe(true);
+        expect(result.warning).toMatch(/manual cleanup/i);
+    });
+
+    it('handles a fetch rejection', async () => {
+        mockFetch.mockRejectedValueOnce(new Error('network down'));
+        const result = await deleteCandidate('cand-1');
+        expect(result.ok).toBe(false);
+        expect(result.error).toBe('network down');
+    });
+});
+
 // ── fetchCandidate ──
 
 describe('fetchCandidate', () => {
@@ -316,6 +463,29 @@ describe('createCandidate', () => {
         expect(result.error).toBeNull();
         expect(result.data?.id).toBe('new-cand');
         expect(result.inviteToken).toBe('inv_test');
+    });
+
+    it('falls back to invite_url when edge function omits invite_token', async () => {
+        mockFetch.mockResolvedValueOnce({
+            ok: true,
+            json: async () => ({
+                candidate: { ...CANDIDATE_ROW, id: 'new-cand', invite_token: null },
+                invitation: { id: 'invitation-1', status: 'pending' },
+                invite_url: 'https://lyfe.sg/candidate/login?token=inv_from_url',
+            }),
+        });
+
+        const usersChain = mockSupa.__getChain('users');
+        mockResolve(usersChain, { data: [{ id: 'mgr-1', full_name: 'Manager Alice' }], error: null });
+
+        const result = await createCandidate(
+            { name: 'Jane Smith', phone: '+6598765432', email: null, notes: null },
+            'mgr-1',
+        );
+
+        expect(result.error).toBeNull();
+        expect(result.data?.id).toBe('new-cand');
+        expect(result.inviteToken).toBe('inv_from_url');
     });
 
     it('returns error on edge function failure', async () => {

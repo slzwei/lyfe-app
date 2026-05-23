@@ -1,13 +1,24 @@
 /**
  * Shared candidate creation edge function.
- * Used by both lyfe-app (mobile) and lyfe-sg (web) to ensure consistent
- * candidate + invitation creation with a single source of truth.
+ * Used by lyfe-app (mobile) to create a candidate + invitation with the same
+ * semantics as the lyfe-sg ATS invite flow.
  *
  * Auth: Bearer JWT (validates caller is staff)
- * Body: { name, phone, email?, notes?, job_id? }
- * Returns: { candidate, invitation, invite_token, invite_url }
+ * Body: { name, phone, email?, notes?, job_id?, assigned_manager_id? }
+ * Returns: { candidate, invitation, invite_token, invite_url, email_sent, email_error? }
+ *
+ * Behaviour:
+ *  - Phone is normalized to the canonical `65XXXXXXXX` SG storage form.
+ *    Non-SG / malformed phones are rejected (400).
+ *  - When an email is provided it is trimmed + lowercased and a candidate
+ *    invitation email is sent via SES. A failed send never fails creation —
+ *    `email_sent: false` + `email_error` are returned so the app can show a
+ *    manual-link message.
+ *  - An invite URL is always returned regardless of email status.
  */
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
+import { legacyPhoneEquivalents, normalizeSgPhone } from '../_shared/phone.ts';
+import { isSesConfigured, sendCandidateInvitationEmail } from '../_shared/email.ts';
 
 interface CreatePayload {
     name: string;
@@ -37,13 +48,8 @@ function jsonResponse(body: Record<string, unknown>, status = 200) {
     });
 }
 
-/** Normalize SG phone to 65XXXXXXXX (no +). Mirrors create-member-invitation. */
-function normalizeSgPhone(raw: string): string | null {
-    const digits = raw.replace(/[\s\-()]/g, '');
-    if (/^\+65[89]\d{7}$/.test(digits)) return digits.slice(1);
-    if (/^[89]\d{7}$/.test(digits)) return `65${digits}`;
-    if (/^65[89]\d{7}$/.test(digits)) return digits;
-    return null;
+function isValidEmail(email: string): boolean {
+    return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
 }
 
 Deno.serve(async (req) => {
@@ -82,6 +88,23 @@ Deno.serve(async (req) => {
 
         if (!name?.trim()) return jsonResponse({ error: 'name is required' }, 400);
         if (!phone?.trim()) return jsonResponse({ error: 'phone is required' }, 400);
+
+        // Single SG normalizer for candidate invites. `90000000`, `+65 9000 0000`
+        // and `6590000000` all collapse to `6590000000`; non-SG values reject.
+        const normalizedPhone = normalizeSgPhone(phone);
+        if (!normalizedPhone) {
+            return jsonResponse({ error: 'Enter a valid Singapore mobile number' }, 400);
+        }
+
+        // Normalize email: trim + lowercase. Validate only if present (email is
+        // optional for candidate invites).
+        let normalizedEmail: string | null = null;
+        if (email?.trim()) {
+            normalizedEmail = email.trim().toLowerCase();
+            if (!isValidEmail(normalizedEmail)) {
+                return jsonResponse({ error: 'Enter a valid email address' }, 400);
+            }
+        }
 
         const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
         if (job_id && !UUID_RE.test(job_id)) return jsonResponse({ error: 'Invalid job_id format' }, 400);
@@ -131,25 +154,26 @@ Deno.serve(async (req) => {
             managerId = assigned_manager_id;
         }
 
-        // Normalize phone once: store the same value used for dedup so a `+` prefix
-        // doesn't bypass duplicate detection. SG-strict form is computed separately
-        // below for the member_invitations mirror (which only accepts SG numbers).
-        const normalizedPhone = phone.trim().replace(/^\+/, '');
+        // ── Duplicate phone check ─────────────────────────────────
+        // Match every legacy representation (`90000000`, `6590000000`,
+        // `+6590000000`, `+65 9000 0000`) so the same phone can't slip past
+        // dedup just because an older row stored it differently.
         const { data: existingByPhone } = await admin
             .from('candidates')
             .select('id')
-            .eq('phone', normalizedPhone)
+            .in('phone', legacyPhoneEquivalents(normalizedPhone))
+            .limit(1)
             .maybeSingle();
 
         if (existingByPhone) {
             return jsonResponse({ error: 'A candidate with this phone number already exists' }, 409);
         }
 
-        if (email?.trim()) {
+        if (normalizedEmail) {
             const { data: existingByEmail } = await admin
                 .from('candidates')
                 .select('id')
-                .eq('email', email.trim())
+                .eq('email', normalizedEmail)
                 .maybeSingle();
 
             if (existingByEmail) {
@@ -183,7 +207,7 @@ Deno.serve(async (req) => {
             .insert({
                 name: name.trim(),
                 phone: normalizedPhone,
-                email: email?.trim() || null,
+                email: normalizedEmail,
                 notes: notes?.trim() || null,
                 status: 'applied',
                 job_id: job_id || null,
@@ -202,11 +226,13 @@ Deno.serve(async (req) => {
         }
 
         // ── Insert invitation ─────────────────────────────────────
+        // `invitations.email` stores a real email or an empty string only —
+        // never a synthetic/phone-like value.
         const { data: invitation, error: inviteErr } = await admin
             .from('invitations')
             .insert({
                 token: inviteToken,
-                email: email?.trim() || '',
+                email: normalizedEmail || '',
                 candidate_name: name.trim(),
                 status: 'pending',
                 invited_by: staffUser?.full_name || 'Staff',
@@ -225,37 +251,57 @@ Deno.serve(async (req) => {
         }
 
         // ── Mirror into member_invitations so Team → Pending reflects the invite.
-        // Best-effort: non-SG formats or a pre-existing pending row for this phone
-        // skip silently so the primary candidate+invitation flow isn't blocked.
-        const normalizedSgPhone = normalizeSgPhone(phone);
-        if (normalizedSgPhone) {
-            const { data: existingMemberInv } = await admin
-                .from('member_invitations')
-                .select('id')
-                .eq('phone', normalizedSgPhone)
-                .eq('status', 'pending')
-                .maybeSingle();
+        // Best-effort: a pre-existing pending row for this phone skips silently so
+        // the primary candidate+invitation flow isn't blocked.
+        const { data: existingMemberInv } = await admin
+            .from('member_invitations')
+            .select('id')
+            .eq('phone', normalizedPhone)
+            .eq('status', 'pending')
+            .maybeSingle();
 
-            if (!existingMemberInv) {
-                const { error: memberInvErr } = await admin.from('member_invitations').insert({
-                    phone: normalizedSgPhone,
-                    full_name: name.trim(),
-                    intended_role: 'candidate',
-                    status: 'pending',
-                    invited_by_id: caller.id,
-                    assigned_manager_id: managerId,
-                    notes: notes?.trim() || null,
-                });
-                if (memberInvErr) {
-                    console.warn('[create-candidate] member_invitations mirror:', memberInvErr.message);
-                }
+        if (!existingMemberInv) {
+            const { error: memberInvErr } = await admin.from('member_invitations').insert({
+                phone: normalizedPhone,
+                full_name: name.trim(),
+                intended_role: 'candidate',
+                status: 'pending',
+                invited_by_id: caller.id,
+                assigned_manager_id: managerId,
+                notes: notes?.trim() || null,
+            });
+            if (memberInvErr) {
+                console.warn('[create-candidate] member_invitations mirror:', memberInvErr.message);
             }
-        } else {
-            console.warn('[create-candidate] skipping member_invitations mirror: non-SG phone format');
         }
 
         // ── Build invite URL ──────────────────────────────────────
         const inviteUrl = `${LYFE_SG_URL}/candidate/login?token=${inviteToken}`;
+
+        // ── Send candidate invitation email (best-effort) ─────────
+        // A failed send must NOT roll back the candidate — the app surfaces
+        // `email_sent: false` + `email_error` and shows a manual-link message.
+        let emailSent = false;
+        let emailError: string | null = null;
+        if (normalizedEmail) {
+            if (!isSesConfigured()) {
+                emailError = 'Email service is not configured';
+                console.warn('[create-candidate] SES not configured — skipping invite email');
+            } else {
+                try {
+                    await sendCandidateInvitationEmail({
+                        to: normalizedEmail,
+                        candidateName: name.trim(),
+                        position: null,
+                        inviteUrl,
+                    });
+                    emailSent = true;
+                } catch (err) {
+                    emailError = err instanceof Error ? err.message : 'Failed to send invitation email';
+                    console.error('[create-candidate] invite email failed:', emailError);
+                }
+            }
+        }
 
         return jsonResponse({
             candidate: {
@@ -264,9 +310,13 @@ Deno.serve(async (req) => {
                 phone: candidate.phone,
                 email: candidate.email,
                 status: candidate.status,
+                invite_token: inviteToken,
             },
             invitation: { id: invitation.id, status: invitation.status },
+            invite_token: inviteToken,
             invite_url: inviteUrl,
+            email_sent: emailSent,
+            ...(emailError ? { email_error: emailError } : {}),
         });
     } catch (err) {
         console.error('[create-candidate]', err);
