@@ -216,7 +216,7 @@ exam_papers, exam_questions, exam_attempts, exam_answers, roadmap_programmes, ro
 
 **Realtime subscriptions:**
 - `notifications` table INSERT → NotificationContext (unread badge)
-- `leads` table INSERT → useLeadRealtime (new MKTR leads)
+- `leads` table INSERT → useLeadRealtime (new MKTR leads — note: MKTR is rolling out `redeem.sg` as the public lead-capture face starting 2026-05-23. Leads arriving here originate from public forms, QR scans, and Retell calls, all proxied through `api.mktr.sg` and delivered via the `receive-mktr-lead` edge function. The lyfe-app side is unaffected — leads land in the same `leads` table regardless of which brand the form was on. See `mktr-platform/CLAUDE.md` for the dual-brand architecture.)
 - `roadshow_activities` + `roadshow_attendance` INSERT → useRoadshowRealtime (live dashboard)
 - `progress_signals` table UPDATE → useCandidateRealtime (cross-app sync)
 
