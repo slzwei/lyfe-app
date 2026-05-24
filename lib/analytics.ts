@@ -40,7 +40,7 @@ export function track(category: EventCategory, data: EventData): void {
 
 export const pipelineAnalytics = {
     /** User changed the Candidates list sort mode. */
-    sortModeChanged(mode: 'alpha' | 'urgency'): void {
+    sortModeChanged(mode: 'urgency' | 'updated' | 'added' | 'alpha' | 'status'): void {
         track('pipeline', { action: 'sort-mode-changed', mode });
     },
 

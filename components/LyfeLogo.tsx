@@ -2,7 +2,7 @@ import { Fonts } from '@/constants/type';
 import { useTheme } from '@/contexts/ThemeContext';
 import { useFonts } from 'expo-font';
 import React from 'react';
-import { StyleSheet, Text, type TextStyle } from 'react-native';
+import { Platform, StyleSheet, Text, type TextStyle } from 'react-native';
 
 interface LyfeLogoProps {
     size?: 'sm' | 'md' | 'lg';
@@ -16,10 +16,15 @@ interface LyfeLogoProps {
 // every size renders identical optical spacing across screen, splash, and icon.
 const TRACKING_RATIO = -0.5 / 48;
 
+// Android's Text view clips descenders when lineHeight is close to fontSize.
+// Fraunces' "y" tail (and italic "f") need extra vertical room on Android;
+// iOS keeps the tight original spacing because its renderer handles descenders.
+const lineHeightFor = (fontSize: number) => (Platform.OS === 'android' ? Math.round(fontSize * 1.3) : fontSize + 4);
+
 const SIZES: Record<string, TextStyle> = {
-    sm: { fontSize: 20, lineHeight: 24, letterSpacing: 20 * TRACKING_RATIO },
-    md: { fontSize: 32, lineHeight: 36, letterSpacing: 32 * TRACKING_RATIO },
-    lg: { fontSize: 48, lineHeight: 52, letterSpacing: 48 * TRACKING_RATIO },
+    sm: { fontSize: 20, lineHeight: lineHeightFor(20), letterSpacing: 20 * TRACKING_RATIO },
+    md: { fontSize: 32, lineHeight: lineHeightFor(32), letterSpacing: 32 * TRACKING_RATIO },
+    lg: { fontSize: 48, lineHeight: lineHeightFor(48), letterSpacing: 48 * TRACKING_RATIO },
 };
 
 /**

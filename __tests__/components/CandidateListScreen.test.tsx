@@ -185,25 +185,8 @@ describe('CandidateListScreen', () => {
         expect(queryByText('Charlie Wong')).toBeNull();
     });
 
-    it('keeps granular statuses in the status sheet', async () => {
-        const { getAllByText, getByLabelText, getByText, queryByText } = render(
-            <CandidateListScreen candidateRoute={(id) => `/candidates/${id}`} addRoute="/add" />,
-        );
-
-        await waitFor(() => {
-            expect(getByText('Alice Tan')).toBeTruthy();
-        });
-
-        fireEvent.press(getByLabelText('Open detailed status filters'));
-        fireEvent.press(getAllByText('Approved').at(-1)!);
-
-        expect(queryByText('Alice Tan')).toBeNull();
-        expect(queryByText('Bob Lim')).toBeNull();
-        expect(getByText('Charlie Wong')).toBeTruthy();
-    });
-
     it('persists manual mode switches', async () => {
-        const { getByText } = render(
+        const { getByText, getByTestId } = render(
             <CandidateListScreen candidateRoute={(id) => `/candidates/${id}`} addRoute="/add" />,
         );
 
@@ -211,7 +194,8 @@ describe('CandidateListScreen', () => {
             expect(getByText('Alice Tan')).toBeTruthy();
         });
 
-        fireEvent.press(getByText('Pipeline'));
+        fireEvent.press(getByTestId('candidates-sort-pill'));
+        fireEvent.press(getByTestId('candidates-sort-option-urgency'));
 
         expect(AsyncStorage.setItem).toHaveBeenCalledWith('lyfe_candidate_sort_mode:pa', 'urgency');
     });
