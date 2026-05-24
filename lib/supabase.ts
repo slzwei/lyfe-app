@@ -1,7 +1,7 @@
 import { createClient } from '@supabase/supabase-js';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as SecureStore from 'expo-secure-store';
-import { Platform } from 'react-native';
+import { AppState, Platform } from 'react-native';
 import type { Database } from '@/types/shared/database.types';
 
 const supabaseUrl = process.env.EXPO_PUBLIC_SUPABASE_URL || '';
@@ -135,51 +135,130 @@ const secureStoreAdapter = {
 };
 
 /**
- * Custom fetch that overrides the Authorization header with our cached
- * access_token whenever it's available. Works around an observed bug in
- * RN where `supabase.auth.getSession()` returns null mid-session (the
- * chunked SecureStore adapter ↔ supabase-js autoRefreshToken interaction
- * intermittently clears the in-memory session). Without this, every
- * `supabase.from(...)` request goes out as anon → RLS hides every row.
+ * Custom fetch with two responsibilities:
  *
- * AuthContext mirrors the active session into `lib/sessionCache` on every
- * auth state change. This fetch shim reads from there.
+ * 1) Inject the cached access_token onto outgoing PostgREST/edge-function
+ *    requests. `supabase.auth.getSession()` in RN with the chunked
+ *    SecureStore adapter occasionally returns null mid-session; this shim
+ *    keeps requests authenticated using `sessionCache` (which AuthContext
+ *    mirrors from authState on every state change, including TOKEN_REFRESHED).
  *
- * Path-specific carve-out: don't touch /auth/* requests — those are how
- * supabase-js manages the session itself; we don't want to recursively
- * inject an old/stale token into the auth flow.
+ * 2) Recover from expired JWTs without showing a technical error. When a
+ *    request returns 401 on a non-auth path, refresh the session once
+ *    (deduped across concurrent failures) and retry the original request
+ *    with the new token. If the refresh fails permanently (refresh token
+ *    revoked/invalid), sign the user out so the auth gate routes to login.
+ *    Transient failures (network) propagate the 401 untouched — the
+ *    NetworkContext reconnect listener handles those.
+ *
+ * /auth/v1/* requests are carved out of both behaviours: those manage the
+ * session itself and must not be retried or have a cached token injected.
  */
-const customFetch: typeof fetch = (input, init) => {
-    let nextInit = init;
-    try {
-        // eslint-disable-next-line @typescript-eslint/no-require-imports
-        const { getCachedAccessToken } = require('./sessionCache') as {
-            getCachedAccessToken: () => string | null;
-        };
-        const token = getCachedAccessToken();
-        if (token) {
-            // Determine URL string from any of the supported input shapes.
-            let url: string | undefined;
-            if (typeof input === 'string') url = input;
-            else if (typeof URL !== 'undefined' && input instanceof URL) url = input.href;
-            else if (input && typeof (input as Request).url === 'string') url = (input as Request).url;
+function resolveUrl(input: RequestInfo | URL): string | undefined {
+    if (typeof input === 'string') return input;
+    if (typeof URL !== 'undefined' && input instanceof URL) return input.href;
+    if (input && typeof (input as Request).url === 'string') return (input as Request).url;
+    return undefined;
+}
 
-            // Only override on non-auth paths. /auth/v1/* is supabase-js's
-            // own auth flow; injecting a cached token there would cause
-            // refresh/session calls to use the wrong subject.
-            const isAuthPath = url ? url.includes('/auth/v1/') : false;
-            if (!isAuthPath && url) {
+interface RefreshResult {
+    ok: boolean;
+    permanent: boolean;
+    accessToken: string | null;
+}
+
+// Module-level mutex so a single screen mount that fires N parallel queries
+// can't trigger N refreshSession() calls — that races with refresh-token
+// rotation and produces false `refresh_token_already_used` sign-outs.
+let refreshPromise: Promise<RefreshResult> | null = null;
+
+const customFetch: typeof fetch = async (input, init) => {
+    const url = resolveUrl(input);
+    const isAuthPath = url ? url.includes('/auth/v1/') : false;
+
+    let nextInit = init;
+    if (!isAuthPath && url) {
+        try {
+            // eslint-disable-next-line @typescript-eslint/no-require-imports
+            const { getCachedAccessToken } = require('./sessionCache') as {
+                getCachedAccessToken: () => string | null;
+            };
+            const token = getCachedAccessToken();
+            if (token) {
                 const headers = new Headers(init?.headers as HeadersInit | undefined);
                 headers.set('Authorization', `Bearer ${token}`);
                 nextInit = { ...(init || {}), headers };
             }
+        } catch {
+            nextInit = init;
         }
-    } catch {
-        // never break the app over a logger/cache lookup; fall through with
-        // the unmodified init.
-        nextInit = init;
     }
-    return fetch(input, nextInit);
+
+    const response = await fetch(input, nextInit);
+
+    if (response.status !== 401 || isAuthPath) return response;
+
+    // No cached session → nothing to refresh. Don't trigger sign-out either,
+    // since the user may already be in the process of signing out.
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    const { getCachedAccessToken, setCachedSession } = require('./sessionCache') as {
+        getCachedAccessToken: () => string | null;
+        setCachedSession: (input: { access_token: string | null; user_id: string | null }) => void;
+    };
+    if (!getCachedAccessToken()) return response;
+
+    let pending = refreshPromise;
+    if (!pending) {
+        pending = (async (): Promise<RefreshResult> => {
+            try {
+                const { error, data } = await supabase.auth.refreshSession();
+                if (!error && data.session) {
+                    // Update sessionCache directly: TOKEN_REFRESHED also fires
+                    // a setState in AuthContext, but React render hasn't run
+                    // by the time this promise resolves. Belt + suspenders so
+                    // the retry below picks up the fresh token immediately.
+                    setCachedSession({
+                        access_token: data.session.access_token,
+                        user_id: data.session.user?.id ?? null,
+                    });
+                    return { ok: true, permanent: false, accessToken: data.session.access_token };
+                }
+                const errAny = error as { status?: number; code?: string } | null;
+                const status = errAny?.status ?? 0;
+                const code = errAny?.code ?? '';
+                // Conservative classification: only treat goTrue's explicit
+                // "refresh token is dead" signals as permanent. Network
+                // errors and 5xx are transient.
+                const permanent =
+                    status === 400 &&
+                    (code === 'refresh_token_not_found' ||
+                        code === 'invalid_grant' ||
+                        code === 'refresh_token_already_used');
+                return { ok: false, permanent, accessToken: null };
+            } catch {
+                return { ok: false, permanent: false, accessToken: null };
+            } finally {
+                refreshPromise = null;
+            }
+        })();
+        refreshPromise = pending;
+    }
+
+    const result = await pending;
+
+    if (result.ok && result.accessToken) {
+        // Retry once via platform fetch (not customFetch) — no recursion.
+        const headers = new Headers(init?.headers as HeadersInit | undefined);
+        headers.set('Authorization', `Bearer ${result.accessToken}`);
+        return fetch(input, { ...(init || {}), headers });
+    }
+
+    if (result.permanent) {
+        // Auth gate in app/_layout.tsx redirects to login on SIGNED_OUT.
+        supabase.auth.signOut().catch(() => {});
+    }
+
+    return response;
 };
 
 export const supabase = createClient<Database>(supabaseUrl, supabaseAnonKey, {
@@ -193,3 +272,17 @@ export const supabase = createClient<Database>(supabaseUrl, supabaseAnonKey, {
         fetch: customFetch,
     },
 });
+
+// JS timers throttle/stop when the app is backgrounded, so supabase-js's
+// autoRefreshToken loop drifts off-schedule and silently fails to refresh.
+// Pair foreground/background transitions with start/stopAutoRefresh per
+// Supabase's RN guidance: https://supabase.com/docs/reference/javascript/initializing
+if (Platform.OS !== 'web') {
+    AppState.addEventListener('change', (state) => {
+        if (state === 'active') {
+            supabase.auth.startAutoRefresh();
+        } else {
+            supabase.auth.stopAutoRefresh();
+        }
+    });
+}

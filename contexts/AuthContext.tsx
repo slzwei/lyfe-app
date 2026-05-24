@@ -538,7 +538,16 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         const {
             data: { subscription },
         } = supabase.auth.onAuthStateChange(async (event, session) => {
-            if (event === 'INITIAL_SESSION' || event === 'TOKEN_REFRESHED') return;
+            if (event === 'INITIAL_SESSION') return;
+
+            // Silent token refreshes only update the session; skip the user
+            // profile re-fetch and downstream work. The render-time mirror at
+            // the top of this provider then propagates the new access_token
+            // into sessionCache so customFetch retries pick up the fresh JWT.
+            if (event === 'TOKEN_REFRESHED') {
+                setAuthState((prev) => ({ ...prev, session }));
+                return;
+            }
 
             if (session?.user) {
                 const profile = await fetchUserProfile(
