@@ -66,8 +66,11 @@ export function NetworkProvider({ children }: { children: React.ReactNode }) {
             setIsConnected(connected);
             setIsInternetReachable(state.isInternetReachable ?? null);
 
-            // Auto-sync when connectivity is restored
+            // Connectivity restored: refresh auth (autoRefreshToken's retry
+            // gives up after a few offline failures and never resumes on its
+            // own) and drain the offline queue.
             if (connected && !prevConnectedRef.current) {
+                supabase.auth.refreshSession().catch(() => {});
                 triggerSync();
             }
             prevConnectedRef.current = connected;
