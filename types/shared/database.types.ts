@@ -668,6 +668,8 @@ export type Database = {
             };
             candidates: {
                 Row: {
+                    archived_at: string | null;
+                    archived_by_id: string | null;
                     assigned_manager_id: string | null;
                     converted_to_agent_at: string | null;
                     created_at: string | null;
@@ -684,12 +686,15 @@ export type Database = {
                     rejected_by_user_id: string | null;
                     rejected_reason: string | null;
                     resume_url: string | null;
+                    source: string;
                     stage_before_hold: Database['public']['Enums']['candidate_status'] | null;
                     stage_entered_at: string | null;
                     status: Database['public']['Enums']['candidate_status'];
                     updated_at: string | null;
                 };
                 Insert: {
+                    archived_at?: string | null;
+                    archived_by_id?: string | null;
                     assigned_manager_id?: string | null;
                     converted_to_agent_at?: string | null;
                     created_at?: string | null;
@@ -706,12 +711,15 @@ export type Database = {
                     rejected_by_user_id?: string | null;
                     rejected_reason?: string | null;
                     resume_url?: string | null;
+                    source?: string;
                     stage_before_hold?: Database['public']['Enums']['candidate_status'] | null;
                     stage_entered_at?: string | null;
                     status?: Database['public']['Enums']['candidate_status'];
                     updated_at?: string | null;
                 };
                 Update: {
+                    archived_at?: string | null;
+                    archived_by_id?: string | null;
                     assigned_manager_id?: string | null;
                     converted_to_agent_at?: string | null;
                     created_at?: string | null;
@@ -728,12 +736,20 @@ export type Database = {
                     rejected_by_user_id?: string | null;
                     rejected_reason?: string | null;
                     resume_url?: string | null;
+                    source?: string;
                     stage_before_hold?: Database['public']['Enums']['candidate_status'] | null;
                     stage_entered_at?: string | null;
                     status?: Database['public']['Enums']['candidate_status'];
                     updated_at?: string | null;
                 };
                 Relationships: [
+                    {
+                        foreignKeyName: 'candidates_archived_by_id_fkey';
+                        columns: ['archived_by_id'];
+                        isOneToOne: false;
+                        referencedRelation: 'users';
+                        referencedColumns: ['id'];
+                    },
                     {
                         foreignKeyName: 'candidates_assigned_manager_id_fkey';
                         columns: ['assigned_manager_id'];
@@ -846,6 +862,27 @@ export type Database = {
                     s_pct?: number;
                     s_raw?: number;
                     user_id?: string;
+                };
+                Relationships: [];
+            };
+            email_debug_log: {
+                Row: {
+                    context: string | null;
+                    created_at: string;
+                    detail: string | null;
+                    id: number;
+                };
+                Insert: {
+                    context?: string | null;
+                    created_at?: string;
+                    detail?: string | null;
+                    id?: number;
+                };
+                Update: {
+                    context?: string | null;
+                    created_at?: string;
+                    detail?: string | null;
+                    id?: number;
                 };
                 Relationships: [];
             };
@@ -2501,6 +2538,7 @@ export type Database = {
             [_ in never]: never;
         };
         Functions: {
+            _cron_auth_headers: { Args: never; Returns: Json };
             append_invitation_file: {
                 Args: { p_file: Json; p_invitation_id: string; p_max_files?: number };
                 Returns: Json;
@@ -2560,6 +2598,10 @@ export type Database = {
             };
             delete_candidate: {
                 Args: { p_invitation_id: string };
+                Returns: undefined;
+            };
+            delete_candidate_cascade: {
+                Args: { p_candidate_id: string };
                 Returns: undefined;
             };
             fn_activate_agent: {
@@ -2648,6 +2690,14 @@ export type Database = {
             redact_audit_data: {
                 Args: { p_data: Json; p_table: string };
                 Returns: Json;
+            };
+            set_candidate_archived: {
+                Args: { p_archived: boolean; p_candidate_id: string };
+                Returns: {
+                    archived_at: string;
+                    archived_by_id: string;
+                    candidate_id: string;
+                }[];
             };
             show_limit: { Args: never; Returns: number };
             show_trgm: { Args: { '': string }; Returns: string[] };
