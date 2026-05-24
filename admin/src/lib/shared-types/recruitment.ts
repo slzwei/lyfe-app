@@ -149,6 +149,10 @@ export interface RecruitmentCandidate {
     rejected_reason: string | null;
     /** Phase A2/F: user.id of the staff member who rejected. */
     rejected_by_user_id: string | null;
+    /** Archive: timestamp set when staff archive the candidate. NULL = active. */
+    archived_at: string | null;
+    /** Archive: user.id of the staff member who archived. NULL if unknown. */
+    archived_by_id: string | null;
     created_at: string;
     updated_at: string;
 }

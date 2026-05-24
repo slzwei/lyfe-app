@@ -29,7 +29,9 @@ export type Capability =
     | 'activate_agent'
     | 'put_on_hold'
     | 'reject_candidate'
-    | 'reassign_agents';
+    | 'reassign_agents'
+    | 'archive_candidate'
+    | 'delete_candidate';
 
 export const ROLE_CAPABILITIES: Record<UserRole, Capability[]> = {
     admin: [
@@ -49,6 +51,8 @@ export const ROLE_CAPABILITIES: Record<UserRole, Capability[]> = {
         'activate_agent',
         'put_on_hold',
         'reject_candidate',
+        'archive_candidate',
+        'delete_candidate',
     ],
     director: [
         'hold_agents',
@@ -66,6 +70,8 @@ export const ROLE_CAPABILITIES: Record<UserRole, Capability[]> = {
         'activate_agent',
         'put_on_hold',
         'reject_candidate',
+        'archive_candidate',
+        'delete_candidate',
     ],
     manager: [
         'hold_agents',
@@ -82,6 +88,8 @@ export const ROLE_CAPABILITIES: Record<UserRole, Capability[]> = {
         'activate_agent',
         'put_on_hold',
         'reject_candidate',
+        'archive_candidate',
+        'delete_candidate',
     ],
     agent: ['view_leads'],
     pa: [
@@ -94,6 +102,8 @@ export const ROLE_CAPABILITIES: Record<UserRole, Capability[]> = {
         'put_on_hold',
         'reject_candidate',
         'reassign_agents',
+        'archive_candidate',
+        'delete_candidate',
     ],
     ro: [
         'create_candidates',
@@ -105,6 +115,8 @@ export const ROLE_CAPABILITIES: Record<UserRole, Capability[]> = {
         'put_on_hold',
         'reject_candidate',
         'reassign_candidates',
+        'archive_candidate',
+        'delete_candidate',
     ],
     candidate: [],
 };
@@ -175,4 +187,12 @@ export function canRejectCandidate(role: UserRole): boolean {
 
 export function canReassignAgents(role: UserRole): boolean {
     return hasCapability(role, 'reassign_agents');
+}
+
+export function canArchiveCandidate(role: UserRole): boolean {
+    return hasCapability(role, 'archive_candidate');
+}
+
+export function canDeleteCandidate(role: UserRole): boolean {
+    return hasCapability(role, 'delete_candidate');
 }

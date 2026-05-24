@@ -15,6 +15,7 @@ import PdfViewerModal from '@/components/candidates/PdfViewerModal';
 import PrepCourseMarkSheet from '@/components/candidates/PrepCourseMarkSheet';
 import PrepCourseSection from '@/components/candidates/PrepCourseSection';
 import ReassignManagerSheet from '@/components/candidates/ReassignManagerSheet';
+import DeleteCandidateSheet from '@/components/candidates/DeleteCandidateSheet';
 import RejectCandidateSheet from '@/components/candidates/RejectCandidateSheet';
 import ActivateAgentSheet, { type ReadinessItem } from '@/components/candidates/ActivateAgentSheet';
 import ProgressSummaryCard from '@/components/roadmap/ProgressSummaryCard';
@@ -31,6 +32,8 @@ import { useInterviewScheduler } from '@/hooks/useInterviewScheduler';
 import {
     activateAgent,
     addCandidateActivity,
+    archiveCandidate,
+    deleteCandidate,
     fetchAssignableManagers,
     fetchCandidate,
     getGeneratedPdfUrl,
@@ -43,6 +46,8 @@ import {
 } from '@/lib/recruitment';
 import {
     canActivateAgent,
+    canArchiveCandidate,
+    canDeleteCandidate,
     canManageMilestones,
     canPutOnHold,
     canReassignCandidates,
@@ -161,12 +166,21 @@ export default function CandidateDetailScreen() {
     const canRejectCand = canRejectCandidate(role as Parameters<typeof canRejectCandidate>[0]);
     const canActivate = canActivateAgent(role as Parameters<typeof canActivateAgent>[0]);
     const canReassign = canReassignCandidates(role as Parameters<typeof canReassignCandidates>[0]);
+    const canArchiveCand = canArchiveCandidate(role as Parameters<typeof canArchiveCandidate>[0]);
+    const canDeleteCand = canDeleteCandidate(role as Parameters<typeof canDeleteCandidate>[0]);
 
     // ── Reject flow state ──
     const [showRejectSheet, setShowRejectSheet] = useState(false);
     const [rejectReason, setRejectReason] = useState('');
     const [rejectError, setRejectError] = useState<string | null>(null);
     const [isRejecting, setIsRejecting] = useState(false);
+
+    // ── Archive / delete flow state ──
+    const [showDeleteSheet, setShowDeleteSheet] = useState(false);
+    const [deleteConfirmText, setDeleteConfirmText] = useState('');
+    const [deleteError, setDeleteError] = useState<string | null>(null);
+    const [isDeleting, setIsDeleting] = useState(false);
+    const [isArchiving, setIsArchiving] = useState(false);
 
     // ── Activate agent flow state ──
     const [showActivateSheet, setShowActivateSheet] = useState(false);
@@ -298,6 +312,7 @@ export default function CandidateDetailScreen() {
     const prepCourseSheetY = useSharedValue(screenH);
     const rejectSheetY = useSharedValue(screenH);
     const activateSheetY = useSharedValue(screenH);
+    const deleteSheetY = useSharedValue(screenH);
 
     const confirmSheetVisible = useSheetAnimation(showConfirmSheet, confirmSheetY);
     const noteSheetVisible = useSheetAnimation(showNoteSheet, noteSheetY);
@@ -307,6 +322,7 @@ export default function CandidateDetailScreen() {
     const prepCourseSheetVisible = useSheetAnimation(!!markingPrepCourse, prepCourseSheetY);
     const rejectSheetVisible = useSheetAnimation(showRejectSheet, rejectSheetY);
     const activateSheetVisible = useSheetAnimation(showActivateSheet, activateSheetY);
+    const deleteSheetVisible = useSheetAnimation(showDeleteSheet, deleteSheetY);
 
     const confirmSheetStyle = useAnimatedStyle(() => ({ transform: [{ translateY: confirmSheetY.value }] }));
     const noteSheetStyle = useAnimatedStyle(() => ({ transform: [{ translateY: noteSheetY.value }] }));
@@ -316,6 +332,7 @@ export default function CandidateDetailScreen() {
     const prepCourseSheetStyle = useAnimatedStyle(() => ({ transform: [{ translateY: prepCourseSheetY.value }] }));
     const rejectSheetStyle = useAnimatedStyle(() => ({ transform: [{ translateY: rejectSheetY.value }] }));
     const activateSheetStyle = useAnimatedStyle(() => ({ transform: [{ translateY: activateSheetY.value }] }));
+    const deleteSheetStyle = useAnimatedStyle(() => ({ transform: [{ translateY: deleteSheetY.value }] }));
 
     // ── Data loading ──
     const loadCandidate = useCallback(async () => {
@@ -579,6 +596,115 @@ export default function CandidateDetailScreen() {
         );
         setShowRejectSheet(false);
     }, [candidate, user?.id, rejectReason]);
+
+    const handleArchivePress = (archive: boolean) => {
+        if (!candidate || isArchiving) return;
+        Alert.alert(
+            archive ? 'Archive Candidate' : 'Unarchive Candidate',
+            archive
+                ? `${candidate.name} will be moved to the Archived list and hidden from the active pipeline. You can unarchive them anytime.`
+                : `${candidate.name} will be restored to the active pipeline.`,
+            [
+                { text: 'Cancel', style: 'cancel' },
+                {
+                    text: archive ? 'Archive' : 'Unarchive',
+                    onPress: async () => {
+                        setIsArchiving(true);
+                        const { error: archiveErr } = await archiveCandidate(candidate.id, archive);
+                        setIsArchiving(false);
+                        if (archiveErr) {
+                            Alert.alert('Could not update', archiveErr);
+                            return;
+                        }
+                        // Q3: return to the candidate list after archive / unarchive.
+                        router.back();
+                    },
+                },
+            ],
+        );
+    };
+
+    const openDeleteSheet = () => {
+        setDeleteConfirmText('');
+        setDeleteError(null);
+        setShowDeleteSheet(true);
+    };
+
+    const dismissDeleteSheet = () => {
+        if (isDeleting) return;
+        setShowDeleteSheet(false);
+    };
+
+    const handleDeleteSubmit = useCallback(async () => {
+        if (!candidate) return;
+        setDeleteError(null);
+        setIsDeleting(true);
+        const { ok, error: delErr, code, warning } = await deleteCandidate(candidate.id);
+        setIsDeleting(false);
+        if (!ok) {
+            if (code === 'candidate_completed_profile_and_quiz') {
+                setShowDeleteSheet(false);
+                Alert.alert(
+                    'Archive instead',
+                    delErr ?? 'This candidate has completed registration and quiz. Archive them instead of deleting.',
+                );
+                return;
+            }
+            setDeleteError(delErr ?? 'Failed to delete candidate.');
+            return;
+        }
+        setShowDeleteSheet(false);
+        if (warning) Alert.alert('Candidate deleted', warning);
+        router.back();
+    }, [candidate]);
+
+    const handleMorePress = () => {
+        if (!candidate) return;
+        const isArchived = candidate.archived_at != null;
+        type MoreAction = { key: 'archive' | 'unarchive' | 'delete'; label: string; destructive?: boolean };
+        const moreActions: MoreAction[] = [];
+        if (canArchiveCand) {
+            moreActions.push(
+                isArchived
+                    ? { key: 'unarchive', label: 'Unarchive Candidate' }
+                    : { key: 'archive', label: 'Archive Candidate' },
+            );
+        }
+        if (canDeleteCand) {
+            moreActions.push({ key: 'delete', label: 'Delete Candidate...', destructive: true });
+        }
+        if (moreActions.length === 0) return;
+
+        const invoke = (action: MoreAction) => {
+            if (action.key === 'delete') openDeleteSheet();
+            else handleArchivePress(action.key === 'archive');
+        };
+        const options = [...moreActions.map((a) => a.label), 'Cancel'];
+
+        if (Platform.OS === 'ios') {
+            const destructiveIndex = moreActions.findIndex((a) => a.destructive);
+            ActionSheetIOS.showActionSheetWithOptions(
+                {
+                    options,
+                    cancelButtonIndex: options.length - 1,
+                    destructiveButtonIndex: destructiveIndex >= 0 ? destructiveIndex : undefined,
+                    title: 'Candidate Actions',
+                },
+                (idx) => {
+                    if (idx < moreActions.length) invoke(moreActions[idx]);
+                },
+            );
+        } else {
+            Alert.alert('Candidate Actions', undefined, [
+                ...moreActions.map((action) => ({
+                    text: action.label,
+                    style: action.destructive ? ('destructive' as const) : ('default' as const),
+                    onPress: () => invoke(action),
+                })),
+                { text: 'Cancel', style: 'cancel' as const },
+            ]);
+        }
+    };
 
     const handleStatusPress = () => {
         if (!candidate) return;
@@ -898,6 +1024,18 @@ export default function CandidateDetailScreen() {
             onPress: () => setShowNoteSheet(true),
             testID: 'candidate-action-note',
         },
+        ...(canArchiveCand || canDeleteCand
+            ? [
+                  {
+                      icon: 'ellipsis-horizontal' as const,
+                      label: 'More',
+                      color: colors.textTertiary,
+                      bgColor: colors.surfacePrimary || colors.background,
+                      onPress: handleMorePress,
+                      testID: 'candidate-action-more',
+                  },
+              ]
+            : []),
     ];
 
     const generatedPdfs: GeneratedPdf[] = [
@@ -1524,6 +1662,18 @@ export default function CandidateDetailScreen() {
                 onReasonChange={setRejectReason}
                 onSubmit={handleRejectSubmit}
                 onDismiss={dismissRejectSheet}
+            />
+            <DeleteCandidateSheet
+                visible={deleteSheetVisible}
+                candidateName={candidate.name}
+                confirmText={deleteConfirmText}
+                error={deleteError}
+                isSubmitting={isDeleting}
+                colors={colors}
+                animatedStyle={deleteSheetStyle}
+                onConfirmTextChange={setDeleteConfirmText}
+                onSubmit={handleDeleteSubmit}
+                onDismiss={dismissDeleteSheet}
             />
             <ActivateAgentSheet
                 visible={activateSheetVisible}
