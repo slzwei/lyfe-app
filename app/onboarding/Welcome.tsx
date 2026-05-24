@@ -24,7 +24,7 @@ export default function WelcomeScreen() {
     const router = useRouter();
 
     return (
-        <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]} edges={['top']}>
+        <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]} edges={['top', 'bottom']}>
             <View style={styles.contentWrap}>
                 <Animated.View entering={FadeInDown.springify().duration(500)}>
                     <Text style={[styles.eyebrow, { color: colors.textTertiary }]}>STEP 1 OF 5</Text>

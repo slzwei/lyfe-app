@@ -1,5 +1,6 @@
 import { letterSpacing } from '@/constants/platform';
 import { KAV_BEHAVIOR } from '@/constants/platform';
+import { useBottomSheetSafeBottom } from '@/hooks/useBottomSheetSafeBottom';
 import type { ThemeColors } from '@/types/theme';
 import { Ionicons } from '@expo/vector-icons';
 import React from 'react';
@@ -26,6 +27,7 @@ interface Props {
 }
 
 function NoteSheet({ visible, noteText, colors, animatedStyle, onNoteTextChange, onSave, onClose }: Props) {
+    const paddingBottom = useBottomSheetSafeBottom(40);
     return (
         <Modal visible={visible} transparent animationType="none" onRequestClose={onClose}>
             <KeyboardAvoidingView style={{ flex: 1 }} behavior={KAV_BEHAVIOR}>
@@ -33,7 +35,7 @@ function NoteSheet({ visible, noteText, colors, animatedStyle, onNoteTextChange,
                     <Animated.View
                         style={[
                             styles.sheet,
-                            { backgroundColor: colors.cardBackground },
+                            { backgroundColor: colors.cardBackground, paddingBottom },
                             animatedStyle as unknown as ViewStyle,
                         ]}
                         onStartShouldSetResponder={() => true}

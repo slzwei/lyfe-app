@@ -37,7 +37,8 @@ import {
     TouchableOpacity,
     View,
 } from 'react-native';
-import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
+import { SafeAreaView } from 'react-native-safe-area-context';
+import { useBottomSheetSafeBottom } from '@/hooks/useBottomSheetSafeBottom';
 
 type SortMode = 'urgency' | 'updated' | 'added' | 'alpha' | 'status';
 
@@ -492,20 +493,14 @@ function SortSheet({
     onClose: () => void;
 }) {
     const { colors } = useTheme();
-    // Pad the sheet past the system inset so the last row clears Android's
-    // 3-button nav bar (~48dp) and iOS's home indicator (~34px).
-    const insets = useSafeAreaInsets();
+    const paddingBottom = useBottomSheetSafeBottom(28);
     return (
         <Modal visible={visible} transparent animationType="fade" onRequestClose={onClose}>
             <Pressable style={styles.sheetBackdrop} onPress={onClose}>
                 <Pressable
                     style={[
                         styles.sheet,
-                        {
-                            backgroundColor: colors.cardBackground,
-                            borderColor: colors.border,
-                            paddingBottom: Math.max(28, 16 + insets.bottom),
-                        },
+                        { backgroundColor: colors.cardBackground, borderColor: colors.border, paddingBottom },
                     ]}
                     onPress={(event) => event.stopPropagation()}
                 >

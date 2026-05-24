@@ -1,4 +1,5 @@
 import { MODAL_STATUS_BAR_TRANSLUCENT } from '@/constants/platform';
+import { useBottomSheetSafeBottom } from '@/hooks/useBottomSheetSafeBottom';
 import { formatDateLabel, toDateStr } from '@/lib/dateTime';
 import type { ThemeColors } from '@/types/theme';
 import { Ionicons } from '@expo/vector-icons';
@@ -56,6 +57,7 @@ export default function CalendarPicker(props: CalendarPickerProps) {
 
     const slideAnim = useRef(new Animated.Value(0)).current;
     const [isRendered, setIsRendered] = useState(false);
+    const sheetPaddingBottom = useBottomSheetSafeBottom(36);
 
     // Range mode local state — not committed until Done
     const [rangeStart, setRangeStart] = useState<string | null>(null);
@@ -210,7 +212,14 @@ export default function CalendarPicker(props: CalendarPickerProps) {
                 </Animated.View>
 
                 <Animated.View
-                    style={[s.sheet, { backgroundColor: colors.cardBackground, transform: [{ translateY }] }]}
+                    style={[
+                        s.sheet,
+                        {
+                            backgroundColor: colors.cardBackground,
+                            transform: [{ translateY }],
+                            paddingBottom: sheetPaddingBottom,
+                        },
+                    ]}
                 >
                     <View style={[s.handle, { backgroundColor: colors.border }]} />
 

@@ -1,5 +1,6 @@
 import { letterSpacing } from '@/constants/platform';
 import { ERROR_BG, ERROR_TEXT } from '@/constants/ui';
+import { useBottomSheetSafeBottom } from '@/hooks/useBottomSheetSafeBottom';
 import type { ThemeColors } from '@/types/theme';
 import { Ionicons } from '@expo/vector-icons';
 import React from 'react';
@@ -38,11 +39,14 @@ function ActivateAgentSheet({
 }: Props) {
     const allSatisfied = readiness.every((r) => r.satisfied);
     const canSubmit = allSatisfied && !isSubmitting;
+    const paddingBottom = useBottomSheetSafeBottom(40);
     return (
         <Modal visible={visible} transparent animationType="none" onRequestClose={onDismiss}>
             <View style={styles.overlay}>
                 <Pressable style={StyleSheet.absoluteFill} onPress={onDismiss} />
-                <Animated.View style={[styles.sheet, { backgroundColor: colors.cardBackground }, animatedStyle]}>
+                <Animated.View
+                    style={[styles.sheet, { backgroundColor: colors.cardBackground, paddingBottom }, animatedStyle]}
+                >
                     <View style={[styles.handle, { backgroundColor: colors.border }]} />
                     <View style={[styles.iconWrap, { backgroundColor: colors.successLight }]}>
                         <Ionicons name="star-outline" size={28} color={colors.success} />

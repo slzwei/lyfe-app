@@ -1,5 +1,6 @@
 import type { ThemeColors } from '@/types/theme';
 import type { CandidateOutcome } from '@/types/recruitment';
+import { useBottomSheetSafeBottom } from '@/hooks/useBottomSheetSafeBottom';
 import { formatSgPhone } from '@/lib/phone';
 import { Ionicons } from '@expo/vector-icons';
 import React from 'react';
@@ -40,6 +41,7 @@ export default function ContactOutcomeSheet({
     onSaveActivity,
     onDismiss,
 }: ContactOutcomeSheetProps) {
+    const paddingBottom = useBottomSheetSafeBottom(40);
     return (
         <Modal
             visible={visible}
@@ -54,7 +56,11 @@ export default function ContactOutcomeSheet({
                     onPress={confirmStep === 'outcome' ? onDismiss : () => onSaveActivity(true)}
                 >
                     <Animated.View
-                        style={[sheetStyles.sheet, { backgroundColor: colors.cardBackground }, animatedStyle]}
+                        style={[
+                            sheetStyles.sheet,
+                            { backgroundColor: colors.cardBackground, paddingBottom },
+                            animatedStyle,
+                        ]}
                         onStartShouldSetResponder={() => true}
                     >
                         {/* Drag handle */}

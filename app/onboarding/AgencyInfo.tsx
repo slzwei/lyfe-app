@@ -41,7 +41,7 @@ export default function AgencyInfoScreen() {
     const router = useRouter();
 
     return (
-        <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]} edges={['top']}>
+        <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]} edges={['top', 'bottom']}>
             <ScrollView style={styles.flex} contentContainerStyle={styles.scrollContent}>
                 <Animated.View entering={FadeInDown.springify().duration(500)}>
                     <Text style={[styles.eyebrow, { color: colors.textTertiary }]}>STEP 4 OF 5</Text>

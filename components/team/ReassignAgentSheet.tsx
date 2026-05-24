@@ -1,3 +1,4 @@
+import { useBottomSheetSafeBottom } from '@/hooks/useBottomSheetSafeBottom';
 import { useSheetAnimation } from '@/hooks/useSheetAnimation';
 import type { ThemeColors } from '@/types/theme';
 import type { ReassignableManager } from '@/lib/team';
@@ -45,6 +46,7 @@ function ReassignAgentSheet({
     const sheetY = useSharedValue(Dimensions.get('window').height);
     const modalVisible = useSheetAnimation(visible, sheetY);
     const animatedStyle = useAnimatedStyle(() => ({ transform: [{ translateY: sheetY.value }] }));
+    const paddingBottom = useBottomSheetSafeBottom(40);
 
     // Two steps in one sheet: 'pick' (manager list) → 'confirm' (type to confirm).
     // Stacking two Modals collides on iOS, so we keep everything in one sheet.
@@ -87,7 +89,9 @@ function ReassignAgentSheet({
                         accessibilityRole="button"
                         accessibilityLabel="Close reassign sheet"
                     />
-                    <Animated.View style={[styles.sheet, { backgroundColor: colors.cardBackground }, animatedStyle]}>
+                    <Animated.View
+                        style={[styles.sheet, { backgroundColor: colors.cardBackground, paddingBottom }, animatedStyle]}
+                    >
                         {step === 'pick' ? (
                             <>
                                 <Text style={[styles.title, { color: colors.textPrimary }]}>Reassign Agent</Text>

@@ -4,6 +4,7 @@ import Animated, { useAnimatedStyle, useSharedValue, withSpring } from 'react-na
 import { Ionicons } from '@expo/vector-icons';
 import Touchable from '@/components/Touchable';
 import { displayWeight, letterSpacing, MODAL_STATUS_BAR_TRANSLUCENT } from '@/constants/platform';
+import { useBottomSheetSafeBottom } from '@/hooks/useBottomSheetSafeBottom';
 import type { ThemeColors } from '@/types/theme';
 
 interface Props {
@@ -43,6 +44,7 @@ function UnlockConfirmSheet({
     const sheetStyle = useAnimatedStyle(() => ({
         transform: [{ translateY: translateY.value }],
     }));
+    const paddingBottom = useBottomSheetSafeBottom(40);
 
     return (
         <Modal
@@ -59,7 +61,9 @@ function UnlockConfirmSheet({
             </Touchable>
 
             {/* Sheet — springs up, isolated from overlay tap */}
-            <Animated.View style={[styles.sheet, { backgroundColor: colors.cardBackground }, sheetStyle]}>
+            <Animated.View
+                style={[styles.sheet, { backgroundColor: colors.cardBackground, paddingBottom }, sheetStyle]}
+            >
                 <View style={[styles.handle, { backgroundColor: colors.border }]} />
 
                 <View style={[styles.iconWrap, { backgroundColor: colors.accentLight }]}>

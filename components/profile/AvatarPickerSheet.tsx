@@ -1,6 +1,7 @@
 import { Ionicons } from '@expo/vector-icons';
 import React, { useEffect, useRef } from 'react';
 import { Animated, Modal, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { useBottomSheetSafeBottom } from '@/hooks/useBottomSheetSafeBottom';
 import type { ThemeColors } from '@/types/theme';
 
 export type AvatarAction = 'camera' | 'library' | 'remove';
@@ -15,6 +16,7 @@ interface AvatarPickerSheetProps {
 
 export default function AvatarPickerSheet({ visible, colors, hasAvatar, onAction, onClose }: AvatarPickerSheetProps) {
     const sheetY = useRef(new Animated.Value(400)).current;
+    const paddingBottom = useBottomSheetSafeBottom(40);
 
     useEffect(() => {
         if (visible) {
@@ -29,7 +31,11 @@ export default function AvatarPickerSheet({ visible, colors, hasAvatar, onAction
                 <Animated.View
                     style={[
                         styles.sheet,
-                        { backgroundColor: colors.cardBackground, transform: [{ translateY: sheetY }] },
+                        {
+                            backgroundColor: colors.cardBackground,
+                            transform: [{ translateY: sheetY }],
+                            paddingBottom,
+                        },
                     ]}
                 >
                     <View style={[styles.handle, { backgroundColor: colors.divider }]} />

@@ -1,3 +1,4 @@
+import { useBottomSheetSafeBottom } from '@/hooks/useBottomSheetSafeBottom';
 import type { ThemeColors } from '@/types/theme';
 import { Ionicons } from '@expo/vector-icons';
 import React from 'react';
@@ -18,14 +19,9 @@ interface ReassignModalProps {
 }
 
 function ReassignModal({ visible, leadName, agents, colors, onSelect, onClose }: ReassignModalProps) {
+    const paddingBottom = useBottomSheetSafeBottom(40);
     return (
-        <Modal
-            visible={visible}
-            transparent
-            animationType="fade"
-            onRequestClose={onClose}
-            accessibilityViewIsModal
-        >
+        <Modal visible={visible} transparent animationType="fade" onRequestClose={onClose} accessibilityViewIsModal>
             <TouchableOpacity
                 style={styles.modalOverlay}
                 activeOpacity={1}
@@ -34,7 +30,7 @@ function ReassignModal({ visible, leadName, agents, colors, onSelect, onClose }:
                 accessibilityLabel="Close reassign modal"
             >
                 <View
-                    style={[styles.reassignSheet, { backgroundColor: colors.cardBackground }]}
+                    style={[styles.reassignSheet, { backgroundColor: colors.cardBackground, paddingBottom }]}
                     onStartShouldSetResponder={() => true}
                 >
                     <Text style={[styles.reassignTitle, { color: colors.textPrimary }]}>Reassign Lead</Text>

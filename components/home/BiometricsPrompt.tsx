@@ -1,5 +1,6 @@
 import { letterSpacing } from '@/constants/platform';
 import { Fonts } from '@/constants/type';
+import { useBottomSheetSafeBottom } from '@/hooks/useBottomSheetSafeBottom';
 import { biometricMeta, type BiometryType } from '@/lib/biometrics';
 import type { ThemeColors } from '@/types/theme';
 import { Ionicons } from '@expo/vector-icons';
@@ -17,11 +18,12 @@ interface Props {
 
 function BiometricsPrompt({ visible, biometryType, isEnabling, colors, onEnable, onDismiss }: Props) {
     const meta = biometricMeta(biometryType);
+    const paddingBottom = useBottomSheetSafeBottom(48);
 
     return (
         <Modal visible={visible} transparent animationType="slide" onRequestClose={onDismiss} accessibilityViewIsModal>
             <View style={styles.overlay}>
-                <View style={[styles.sheet, { backgroundColor: colors.cardBackground }]}>
+                <View style={[styles.sheet, { backgroundColor: colors.cardBackground, paddingBottom }]}>
                     <View style={[styles.iconCircle, { backgroundColor: colors.accentLight }]}>
                         <Ionicons name={meta.icon} size={40} color={colors.accent} />
                     </View>

@@ -10,7 +10,7 @@ import {
     TouchableOpacity,
     View,
 } from 'react-native';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { useBottomSheetSafeBottom } from '@/hooks/useBottomSheetSafeBottom';
 import type { ThemeColors } from '@/types/theme';
 
 interface EditProfileSheetProps {
@@ -39,9 +39,7 @@ export default function EditProfileSheet({
     onClose,
 }: EditProfileSheetProps) {
     const sheetY = useRef(new Animated.Value(400)).current;
-    // Pad the sheet past the system inset so the Save button clears Android's
-    // 3-button nav bar (~48dp) and iOS's home indicator (~34px).
-    const insets = useSafeAreaInsets();
+    const paddingBottom = useBottomSheetSafeBottom(40);
 
     useEffect(() => {
         if (visible) {
@@ -60,7 +58,7 @@ export default function EditProfileSheet({
                             {
                                 backgroundColor: colors.cardBackground,
                                 transform: [{ translateY: sheetY }],
-                                paddingBottom: Math.max(40, 16 + insets.bottom),
+                                paddingBottom,
                             },
                         ]}
                     >

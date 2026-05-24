@@ -1,6 +1,7 @@
 import InlineCalendar from '@/components/InlineCalendar';
 import InlineTimePicker from '@/components/InlineTimePicker';
 import { KAV_BEHAVIOR, letterSpacing } from '@/constants/platform';
+import { useBottomSheetSafeBottom } from '@/hooks/useBottomSheetSafeBottom';
 import { formatDateLabel, toDateStr } from '@/lib/dateTime';
 import type { MilestoneCode, MilestoneStatus } from '@/types/recruitment';
 import type { ThemeColors } from '@/types/theme';
@@ -204,6 +205,7 @@ export default function MilestoneMarkSheet({
         !!milestoneCode &&
         (!showScheduledField || !!scheduledAt) &&
         (!showRnfReferenceField || referenceNumber.trim().length > 0);
+    const paddingBottom = useBottomSheetSafeBottom(40);
 
     return (
         <Modal visible={visible} transparent animationType="none" onRequestClose={onDismiss}>
@@ -214,7 +216,9 @@ export default function MilestoneMarkSheet({
                         contents — critical so the inner ScrollView can drive
                         vertical-drag scrolls. */}
                     <Pressable style={StyleSheet.absoluteFill} onPress={onDismiss} />
-                    <Animated.View style={[styles.sheet, { backgroundColor: colors.cardBackground }, animatedStyle]}>
+                    <Animated.View
+                        style={[styles.sheet, { backgroundColor: colors.cardBackground, paddingBottom }, animatedStyle]}
+                    >
                         <View style={[styles.handle, { backgroundColor: colors.border }]} />
 
                         <View style={[styles.iconWrap, { backgroundColor: colors.surfaceSecondary }]}>

@@ -22,6 +22,7 @@ import {
     TouchableWithoutFeedback,
     View,
 } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 // Login is a persistent branded terracotta hero (regardless of theme), with
 // white overlay text designed for max contrast on orange. The overlays stay
@@ -45,6 +46,7 @@ const PAGE_SPRING = { damping: 22, stiffness: 250, useNativeDriver: true } as co
 
 export default function LoginScreen() {
     const { colors } = useTheme();
+    const insets = useSafeAreaInsets();
     const {
         checkPhoneEligible,
         signInWithOtp,
@@ -547,7 +549,7 @@ export default function LoginScreen() {
 
                 <Text
                     testID="login-version-label"
-                    style={styles.versionFooter}
+                    style={[styles.versionFooter, { paddingBottom: Math.max(8, insets.bottom + 4) }]}
                     accessibilityRole="text"
                     accessibilityLabel={`App version ${appVersionLabel}`}
                 >

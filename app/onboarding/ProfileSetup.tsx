@@ -38,7 +38,7 @@ export default function ProfileSetupScreen() {
     const inputBorderColor = error ? colors.danger : focused ? colors.accent : colors.inputBorder;
 
     return (
-        <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]} edges={['top']}>
+        <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]} edges={['top', 'bottom']}>
             <KeyboardAvoidingView style={styles.flex} behavior={KAV_BEHAVIOR}>
                 <ScrollView
                     style={styles.flex}

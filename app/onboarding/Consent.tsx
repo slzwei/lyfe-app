@@ -127,7 +127,7 @@ export default function ConsentScreen() {
     };
 
     return (
-        <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]} edges={['top']}>
+        <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]} edges={['top', 'bottom']}>
             <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
                 <Animated.View entering={FadeInDown.springify().duration(500)}>
                     <Text style={[styles.eyebrow, { color: colors.textTertiary }]}>BEFORE WE BEGIN</Text>

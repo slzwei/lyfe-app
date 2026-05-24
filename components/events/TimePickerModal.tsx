@@ -2,6 +2,7 @@ import WheelPicker, { WHEEL_ITEM_H } from '@/components/WheelPicker';
 import { MODAL_ANIM_SHEET, MODAL_STATUS_BAR_TRANSLUCENT } from '@/constants/platform';
 import { PICKER_AMPM, PICKER_HOURS, PICKER_MINUTES, TIME_PICKER_VISIBLE } from '@/constants/ui';
 import { useTheme } from '@/contexts/ThemeContext';
+import { useBottomSheetSafeBottom } from '@/hooks/useBottomSheetSafeBottom';
 import React from 'react';
 import { Modal, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 
@@ -45,6 +46,7 @@ export default function TimePickerModal({
     onClose,
 }: TimePickerModalProps) {
     const { colors } = useTheme();
+    const paddingBottom = useBottomSheetSafeBottom(32);
 
     const isStart = mode === 'start';
     const hourIdx = isStart ? startHour : endHour;
@@ -64,7 +66,7 @@ export default function TimePickerModal({
         >
             <View style={styles.timeModalOverlay}>
                 <TouchableOpacity style={StyleSheet.absoluteFillObject} activeOpacity={1} onPress={onClose} />
-                <View style={[styles.timeModalSheet, { backgroundColor: colors.cardBackground }]}>
+                <View style={[styles.timeModalSheet, { backgroundColor: colors.cardBackground, paddingBottom }]}>
                     <View style={[styles.timeModalHandle, { backgroundColor: colors.border }]} />
                     <View style={styles.timeModalHeader}>
                         <Text style={[styles.timeModalTitle, { color: colors.textPrimary }]}>

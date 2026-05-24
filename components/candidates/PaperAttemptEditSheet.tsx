@@ -7,6 +7,7 @@
 import InlineCalendar from '@/components/InlineCalendar';
 import InlineTimePicker from '@/components/InlineTimePicker';
 import { KAV_BEHAVIOR, letterSpacing } from '@/constants/platform';
+import { useBottomSheetSafeBottom } from '@/hooks/useBottomSheetSafeBottom';
 import { formatDateLabel, toDateStr } from '@/lib/dateTime';
 import type { CandidatePaperAttempt, PaperCode } from '@/types/recruitment';
 import type { ThemeColors } from '@/types/theme';
@@ -149,13 +150,16 @@ export default function PaperAttemptEditSheet({
     };
 
     const showCmLipHint = acceptedPaperCodes.includes('CM_LIP') && paperCode !== 'CM_LIP';
+    const paddingBottom = useBottomSheetSafeBottom(40);
 
     return (
         <Modal visible={visible} transparent animationType="none" onRequestClose={onDismiss}>
             <KeyboardAvoidingView style={{ flex: 1 }} behavior={KAV_BEHAVIOR}>
                 <View style={styles.overlay}>
                     <Pressable style={StyleSheet.absoluteFill} onPress={onDismiss} />
-                    <Animated.View style={[styles.sheet, { backgroundColor: colors.cardBackground }, animatedStyle]}>
+                    <Animated.View
+                        style={[styles.sheet, { backgroundColor: colors.cardBackground, paddingBottom }, animatedStyle]}
+                    >
                         <View style={[styles.handle, { backgroundColor: colors.border }]} />
                         <View style={[styles.iconWrap, { backgroundColor: colors.surfaceSecondary }]}>
                             <Ionicons name="book-outline" size={26} color={colors.accent} />

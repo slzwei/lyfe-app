@@ -1,3 +1,4 @@
+import { useBottomSheetSafeBottom } from '@/hooks/useBottomSheetSafeBottom';
 import { useSheetAnimation } from '@/hooks/useSheetAnimation';
 import type { ThemeColors } from '@/types/theme';
 import type { AssignableManager } from '@/lib/recruitment';
@@ -44,6 +45,7 @@ function ReassignManagerSheet({
     const sheetY = useSharedValue(Dimensions.get('window').height);
     const modalVisible = useSheetAnimation(visible, sheetY);
     const animatedStyle = useAnimatedStyle(() => ({ transform: [{ translateY: sheetY.value }] }));
+    const paddingBottom = useBottomSheetSafeBottom(40);
 
     return (
         <Modal visible={modalVisible} transparent animationType="none" onRequestClose={onClose}>
@@ -54,7 +56,9 @@ function ReassignManagerSheet({
                     accessibilityRole="button"
                     accessibilityLabel="Close reassign sheet"
                 />
-                <Animated.View style={[styles.sheet, { backgroundColor: colors.cardBackground }, animatedStyle]}>
+                <Animated.View
+                    style={[styles.sheet, { backgroundColor: colors.cardBackground, paddingBottom }, animatedStyle]}
+                >
                     <Text style={[styles.title, { color: colors.textPrimary }]}>Reassign Candidate</Text>
                     <Text style={[styles.subtitle, { color: colors.textSecondary }]}>
                         {currentManagerName
