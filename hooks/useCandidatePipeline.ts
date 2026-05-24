@@ -18,6 +18,7 @@
 import { useAuth } from '@/contexts/AuthContext';
 import { useCandidateRealtime } from '@/hooks/useCandidateRealtime';
 import { pipelineAnalytics } from '@/lib/analytics';
+import { type CandidateArchiveMode } from '@/lib/recruitment/candidates';
 import { fetchPipelineSnapshot, type PipelineSnapshot } from '@/lib/recruitment/pipelineFetch';
 import { useFocusEffect } from 'expo-router';
 import { useCallback, useState } from 'react';
@@ -33,6 +34,8 @@ export interface UseCandidatePipelineOptions {
      * in fetchCandidates.
      */
     managerScope?: string[];
+    /** Archive scope for the fetch. Defaults to 'active' (excludes archived). */
+    archiveMode?: CandidateArchiveMode;
 }
 
 export interface UseCandidatePipelineResult {
@@ -56,6 +59,7 @@ export function useCandidatePipeline({
     isManagerView = false,
     enabled = true,
     managerScope,
+    archiveMode = 'active',
 }: UseCandidatePipelineOptions = {}): UseCandidatePipelineResult {
     const { user } = useAuth();
     const [rows, setRows] = useState<PipelineSnapshot['rows']>([]);
@@ -75,14 +79,14 @@ export function useCandidatePipeline({
         }
         setError(null);
         const t0 = Date.now();
-        const snap = await fetchPipelineSnapshot(user.id, isManagerView, new Date(), managerScope);
+        const snap = await fetchPipelineSnapshot(user.id, isManagerView, new Date(), managerScope, archiveMode);
         if (snap.error) setError(snap.error);
         setRows(snap.rows);
         setCounts(snap.counts);
         setIsLoading(false);
         pipelineAnalytics.snapshotLoaded(snap.counts, Date.now() - t0);
         // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [user?.id, isManagerView, enabled, managerScopeKey]);
+    }, [user?.id, isManagerView, enabled, managerScopeKey, archiveMode]);
 
     useFocusEffect(
         useCallback(() => {

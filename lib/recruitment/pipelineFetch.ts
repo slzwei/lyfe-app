@@ -10,7 +10,7 @@ import type {
     CandidatePaperAttempt,
     RecruitmentCandidate,
 } from '@/types/recruitment';
-import { fetchCandidates } from './candidates';
+import { fetchCandidates, type CandidateArchiveMode } from './candidates';
 import { buildPaperRequirements, computeNextStep, type NextStep, type Urgency } from './pipeline';
 import {
     fetchActivitiesForCandidates,
@@ -41,6 +41,7 @@ export async function fetchPipelineSnapshot(
     isManagerView: boolean,
     now: Date = new Date(),
     managerScope?: string[],
+    archiveMode: CandidateArchiveMode = 'active',
 ): Promise<PipelineSnapshot> {
     const emptyCounts: Record<Urgency, number> = {
         'at-risk': 0,
@@ -56,6 +57,7 @@ export async function fetchPipelineSnapshot(
         undefined,
         undefined,
         managerScope,
+        archiveMode,
     );
     if (candError) {
         return { rows: [], counts: emptyCounts, error: candError };

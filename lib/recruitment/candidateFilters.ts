@@ -1,6 +1,6 @@
 import type { CandidateStatus, RecruitmentCandidate } from '@/types/recruitment';
 
-export type CandidateFilterGroup = 'open' | 'interview' | 'paperwork' | 'exam' | 'ready' | 'closed';
+export type CandidateFilterGroup = 'open' | 'interview' | 'paperwork' | 'exam' | 'ready' | 'closed' | 'archived';
 export type CandidateFilterKey = CandidateFilterGroup | CandidateStatus;
 
 export interface CandidateFilterDefinition {
@@ -15,6 +15,7 @@ export const CANDIDATE_FILTER_GROUPS: CandidateFilterDefinition[] = [
     { key: 'exam', label: 'Exam' },
     { key: 'ready', label: 'Ready' },
     { key: 'closed', label: 'Closed' },
+    { key: 'archived', label: 'Archived' },
 ];
 
 const GROUP_STATUS_MAP: Record<CandidateFilterGroup, CandidateStatus[]> = {
@@ -33,6 +34,7 @@ const GROUP_STATUS_MAP: Record<CandidateFilterGroup, CandidateStatus[]> = {
     exam: ['exam_prep'],
     ready: ['licensed', 'active_agent'],
     closed: ['on_hold', 'rejected'],
+    archived: [],
 };
 
 export function isCandidateFilterGroup(key: CandidateFilterKey): key is CandidateFilterGroup {
@@ -49,6 +51,14 @@ export function getCandidateFilterLabel(
 }
 
 export function candidateMatchesFilter(candidate: RecruitmentCandidate, filter: CandidateFilterKey): boolean {
+    // The Archived filter is the only one that surfaces archived candidates.
+    if (filter === 'archived') {
+        return candidate.archived_at != null;
+    }
+    // Archived candidates never appear under status or status-group filters.
+    if (candidate.archived_at != null) {
+        return false;
+    }
     if (isCandidateFilterGroup(filter)) {
         return GROUP_STATUS_MAP[filter].includes(candidate.status);
     }
@@ -59,18 +69,27 @@ export function getCandidateFilterCounts(
     candidates: RecruitmentCandidate[],
 ): Record<CandidateFilterKey | 'all', number> {
     const counts = {
-        all: candidates.length,
+        all: 0,
         open: 0,
         interview: 0,
         paperwork: 0,
         exam: 0,
         ready: 0,
         closed: 0,
+        archived: 0,
     } as Record<CandidateFilterKey | 'all', number>;
 
     for (const candidate of candidates) {
+        // Archived candidates are counted on their own and excluded from
+        // `all` and every status / status-group tally.
+        if (candidate.archived_at != null) {
+            counts.archived += 1;
+            continue;
+        }
+        counts.all += 1;
         counts[candidate.status] = (counts[candidate.status] ?? 0) + 1;
         for (const group of CANDIDATE_FILTER_GROUPS) {
+            if (group.key === 'archived') continue;
             if (GROUP_STATUS_MAP[group.key].includes(candidate.status)) {
                 counts[group.key] = (counts[group.key] ?? 0) + 1;
             }

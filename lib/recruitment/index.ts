@@ -9,6 +9,7 @@
  */
 export {
     type CreateCandidateInput,
+    type CandidateArchiveMode,
     type AssignableManager,
     fetchCandidates,
     fetchCandidate,
@@ -16,6 +17,8 @@ export {
     updateCandidateStatus,
     rejectCandidate,
     activateAgent,
+    archiveCandidate,
+    deleteCandidate,
     fetchAssignableManagers,
     reassignCandidate,
     addCandidateActivity,
