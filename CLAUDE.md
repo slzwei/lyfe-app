@@ -89,8 +89,8 @@ lyfe-app/
       lead.ts             # Lead + activity types
       recruitment.ts      # Candidate + interview types
   supabase/
-    functions/            # Edge functions (12 functions)
-    migrations/           # Canonical migration files (47 files)
+    functions/            # Edge functions (19 functions; `_shared/` holds SES + SG-phone helpers reused by them)
+    migrations/           # Canonical migration files (~170 as of 2026-05-24)
   admin/                  # Next.js admin panel (separate app, co-located)
   __tests__/              # Jest test files (~100+ files)
   __mocks__/              # Test mocks
@@ -186,7 +186,7 @@ exam_papers, exam_questions, exam_attempts, exam_answers, roadmap_programmes, ro
 ### Storage Buckets
 
 - `avatars` — Upload/delete/getPublicUrl (user profile pictures)
-- `candidate-resumes` — Upload/createSignedUrl (resumes + misc documents)
+- `candidate-resumes` — Upload/createSignedUrl (resumes + misc documents). Mobile-app candidate doc uploads land here at `<candidate-id>/docs/<filename>` (via `lib/recruitment/documents.ts`) — distinct from the web ATS bucket `candidate-documents` used by lyfe-sg uploads. `lyfe-sg`'s `getCandidateDocUrl()` accepts both path shapes.
 - `candidate-pdfs` — createSignedUrl only (generated PDFs, read-only)
 
 ### RPC Functions
@@ -198,7 +198,9 @@ exam_papers, exam_questions, exam_attempts, exam_answers, roadmap_programmes, ro
 
 ### Edge Functions Called by App
 
-- `create-candidate` — Atomic candidate + invitation creation (staff-initiated)
+- `create-candidate` — Atomic candidate + invitation creation (staff-initiated). Normalizes SG phone via `_shared/phone.ts`; sends invite email via SES (`_shared/email.ts`, sender `noreply@mktr.sg`) when an email is provided; returns `email_sent` / `email_error` / `invite_url` so the app can show 3-state success copy.
+- `create-member-invitation` — Staff invitation flow (not used for candidates — Add Candidate routes through `create-candidate`).
+- `delete-candidate` — Staff-authorized candidate hard-delete + cascade (RO+ archive, admin/director delete).
 - `notify-roadshow-pledge` — Pledge notification to manager (agent-initiated)
 - `delete-account` — Cascading user data deletion (self-service)
 
