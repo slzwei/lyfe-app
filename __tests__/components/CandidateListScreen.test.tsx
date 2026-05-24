@@ -112,7 +112,7 @@ describe('CandidateListScreen', () => {
         expect(getByText('Charlie Wong')).toBeTruthy();
         // PA path passes a managerScope (resolved from pa_manager_assignments). The
         // supabase mock returns no rows so the scope resolves to an empty array here.
-        expect(mockFetch).toHaveBeenCalledWith('user-1', false, undefined, undefined, []);
+        expect(mockFetch).toHaveBeenCalledWith('user-1', false, undefined, undefined, [], 'active');
     });
 
     it('defaults managers to Pipeline', async () => {
@@ -147,6 +147,7 @@ describe('CandidateListScreen', () => {
             isManagerView: true,
             managerScope: undefined,
             enabled: true,
+            archiveMode: 'active',
         });
     });
 
@@ -245,7 +246,7 @@ describe('CandidateListScreen', () => {
         await waitFor(() => {
             // Default beforeEach sets role='pa', so the call still includes the
             // (empty, since supabase is mocked) managerScope.
-            expect(mockFetch).toHaveBeenCalledWith('user-1', true, undefined, undefined, []);
+            expect(mockFetch).toHaveBeenCalledWith('user-1', true, undefined, undefined, [], 'active');
         });
     });
 });

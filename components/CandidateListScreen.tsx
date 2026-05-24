@@ -128,6 +128,10 @@ export function CandidateList({ candidateRoute, isManagerView = false, embedded 
     const effectiveIsManagerView = isRo ? true : isManagerView;
     const effectiveManagerScope = isPa ? (paManagerScope ?? []) : undefined;
 
+    // Viewing the Archived filter switches the fetch to archived candidates;
+    // every other filter shows the active pipeline.
+    const archiveMode = activeFilter === 'archived' ? 'archived' : 'active';
+
     const sortStorageKey = `${SORT_STORAGE_KEY}:${user?.role ?? 'default'}`;
 
     useEffect(() => {
@@ -170,11 +174,12 @@ export function CandidateList({ candidateRoute, isManagerView = false, embedded 
             undefined,
             undefined,
             effectiveManagerScope,
+            archiveMode,
         );
         if (fetchError) setErrorAlpha(fetchError);
         else setCandidatesAlpha(data);
         setIsLoadingAlpha(false);
-    }, [user?.id, effectiveIsManagerView, effectiveManagerScope, isResolvingPaScope]);
+    }, [user?.id, effectiveIsManagerView, effectiveManagerScope, isResolvingPaScope, archiveMode]);
 
     useFocusEffect(
         useCallback(() => {
@@ -198,6 +203,7 @@ export function CandidateList({ candidateRoute, isManagerView = false, embedded 
         isManagerView: effectiveIsManagerView,
         managerScope: effectiveManagerScope,
         enabled: sortMode === 'urgency' && !isResolvingPaScope,
+        archiveMode,
     });
 
     const candidates: RecruitmentCandidate[] =
@@ -219,7 +225,7 @@ export function CandidateList({ candidateRoute, isManagerView = false, embedded 
         list = list.filter((candidate) => candidateMatchesFilter(candidate, activeFilter));
 
         if (sortMode === 'urgency') {
-            if (!isClosedFilter(activeFilter)) {
+            if (!isClosedFilter(activeFilter) && activeFilter !== 'archived') {
                 list = list.filter((candidate) => nextStepByCandidateId[candidate.id]?.urgency !== 'hidden');
             }
             list = [...list].sort((a, b) => {

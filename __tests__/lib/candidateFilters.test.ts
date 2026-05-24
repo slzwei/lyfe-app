@@ -5,9 +5,9 @@ import {
 } from '@/lib/recruitment/candidateFilters';
 import type { RecruitmentCandidate } from '@/types/recruitment';
 
-function candidate(status: RecruitmentCandidate['status']): RecruitmentCandidate {
+function candidate(status: RecruitmentCandidate['status'], archivedAt: string | null = null): RecruitmentCandidate {
     return {
-        id: `cand-${status}`,
+        id: `cand-${status}${archivedAt ? '-archived' : ''}`,
         name: 'Priya Selvaraj',
         phone: '+6591111111',
         email: null,
@@ -22,6 +22,8 @@ function candidate(status: RecruitmentCandidate['status']): RecruitmentCandidate
         disc_pdf_path: null,
         enneagram_pdf_path: null,
         interviews: [],
+        archived_at: archivedAt,
+        archived_by_id: archivedAt ? 'mgr-1' : null,
         created_at: '2026-04-01T00:00:00Z',
         updated_at: '2026-04-20T00:00:00Z',
     };
@@ -58,5 +60,32 @@ describe('candidateFilters', () => {
         expect(counts.paperwork).toBe(1);
         expect(counts.closed).toBe(2);
         expect(counts.rejected).toBe(1);
+    });
+
+    it('surfaces archived candidates only under the archived filter', () => {
+        const archived = candidate('applied', '2026-05-01T00:00:00Z');
+        expect(candidateMatchesFilter(archived, 'archived')).toBe(true);
+        // Archived candidates must never leak into status or status-group filters.
+        expect(candidateMatchesFilter(archived, 'open')).toBe(false);
+        expect(candidateMatchesFilter(archived, 'applied')).toBe(false);
+    });
+
+    it('excludes active candidates from the archived filter', () => {
+        expect(candidateMatchesFilter(candidate('applied'), 'archived')).toBe(false);
+    });
+
+    it('counts archived candidates separately from all and status groups', () => {
+        const counts = getCandidateFilterCounts([
+            candidate('applied'),
+            candidate('interview_scheduled'),
+            candidate('applied', '2026-05-01T00:00:00Z'),
+            candidate('licensed', '2026-05-02T00:00:00Z'),
+        ]);
+
+        expect(counts.archived).toBe(2);
+        // `all` and the group tallies cover only the 2 active candidates.
+        expect(counts.all).toBe(2);
+        expect(counts.open).toBe(2);
+        expect(counts.ready).toBe(0);
     });
 });
