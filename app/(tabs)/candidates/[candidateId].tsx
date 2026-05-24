@@ -8,7 +8,6 @@ import LoadingState from '@/components/LoadingState';
 import MilestoneMarkSheet from '@/components/candidates/MilestoneMarkSheet';
 import MilestonesSection from '@/components/candidates/MilestonesSection';
 import NoteSheet from '@/components/candidates/NoteSheet';
-import OnboardingChecklist from '@/components/candidates/OnboardingChecklist';
 import EmockScoresSection from '@/components/candidates/EmockScoresSection';
 import PapersSection from '@/components/candidates/PapersSection';
 import PdfViewerModal from '@/components/candidates/PdfViewerModal';
@@ -1085,11 +1084,6 @@ export default function CandidateDetailScreen() {
                 {/* ── Quick Actions (always visible — universal actions) ── */}
                 <View style={{ paddingHorizontal: 20, marginTop: 28 }}>
                     <QuickActionsBar actions={quickActions} colors={colors} />
-                </View>
-
-                {/* ── Onboarding Checklist (always visible — high-signal lifecycle status) ── */}
-                <View style={{ marginTop: 28 }}>
-                    <OnboardingChecklist candidate={candidate} documents={documents} colors={colors} />
                 </View>
 
                 {/* ── Tab bar: Progress | Profile | Docs | Activity ── */}
