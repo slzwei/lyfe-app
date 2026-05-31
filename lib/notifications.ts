@@ -4,6 +4,7 @@
 import type { AppNotification } from '@/types/notification';
 import { applyPageRange, resolvePage } from './pagination';
 import { supabase } from './supabase';
+import { queueMutation } from './offline';
 
 /**
  * Fetch notifications for a user, newest first, paginated.
@@ -47,18 +48,22 @@ export async function fetchUnreadCount(userId: string): Promise<{ count: number;
  * Mark a single notification as read.
  */
 export async function markAsRead(notificationId: string): Promise<{ error: string | null }> {
-    const { error } = await supabase.from('notifications').update({ is_read: true }).eq('id', notificationId);
-    return { error: error ? error.message : null };
+    const res = await queueMutation('notifications', 'update', { is_read: true }, { id: notificationId }, () =>
+        supabase.from('notifications').update({ is_read: true }).eq('id', notificationId),
+    );
+    return { error: res.error };
 }
 
 /**
  * Mark all unread notifications as read for a user.
  */
 export async function markAllAsRead(userId: string): Promise<{ error: string | null }> {
-    const { error } = await supabase
-        .from('notifications')
-        .update({ is_read: true })
-        .eq('user_id', userId)
-        .eq('is_read', false);
-    return { error: error ? error.message : null };
+    const res = await queueMutation(
+        'notifications',
+        'update',
+        { is_read: true },
+        { user_id: userId, is_read: false },
+        () => supabase.from('notifications').update({ is_read: true }).eq('user_id', userId).eq('is_read', false),
+    );
+    return { error: res.error };
 }

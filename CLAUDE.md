@@ -267,7 +267,7 @@ EXPO_PUBLIC_LYFE_SG_DOMAIN      # lyfe-sg domain for invite URLs
 
 ## Known Technical Debt
 
-1. **Offline sync is fragile** — SyncManager has no retry logic; single failure blocks entire queue; no deduplication; no max queue size
+1. **Offline-first write queue (wired 2026-05-31)** — `lib/offline/` holds a shared singleton `OfflineQueue` (`instance.ts`) that lib mutations enqueue into via `queueMutation` on a network failure; `SyncManager` drains it on reconnect with per-item retry (3×), dead-lettering, dedup, max-queue-size (500), one-shot JWT-refresh recovery, and userId-stamped items. Queueable surface = single-table writes (16-table allowlist in `safeQuery.ts`+`sync.ts`, `onConflict`-aware): leads + lead_activities; candidate activities/status/reject/reassign, interviews, paper-attempts, milestones, prep-courses, module/item progress + enrollment; roadshow check-in/activities/config; event location-update + delete; notifications. **Online-only by nature** (fail clearly via `runOnlineOnly`, never queued): server RPCs (exam submit, roadshow bulk-create, reassign-upline, archive, mark-licensed), edge functions (create-candidate, activate-agent, delete-candidate, delete-account, member-invitation, face/email-OTP), storage uploads (resume/avatar/docs), auth, onboarding gates (read-after-write), create-then-need-id flows (createLead/createEvent), and `updateEvent` attendee reconciliation (not-in delete can't replay).
 2. **Admin tab is a stub** — Placeholder only; admin functionality lives in separate Next.js panel
 3. **Study materials stub** — exams/study.tsx shows all modules as "Coming Soon"
 4. **Hard-coded Singapore locale** — Phone validation (+65, 8/9 prefix), date formatting (en-SG), SMS via AWS SNS (ap-southeast-1)

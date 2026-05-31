@@ -19,6 +19,7 @@ import type {
 } from '@/types/recruitment';
 import { EMOCK_MODULE_CODES, type EmockAttempt } from '@/types/emock';
 import { supabase } from '../supabase';
+import { queueMutation } from '../offline';
 
 // ── Reads ──────────────────────────────────────────────────────────────────
 
@@ -171,17 +172,23 @@ export async function upsertPaperAttempt(
         result: patch.result ?? null,
         logged_by_user_id: actorUserId ?? null,
     };
-    const { data, error } = patch.id
-        ? await supabase.from('candidate_paper_attempts').update(row).eq('id', patch.id).select().single()
-        : await supabase.from('candidate_paper_attempts').insert(row).select().single();
-    if (error) return { data: null, error: error.message };
+    const res = patch.id
+        ? await queueMutation('candidate_paper_attempts', 'update', row, { id: patch.id }, () =>
+              supabase.from('candidate_paper_attempts').update(row).eq('id', patch.id!).select().single(),
+          )
+        : await queueMutation('candidate_paper_attempts', 'insert', row, undefined, () =>
+              supabase.from('candidate_paper_attempts').insert(row).select().single(),
+          );
+    if (res.error) return { data: null, error: res.error };
+    const data = res.data ?? ({ ...row, id: patch.id ?? `offline-${Date.now()}` } as unknown as CandidatePaperAttempt);
     return { data: data as CandidatePaperAttempt, error: null };
 }
 
 export async function deletePaperAttempt(id: string): Promise<{ error: string | null }> {
-    const { error } = await supabase.from('candidate_paper_attempts').delete().eq('id', id);
-    if (error) return { error: error.message };
-    return { error: null };
+    const res = await queueMutation('candidate_paper_attempts', 'delete', {}, { id }, () =>
+        supabase.from('candidate_paper_attempts').delete().eq('id', id),
+    );
+    return { error: res.error };
 }
 
 // ── Milestone writes ──────────────────────────────────────────────────────
@@ -221,12 +228,21 @@ export async function upsertMilestone(
             patch.status === 'not_started' || patch.status === 'scheduled' ? null : (actorUserId ?? null),
     };
 
-    const { data, error } = await supabase
-        .from('candidate_milestones')
-        .upsert(row, { onConflict: 'candidate_id,milestone_code' })
-        .select()
-        .single();
-    if (error) return { data: null, error: error.message };
+    const res = await queueMutation(
+        'candidate_milestones',
+        'upsert',
+        row,
+        undefined,
+        () =>
+            supabase
+                .from('candidate_milestones')
+                .upsert(row, { onConflict: 'candidate_id,milestone_code' })
+                .select()
+                .single(),
+        'candidate_id,milestone_code',
+    );
+    if (res.error) return { data: null, error: res.error };
+    const data = res.data ?? ({ ...row } as unknown as CandidateMilestone);
     return { data: data as CandidateMilestone, error: null };
 }
 
@@ -255,12 +271,21 @@ export async function upsertPrepCourseBooking(
         booked_by_user_id: patch.bookedDate ? (actorUserId ?? null) : null,
     };
 
-    const { data, error } = await supabase
-        .from('candidate_prep_course_bookings')
-        .upsert(row, { onConflict: 'candidate_id,course_code' })
-        .select()
-        .single();
-    if (error) return { data: null, error: error.message };
+    const res = await queueMutation(
+        'candidate_prep_course_bookings',
+        'upsert',
+        row,
+        undefined,
+        () =>
+            supabase
+                .from('candidate_prep_course_bookings')
+                .upsert(row, { onConflict: 'candidate_id,course_code' })
+                .select()
+                .single(),
+        'candidate_id,course_code',
+    );
+    if (res.error) return { data: null, error: res.error };
+    const data = res.data ?? ({ ...row } as unknown as CandidatePrepCourseBooking);
     return { data: data as CandidatePrepCourseBooking, error: null };
 }
 

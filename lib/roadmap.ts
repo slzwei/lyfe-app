@@ -1,5 +1,6 @@
 import { captureError } from './sentry';
 import { supabase } from './supabase';
+import { queueMutation } from './offline';
 import type {
     RoadmapProgramme,
     RoadmapModule,
@@ -205,22 +206,27 @@ export async function updateModuleItemProgress(
     score?: number,
     notes?: string,
 ): Promise<{ error: string | null }> {
-    const { error } = await supabase.from('candidate_module_item_progress').upsert(
-        {
-            candidate_id: candidateId,
-            module_item_id: itemId,
-            status,
-            completed_at: status === 'completed' ? new Date().toISOString() : null,
-            completed_by: status === 'completed' ? updatedBy : null,
-            score: score ?? null,
-            notes: notes ?? null,
-            attempt_count: 1,
-            updated_at: new Date().toISOString(),
-        },
-        { onConflict: 'candidate_id,module_item_id' },
+    const row = {
+        candidate_id: candidateId,
+        module_item_id: itemId,
+        status,
+        completed_at: status === 'completed' ? new Date().toISOString() : null,
+        completed_by: status === 'completed' ? updatedBy : null,
+        score: score ?? null,
+        notes: notes ?? null,
+        attempt_count: 1,
+        updated_at: new Date().toISOString(),
+    };
+    const res = await queueMutation(
+        'candidate_module_item_progress',
+        'upsert',
+        row,
+        undefined,
+        () =>
+            supabase.from('candidate_module_item_progress').upsert(row, { onConflict: 'candidate_id,module_item_id' }),
+        'candidate_id,module_item_id',
     );
-
-    return { error: error?.message ?? null };
+    return { error: res.error };
 }
 
 // ─── Fetch item summary counts for grid cards ─────────────────────────────
@@ -464,21 +470,25 @@ export async function updateModuleProgress(
     notes?: string,
     score?: number,
 ): Promise<{ error: string | null }> {
-    const { error } = await supabase.from('candidate_module_progress').upsert(
-        {
-            candidate_id: candidateId,
-            module_id: moduleId,
-            status,
-            completed_at: status === 'completed' ? new Date().toISOString() : null,
-            completed_by: status === 'completed' ? updatedBy : null,
-            score: score ?? null,
-            notes: notes ?? null,
-            updated_at: new Date().toISOString(),
-        },
-        { onConflict: 'candidate_id,module_id' },
+    const row = {
+        candidate_id: candidateId,
+        module_id: moduleId,
+        status,
+        completed_at: status === 'completed' ? new Date().toISOString() : null,
+        completed_by: status === 'completed' ? updatedBy : null,
+        score: score ?? null,
+        notes: notes ?? null,
+        updated_at: new Date().toISOString(),
+    };
+    const res = await queueMutation(
+        'candidate_module_progress',
+        'upsert',
+        row,
+        undefined,
+        () => supabase.from('candidate_module_progress').upsert(row, { onConflict: 'candidate_id,module_id' }),
+        'candidate_id,module_id',
     );
-
-    return { error: error?.message ?? null };
+    return { error: res.error };
 }
 
 // ─── Update management notes ────────────────────────────────────────────────
@@ -488,17 +498,21 @@ export async function updateModuleNotes(
     moduleId: string,
     notes: string,
 ): Promise<{ error: string | null }> {
-    const { error } = await supabase.from('candidate_module_progress').upsert(
-        {
-            candidate_id: candidateId,
-            module_id: moduleId,
-            notes,
-            updated_at: new Date().toISOString(),
-        },
-        { onConflict: 'candidate_id,module_id' },
+    const row = {
+        candidate_id: candidateId,
+        module_id: moduleId,
+        notes,
+        updated_at: new Date().toISOString(),
+    };
+    const res = await queueMutation(
+        'candidate_module_progress',
+        'upsert',
+        row,
+        undefined,
+        () => supabase.from('candidate_module_progress').upsert(row, { onConflict: 'candidate_id,module_id' }),
+        'candidate_id,module_id',
     );
-
-    return { error: error?.message ?? null };
+    return { error: res.error };
 }
 
 // ─── Enroll candidate in programme ──────────────────────────────────────────

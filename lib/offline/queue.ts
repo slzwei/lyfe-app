@@ -12,6 +12,8 @@ export interface QueueItem {
     operation: OfflineOperation;
     payload: Record<string, unknown>;
     filters?: Record<string, unknown>;
+    /** For upserts: the conflict target (e.g. 'candidate_id,module_id') so replay dedups correctly. */
+    onConflict?: string;
     createdAt: string;
     retryCount: number;
 }

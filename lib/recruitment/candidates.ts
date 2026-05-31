@@ -5,6 +5,7 @@ import type { CandidateStatus, Interview, RecruitmentCandidate } from '@/types/r
 import { applyPageRange, resolvePage } from '../pagination';
 import { captureError } from '../sentry';
 import { supabase } from '../supabase';
+import { queueMutation } from '../offline';
 import { resolveTeamDataScope } from '../teamDataScope';
 import { markCandidateLicensed } from './progression';
 
@@ -465,9 +466,10 @@ export async function updateCandidateStatus(
         };
     }
 
-    const { error } = await supabase.from('candidates').update({ status: newStatus }).eq('id', candidateId);
-    if (error) return { error: error.message };
-    return { error: null };
+    const res = await queueMutation('candidates', 'update', { status: newStatus }, { id: candidateId }, () =>
+        supabase.from('candidates').update({ status: newStatus }).eq('id', candidateId),
+    );
+    return { error: res.error };
 }
 
 /**
@@ -488,16 +490,18 @@ export async function rejectCandidate(
     if (!rejectedByUserId) {
         return { error: 'Not authenticated.' };
     }
-    const { error } = await supabase
-        .from('candidates')
-        .update({
-            status: 'rejected',
-            rejected_reason: trimmedReason,
-            rejected_by_user_id: rejectedByUserId,
-        })
-        .eq('id', candidateId);
-    if (error) return { error: error.message };
-    return { error: null };
+    const res = await queueMutation(
+        'candidates',
+        'update',
+        { status: 'rejected', rejected_reason: trimmedReason, rejected_by_user_id: rejectedByUserId },
+        { id: candidateId },
+        () =>
+            supabase
+                .from('candidates')
+                .update({ status: 'rejected', rejected_reason: trimmedReason, rejected_by_user_id: rejectedByUserId })
+                .eq('id', candidateId),
+    );
+    return { error: res.error };
 }
 
 export interface AssignableManager {
@@ -595,22 +599,29 @@ export async function reassignCandidate(
             return { error: 'Target user is not a manager or director' };
         }
 
-        const { error } = await supabase
-            .from('candidates')
-            .update({ assigned_manager_id: newManagerId })
-            .eq('id', candidateId);
-
-        if (error) return { error: error.message };
+        const upd = await queueMutation(
+            'candidates',
+            'update',
+            { assigned_manager_id: newManagerId },
+            { id: candidateId },
+            () => supabase.from('candidates').update({ assigned_manager_id: newManagerId }).eq('id', candidateId),
+        );
+        if (upd.error) return { error: upd.error };
 
         const nameMap = new Map((users || []).map((u) => [u.id, u.full_name]));
         const fromName = candidate?.assigned_manager_id ? nameMap.get(candidate.assigned_manager_id) : undefined;
+        const note = `Reassigned from ${fromName || 'Unknown'} to ${nameMap.get(newManagerId) || 'Unknown'}`;
 
-        await supabase.from('candidate_activities').insert({
-            candidate_id: candidateId,
-            user_id: userId,
-            type: 'reassignment',
-            note: `Reassigned from ${fromName || 'Unknown'} to ${nameMap.get(newManagerId) || 'Unknown'}`,
-        });
+        await queueMutation(
+            'candidate_activities',
+            'insert',
+            { candidate_id: candidateId, user_id: userId, type: 'reassignment', note },
+            undefined,
+            () =>
+                supabase
+                    .from('candidate_activities')
+                    .insert({ candidate_id: candidateId, user_id: userId, type: 'reassignment', note }),
+        );
 
         return { error: null };
     } catch (err: unknown) {
@@ -699,11 +710,17 @@ export async function addCandidateActivity(
     outcome: string | null,
     note: string | null,
 ): Promise<{ error: string | null }> {
-    const { error } = await supabase
-        .from('candidate_activities')
-        .insert({ candidate_id: candidateId, user_id: userId, type, outcome: outcome || null, note });
-    if (error) return { error: error.message };
-    return { error: null };
+    const res = await queueMutation(
+        'candidate_activities',
+        'insert',
+        { candidate_id: candidateId, user_id: userId, type, outcome: outcome || null, note },
+        undefined,
+        () =>
+            supabase
+                .from('candidate_activities')
+                .insert({ candidate_id: candidateId, user_id: userId, type, outcome: outcome || null, note }),
+    );
+    return { error: res.error };
 }
 
 /**

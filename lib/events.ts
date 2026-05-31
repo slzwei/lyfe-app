@@ -5,6 +5,7 @@ import type { AgencyEvent, CreateEventInput, EventAttendee, EventType, ExternalA
 import type { Json } from '@/types/shared/database.types';
 import { applyPageRange, resolvePage } from './pagination';
 import { supabase } from './supabase';
+import { queueMutation } from './offline';
 import { resolveTeamDataScope } from './teamDataScope';
 
 export interface SimpleUser {
@@ -186,18 +187,16 @@ export async function updateEventLocation(
         locationRadiusMeters?: number;
     },
 ): Promise<{ error: string | null }> {
-    const { error } = await supabase
-        .from('events')
-        .update({
-            latitude: fields.latitude,
-            longitude: fields.longitude,
-            ...(fields.locationName !== undefined ? { location: fields.locationName } : {}),
-            ...(fields.locationRadiusMeters !== undefined
-                ? { location_radius_meters: fields.locationRadiusMeters }
-                : {}),
-        })
-        .eq('id', eventId);
-    return { error: error?.message ?? null };
+    const patch = {
+        latitude: fields.latitude,
+        longitude: fields.longitude,
+        ...(fields.locationName !== undefined ? { location: fields.locationName } : {}),
+        ...(fields.locationRadiusMeters !== undefined ? { location_radius_meters: fields.locationRadiusMeters } : {}),
+    };
+    const res = await queueMutation('events', 'update', patch, { id: eventId }, () =>
+        supabase.from('events').update(patch).eq('id', eventId),
+    );
+    return { error: res.error };
 }
 
 /**
@@ -286,8 +285,10 @@ function mapEvents(rows: EventRow[]): AgencyEvent[] {
  * Delete an event (attendees cascade via FK).
  */
 export async function deleteEvent(eventId: string): Promise<{ error: string | null }> {
-    const { error } = await supabase.from('events').delete().eq('id', eventId);
-    return { error: error ? error.message : null };
+    const res = await queueMutation('events', 'delete', {}, { id: eventId }, () =>
+        supabase.from('events').delete().eq('id', eventId),
+    );
+    return { error: res.error };
 }
 
 /**

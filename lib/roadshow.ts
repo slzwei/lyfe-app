@@ -6,6 +6,7 @@ import type { Json } from '@/types/shared/database.types';
 import { friendlyError } from './errors';
 import { applyPageRange, resolvePage } from './pagination';
 import { supabase } from './supabase';
+import { queueMutation, enqueueWrite, isNetworkError } from './offline';
 
 /** PostgREST error code: "no rows found" from .single() */
 const PGRST_NO_ROWS = 'PGRST116';
@@ -102,10 +103,19 @@ export async function saveRoadshowConfig(
     eventId: string,
     input: RoadshowConfigInput,
 ): Promise<{ error: string | null }> {
-    const { error } = await supabase
-        .from('roadshow_configs')
-        .upsert({ event_id: eventId, ...input }, { onConflict: 'event_id' });
-    return { error: error ? friendlyError(error.message, error.code) : null };
+    const row = { event_id: eventId, ...input };
+    try {
+        const { error } = await supabase.from('roadshow_configs').upsert(row, { onConflict: 'event_id' });
+        if (error) return { error: friendlyError(error.message, error.code) };
+        return { error: null };
+    } catch (e) {
+        // Offline → queue the config upsert (replays on reconnect).
+        if (isNetworkError(e)) {
+            await enqueueWrite('roadshow_configs', 'upsert', row, undefined, 'event_id');
+            return { error: null };
+        }
+        throw e;
+    }
 }
 
 // ── Attendance ───────────────────────────────────────────────
@@ -178,7 +188,7 @@ export async function logRoadshowAttendanceWithPledge(
     lateReason: string | null,
     pledges: PledgeInput,
 ): Promise<CheckInResult> {
-    const { error } = await supabase.from('roadshow_attendance').insert({
+    const payload = {
         event_id: eventId,
         user_id: userId,
         late_reason: lateReason || null,
@@ -186,10 +196,21 @@ export async function logRoadshowAttendanceWithPledge(
         pledged_pitches: pledges.pitches,
         pledged_closed: pledges.closed,
         pledged_afyc: pledges.afyc,
-    });
-    if (!error) return { error: null };
-    if (error.code === PG_UNIQUE_VIOLATION) return { error: null, alreadyCheckedIn: true };
-    return { error: friendlyError(error.message, error.code) };
+    };
+    try {
+        const { error } = await supabase.from('roadshow_attendance').insert(payload);
+        if (!error) return { error: null };
+        if (error.code === PG_UNIQUE_VIOLATION) return { error: null, alreadyCheckedIn: true };
+        return { error: friendlyError(error.message, error.code) };
+    } catch (e) {
+        // Offline → queue the check-in (replays on reconnect; a duplicate that
+        // already exists will simply fail the unique constraint on replay).
+        if (isNetworkError(e)) {
+            await enqueueWrite('roadshow_attendance', 'insert', payload);
+            return { error: null };
+        }
+        throw e;
+    }
 }
 
 export async function managerCheckIn(
@@ -200,7 +221,7 @@ export async function managerCheckIn(
     pledges: PledgeInput,
     managerId: string,
 ): Promise<CheckInResult> {
-    const { error } = await supabase.from('roadshow_attendance').insert({
+    const payload = {
         event_id: eventId,
         user_id: userId,
         checked_in_at: checkedInAt,
@@ -210,10 +231,19 @@ export async function managerCheckIn(
         pledged_pitches: pledges.pitches,
         pledged_closed: pledges.closed,
         pledged_afyc: pledges.afyc,
-    });
-    if (!error) return { error: null };
-    if (error.code === PG_UNIQUE_VIOLATION) return { error: null, alreadyCheckedIn: true };
-    return { error: friendlyError(error.message, error.code) };
+    };
+    try {
+        const { error } = await supabase.from('roadshow_attendance').insert(payload);
+        if (!error) return { error: null };
+        if (error.code === PG_UNIQUE_VIOLATION) return { error: null, alreadyCheckedIn: true };
+        return { error: friendlyError(error.message, error.code) };
+    } catch (e) {
+        if (isNetworkError(e)) {
+            await enqueueWrite('roadshow_attendance', 'insert', payload);
+            return { error: null };
+        }
+        throw e;
+    }
 }
 
 // ── Activities ───────────────────────────────────────────────
@@ -268,27 +298,27 @@ export async function logRoadshowActivity(
     afycAmount?: number,
     loggedAt?: string,
 ): Promise<{ data: RoadshowActivity | null; error: string | null }> {
-    const { data, error } = await supabase
-        .from('roadshow_activities')
-        .insert({
+    const payload = {
+        event_id: eventId,
+        user_id: userId,
+        type,
+        afyc_amount: afycAmount ?? null,
+        ...(loggedAt ? { logged_at: loggedAt } : {}),
+    };
+    const res = await queueMutation('roadshow_activities', 'insert', payload, undefined, () =>
+        supabase.from('roadshow_activities').insert(payload).select().single(),
+    );
+    if (res.error) return { data: null, error: res.error };
+    // Queued offline → build an optimistic row from the known inputs.
+    const row = res.data as { id?: string; logged_at?: string } | null;
+    return {
+        data: {
+            id: row?.id ?? `offline-${Date.now()}`,
             event_id: eventId,
             user_id: userId,
             type,
             afyc_amount: afycAmount ?? null,
-            ...(loggedAt ? { logged_at: loggedAt } : {}),
-        })
-        .select()
-        .single();
-
-    if (error) return { data: null, error: friendlyError(error.message, error.code) };
-    return {
-        data: {
-            id: data.id,
-            event_id: data.event_id,
-            user_id: data.user_id,
-            type: data.type,
-            afyc_amount: data.afyc_amount,
-            logged_at: data.logged_at,
+            logged_at: row?.logged_at ?? loggedAt ?? new Date().toISOString(),
         },
         error: null,
     };

@@ -7,6 +7,7 @@ import { friendlyError } from '../errors';
 import { captureError } from '../sentry';
 import { getCachedAccessToken } from '../sessionCache';
 import { supabase } from '../supabase';
+import { queueMutation, runOnlineOnly } from '../offline';
 import { resolveTeamDataScope } from '../teamDataScope';
 
 export interface CreateLeadInput {
@@ -123,32 +124,51 @@ export async function createLead(
 
     const trimmedNotes = input.notes?.trim().slice(0, 2000) || null;
 
-    const { data: lead, error: leadError } = await supabase
-        .from('leads')
-        .insert({
-            full_name: trimmedName,
-            phone: input.phone?.trim() || null,
-            email: input.email?.trim() || null,
-            source: trimmedSource,
-            product_interest: input.product_interest,
-            notes: trimmedNotes,
-            status: 'new' as LeadStatus,
-            assigned_to: userId,
-            created_by: userId,
-        })
-        .select()
-        .single();
-
+    // Online-only: creating a lead returns a server-generated id that both the
+    // "created" activity and the UI (navigation to the new lead) need, so this
+    // cannot be queued offline — fail clearly instead.
+    const attempt = await runOnlineOnly(() =>
+        supabase
+            .from('leads')
+            .insert({
+                full_name: trimmedName,
+                phone: input.phone?.trim() || null,
+                email: input.email?.trim() || null,
+                source: trimmedSource,
+                product_interest: input.product_interest,
+                notes: trimmedNotes,
+                status: 'new' as LeadStatus,
+                assigned_to: userId,
+                created_by: userId,
+            })
+            .select()
+            .single(),
+    );
+    if (attempt.error) return { data: null, error: attempt.error };
+    const { data: lead, error: leadError } = attempt.data!;
     if (leadError) return { data: null, error: leadError.message };
 
-    // Insert "created" activity
-    await supabase.from('lead_activities').insert({
-        lead_id: lead.id,
-        user_id: userId,
-        type: 'created' as LeadActivityType,
-        description: `Lead created from ${input.source}`,
-        metadata: {},
-    });
+    // Insert "created" activity (queueable — we already have the lead id).
+    await queueMutation(
+        'lead_activities',
+        'insert',
+        {
+            lead_id: lead.id,
+            user_id: userId,
+            type: 'created',
+            description: `Lead created from ${input.source}`,
+            metadata: {},
+        },
+        undefined,
+        () =>
+            supabase.from('lead_activities').insert({
+                lead_id: lead.id,
+                user_id: userId,
+                type: 'created' as LeadActivityType,
+                description: `Lead created from ${input.source}`,
+                metadata: {},
+            }),
+    );
 
     return { data: lead as Lead, error: null };
 }
@@ -162,20 +182,36 @@ export async function updateLeadStatus(
     oldStatus: LeadStatus,
     userId: string,
 ): Promise<{ error: string | null }> {
-    const { error: updateError } = await supabase
-        .from('leads')
-        .update({ status: newStatus, updated_at: new Date().toISOString() })
-        .eq('id', leadId);
+    const updatedAt = new Date().toISOString();
+    const upd = await queueMutation(
+        'leads',
+        'update',
+        { status: newStatus, updated_at: updatedAt },
+        { id: leadId },
+        () => supabase.from('leads').update({ status: newStatus, updated_at: updatedAt }).eq('id', leadId),
+    );
+    if (upd.error) return { error: upd.error };
 
-    if (updateError) return { error: updateError.message };
-
-    await supabase.from('lead_activities').insert({
-        lead_id: leadId,
-        user_id: userId,
-        type: 'status_change' as LeadActivityType,
-        description: null,
-        metadata: { from_status: oldStatus, to_status: newStatus },
-    });
+    await queueMutation(
+        'lead_activities',
+        'insert',
+        {
+            lead_id: leadId,
+            user_id: userId,
+            type: 'status_change',
+            description: null,
+            metadata: { from_status: oldStatus, to_status: newStatus },
+        },
+        undefined,
+        () =>
+            supabase.from('lead_activities').insert({
+                lead_id: leadId,
+                user_id: userId,
+                type: 'status_change' as LeadActivityType,
+                description: null,
+                metadata: { from_status: oldStatus, to_status: newStatus },
+            }),
+    );
 
     return { error: null };
 }
@@ -219,32 +255,46 @@ export async function assignLead(
     actingUserId: string,
 ): Promise<{ error: string | null }> {
     try {
-        const { data: existing, error: fetchError } = await supabase
-            .from('leads')
-            .select('assigned_to')
-            .eq('id', leadId)
-            .single();
+        // Best-effort read of the previous assignee for the activity log; if the
+        // device is offline this read fails harmlessly and we proceed without it.
+        let previousAgent: string | null = null;
+        try {
+            const { data: existing } = await supabase.from('leads').select('assigned_to').eq('id', leadId).single();
+            previousAgent = (existing as { assigned_to: string | null } | null)?.assigned_to ?? null;
+        } catch {
+            /* offline / not found — proceed without previous-agent metadata */
+        }
 
-        if (fetchError) return { error: fetchError.message };
+        const updatedAt = new Date().toISOString();
+        const upd = await queueMutation(
+            'leads',
+            'update',
+            { assigned_to: agentId, updated_at: updatedAt },
+            { id: leadId },
+            () => supabase.from('leads').update({ assigned_to: agentId, updated_at: updatedAt }).eq('id', leadId),
+        );
+        if (upd.error) return { error: upd.error };
 
-        const { error: updateError } = await supabase
-            .from('leads')
-            .update({ assigned_to: agentId, updated_at: new Date().toISOString() })
-            .eq('id', leadId);
-
-        if (updateError) return { error: updateError.message };
-
-        const previousAgent = (existing as { assigned_to: string | null })?.assigned_to;
-        await supabase.from('lead_activities').insert({
-            lead_id: leadId,
-            user_id: actingUserId,
-            type: 'reassignment' as LeadActivityType,
-            description: previousAgent ? 'Lead reassigned by manager' : 'Lead assigned by manager',
-            metadata: {
-                from_agent_id: previousAgent || null,
-                to_agent_id: agentId,
+        await queueMutation(
+            'lead_activities',
+            'insert',
+            {
+                lead_id: leadId,
+                user_id: actingUserId,
+                type: 'reassignment',
+                description: previousAgent ? 'Lead reassigned by manager' : 'Lead assigned by manager',
+                metadata: { from_agent_id: previousAgent || null, to_agent_id: agentId },
             },
-        });
+            undefined,
+            () =>
+                supabase.from('lead_activities').insert({
+                    lead_id: leadId,
+                    user_id: actingUserId,
+                    type: 'reassignment' as LeadActivityType,
+                    description: previousAgent ? 'Lead reassigned by manager' : 'Lead assigned by manager',
+                    metadata: { from_agent_id: previousAgent || null, to_agent_id: agentId },
+                }),
+        );
 
         return { error: null };
     } catch (err) {

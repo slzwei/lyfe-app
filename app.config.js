@@ -76,6 +76,7 @@ module.exports = {
                 'android.permission.READ_MEDIA_IMAGES',
                 'android.permission.ACCESS_FINE_LOCATION',
                 'android.permission.ACCESS_COARSE_LOCATION',
+                'android.permission.POST_NOTIFICATIONS',
             ],
             config: {
                 googleMaps: {

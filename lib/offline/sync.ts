@@ -5,15 +5,27 @@ import { captureError } from '../sentry';
 const MAX_RETRIES = 3;
 const EXECUTE_TIMEOUT_MS = 10_000;
 
-/** Tables allowed for sync — must match ALLOWED_SYNC_TABLES in safeQuery.ts */
+/** Tables allowed for sync — MUST match ALLOWED_SYNC_TABLES in safeQuery.ts */
 const ALLOWED_SYNC_TABLES = new Set([
     'leads',
     'lead_activities',
     'roadshow_activities',
     'roadshow_attendance',
+    'roadshow_configs',
     'candidate_module_progress',
     'candidate_module_item_progress',
+    'candidate_programme_enrollment',
+    'candidate_activities',
+    'candidate_paper_attempts',
+    'candidate_milestones',
+    'candidate_prep_course_bookings',
+    'candidates',
+    'candidate_profiles',
+    'interviews',
+    'events',
+    'event_attendees',
     'notifications',
+    'users',
 ]);
 
 /** Operations allowed for sync — must match OfflineOperation type in queue.ts */
@@ -85,7 +97,9 @@ export class SyncManager {
                     break;
                 }
                 case 'upsert':
-                    query = this.client.from(table).upsert(payload);
+                    query = item.onConflict
+                        ? this.client.from(table).upsert(payload, { onConflict: item.onConflict })
+                        : this.client.from(table).upsert(payload);
                     break;
                 case 'delete': {
                     query = this.client.from(table).delete();

@@ -4,6 +4,7 @@
 import type { LeadActivity, LeadActivityType } from '@/types/lead';
 import { applyPageRange, resolvePage } from '../pagination';
 import { supabase } from '../supabase';
+import { queueMutation } from '../offline';
 
 /**
  * Fetch activities for a single lead.
@@ -58,22 +59,45 @@ export async function addLeadNote(
     note: string,
     userId: string,
 ): Promise<{ data: LeadActivity | null; error: string | null }> {
-    // Update lead's updated_at timestamp
-    await supabase.from('leads').update({ updated_at: new Date().toISOString() }).eq('id', leadId);
+    // Bump the lead's updated_at timestamp (queueable).
+    const updatedAt = new Date().toISOString();
+    await queueMutation('leads', 'update', { updated_at: updatedAt }, { id: leadId }, () =>
+        supabase.from('leads').update({ updated_at: updatedAt }).eq('id', leadId),
+    );
 
-    const { data, error } = await supabase
-        .from('lead_activities')
-        .insert({
+    const res = await queueMutation(
+        'lead_activities',
+        'insert',
+        { lead_id: leadId, user_id: userId, type: 'note', description: note, metadata: {} },
+        undefined,
+        () =>
+            supabase
+                .from('lead_activities')
+                .insert({
+                    lead_id: leadId,
+                    user_id: userId,
+                    type: 'note' as LeadActivityType,
+                    description: note,
+                    metadata: {},
+                })
+                .select()
+                .single(),
+    );
+
+    if (res.error) return { data: null, error: res.error };
+    // Queued offline → no server row yet; return an optimistic stub so the note
+    // renders immediately (the real row replaces it on the next refetch/sync).
+    const data =
+        res.data ??
+        ({
+            id: `offline-${Date.now()}`,
             lead_id: leadId,
             user_id: userId,
-            type: 'note' as LeadActivityType,
+            type: 'note',
             description: note,
             metadata: {},
-        })
-        .select()
-        .single();
-
-    if (error) return { data: null, error: error.message };
+            created_at: new Date().toISOString(),
+        } as unknown as LeadActivity);
     return { data: data as LeadActivity, error: null };
 }
 
@@ -88,15 +112,36 @@ export async function addLeadActivity(
     description: string | null,
     metadata: Record<string, any> = {},
 ): Promise<{ data: LeadActivity | null; error: string | null }> {
-    await supabase.from('leads').update({ updated_at: new Date().toISOString() }).eq('id', leadId);
+    const updatedAt = new Date().toISOString();
+    await queueMutation('leads', 'update', { updated_at: updatedAt }, { id: leadId }, () =>
+        supabase.from('leads').update({ updated_at: updatedAt }).eq('id', leadId),
+    );
 
-    const { data, error } = await supabase
-        .from('lead_activities')
-        .insert({ lead_id: leadId, user_id: userId, type, description, metadata })
-        .select()
-        .single();
+    const res = await queueMutation(
+        'lead_activities',
+        'insert',
+        { lead_id: leadId, user_id: userId, type, description, metadata },
+        undefined,
+        () =>
+            supabase
+                .from('lead_activities')
+                .insert({ lead_id: leadId, user_id: userId, type, description, metadata })
+                .select()
+                .single(),
+    );
 
-    if (error) return { data: null, error: error.message };
+    if (res.error) return { data: null, error: res.error };
+    const data =
+        res.data ??
+        ({
+            id: `offline-${Date.now()}`,
+            lead_id: leadId,
+            user_id: userId,
+            type,
+            description,
+            metadata,
+            created_at: new Date().toISOString(),
+        } as unknown as LeadActivity);
     return { data: data as LeadActivity, error: null };
 }
 
@@ -111,25 +156,46 @@ export async function reassignLead(
     toAgentName: string,
     actingUserId: string,
 ): Promise<{ error: string | null }> {
-    const { error: updateError } = await supabase
-        .from('leads')
-        .update({ assigned_to: toAgentId, updated_at: new Date().toISOString() })
-        .eq('id', leadId);
+    const updatedAt = new Date().toISOString();
+    const upd = await queueMutation(
+        'leads',
+        'update',
+        { assigned_to: toAgentId, updated_at: updatedAt },
+        { id: leadId },
+        () => supabase.from('leads').update({ assigned_to: toAgentId, updated_at: updatedAt }).eq('id', leadId),
+    );
+    if (upd.error) return { error: upd.error };
 
-    if (updateError) return { error: updateError.message };
-
-    await supabase.from('lead_activities').insert({
-        lead_id: leadId,
-        user_id: actingUserId,
-        type: 'reassignment' as LeadActivityType,
-        description: null,
-        metadata: {
-            from_agent_id: fromAgentId,
-            to_agent_id: toAgentId,
-            from_agent_name: fromAgentName,
-            to_agent_name: toAgentName,
+    await queueMutation(
+        'lead_activities',
+        'insert',
+        {
+            lead_id: leadId,
+            user_id: actingUserId,
+            type: 'reassignment',
+            description: null,
+            metadata: {
+                from_agent_id: fromAgentId,
+                to_agent_id: toAgentId,
+                from_agent_name: fromAgentName,
+                to_agent_name: toAgentName,
+            },
         },
-    });
+        undefined,
+        () =>
+            supabase.from('lead_activities').insert({
+                lead_id: leadId,
+                user_id: actingUserId,
+                type: 'reassignment' as LeadActivityType,
+                description: null,
+                metadata: {
+                    from_agent_id: fromAgentId,
+                    to_agent_id: toAgentId,
+                    from_agent_name: fromAgentName,
+                    to_agent_name: toAgentName,
+                },
+            }),
+    );
 
     return { error: null };
 }

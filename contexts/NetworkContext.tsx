@@ -1,5 +1,5 @@
 import React, { createContext, useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { OfflineQueue, SyncManager, type SyncStatus } from '@/lib/offline';
+import { offlineQueue, SyncManager, type SyncStatus } from '@/lib/offline';
 import { supabase } from '@/lib/supabase';
 
 // NetInfo requires a native module that may not be present in older dev builds.
@@ -36,7 +36,10 @@ export function NetworkProvider({ children }: { children: React.ReactNode }) {
         lastSyncAt: null,
     });
 
-    const queueRef = useRef(new OfflineQueue());
+    // Shared module-level singleton (see lib/offline/instance.ts) — the same
+    // queue that lib mutations enqueue into, so this provider's sync + pending
+    // count actually reflect real queued writes.
+    const queueRef = useRef(offlineQueue);
     const syncManagerRef = useRef(new SyncManager(supabase, queueRef.current));
     const prevConnectedRef = useRef(true);
 
