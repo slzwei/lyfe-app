@@ -1,0 +1,829 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Lyfe-app · Production-Readiness Board</title>
+<style>
+  :root{
+    --cream:#F5F0E6; --paper:#FBF8F1; --ink:#241f1a; --ink-soft:#6c6155;
+    --line:#e4dccb; --terra:#D6552B; --terra-deep:#b8431f;
+    --crit:#b3261e; --high:#D6552B; --med:#C08A1E; --low:#5f7a6b;
+    --sage:#5f7a6b; --shadow:0 1px 2px rgba(60,45,30,.06),0 6px 18px rgba(60,45,30,.07);
+  }
+  *{box-sizing:border-box}
+  html,body{margin:0;height:100%}
+  body{
+    font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Inter,system-ui,sans-serif;
+    background:var(--cream); color:var(--ink); -webkit-font-smoothing:antialiased;
+    font-size:14px; line-height:1.5;
+  }
+  code,.mono{font-family:"SF Mono",ui-monospace,Menlo,Consolas,monospace}
+
+  header{
+    position:sticky; top:0; z-index:30; background:rgba(245,240,230,.92);
+    backdrop-filter:saturate(1.2) blur(8px); border-bottom:1px solid var(--line);
+    padding:14px 22px 12px;
+  }
+  .hrow{display:flex; align-items:center; gap:16px; flex-wrap:wrap}
+  h1{font-size:18px; margin:0; letter-spacing:-.01em; font-weight:700}
+  h1 .sub{font-weight:500; color:var(--ink-soft); font-size:13px; margin-left:8px}
+  .spacer{flex:1}
+  .btn{
+    border:1px solid var(--line); background:var(--paper); color:var(--ink);
+    padding:7px 12px; border-radius:9px; font-size:12.5px; cursor:pointer; font-weight:600;
+    transition:.15s; white-space:nowrap;
+  }
+  .btn:hover{border-color:var(--terra); color:var(--terra-deep)}
+  .btn.danger:hover{border-color:var(--crit); color:var(--crit)}
+
+  .progresswrap{margin-top:12px; display:flex; align-items:center; gap:14px; flex-wrap:wrap}
+  .bar{height:9px; flex:1; min-width:200px; background:#e9e0cf; border-radius:99px; overflow:hidden; box-shadow:inset 0 1px 2px rgba(0,0,0,.05)}
+  .bar > i{display:block; height:100%; width:0;
+    background:linear-gradient(90deg,var(--sage),#7fa08c); transition:width .4s cubic-bezier(.2,.8,.2,1)}
+  .stat{font-size:12.5px; color:var(--ink-soft); white-space:nowrap}
+  .stat b{color:var(--ink); font-variant-numeric:tabular-nums}
+  .sevtally{display:flex; gap:7px; flex-wrap:wrap}
+  .pill{font-size:11px; font-weight:700; padding:3px 9px; border-radius:99px; color:#fff; letter-spacing:.02em}
+  .pill.c{background:var(--crit)} .pill.h{background:var(--high)} .pill.m{background:var(--med)} .pill.l{background:var(--low)}
+  .pill.ghost{background:transparent; color:var(--ink-soft); border:1px solid var(--line)}
+
+  .filters{display:flex; gap:9px; align-items:center; margin-top:11px; flex-wrap:wrap}
+  select,input[type=search]{
+    font:inherit; font-size:12.5px; padding:6px 10px; border:1px solid var(--line);
+    border-radius:9px; background:var(--paper); color:var(--ink);
+  }
+  input[type=search]{min-width:230px}
+  input[type=search]:focus,select:focus{outline:none; border-color:var(--terra)}
+
+  main{padding:18px 22px 60px}
+  .board{display:grid; grid-template-columns:repeat(3,1fr); gap:16px; align-items:start}
+  @media (max-width:900px){.board{grid-template-columns:1fr}}
+  .col{background:rgba(251,248,241,.6); border:1px solid var(--line); border-radius:16px; padding:10px 10px 14px; min-height:120px}
+  .col.dragover{border-color:var(--terra); background:#faf0e8}
+  .colhead{display:flex; align-items:center; gap:8px; padding:6px 8px 10px; position:sticky; top:74px}
+  .colhead h2{font-size:13px; margin:0; text-transform:uppercase; letter-spacing:.08em; color:var(--ink-soft); font-weight:700}
+  .count{margin-left:auto; font-size:12px; font-weight:700; color:var(--ink-soft); background:#ece3d2; padding:2px 9px; border-radius:99px; font-variant-numeric:tabular-nums}
+  .col[data-col=done] .colhead h2{color:var(--sage)}
+
+  .card{
+    background:var(--paper); border:1px solid var(--line); border-left:4px solid var(--line);
+    border-radius:12px; padding:11px 12px 10px; margin:8px 4px; box-shadow:var(--shadow);
+    cursor:grab; transition:transform .12s, box-shadow .12s; position:relative;
+  }
+  .card:active{cursor:grabbing}
+  .card:hover{transform:translateY(-1px); box-shadow:0 2px 4px rgba(60,45,30,.08),0 10px 26px rgba(60,45,30,.10)}
+  .card.sev-c{border-left-color:var(--crit)} .card.sev-h{border-left-color:var(--high)}
+  .card.sev-m{border-left-color:var(--med)} .card.sev-l{border-left-color:var(--low)}
+  .card.done{opacity:.96; background:#f4f6f1; border-left-color:var(--sage)}
+  .card.dim{display:none}
+
+  .ctop{display:flex; align-items:center; gap:7px; margin-bottom:5px}
+  .sev{font-size:9.5px; font-weight:800; letter-spacing:.06em; padding:2px 7px; border-radius:5px; color:#fff}
+  .sev.c{background:var(--crit)} .sev.h{background:var(--high)} .sev.m{background:var(--med)} .sev.l{background:var(--low)}
+  .area{font-size:10.5px; color:var(--ink-soft); font-weight:600; background:#efe7d6; padding:2px 7px; border-radius:5px}
+  .idtag{font-size:10px; color:#b3a896; margin-left:auto; font-weight:700}
+  .title{font-size:13.5px; font-weight:650; line-height:1.35; margin:2px 0 6px; letter-spacing:-.005em}
+  .files{font-size:10.5px; color:#9a8e7c; word-break:break-all; margin-bottom:8px}
+  .doneat{font-size:10.5px; font-weight:700; color:var(--sage); margin:-4px 0 8px}
+
+  .chips{display:flex; flex-wrap:wrap; gap:5px; margin-bottom:7px}
+  .chip{font-size:10.5px; font-weight:700; padding:3px 8px; border-radius:7px; border:1px solid var(--line);
+    background:#fff; color:var(--ink-soft); cursor:pointer; user-select:none; transition:.12s; display:flex; align-items:center; gap:4px}
+  .chip:hover{border-color:#cdbfa6}
+  .chip .dot{width:7px;height:7px;border-radius:99px;background:#d8ccb6}
+  .chip.on{background:#eef3ec; border-color:#b9d0bf; color:#3f5a4b}
+  .chip.on .dot{background:var(--sage)}
+  .chip.code.on{background:#fbeee7; border-color:#eac4ae; color:var(--terra-deep)} .chip.code.on .dot{background:var(--terra)}
+
+  .cbtns{display:flex; align-items:center; gap:6px; margin-top:2px}
+  .mv{border:1px solid var(--line); background:#fff; border-radius:7px; width:26px; height:24px; cursor:pointer; font-size:13px; color:var(--ink-soft); line-height:1}
+  .mv:hover{border-color:var(--terra); color:var(--terra-deep)}
+  .mv:disabled{opacity:.3; cursor:default}
+  .note{flex:1; font:inherit; font-size:11px; padding:4px 7px; border:1px dashed var(--line); border-radius:7px; background:transparent; color:var(--ink); min-width:60px}
+  .note:focus{outline:none; border-color:var(--terra); border-style:solid}
+  .expand{font-size:10.5px; color:var(--terra-deep); cursor:pointer; font-weight:700; background:none; border:none; padding:2px 0}
+  .details{display:none; margin-top:8px; padding-top:8px; border-top:1px dashed var(--line); font-size:11.5px; color:var(--ink-soft)}
+  .details.open{display:block}
+  .details .lbl{font-weight:800; color:var(--ink); text-transform:uppercase; font-size:9.5px; letter-spacing:.06em; display:block; margin:6px 0 2px}
+
+  /* tooltip */
+  #tip{position:fixed; z-index:60; max-width:330px; background:#241f1a; color:#f3ece0;
+    padding:11px 13px; border-radius:11px; font-size:12.5px; line-height:1.5; box-shadow:0 10px 34px rgba(0,0,0,.28);
+    pointer-events:none; opacity:0; transform:translateY(4px); transition:opacity .13s, transform .13s; display:none}
+  #tip.show{opacity:1; transform:translateY(0)}
+  #tip .tt-h{font-weight:800; font-size:10.5px; letter-spacing:.06em; text-transform:uppercase; color:#e0a98c; margin-bottom:5px; display:flex; gap:6px; align-items:center}
+  #tip:after{content:""; position:absolute; width:10px;height:10px; background:#241f1a; transform:rotate(45deg)}
+  .legend{font-size:11px; color:var(--ink-soft); margin-top:12px; display:flex; gap:14px; flex-wrap:wrap; align-items:center}
+  .legend b{color:var(--ink)}
+  .empty{text-align:center; color:#b3a896; font-size:12px; padding:18px 0; font-style:italic}
+
+  .prow{display:flex; align-items:center; gap:9px; margin-top:8px}
+  .promptbtn{border:1px solid #eac4ae; background:#fbeee7; color:var(--terra-deep); font-weight:750; font-size:11px;
+    padding:5px 11px; border-radius:8px; cursor:pointer; transition:.12s}
+  .promptbtn:hover{background:#f7e2d6; border-color:var(--terra)}
+  .promptbtn.ok{background:#eef3ec; border-color:#b9d0bf; color:#3f5a4b}
+  .previewlink{background:none; border:none; color:var(--ink-soft); font-size:11px; cursor:pointer; text-decoration:underline; text-underline-offset:2px; padding:2px}
+  .previewlink:hover{color:var(--terra-deep)}
+
+  #toast{position:fixed; left:50%; bottom:26px; transform:translateX(-50%) translateY(12px); background:#241f1a; color:#f3ece0;
+    padding:10px 16px; border-radius:10px; font-size:13px; font-weight:600; box-shadow:0 10px 30px rgba(0,0,0,.25);
+    opacity:0; pointer-events:none; transition:.18s; z-index:80}
+  #toast.show{opacity:1; transform:translateX(-50%) translateY(0)}
+
+  #overlay{position:fixed; inset:0; background:rgba(36,31,26,.45); backdrop-filter:blur(2px); display:none;
+    align-items:center; justify-content:center; z-index:70; padding:24px}
+  #overlay.show{display:flex}
+  #modal{background:var(--paper); border:1px solid var(--line); border-radius:16px; width:min(780px,94vw); max-height:86vh;
+    display:flex; flex-direction:column; box-shadow:0 24px 70px rgba(0,0,0,.3); overflow:hidden}
+  .mhead{display:flex; align-items:center; gap:10px; padding:13px 16px; border-bottom:1px solid var(--line)}
+  .mhead b{font-size:14px; letter-spacing:-.005em}
+  #mclose{margin-left:auto; border:none; background:none; font-size:17px; cursor:pointer; color:var(--ink-soft); line-height:1}
+  #mtext{flex:1; min-height:340px; resize:vertical; border:none; padding:14px 16px;
+    font-family:"SF Mono",ui-monospace,Menlo,monospace; font-size:12px; line-height:1.55; color:var(--ink); background:var(--paper); outline:none}
+  .mfoot{display:flex; align-items:center; gap:10px; padding:12px 16px; border-top:1px solid var(--line)}
+</style>
+</head>
+<body>
+<header>
+  <div class="hrow">
+    <h1>Lyfe-app · Production-Readiness Board <span class="sub">deep audit · 2026-06-12</span></h1>
+    <div class="spacer"></div>
+    <button class="btn" id="collapseAll">Collapse details</button>
+    <button class="btn" id="copyAllBtn" title="Copy a prompt for every open item matching the current filters">Copy visible prompts</button>
+    <button class="btn" id="exportBtn">Export</button>
+    <button class="btn" id="importBtn">Import</button>
+    <button class="btn danger" id="resetBtn">Reset board</button>
+    <input type="file" id="importFile" accept="application/json" hidden />
+  </div>
+
+  <div class="progresswrap">
+    <div class="stat"><b id="doneN">0</b>/<b id="totN">0</b> done</div>
+    <div class="bar"><i id="barFill"></i></div>
+    <div class="stat"><b id="pct">0</b>% complete · <b id="verN">0</b> fully verified</div>
+    <div class="sevtally" id="sevTally"></div>
+  </div>
+
+  <div class="filters">
+    <select id="fSev">
+      <option value="">All severities</option>
+      <option value="c">Critical</option>
+      <option value="h">High</option>
+      <option value="m">Medium</option>
+      <option value="l">Low</option>
+    </select>
+    <select id="fArea"><option value="">All areas</option></select>
+    <input type="search" id="fText" placeholder="Search title, files, plain-English…" />
+    <label class="stat" style="display:flex;gap:6px;align-items:center;cursor:pointer">
+      <input type="checkbox" id="fHideDone" /> hide completed
+    </label>
+  </div>
+
+  <div class="legend">
+    <span><b>Hover a card</b> for the plain-English meaning.</span>
+    <span>Each card has a <b>⧉ Copy Claude prompt</b> button — paste it into Claude Code to work that item.</span>
+    <span>Status chips: <span class="chip code on" style="cursor:default"><span class="dot"></span>Code</span>
+      <span class="chip on" style="cursor:default"><span class="dot"></span>Tests written</span>
+      <span class="chip on" style="cursor:default"><span class="dot"></span>Tests passing</span>
+      <span class="chip on" style="cursor:default"><span class="dot"></span>Verified</span> — click to toggle.</span>
+  </div>
+</header>
+
+<main>
+  <div class="board" id="board">
+    <section class="col" data-col="outstanding">
+      <div class="colhead"><h2>Outstanding</h2><span class="count" id="c-outstanding">0</span></div>
+      <div class="dropzone" data-col="outstanding"></div>
+    </section>
+    <section class="col" data-col="inprogress">
+      <div class="colhead"><h2>In Progress</h2><span class="count" id="c-inprogress">0</span></div>
+      <div class="dropzone" data-col="inprogress"></div>
+    </section>
+    <section class="col" data-col="done">
+      <div class="colhead"><h2>Completed</h2><span class="count" id="c-done">0</span></div>
+      <div class="dropzone" data-col="done"></div>
+    </section>
+  </div>
+</main>
+
+<div id="tip"></div>
+
+<script>
+/* ---------- DATA: every audit finding ---------- */
+/* sev: c/h/m/l · area · title · files · layman (plain English) · tech (technical) · fix (recommended) */
+const SEED = [
+ // CRITICAL
+ {id:"C1",sev:"c",area:"Offline",title:"Offline write queue is dead code — saves are silently lost",done:true,doneAt:"2026-06-12",
+  files:"lib/offline/safeQuery.ts; @supabase/postgrest-js 2.98",
+  layman:"The app promises that if staff save something while offline (no signal), it'll sync later. In reality nothing is saved — the change is silently dropped while the app says 'will sync when back online.' Staff lose work without knowing.",
+  tech:"postgrest-js resolves network failures as {error,status:0} instead of throwing, so the catch/enqueue path in safeMutation is unreachable. Tests pass on a Promise.reject mock the client never produces.",
+  fix:"FIXED 2026-06-12 (TRACKER #23): resolved status:0 now classified as offline in safeQuery/safeMutation/runOnlineOnly + roadshow's 3 direct sites; wiring-test fixtures rewritten to resolve-with-error; Hermes-safe id generator; sync no longer burns retries/dead-letters on network failure; signed-out guard; cold-start queue drain; queue-full surfaces error; dedup merges same-op payloads. 16 regression tests (fail-before proven). PERMANENT GUARD added: postgrestOfflineContract.test.ts — 6 tests driving the REAL installed postgrest-js (rejecting fetch, zero mocks) through safeQuery/safeMutation/runOnlineOnly; fails if a supabase-js upgrade changes the resolve-vs-throw contract (4/6 proven failing on pre-fix code). Never swap its real client for a mock — fixture-only tests are how the bug shipped originally. NOT done: unique key on roadshow_activities (replay idempotency — needs a product decision on natural keys vs client-generated ids)."},
+ {id:"C2",sev:"c",area:"Auth",title:"Offline cold-start logs valid users out (hard lockout)",done:true,doneAt:"2026-06-12",
+  files:"contexts/AuthContext.tsx; app/_layout.tsx",
+  layman:"If a staff member opens the app with no internet (e.g. a basement venue), they're kicked to the login screen — which itself needs internet. They're locked out even though they were properly logged in.",
+  tech:"initAuth restores a valid session, then fetchUserProfile's 3 quick fetches fail offline → isAuthenticated:false → auth gate routes to OTP login. Biometric unlock silently no-ops offline. Worst case (verified in auth-js source): an EXPIRED stored session refreshing offline returns session:null, so even the session restore fails.",
+  fix:"FIXED 2026-06-12 (TRACKER #24): last-known-good profile cache (lib/profileCache.ts) written on every successful resolution, served ONLY on transport-layer failure — served HTTP responses stay authoritative and clear it (deleted accounts can't live on offline). Offline-aware invitation check (postgrest status:0 falls back to last gate-passing status). Biometric unlock falls back to the never-revoked local session, keeps the stored token for the next online unlock, and reports offline instead of silently failing. Offline GRACE state for expired sessions: authed with session:null on the cached profile when the failure is provably network (AuthRetryableFetchError); on reconnect NetworkContext's refresh fires TOKEN_REFRESHED which merges the real session back in; sessionCache stamps user_id so C1 offline-queue writes keep ownership. Real sign-out + SIGNED_OUT clear the cache; biometric sign-out keeps it for offline Face ID. 9 fail-before-proven regression tests + 6 profileCache unit tests. Known limits: cached profile can be one online-session stale (RLS still enforces server-side); the chunked-SecureStore spurious-SIGNED_OUT issue (separate item) would clear the cache."},
+ {id:"C3",sev:"c",area:"Database",title:"Repo cannot rebuild the database (Dashboard-only tables)",done:true,doneAt:"2026-06-12",
+  files:"supabase/migrations/* (candidate_profiles, disc_results, disc_responses, invitations CREATE'd nowhere)",
+  layman:"The database's blueprint is incomplete. Several core tables were created by hand in the dashboard, not saved in the project's setup files. Rebuilding from scratch (new environment, disaster recovery) would fail. The live database is the only copy of the recipe.",
+  tech:"4 core tables are referenced by ~30 migrations but CREATE'd in 0. A db reset fails at the first ALTER/policy on them. Worse than the audit claimed: the 00000000000000_initial_schema.sql snapshot (never executed on prod — repaired into history) collides with the real chain's unguarded CREATEs, so a reset actually died at file #2. Also found: 20260610031503_leads_outcome_webhook_to_mktr applied to prod 06-10 with no local file.",
+  fix:"FIXED 2026-06-12 (TRACKER #25): new 20260320173000_baseline_dashboard_tables.sql creates the 4 tables in their original pre-2026-03-20 shape (current prod DDL minus what later migrations add) + 5 Dashboard-original invitations policies + Dashboard-era sync_role_to_jwt(); fully guarded — re-apply on a built schema proven a strict no-op; recorded as applied in prod history WITHOUT executing. initial_schema gutted to a documented no-op (content in git history). 3 historical files repaired for replay only (interviews_update guarded drop in 20260311; exam_papers.allow_multiple_answers guarded backfill in 20260314; empty-DB early-exit in 20260322093245). Recovered the 06-10 webhook migration verbatim from prod history. VERIFIED: all 180 migrations replay cleanly on scratch PG17 with Supabase shims (scripts/verify-db-rebuild.sh, repeatable, no Docker) and the rebuilt 4 tables match prod object-for-object (168/168 facts: columns+order, constraints, indexes, 10 invitations policies, triggers, RLS, replica identity, publication). Guard test __tests__/supabase/migrationsRebuildable.test.ts (3 tests, fail-before proven) blocks future Dashboard-only tables. Deliberately NOT done here: prod-only users_select_authenticated / leads dual-DELETE / 2-arg pipeline-stats RPC stay un-codified (their fixes are H3/H5/H2); synthetic_* tables remain in migrations though prod hand-dropped them (rebuild recreates, dormant + harmless)."},
+
+ // HIGH — authorization
+ {id:"H1",sev:"h",area:"Leads",title:"Lead RPCs bypass access control",done:true,doneAt:"2026-06-12",
+  files:"assign_lead_with_activity / update_lead_status_with_activity (DB); supabase/migrations/20260612000000_secure_lead_rpcs_access_control.sql",
+  layman:"There's a back door: any logged-in user — even a trainee candidate — can reassign or change the status of ANY sales lead, including other agents' leads, by talking to the database directly. The app's permission rules don't cover this path.",
+  tech:"Both SECURITY DEFINER RPCs check only auth.uid()=p_acting_user_id, never can_access_lead or role.",
+  fix:"FIXED 2026-06-12 (TRACKER #26). REPRODUCED first: impersonated a candidate (lowest role) and hijacked a foreign lead — reassigned it to self + flipped status to 'lost' — despite can_access_lead denying them (all inside a rolled-back txn, zero data change). Root cause confirmed exactly as described: both SECURITY DEFINER RPCs only checked auth.uid()=acting-user, bypassing the leads RLS. Drift also found: both functions existed ONLY in prod (Dashboard-created, in no migration) — same class as H2/H3/H5 prod-only objects. New migration 20260612000000 codifies BOTH functions into the canonical chain WITH the fix: each now re-reads the lead's stored assigned_to/created_by server-side and gates on can_access_lead(...) (mirrors the leads_update RLS policy this DEFINER path bypasses); reassignment additionally requires the reassign_leads capability (role IN admin/director/manager); both keep the original acting-user identity guard. Forbidden→insufficient_privilege, missing lead→no_data_found. Applied to prod (CREATE OR REPLACE, non-destructive) and recorded in prod migration history under the matching version 20260612000000. VERIFIED live (7-scenario matrix, rolled back): candidate reassign/status BLOCKED, acting-id spoof BLOCKED, owning-agent status-change ALLOWED, owning-agent reassign BLOCKED (no capability), managing-manager + admin reassign ALLOWED. Tests fail-before/pass-after: behavioral scripts/verify-lead-rpc-authz.sh + lead-rpc-authz-test.sql on scratch PG17 (fails against scripts/__fixtures__/lead-rpcs-vulnerable.sql, passes against the migration); static Jest __tests__/supabase/leadRpcsAccessControl.test.ts (6 tests) in npm test. Full-chain rebuild now replays 181 migrations cleanly. Deliberately NOT done: RPCs kept (not dropped) since nothing calls them today but the surface must be safe, preserving the prod anon/authenticated/service_role execute grants (anon is inert — auth.uid() is NULL); status-change intentionally has NO role gate (changing a lead you own is a normal agent action); the unauthenticated 2-arg get_lead_pipeline_stats overload is a separate item (H2)."},
+ {id:"H2",sev:"h",area:"Leads",title:"Pipeline-stats RPC has zero auth (and is prod-only)",
+  files:"get_lead_pipeline_stats(uuid,boolean); lib/leads/stats.ts:39",
+  layman:"Any user can pull up any manager's sales numbers (totals, conversion) by asking directly — no check they're allowed. Worse, this report only works due to a hand-made change in production; a fresh copy of the system shows errors on the home dashboard.",
+  tech:"The app calls the unauthenticated 2-arg overload; the migration-tracked 1-arg version (which has the auth check) is never called. The 2-arg version isn't in any migration.",
+  fix:"Point the app at the guarded overload; drop the unauthenticated one; add it to migrations."},
+ {id:"H3",sev:"h",area:"RLS",title:"Every user can read all staff PII",
+  files:"users_select_authenticated USING(true)",
+  layman:"Every logged-in user can read the full contact list of all 137 staff — everyone's phone and email — plus the 'push token' that lets you send notifications to someone's specific phone.",
+  tech:"A permissive SELECT policy USING(true) on users exposes phone/email/push_token to every authenticated role.",
+  fix:"Replace with a scoped policy (self + team + admin); never expose push_token broadly."},
+ {id:"H4",sev:"h",area:"Storage",title:"candidate-resumes writes open to any user",
+  files:"storage policies: Authenticated users can update/delete resumes",
+  layman:"Any logged-in user — including candidates — can overwrite or delete every candidate's uploaded resume, not just their own.",
+  tech:"INSERT/UPDATE/DELETE storage policies check only bucket_id for role 'authenticated'. SELECT was tightened; writes were not.",
+  fix:"Gate resume writes by staff role and/or path ownership."},
+ {id:"H5",sev:"h",area:"RLS",title:"Lead hard-DELETE is actually allowed",
+  files:"leads policies: deny_delete_leads + leads_delete (both PERMISSIVE)",
+  layman:"Despite a rule meant to forbid deleting leads (to keep an audit trail), a conflicting rule quietly re-allows it. Leads and their entire history can be permanently erased.",
+  tech:"Two PERMISSIVE DELETE policies are OR'd: USING(false) + USING(can_access_lead) ⇒ delete permitted.",
+  fix:"Drop the leads_delete allow-policy (the deny is the intent)."},
+
+ // HIGH — reliability / accuracy
+ {id:"H6",sev:"h",area:"Realtime",title:"Realtime dead for notifications + roadshows",
+  files:"supabase_realtime publication; NotificationContext; useRoadshowRealtime",
+  layman:"The 'live' features aren't live. The unread-notification badge and the live roadshow leaderboard don't update on their own — the live-data feed was never switched on for those. A manager watching the booth sees a frozen screen until they manually refresh.",
+  tech:"Only leads + progress_signals are in the publication; notifications/roadshow_activities/roadshow_attendance aren't, yet the client subscribes via postgres_changes. No foreground/interval fallback.",
+  fix:"ALTER PUBLICATION supabase_realtime ADD TABLE for the 3 tables; add status-callback + refetch-on-reconnect."},
+ {id:"H7",sev:"h",area:"Exams",title:"Exam pass/fail trusts a client-supplied total",
+  files:"submit_exam_attempt; lib/exams.ts:150",
+  layman:"The app trusts the phone to report how many questions were on the exam. A tampered app could claim 'there was 1 question and I got it right' = 100% = pass on any licensing exam.",
+  tech:"Percentage = score / p_total_questions where p_total_questions is client-supplied; question IDs aren't validated against the paper.",
+  fix:"Compute the denominator from a server COUNT of the paper; validate submitted question_ids belong to the paper."},
+ {id:"H8",sev:"h",area:"MKTR",title:"A 422 permanently loses the lead",
+  files:"supabase/functions/receive-mktr-lead; mktr webhookService.js",
+  layman:"When a lead comes in for an agent the system can't match yet (e.g. a brand-new agent), it's rejected and — due to how retries work — permanently dropped within ~20 seconds. The lead reaches no one; nobody is told.",
+  tech:"MKTR retries any non-2xx 3× over ~21s then marks failed; recoverPendingRetries only re-dispatches pending rows. 422 is deterministic.",
+  fix:"Return 5xx for transient/unmatched cases so MKTR keeps retrying, or buffer unmatched leads for later assignment."},
+ {id:"H9",sev:"h",area:"Edge",title:"delete-account corrupts data + fails PDPA deletion",
+  files:"supabase/functions/delete-account/index.ts",
+  layman:"When staff delete their own account, cleanup gets stuck halfway: it erases a candidate's notes and documents but can't finish, leaving the person's private data and login behind — while saying 'your account has been deleted.' It also deletes leads/candidates other staff are actively working on.",
+  tech:"candidate_profiles (NO ACTION FK) blocks the candidates delete after activities/docs are removed; the users + auth delete then FK-fail. Ownership scope is creator-OR-assignee with no archive guard.",
+  fix:"Delete candidate_profiles before candidates; scope to safely-owned records; make the cascade transactional."},
+ {id:"H10",sev:"h",area:"Leads",title:"Lead detail crashes on an 'unassignment' activity",
+  files:"components/LeadActivityItem.tsx:50",
+  layman:"The first time a lead is 'unassigned' (handed back) by the marketing system, opening that lead's screen crashes the app for whoever views it. Hasn't happened yet, but guaranteed once that event occurs.",
+  tech:"ACTIVITY_ICONS[activity.type].color has no fallback; ACTIVITY_ICONS lacks an 'unassignment' key that receive-mktr-lead writes.",
+  fix:"Add an icon-config fallback (the description switch already has a default)."},
+ {id:"H11",sev:"h",area:"Leads",title:"Leads list has no limit → silent truncation at scale",
+  files:"lib/leads/crud.ts:57",
+  layman:"The leads screen downloads the entire lead list every time it opens. Past ~1,000 leads the oldest ones silently stop showing — with no warning the list is incomplete.",
+  tech:"Raw select=*&order=updated_at.desc with no Range; client-side resolvePage is also broken (every page returns page 0).",
+  fix:"Add server-side range pagination; fix resolvePage."},
+ {id:"H12",sev:"h",area:"Events",title:"Bulk roadshow dates shift one day early (SGT)",
+  files:"lib/dateTime.ts:81 dateRange; hooks/useEventForm.ts:173",
+  layman:"When a manager schedules a roadshow week (say Mon–Fri), the app saves it as Sun–Thu — every date one day early — because of a timezone bug. Agents see it a day early and the real final day goes missing.",
+  tech:"new Date('YYYY-MM-DDT00:00:00') is local; .toISOString() converts to UTC (previous day in UTC+8) before slicing the date. Verified under TZ=Asia/Singapore.",
+  fix:"Build the date strings without a UTC round-trip (e.g. increment Y-M-D directly)."},
+ {id:"H13",sev:"h",area:"Recruitment",title:"Candidate Activity tab is write-only",
+  files:"app/(tabs)/candidates/[candidateId].tsx:116",
+  layman:"The contact-history tab on a candidate only shows notes/calls you logged this session. Reopen the candidate and it's blank — it never loads the real history. Managers can't see past contact and may double-contact people.",
+  tech:"callLog starts [] and is only appended optimistically; never hydrated from candidate_activities (no per-candidate fetcher in lib/). (Low current impact: 7 rows live today.)",
+  fix:"Add fetchCandidateActivities(candidateId) and hydrate callLog on open."},
+ {id:"H14",sev:"h",area:"Exams",title:"Exam timer freezes after backgrounding",
+  files:"app/(tabs)/exams/take/[paperId].tsx:184-213",
+  layman:"During a timed exam, if the phone goes to the background even once (a call/notification), the countdown freezes for good and never auto-submits. The time limit effectively disappears.",
+  tech:"AppState foreground sets pausedAtRef=null but never recreates the interval; the timer effect deps [isLoading,isSubmitting] don't change. (No knowledge-exam attempts exist in prod yet.)",
+  fix:"Recreate the interval on foreground and reconcile against wall-clock."},
+ {id:"H15",sev:"h",area:"Exams",title:"Killed-app exam resume grants full time back",
+  files:"app/(tabs)/exams/take/[paperId].tsx:154-160",
+  layman:"Close a timed exam and reopen an hour later — you get your full remaining time back; the elapsed hour isn't deducted. The time limit can be sidestepped.",
+  tech:"The wall-clock recompute only runs when saved timeLeft<=0, but autosave writes a positive timeLeft every tick, so restore takes setTimeLeft(saved).",
+  fix:"Always recompute remaining time from startedAt + duration on restore."},
+ {id:"H16",sev:"h",area:"Exams",title:"Exam/DISC autosave crosses users on a shared device",
+  files:"take/[paperId].tsx; exams/disc.tsx; AuthContext signOut",
+  layman:"On a shared device, exam progress isn't tied to who's logged in and isn't cleared at sign-out. The next person to sign in can resume — and submit — the previous person's answers as their own.",
+  tech:"Module-level keys lyfe_active_exam/lyfe_disc_quiz; restore checks paperId/schema not user id; signOut clears only lyfe_view_mode.",
+  fix:"Namespace autosave keys by user id; clear them on sign-out."},
+
+ // HIGH — auth robustness + data model
+ {id:"H17",sev:"h",area:"Auth",title:"Chunked secure-storage is non-atomic → spurious logouts",
+  files:"lib/supabase.ts:67-110",
+  layman:"The secure storage holding your login can get scrambled when the app refreshes it in the background, which sometimes wipes the saved session and logs people out unexpectedly.",
+  tech:"setItem does ~5 sequential SecureStore ops with no lock; a concurrent read can see truncated JSON which auth-js treats as invalid and deletes the session.",
+  fix:"Write chunks under a mutex / write-then-swap a single pointer key."},
+ {id:"H18",sev:"h",area:"Auth",title:"Biometric login fails the morning after",
+  files:"contexts/AuthContext.tsx:639-668; lib/biometrics.ts",
+  layman:"Face ID / fingerprint login often fails if you come back more than an hour later — the stored login key has expired and you're told to use a code instead.",
+  tech:"Bio sign-out keeps the live session holding refresh token R0; an overnight auto-refresh rotates R0→R1, so the stored R0 is already-used when Face ID later calls refreshSession(R0).",
+  fix:"Store/refresh the biometric token via a dedicated, non-rotating path or re-capture it post-refresh."},
+ {id:"H19",sev:"h",area:"Auth",title:"Sign-out doesn't stick offline (account resurrects)",
+  files:"contexts/AuthContext.tsx:655; auth-js _signOut",
+  layman:"Sign out while offline and it doesn't fully take — next launch quietly logs you back in. On a shared/handed-over phone the previous person's account returns.",
+  tech:"signOut() ignores the result; a network failure returns before _removeSession, leaving local storage intact while React state clears.",
+  fix:"On offline sign-out, force local session removal regardless of the network call."},
+ {id:"H20",sev:"h",area:"Auth",title:"Global sign-out scope kills all devices",
+  files:"contexts/AuthContext.tsx:655 (default scope 'global')",
+  layman:"Signing out on one device signs you out everywhere and disables Face ID on your other devices — probably not what people expect from logging out of one phone.",
+  tech:"supabase.auth.signOut() default scope is 'global', revoking all refresh tokens.",
+  fix:"Use { scope: 'local' } for ordinary sign-out."},
+ {id:"H21",sev:"h",area:"Database",title:"Training-progress FK points at the wrong table (docs wrong)",
+  files:"candidate_module_progress / _item_progress .candidate_id → users (live)",
+  layman:"Two training-progress tables are wired to the wrong ID, inconsistent with the rest of the system and with the project's own docs. Harmless today (training barely used) but it will block managers from seeing candidates' progress once training rolls out.",
+  tech:"Both reference users.id while milestones/paper_attempts/enrollment reference candidates.id; can_access_candidate_user() expects candidates.id. CLAUDE.md wrongly claims it was re-pointed.",
+  fix:"Decide the canonical id, re-point the FK consistently, update RLS + the docs."},
+
+ // HIGH — build / release
+ {id:"H22",sev:"h",area:"Build",title:".env (prod service-role key) uploaded on local build",
+  files:".easignore; .env; eas.json",
+  layman:"Building the app from a developer's machine uploads a secret master key (full database access) to the build service, and the build relies on that file being present — a security exposure and a fragile setup.",
+  tech:".easignore replaces .gitignore for upload filtering and doesn't exclude .env; eas.json defines no EXPO_PUBLIC_* — a CI build with no .env would crash at launch.",
+  fix:"Exclude .env from EAS uploads; move config to EAS env/secrets."},
+ {id:"H23",sev:"h",area:"Build",title:"Three SDK-55 packages on an SDK-54 project",
+  files:"package.json: expo-image, expo-location, expo-build-properties",
+  layman:"Three building-block libraries are from a newer framework version than the app is built on — a mismatch that can cause subtle crashes and makes upgrades risky.",
+  tech:"Versions diverge from bundledNativeModules for SDK 54; CI hides it (expo-doctor || echo warning).",
+  fix:"Pin to SDK-54-compatible versions; let expo-doctor fail the build."},
+
+ // MEDIUM
+ {id:"M1",sev:"m",area:"Auth",title:"Role-flip JWT lag after activate-agent",
+  files:"lib/recruitment/candidates.ts; sync_role_to_jwt",
+  layman:"When a candidate is promoted to agent, their phone shows the new role but the security system still treats them as a candidate for up to an hour, so the new agent sees empty screens until they fully restart/re-login.",
+  tech:"UI reads users.role; RLS reads JWT app_metadata.role which only refreshes on token refresh (≤60min). No client-side refresh is triggered.",
+  fix:"Force a session refresh on the activated device right after the flip."},
+ {id:"M2",sev:"m",area:"Leads",title:"Duplicate MKTR 'new lead' notifications",
+  files:"receive-mktr-lead + trigger_notify_lead_reassigned",
+  layman:"When the marketing system assigns a lead, the new agent gets two identical 'new lead' notifications instead of one.",
+  tech:"The edge function inserts a notification on lead.assigned while the DB reassign trigger fires on the same UPDATE.",
+  fix:"Let the trigger be canonical; stop the EF inserting its own notification."},
+ {id:"M3",sev:"m",area:"Leads",title:"Dashboard counts disagree with the lists",
+  files:"lib/leads/stats.ts; get_lead_pipeline_stats",
+  layman:"The home-dashboard numbers don't match the actual lists — admins and directors especially see totals that don't line up, and unassigned leads disappear from managers' views entirely.",
+  tech:"View-mode/role mismatches: admin lacks hold_agents so list scopes to self; director stats exclude managers' leads; unassigned (null) leads fail every can_access_lead branch.",
+  fix:"Align stat scoping with list scoping per role; surface unassigned leads."},
+ {id:"M4",sev:"m",area:"Admin",title:"Admin panel can't manage 'ro' users",
+  files:"admin/src/lib/types.ts:28 USER_ROLES",
+  layman:"In the admin panel you can't edit or deactivate anyone with the 'Recruitment Officer' role — the form rejects it because that role was never added to the admin tool.",
+  tech:"USER_ROLES omits 'ro'; the zod enum rejects it and ROLE_LABELS['ro'] is undefined.",
+  fix:"Add 'ro' to USER_ROLES + ROLE_LABELS (import STAFF_ROLES)."},
+ {id:"M5",sev:"m",area:"Admin",title:"Admin role-demotion bypasses holding invariants",
+  files:"admin/.../users/actions.ts; validate_* triggers",
+  layman:"An admin can demote a manager to a regular agent even while that manager still 'holds' candidates and agents — leaving those people pointing at a boss who's no longer a manager, which breaks team logic.",
+  tech:"The holding-invariant triggers fire on the subordinate rows, not on users.role updates, and service-role writes bypass RLS.",
+  fix:"Re-validate (or block) demotion when the user still holds candidates/agents."},
+ {id:"M6",sev:"m",area:"Database",title:"Migration drift — 5 prod-only objects",
+  files:"pipeline-stats overload; whatsapp/unassignment enums; leads_notify_mktr_outcome",
+  layman:"Five pieces of the live database were changed by hand and never written into the project files. A routine rebuild would silently drop them.",
+  tech:"Objects exist in prod but in no migration; duplicate-applied versions also present.",
+  fix:"Author migrations for each; reconcile so files == live."},
+ {id:"M7",sev:"m",area:"App shell",title:"home/ route group is unguarded",
+  files:"app/(tabs)/home/_layout.tsx",
+  layman:"A whole set of staff-only screens can be reached directly via links by roles that shouldn't see them. Today the data is protected by a second layer, but the screens themselves open up for anyone.",
+  tech:"home/ re-exports team/candidate/lead/invite screens with no useRequireRole; group guards don't travel with re-exports.",
+  fix:"Add a role guard to the home group or to each re-export."},
+ {id:"M8",sev:"m",area:"Events",title:"events/create is ungated",
+  files:"app/(tabs)/events/create.tsx; events INSERT RLS",
+  layman:"Any role — even a candidate — can create real agency events/roadshows visible to the whole agency, by going straight to the create-event screen.",
+  tech:"No role gate in the screen; RLS INSERT is merely auth.uid() IS NOT NULL.",
+  fix:"Gate the screen by role and tighten the INSERT policy."},
+ {id:"M9",sev:"m",area:"Edge",title:"verify-email-otp attempt-limit race",
+  files:"supabase/functions/verify-email-otp/index.ts",
+  layman:"The 5-tries limit on email codes can be beaten by sending many guesses at the exact same moment, which could let someone verify an email that isn't theirs.",
+  tech:"Read-modify-write on failed_attempts with no atomicity; parallel requests all pass the ceiling.",
+  fix:"Atomic increment / row lock on the attempt counter."},
+ {id:"M10",sev:"m",area:"Edge",title:"custom-sms-hook unauthenticated + caller-controlled text",
+  files:"supabase/functions/custom-sms-hook/index.ts",
+  layman:"The text-message verification endpoint has no lock on it and lets the message text be set by the caller, so it could be abused to send misleading 'verification code' texts to invited numbers.",
+  tech:"No JWT/secret (platform limitation); otp text comes from payload; no rate limit. Invitation gate does block uninvited numbers.",
+  fix:"Restrict reachability; rate-limit; template the message server-side."},
+ {id:"M11",sev:"m",area:"Edge",title:"verify-face has no liveness check",
+  files:"supabase/functions/verify-face/index.ts",
+  layman:"The face-check at roadshow check-in can be fooled by holding up a photo of the person — there's no 'are you a live human' test — so it doesn't truly prevent buddy check-ins.",
+  tech:"Quality gates + CompareFaces only; no presentation-attack detection. Enforcement is also client-side (see M16).",
+  fix:"Add liveness (or accept it as a soft control and document the limit)."},
+ {id:"M12",sev:"m",area:"App shell",title:"Single root ErrorBoundary blanks the whole app",
+  files:"app/_layout.tsx:222; AppErrorBoundary",
+  layman:"If any single screen hits an error, the whole app goes to a blank error screen instead of just that section failing. Also, 'Clear data' wipes any queued offline changes.",
+  tech:"Only a root boundary exists; no per-route boundaries. handleClearAndRestart calls AsyncStorage.clear().",
+  fix:"Add route-level boundaries; scope the clear to known keys."},
+ {id:"M13",sev:"m",area:"Leads",title:"Contact-confirm stale state → spurious prompts",
+  files:"app/(tabs)/leads/[leadId].tsx:173-200",
+  layman:"After tapping 'Call,' if you cancel, the app may later pop 'How did the call go?' for a call that never happened — and logging an outcome creates a fake activity.",
+  tech:"hasPendingContact set before Linking.openURL with no catch and no cancel detection; cleared only on confirm.",
+  fix:"Clear pending on openURL failure; require an explicit return signal."},
+ {id:"M14",sev:"m",area:"Recruitment",title:"Archived candidates inflate counts",
+  files:"lib/recruitment/pa-helpers.ts:26; lib/team.ts:178",
+  layman:"Archived candidates vanish from the lists but still get counted in dashboard badges (active candidates, interviews), so the numbers don't match what you can see.",
+  tech:"List queries exclude archived_at; the count queries don't.",
+  fix:"Add .is('archived_at', null) to the count queries."},
+ {id:"M15",sev:"m",area:"Events",title:"Activity-log time picker is unbounded",
+  files:"hooks/useActivityLog.ts:60-97",
+  layman:"When logging a roadshow activity, staff can set the time to any hour, including times outside the event — which scrambles the activity timeline and audits.",
+  tech:"logTimeToISO writes the picked time verbatim; no clamp to the event window or 'not in future'.",
+  fix:"Clamp logged_at to the event window server-side."},
+ {id:"M16",sev:"m",area:"Events",title:"Face/GPS check-in enforced client-side only",
+  files:"hooks/useCheckInFlow.ts; lib/roadshow.ts",
+  layman:"The face + GPS check at check-in is only enforced in the app, not on the server — a tampered app could check in from home without a face.",
+  tech:"The attendance INSERT carries no proof a face/GPS check happened; RLS is self-insert.",
+  fix:"Require a server-verified token from verify-face before accepting the row."},
+ {id:"M17",sev:"m",area:"Events",title:"Offline deleteEvent replay cascades live data",
+  files:"lib/events.ts:287; sync.ts (latent behind C1)",
+  layman:"(Only matters once the offline feature is fixed.) A delete-event queued while offline could later wipe an event that has since had real check-ins and sales logged against it.",
+  tech:"deleteEvent is queueable; replay deletes by id with cascade and no staleness guard.",
+  fix:"Exclude cascade-root deletes from replay, or guard on a version/timestamp."},
+ {id:"M18",sev:"m",area:"Exams",title:"Enneagram tie silently picks lowest type",
+  files:"lib/enneagram.ts:59-66",
+  layman:"If a personality quiz ends in a tie between two types, the app always silently picks the lower-numbered one rather than noting the tie.",
+  tech:"maxScore uses strict > from Type 1, so the first type wins ties; never surfaced.",
+  fix:"Detect ties and present both / a tiebreak."},
+ {id:"M19",sev:"m",area:"Notifications",title:"Notifications list duplicates + badge drift",
+  files:"lib/notifications.ts:12; NotificationContext.tsx:66",
+  layman:"The notifications list can show duplicate entries when scrolling, and the unread badge can drift out of sync with what's actually unread.",
+  tech:"Offset pagination with no id-dedup; optimistic badge decrement with no rollback when the server UPDATE affects 0 rows.",
+  fix:"Dedup by id on append; reconcile the badge from a server count."},
+ {id:"M20",sev:"m",area:"Edge",title:"send-push treats MessageTooBig as a dead token",
+  files:"supabase/functions/send-push-notification/index.ts:153",
+  layman:"If one notification is too large to send, the system wrongly concludes the user's phone is unreachable and stops sending them all notifications until next sign-in.",
+  tech:"REVOKED set includes MessageTooBig, which nulls users.push_token.",
+  fix:"Treat MessageTooBig as a payload error, not a revoked token."},
+
+ // LOW
+ {id:"L1",sev:"l",area:"Leads",title:"Lead phone never normalized (search misses)",
+  files:"lib/leads/crud.ts:112; useFilteredList.ts",
+  layman:"Staff-typed lead phone numbers aren't standardized, so searching by number can miss leads, and duplicates aren't caught.",
+  tech:"Phone stored verbatim; MKTR stores 65XXXXXXXX; raw substring search diverges.",
+  fix:"Normalize on write; normalize the search term."},
+ {id:"L2",sev:"l",area:"App shell",title:"friendlyError misses RN's network message",
+  files:"lib/errors.ts:41",
+  layman:"Some connection errors show a generic 'something went wrong' instead of a clear 'you're offline' message.",
+  tech:"Checks 'Failed to fetch'/'NetworkError' but RN emits 'Network request failed'.",
+  fix:"Add the RN string to the matcher."},
+ {id:"L3",sev:"l",area:"Edge",title:"export-user-data (PDPA) is incomplete",
+  files:"supabase/functions/export-user-data/index.ts",
+  layman:"The 'download my data' privacy export leaves out several categories of a person's data.",
+  tech:"Omits enneagram_results, candidate_documents, interviews, exam_answers, roadshow_activities; rate-limit bypassable.",
+  fix:"Include the missing tables; make the rate-limit write atomic."},
+ {id:"L4",sev:"l",area:"App shell",title:"useSubmitGuard has a race window",
+  files:"hooks/useSubmitGuard.ts:12",
+  layman:"Tapping a submit button twice very fast can occasionally create two copies of the same thing.",
+  tech:"Guards on state, not a ref; two taps in one batch both pass.",
+  fix:"Latch with a ref."},
+ {id:"L5",sev:"l",area:"Database",title:"CHECK constraints left NOT VALID",
+  files:"chk_options_shape (20260404000000); others",
+  layman:"A couple of database rules were added in a way that checks new data but never verified existing data, so old bad values could slip through.",
+  tech:"ADD CONSTRAINT ... NOT VALID without a later VALIDATE.",
+  fix:"Run VALIDATE CONSTRAINT after backfilling."},
+
+ // COMPLETED — already fixed historically (seeded into Completed, all statuses on)
+ {id:"F1",sev:"h",area:"Edge",title:"Push notifications silently 401-failed for months",done:1,
+  files:"20260511120000_push_dispatcher_vault_auth.sql",
+  layman:"(Already fixed) For months no push notifications actually reached phones — an auth/setup gap — though the in-app badge hid it. Fixed 2026-05-11.",
+  tech:"Trigger sent a bearer from a never-injected GUC; EF only accepts X-Webhook-Secret. Switched to vault secret + type:'INSERT'.",
+  fix:"Done — vault-backed secret."},
+ {id:"F2",sev:"h",area:"Storage",title:"candidate-resumes PII readable by any user (Mar–May)",done:1,
+  files:"20260511130000_tighten_candidate_resumes_select.sql",
+  layman:"(Already fixed) For about two months any logged-in user could view any candidate's resume. Locked down in May.",
+  tech:"SELECT policy USING(bucket_id) with no role gate; bucket private but signed URLs enumerable.",
+  fix:"Done — role-gated SELECT."},
+ {id:"F3",sev:"h",area:"Database",title:"fn_activate_agent 409'd every activation (Apr–May)",done:1,
+  files:"20260516050000_fix_fn_activate_agent_ambiguity.sql",
+  layman:"(Already fixed) For about a month, promoting a candidate to agent failed every time due to a code error. Fixed mid-May, caught by monitoring.",
+  tech:"Unqualified candidate_id collided with the RETURNS TABLE OUT param under variable_conflict=error.",
+  fix:"Done — columns aliased/qualified."},
+ {id:"F4",sev:"m",area:"Database",title:"DISC/onboarding completion could roll back (Apr 1–19)",done:1,
+  files:"20260419130000_allow_enneagram_completed_notification_type.sql",
+  layman:"(Already fixed) For ~3 weeks, finishing the DISC quiz or onboarding form could fail and roll back due to a missing allowed-value. Fixed 19 Apr.",
+  tech:"chk_notification_type (NOT VALID still enforces writes) lacked disc_completed/profile_completed while triggers inserted them.",
+  fix:"Done — types added to the CHECK."},
+];
+
+/* ---------- state + persistence ---------- */
+const LSKEY="lyfe_audit_board_v1";
+const COLS=["outstanding","inprogress","done"];
+const STKEYS=["code","testsWritten","testsPassing","verified"];
+const STLABEL={code:"Code",testsWritten:"Tests written",testsPassing:"Tests passing",verified:"Verified"};
+
+function defaultState(it){
+  const done=!!it.done;
+  const col = done ? "done" : (it.inprogress ? "inprogress" : "outstanding");
+  return {col,
+    code:done, testsWritten:done, testsPassing:done, verified:done, note:"",
+    completedAt: done ? (it.doneAt||null) : null};
+}
+/* Move a card between columns, stamping when it lands in done
+   (and clearing the stamp if it's pulled back out). */
+function setCol(s,col){
+  if(s.col===col) return;
+  if(col==="done") s.completedAt=new Date().toISOString();
+  else s.completedAt=null;
+  s.col=col;
+}
+function fmtDone(iso){
+  const d=new Date(iso);
+  if(isNaN(d)) return iso;
+  const date=d.toLocaleDateString("en-SG",{day:"numeric",month:"short",year:"numeric"});
+  // Seeded dates are date-only (midnight) — showing a fake 00:00 helps no one
+  return (iso.length>10) ? `${date}, ${d.toLocaleTimeString("en-SG",{hour:"2-digit",minute:"2-digit",hour12:false})}` : date;
+}
+let saved={};
+try{saved=JSON.parse(localStorage.getItem(LSKEY))||{}}catch(e){saved={}}
+const state={};
+SEED.forEach(it=>{
+  const s=Object.assign(defaultState(it), saved[it.id]||{});
+  /* A SEED entry marked done (work completed + verified in the repo) outranks
+     stale saved state written BEFORE the item was finished. Applied once per
+     item (seedDoneApplied), so a card the user deliberately reopens afterwards
+     stays reopened instead of snapping back on every load. */
+  if(it.done && !s.seedDoneApplied){
+    s.col="done";
+    STKEYS.forEach(k=>{s[k]=true;});
+    if(!s.completedAt) s.completedAt=it.doneAt||null;
+    s.seedDoneApplied=true;
+  }
+  /* Same one-shot precedence for a SEED entry marked in-progress (Claude
+     starts each item by flagging it before working): promote a stale
+     outstanding card into the working column once; never demote a card the
+     user has moved themselves. done outranks inprogress. */
+  else if(it.inprogress && !s.seedInProgressApplied){
+    if(s.col==="outstanding") s.col="inprogress";
+    s.seedInProgressApplied=true;
+  }
+  state[it.id]=s;
+});
+function persist(){ localStorage.setItem(LSKEY, JSON.stringify(state)); }
+persist();
+
+/* ---------- render ---------- */
+const board=document.getElementById("board");
+const tip=document.getElementById("tip");
+let detailsOpen={};
+
+function areaList(){return [...new Set(SEED.map(i=>i.area))].sort();}
+(function fillArea(){
+  const sel=document.getElementById("fArea");
+  areaList().forEach(a=>{const o=document.createElement("option");o.value=a;o.textContent=a;sel.appendChild(o);});
+})();
+
+const f={sev:"",area:"",text:"",hideDone:false};
+function matches(it){
+  if(f.sev && it.sev!==f.sev) return false;
+  if(f.area && it.area!==f.area) return false;
+  if(f.hideDone && state[it.id].col==="done") return false;
+  if(f.text){
+    const h=(it.title+" "+it.area+" "+it.files+" "+it.layman+" "+it.id).toLowerCase();
+    if(!h.includes(f.text.toLowerCase())) return false;
+  }
+  return true;
+}
+
+function card(it){
+  const s=state[it.id];
+  const el=document.createElement("div");
+  el.className=`card sev-${it.sev}${s.col==="done"?" done":""}`;
+  el.draggable=true; el.dataset.id=it.id;
+
+  const sevTxt={c:"CRIT",h:"HIGH",m:"MED",l:"LOW"}[it.sev];
+  el.innerHTML=`
+    <div class="ctop">
+      <span class="sev ${it.sev}">${sevTxt}</span>
+      <span class="area">${it.area}</span>
+      <span class="idtag">${it.id}</span>
+    </div>
+    <div class="title">${it.title}</div>
+    <div class="files mono">${it.files}</div>
+    ${s.col==="done"&&s.completedAt?`<div class="doneat">✓ Completed ${fmtDone(s.completedAt)}</div>`:""}
+    <div class="chips">
+      ${STKEYS.map(k=>`<button class="chip ${k} ${s[k]?"on":""}" data-k="${k}"><span class="dot"></span>${STLABEL[k]}</button>`).join("")}
+    </div>
+    <div class="cbtns">
+      <button class="mv" data-mv="-1" title="Move left">←</button>
+      <button class="mv" data-mv="1" title="Move right">→</button>
+      <input class="note" placeholder="note / PR #" value="${(s.note||"").replace(/"/g,"&quot;")}" />
+      <button class="expand" data-x>details ▾</button>
+    </div>
+    <div class="prow">
+      <button class="promptbtn" data-copy>⧉ Copy Claude prompt</button>
+      <button class="previewlink" data-preview>preview / edit</button>
+    </div>
+    <div class="details ${detailsOpen[it.id]?"open":""}">
+      <span class="lbl">Technical</span>${it.tech||""}
+      <span class="lbl">Recommended fix</span>${it.fix||""}
+    </div>`;
+
+  // status chips
+  el.querySelectorAll(".chip").forEach(c=>{
+    c.addEventListener("click",ev=>{ev.stopPropagation(); const k=c.dataset.k; s[k]=!s[k]; persist(); c.classList.toggle("on",s[k]);});
+  });
+  // move buttons
+  el.querySelectorAll(".mv").forEach(b=>{
+    b.addEventListener("click",ev=>{ev.stopPropagation();
+      const i=COLS.indexOf(s.col)+ (b.dataset.mv==="1"?1:-1);
+      if(i<0||i>2) return; setCol(s,COLS[i]); persist(); render();
+    });
+  });
+  // note
+  const note=el.querySelector(".note");
+  note.addEventListener("click",e=>e.stopPropagation());
+  note.addEventListener("input",e=>{s.note=e.target.value; persist();});
+  // expand
+  el.querySelector("[data-x]").addEventListener("click",ev=>{ev.stopPropagation();
+    detailsOpen[it.id]=!detailsOpen[it.id];
+    const d=el.querySelector(".details"); d.classList.toggle("open",detailsOpen[it.id]);
+  });
+  // copy Claude prompt (one click)
+  el.querySelector("[data-copy]").addEventListener("click",async ev=>{ev.stopPropagation();
+    const b=ev.currentTarget, ok=await copyText(buildPrompt(it)), orig=b.textContent;
+    b.textContent= ok?"✓ Copied":"⌘C in preview"; b.classList.toggle("ok",ok);
+    showToast(ok?`Prompt for ${it.id} copied — paste into Claude Code`:"Copy blocked — use preview / edit");
+    setTimeout(()=>{b.textContent=orig; b.classList.remove("ok");},1500);
+  });
+  el.querySelector("[data-preview]").addEventListener("click",ev=>{ev.stopPropagation(); openModal(it);});
+  // tooltip (layman)
+  el.addEventListener("mouseenter",()=>showTip(el,it));
+  el.addEventListener("mouseleave",hideTip);
+  // drag
+  el.addEventListener("dragstart",ev=>{
+    if(["BUTTON","INPUT","TEXTAREA"].includes(ev.target.tagName)){ev.preventDefault();return;}
+    ev.dataTransfer.setData("text/plain",it.id); ev.dataTransfer.effectAllowed="move"; hideTip();
+    setTimeout(()=>el.classList.add("dim"),0);
+  });
+  el.addEventListener("dragend",()=>el.classList.remove("dim"));
+  return el;
+}
+
+function render(){
+  const order={c:0,h:1,m:2,l:3};
+  COLS.forEach(c=>{
+    const zone=document.querySelector(`.dropzone[data-col="${c}"]`);
+    zone.innerHTML="";
+    const items=SEED.filter(it=>state[it.id].col===c && matches(it))
+      .sort((a,b)=> order[a.sev]-order[b.sev] || a.id.localeCompare(b.id, undefined,{numeric:true}));
+    items.forEach(it=>zone.appendChild(card(it)));
+    if(!items.length) zone.innerHTML=`<div class="empty">— none —</div>`;
+    document.getElementById("c-"+c).textContent=items.length;
+  });
+  updateSummary();
+}
+
+function updateSummary(){
+  const tot=SEED.length;
+  const done=SEED.filter(it=>state[it.id].col==="done").length;
+  const ver=SEED.filter(it=>{const s=state[it.id]; return s.col==="done"&&STKEYS.every(k=>s[k]);}).length;
+  document.getElementById("doneN").textContent=done;
+  document.getElementById("totN").textContent=tot;
+  document.getElementById("verN").textContent=ver;
+  const pct=Math.round(done/tot*100);
+  document.getElementById("pct").textContent=pct;
+  document.getElementById("barFill").style.width=pct+"%";
+  // outstanding severity tally (not yet done)
+  const t={c:0,h:0,m:0,l:0};
+  SEED.forEach(it=>{ if(state[it.id].col!=="done") t[it.sev]++; });
+  const names={c:"critical",h:"high",m:"medium",l:"low"};
+  document.getElementById("sevTally").innerHTML=
+    ["c","h","m","l"].map(k=>`<span class="pill ${t[k]?k:"ghost"}">${t[k]} ${names[k]}</span>`).join("");
+}
+
+/* tooltip positioning */
+function showTip(el,it){
+  tip.innerHTML=`<div class="tt-h">In plain English · ${it.id}</div>${it.layman}`;
+  tip.style.display="block";
+  const r=el.getBoundingClientRect(); const tw=Math.min(330,innerWidth-24);
+  tip.style.maxWidth=tw+"px";
+  let left=r.right+12, top=r.top;
+  if(left+tw>innerWidth-10) left=r.left-tw-12;
+  if(left<10) left=10;
+  const th=tip.offsetHeight;
+  if(top+th>innerHeight-10) top=Math.max(10,innerHeight-th-10);
+  tip.style.left=left+"px"; tip.style.top=top+"px";
+  requestAnimationFrame(()=>tip.classList.add("show"));
+}
+function hideTip(){tip.classList.remove("show"); setTimeout(()=>{if(!tip.classList.contains("show"))tip.style.display="none";},140);}
+
+/* drag/drop on columns */
+document.querySelectorAll(".col").forEach(col=>{
+  col.addEventListener("dragover",ev=>{ev.preventDefault(); col.classList.add("dragover");});
+  col.addEventListener("dragleave",()=>col.classList.remove("dragover"));
+  col.addEventListener("drop",ev=>{
+    ev.preventDefault(); col.classList.remove("dragover");
+    const id=ev.dataTransfer.getData("text/plain"); if(!id||!state[id]) return;
+    setCol(state[id],col.dataset.col); persist(); render();
+  });
+});
+
+/* controls */
+document.getElementById("fSev").addEventListener("change",e=>{f.sev=e.target.value;render();});
+document.getElementById("fArea").addEventListener("change",e=>{f.area=e.target.value;render();});
+document.getElementById("fText").addEventListener("input",e=>{f.text=e.target.value;render();});
+document.getElementById("fHideDone").addEventListener("change",e=>{f.hideDone=e.target.checked;render();});
+document.getElementById("collapseAll").addEventListener("click",()=>{detailsOpen={};render();});
+document.getElementById("resetBtn").addEventListener("click",()=>{
+  if(confirm("Reset the whole board to its original state? This clears your progress.")){
+    localStorage.removeItem(LSKEY);
+    SEED.forEach(it=>state[it.id]=defaultState(it)); persist(); render();
+  }
+});
+document.getElementById("exportBtn").addEventListener("click",()=>{
+  const blob=new Blob([JSON.stringify(state,null,2)],{type:"application/json"});
+  const a=document.createElement("a"); a.href=URL.createObjectURL(blob);
+  a.download="lyfe-audit-board.json"; a.click(); URL.revokeObjectURL(a.href);
+});
+document.getElementById("importBtn").addEventListener("click",()=>document.getElementById("importFile").click());
+document.getElementById("importFile").addEventListener("change",e=>{
+  const file=e.target.files[0]; if(!file) return;
+  const rd=new FileReader();
+  rd.onload=()=>{ try{const data=JSON.parse(rd.result);
+    Object.keys(data).forEach(id=>{ if(state[id]) state[id]=Object.assign(defaultState(SEED.find(s=>s.id===id)),data[id]); });
+    persist(); render();
+  }catch(err){alert("Could not read that file.");}};
+  rd.readAsText(file); e.target.value="";
+});
+
+/* ---------- Claude prompts ---------- */
+const DEPS={ M17:"Only relevant after C1 (the offline write queue) is fixed — coordinate with that work." };
+function sevName(s){return {c:"CRITICAL",h:"HIGH",m:"MEDIUM",l:"LOW"}[s];}
+function isDBItem(it){
+  return /Database|RLS|Storage/.test(it.area) ||
+    /migration|\.sql|policy|RPC|trigger|publication|cascade|\bFK\b|RLS/i.test(it.files+" "+it.tech+" "+it.fix);
+}
+function buildPrompt(it){
+  const db=isDBItem(it), L=[];
+  L.push(`You are Claude Code in the lyfe-app repo (React Native 0.81 / Expo SDK 54 + Supabase, TypeScript strict). Fix ONE item from the 2026-06-12 production-readiness audit and take it to "done". Prioritise reliability and accuracy over speed.`);
+  L.push("");
+  L.push(`## Audit item ${it.id} — [${sevName(it.sev)}] ${it.title}`);
+  L.push(`Area: ${it.area}`);
+  L.push(`Start from: ${it.files}`);
+  L.push("");
+  L.push(`Plain-English problem: ${it.layman}`);
+  L.push("");
+  L.push(`Technical detail (from the audit — verify it, don't trust it): ${it.tech}`);
+  L.push("");
+  L.push(`Suggested fix (a hypothesis, not gospel): ${it.fix}`);
+  if(DEPS[it.id]){ L.push(""); L.push(`Dependency: ${DEPS[it.id]}`); }
+  L.push("");
+  L.push("## How to work it");
+  const steps=[];
+  if(it.done){
+    steps.push(`This was reportedly FIXED already. VERIFY it is still fixed by reading the real code${db?" and querying the live Supabase via the MCP":""} — don't trust comments or this text. If it has regressed, fix it.`);
+    steps.push("Add a regression test that fails if this bug ever returns (that is the main deliverable here).");
+  }else{
+    steps.push(`BEFORE any other work, mark this item in-progress on my board so I can see it's being worked: edit audit-dashboard.html, find the ${it.id} entry in the SEED array, add inprogress:true (do NOT touch done), and confirm the file's <script> block still parses. Then begin.`);
+    steps.push(`VERIFY FIRST — do not trust this description or any code comments. Read the actual code${db?" and inspect the live database via the Supabase MCP":""} and confirm the problem reproduces. If it is already fixed or the description is wrong, tell me and STOP before changing anything.`);
+    steps.push("Implement the smallest correct fix that matches the surrounding code style.");
+  }
+  steps.push("Add or update tests that FAIL before your change and PASS after it. Then run `npm test`, `npx tsc --noEmit`, and `npm run lint`, and report the output.");
+  if(db) steps.push("Database changes: follow the DB SAFETY RULES in CLAUDE.md — never run DELETE/TRUNCATE/DROP on production via the Supabase MCP unless I explicitly say so. Put schema changes in a NEW migration file under supabase/migrations/ (the canonical source), and flag any drift between the repo and the live DB.");
+  steps.push("Finish with a short report: what you changed, the test name(s), the test/typecheck/lint results, and the status of each — Code fixed / Tests written / Tests passing / Verified. Don't claim a state you haven't proven.");
+  steps.push(`AFTER the work is done and confirmed completed (all checks green and verified), shift this item to completed on my board: edit audit-dashboard.html, find the ${it.id} entry in the SEED array, replace the inprogress:true from step 1 with done:true and doneAt (today, YYYY-MM-DD), and update its fix text to describe what actually shipped (including anything deliberately NOT done). Then confirm the file's <script> block still parses (extract it and run new Function(src) in node). Update TRACKER.md too. If the item is NOT fully verified, leave it marked inprogress (NOT done) and tell me why instead.`);
+  L.push(steps.map((s,i)=>`${i+1}. ${s}`).join("\n"));
+  L.push("");
+  L.push("Keep going until the item is genuinely complete and verified. Only stop to ask me if you hit a real blocker (a product decision, a destructive DB action, or missing access).");
+  return L.join("\n");
+}
+
+async function copyText(s){
+  try{ if(navigator.clipboard && window.isSecureContext){ await navigator.clipboard.writeText(s); return true; } }catch(e){}
+  const ta=document.createElement("textarea"); ta.value=s; ta.style.cssText="position:fixed;top:0;left:0;opacity:0";
+  document.body.appendChild(ta); ta.focus(); ta.select(); let ok=false;
+  try{ ok=document.execCommand("copy"); }catch(e){}
+  document.body.removeChild(ta); return ok;
+}
+
+/* toast + modal */
+const toast=document.createElement("div"); toast.id="toast"; document.body.appendChild(toast);
+let toastT; function showToast(m){ toast.textContent=m; toast.classList.add("show"); clearTimeout(toastT); toastT=setTimeout(()=>toast.classList.remove("show"),2000); }
+
+const overlay=document.createElement("div"); overlay.id="overlay";
+overlay.innerHTML=`<div id="modal">
+  <div class="mhead"><b id="mtitle"></b><button id="mclose" title="Close (Esc)">✕</button></div>
+  <textarea id="mtext" spellcheck="false"></textarea>
+  <div class="mfoot"><button class="btn" id="mcopy">⧉ Copy to clipboard</button>
+    <span class="stat" style="margin-left:auto">Edit freely, then paste into Claude Code in this repo.</span></div>
+</div>`;
+document.body.appendChild(overlay);
+const mtext=overlay.querySelector("#mtext");
+function openModal(it){ overlay.querySelector("#mtitle").textContent=`${it.id} — ${it.title}`; mtext.value=buildPrompt(it); overlay.classList.add("show"); mtext.scrollTop=0; }
+function closeModal(){ overlay.classList.remove("show"); }
+overlay.addEventListener("click",e=>{ if(e.target===overlay) closeModal(); });
+overlay.querySelector("#mclose").addEventListener("click",closeModal);
+overlay.querySelector("#mcopy").addEventListener("click",async()=>{ const ok=await copyText(mtext.value); showToast(ok?"Copied ✓":"Select all + ⌘C"); });
+document.addEventListener("keydown",e=>{ if(e.key==="Escape") closeModal(); });
+
+document.getElementById("copyAllBtn").addEventListener("click",async()=>{
+  const items=SEED.filter(it=>state[it.id].col!=="done" && matches(it));
+  if(!items.length){ showToast("No open items match the current filter"); return; }
+  const txt=items.map(buildPrompt).join("\n\n────────────────────────────\n\n");
+  const ok=await copyText(txt);
+  showToast(ok?`Copied ${items.length} prompt(s) — one per open item shown`:"Copy blocked — copy them one at a time");
+});
+
+render();
+</script>
+</body>
+</html>
