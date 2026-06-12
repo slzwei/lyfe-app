@@ -7,6 +7,13 @@ DECLARE
   new_cid uuid;
   admin_id uuid;
 BEGIN
+  -- Repair for fresh rebuilds (audit C3, 2026-06-12): on an empty database
+  -- there is nothing to backfill — exit before the admin-user assertion,
+  -- which otherwise aborts a `db reset` replay.
+  IF NOT EXISTS (SELECT 1 FROM candidate_profiles WHERE candidate_id IS NULL) THEN
+    RETURN;
+  END IF;
+
   -- Get a fallback admin user for assigned_manager_id / created_by_id
   SELECT id INTO admin_id FROM users WHERE role = 'admin' LIMIT 1;
 

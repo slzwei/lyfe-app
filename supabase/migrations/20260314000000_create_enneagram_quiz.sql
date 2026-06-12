@@ -2,6 +2,13 @@
 -- Each question has two statements (A/B), each mapping to one of 9 Enneagram types.
 -- Based on the Riso-Hudson Enneagram Type Indicator (RHETI) format.
 
+-- Repair for fresh rebuilds (audit C3, 2026-06-12): allow_multiple_answers was
+-- a Dashboard-created column already on prod when this ran in March; no earlier
+-- migration creates it (20260504150311 only backfills it guarded, too late for
+-- the INSERT below). No-op wherever the column already exists.
+ALTER TABLE public.exam_papers
+  ADD COLUMN IF NOT EXISTS allow_multiple_answers boolean NOT NULL DEFAULT false;
+
 -- Create exam paper
 INSERT INTO public.exam_papers (code, title, description, duration_minutes, pass_percentage, question_count, is_active, is_mandatory, display_order, allow_multiple_answers)
 VALUES ('ENNEAGRAM', 'Enneagram Personality Test', 'Discover your personality type through the Enneagram system.', 45, 0, 144, true, false, 10, false);

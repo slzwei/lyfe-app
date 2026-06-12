@@ -269,6 +269,11 @@ DROP POLICY IF EXISTS "Authenticated users can read interviews" ON interviews;
 DROP POLICY IF EXISTS "Authenticated users can insert interviews" ON interviews;
 DROP POLICY IF EXISTS "Authenticated users can update interviews" ON interviews;
 DROP POLICY IF EXISTS interviews_insert_own ON interviews;
+-- Repair for fresh rebuilds (audit C3, 2026-06-12): 20260306140441 creates
+-- interviews_update, and on prod it was evidently hand-dropped via Dashboard
+-- before this file ran — without this guard a `db reset` replay dies here.
+-- Final shape is settled by 20260404000000 either way.
+DROP POLICY IF EXISTS interviews_update ON interviews;
 
 -- SELECT: can see if you can access the parent candidate
 CREATE POLICY interviews_select ON interviews
