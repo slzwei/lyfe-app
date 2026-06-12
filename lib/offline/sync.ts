@@ -1,5 +1,6 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
 import type { OfflineQueue, QueueItem } from './queue';
+import { isNetworkError, isNetworkErrorResult } from './safeQuery';
 import { captureError } from '../sentry';
 
 const MAX_RETRIES = 3;
@@ -69,7 +70,9 @@ export class SyncManager {
         };
     }
 
-    private async executeItem(item: QueueItem): Promise<{ error: string | null; isAuthError?: boolean }> {
+    private async executeItem(
+        item: QueueItem,
+    ): Promise<{ error: string | null; isAuthError?: boolean; isNetworkFailure?: boolean }> {
         try {
             const { table, operation, payload, filters } = item;
 
@@ -122,10 +125,19 @@ export class SyncManager {
             ]);
             if (!result.error) return { error: null };
             const message = result.error.message ?? '';
-            const status = (result.error as { status?: number }).status;
+            // postgrest-js reports the HTTP status on the result; the race
+            // timeout fallback puts it on the error. Network failures resolve
+            // with status 0 (the request never reached the server).
+            const status = (result as { status?: number }).status ?? (result.error as { status?: number }).status;
+            if (isNetworkErrorResult(result.error, status)) {
+                return { error: message, isNetworkFailure: true };
+            }
             const isAuthError = status === 401 || /jwt|expired|invalid (signature|token)|401/i.test(message);
             return { error: message, isAuthError };
         } catch (e: unknown) {
+            if (isNetworkError(e)) {
+                return { error: e instanceof Error ? e.message : 'Network request failed', isNetworkFailure: true };
+            }
             const message = e instanceof Error ? e.message : 'Unknown error during sync';
             const isAuthError = /jwt|expired|invalid (signature|token)|401/i.test(message);
             return { error: message, isAuthError };
@@ -141,13 +153,23 @@ export class SyncManager {
         try {
             // Resolve current user to discard items from a previous session
             let currentUserId: string | undefined;
+            let signedOut = false;
             try {
                 const {
                     data: { session },
                 } = await this.client.auth.getSession();
+                signedOut = !session;
                 currentUserId = session?.user?.id;
             } catch {
                 // Auth not available (e.g. in tests) — skip ownership check
+            }
+
+            // Signed out (e.g. cold start on the login screen): leave the
+            // queue intact. Anonymous replays would only collect RLS errors
+            // and burn retry budget; the items belong to whoever signs back in
+            // (the per-item ownership check discards anyone else's).
+            if (signedOut) {
+                return this.getSyncStatus();
             }
 
             // Snapshot the queue to avoid peek/remove races
@@ -201,6 +223,15 @@ export class SyncManager {
 
                 if (result.error) {
                     this.lastError = result.error;
+                    // Network failure: the device is still (or again) offline,
+                    // so the write never reached the server. Keep the item —
+                    // and its retry budget — intact and stop draining; NetInfo
+                    // flaps must not dead-letter perfectly good writes. The
+                    // next reconnect triggers another sync.
+                    if (result.isNetworkFailure) {
+                        await this.emitStatus();
+                        break;
+                    }
                     await this.queue.incrementRetry(item.id);
                     await this.emitStatus();
                     // Continue processing remaining items instead of blocking

@@ -3,6 +3,7 @@ import { render, act, waitFor } from '@testing-library/react-native';
 import { Text } from 'react-native';
 import { NetworkProvider, type NetworkContextType } from '@/contexts/NetworkContext';
 import { useNetworkStatus } from '@/hooks/useNetworkStatus';
+import { offlineQueue } from '@/lib/offline';
 import NetInfo from '@react-native-community/netinfo';
 
 jest.mock('@/lib/supabase', () => require('@/lib/__mocks__/supabase'));
@@ -83,6 +84,32 @@ describe('NetworkProvider', () => {
         });
 
         expect(getByTestId('connected').props.children).toBe('true');
+    });
+
+    it('drains writes queued before an app restart (cold-start sync)', async () => {
+        // The singleton queue persists across app launches via AsyncStorage.
+        // A queue that only drains on an offline→online TRANSITION strands
+        // these items until the next connectivity blip — possibly forever.
+        await offlineQueue.clear();
+        await offlineQueue.enqueue({
+            table: 'leads',
+            operation: 'update',
+            payload: { status: 'contacted' },
+            filters: { id: 'L1' },
+        });
+
+        try {
+            const { getByTestId } = render(
+                <NetworkProvider>
+                    <TestConsumer />
+                </NetworkProvider>,
+            );
+
+            await waitFor(() => expect(getByTestId('pending').props.children).toBe(0));
+            expect(await offlineQueue.size()).toBe(0);
+        } finally {
+            await offlineQueue.clear();
+        }
     });
 
     it('provides triggerSync function', async () => {

@@ -43,6 +43,11 @@ export function NetworkProvider({ children }: { children: React.ReactNode }) {
     const syncManagerRef = useRef(new SyncManager(supabase, queueRef.current));
     const prevConnectedRef = useRef(true);
 
+    const triggerSync = useCallback(async () => {
+        const status = await syncManagerRef.current.sync();
+        setSyncStatus({ pending: status.pending, lastSyncAt: status.lastSyncAt });
+    }, []);
+
     // Set up sync status callback
     useEffect(() => {
         syncManagerRef.current.onStatusChange((status: SyncStatus) => {
@@ -50,17 +55,17 @@ export function NetworkProvider({ children }: { children: React.ReactNode }) {
         });
     }, []);
 
-    // Initialize pending count
+    // Initialize pending count and drain anything left over from a previous
+    // session — without this, writes queued before an app restart would only
+    // sync after the NEXT offline→online transition (possibly never). Safe to
+    // call while offline or signed out: SyncManager halts without burning
+    // retry budget in both cases.
     useEffect(() => {
         queueRef.current.size().then((pending) => {
             setSyncStatus((prev) => ({ ...prev, pending }));
+            if (pending > 0) triggerSync();
         });
-    }, []);
-
-    const triggerSync = useCallback(async () => {
-        const status = await syncManagerRef.current.sync();
-        setSyncStatus({ pending: status.pending, lastSyncAt: status.lastSyncAt });
-    }, []);
+    }, [triggerSync]);
 
     // Listen for connectivity changes
     useEffect(() => {

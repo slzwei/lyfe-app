@@ -16,7 +16,26 @@
 import { queueMutation, enqueueWrite, runOnlineOnly, offlineQueue, OFFLINE_ACTION_MESSAGE } from '@/lib/offline';
 import { setCachedSession, clearCachedSession } from '@/lib/sessionCache';
 
-const NET = () => Promise.reject(new TypeError('Network request failed'));
+// What supabase-js ACTUALLY produces on a network failure: postgrest-js
+// catches the fetch rejection internally and RESOLVES with status 0 — it
+// never rejects. A Promise.reject fixture here would test a code path the
+// real client cannot reach (the original sin of the dead-queue bug).
+const NET = () =>
+    Promise.resolve({
+        data: null,
+        error: {
+            message: 'TypeError: Network request failed',
+            details: 'TypeError: Network request failed\n    at anonymous (fetch.umd.js:535:33)',
+            hint: '',
+            code: '',
+        },
+        count: null,
+        status: 0,
+        statusText: '',
+    });
+
+// Kept as a secondary fixture: custom fetch wrappers (e.g. fetchLeads) DO throw.
+const NET_THROWN = () => Promise.reject(new TypeError('Network request failed'));
 
 describe('offline-first wiring (queueMutation → shared singleton queue)', () => {
     beforeEach(async () => {
@@ -91,10 +110,32 @@ describe('offline-first wiring (queueMutation → shared singleton queue)', () =
         expect(items[0].userId).toBe('user-2');
     });
 
-    it('runOnlineOnly converts a network error into a friendly message', async () => {
-        const res = await runOnlineOnly(() => Promise.reject(new TypeError('Network request failed')));
+    it('also queues on a THROWN network error (custom fetch wrappers)', async () => {
+        const res = await queueMutation('leads', 'update', { status: 'lost' }, { id: 'L9' }, NET_THROWN);
+        expect(res.queued).toBe(true);
+        expect(await offlineQueue.size()).toBe(1);
+    });
+
+    it('runOnlineOnly converts a thrown network error into a friendly message', async () => {
+        const res = await runOnlineOnly(NET_THROWN);
         expect(res.offline).toBe(true);
         expect(res.error).toBe(OFFLINE_ACTION_MESSAGE);
         expect(res.data).toBeNull();
+    });
+
+    it('runOnlineOnly converts a RESOLVED network failure (postgrest-js) into a friendly message', async () => {
+        const res = await runOnlineOnly(NET);
+        expect(res.offline).toBe(true);
+        expect(res.error).toBe(OFFLINE_ACTION_MESSAGE);
+        expect(res.data).toBeNull();
+    });
+
+    it('runOnlineOnly passes through a real server error untouched', async () => {
+        const res = await runOnlineOnly(() =>
+            Promise.resolve({ data: null, error: { message: 'permission denied' }, status: 403 }),
+        );
+        expect(res.offline).toBe(false);
+        expect(res.error).toBeNull();
+        expect(res.data).toEqual({ data: null, error: { message: 'permission denied' }, status: 403 });
     });
 });

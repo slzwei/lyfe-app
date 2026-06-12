@@ -762,6 +762,229 @@ describe('AuthContext — biometric gate with stored token', () => {
     });
 });
 
+// ── Offline cold start (audit C2) ──
+//
+// The app must not log a validly signed-in user out just because it was
+// opened without connectivity — the OTP login screen needs network, so that
+// bounce is a hard lockout. These tests pin the last-known-good profile
+// cache (lib/profileCache) and the offline grace state.
+
+const CACHE_KEY = 'lyfe_profile_cache_v1';
+
+const CACHED_PROFILE = { ...MOCK_PROFILE, full_name: 'Cached User' };
+
+function cacheEntry(overrides?: Partial<{ userId: string; invitationStatus: string }>) {
+    return JSON.stringify({
+        userId: 'user-1',
+        profile: CACHED_PROFILE,
+        invitationStatus: 'skipped',
+        cachedAt: '2026-06-11T00:00:00Z',
+        ...overrides,
+    });
+}
+
+/** What RN fetch does offline — every profile-fetch attempt rejects. */
+function mockProfileFetchOffline() {
+    (global as any).fetch = jest.fn(async () => {
+        throw new TypeError('Network request failed');
+    }) as typeof fetch;
+}
+
+function mockCacheInStorage(entry: string | null) {
+    (AsyncStorage.getItem as jest.Mock).mockImplementation(async (key: string) => (key === CACHE_KEY ? entry : null));
+}
+
+/** auth-js wraps offline refresh failures in AuthRetryableFetchError (status 0). */
+function authRetryableError() {
+    return Object.assign(new Error('Network request failed'), { name: 'AuthRetryableFetchError', status: 0 });
+}
+
+describe('AuthContext — offline cold start (audit C2)', () => {
+    it('lands authed on the cached profile when the profile fetch fails offline (valid session)', async () => {
+        mockSupa.auth.getSession.mockResolvedValue({ data: { session: MOCK_SESSION } });
+        mockProfileFetchOffline();
+        mockCacheInStorage(cacheEntry());
+
+        const consoleSpy = jest.spyOn(console, 'error').mockImplementation();
+        const { result } = renderHook(() => useAuth(), { wrapper });
+        // fetchUserProfile retries 3× with 150ms gaps before reporting offline
+        await act(async () => {
+            await new Promise((r) => setTimeout(r, 500));
+        });
+        consoleSpy.mockRestore();
+
+        expect(result.current.isAuthenticated).toBe(true);
+        expect(result.current.user?.full_name).toBe('Cached User');
+        expect(result.current.invitationStatus).toBe('skipped');
+        expect(result.current.session).toBeTruthy();
+    });
+
+    it('keeps the lockout when offline with NO cached profile', async () => {
+        mockSupa.auth.getSession.mockResolvedValue({ data: { session: MOCK_SESSION } });
+        mockProfileFetchOffline();
+        mockCacheInStorage(null);
+
+        const consoleSpy = jest.spyOn(console, 'error').mockImplementation();
+        const { result } = renderHook(() => useAuth(), { wrapper });
+        await act(async () => {
+            await new Promise((r) => setTimeout(r, 500));
+        });
+        consoleSpy.mockRestore();
+
+        expect(result.current.isAuthenticated).toBe(false);
+    });
+
+    it('never serves a cached profile belonging to a different user', async () => {
+        mockSupa.auth.getSession.mockResolvedValue({ data: { session: MOCK_SESSION } });
+        mockProfileFetchOffline();
+        mockCacheInStorage(cacheEntry({ userId: 'user-2' }));
+
+        const consoleSpy = jest.spyOn(console, 'error').mockImplementation();
+        const { result } = renderHook(() => useAuth(), { wrapper });
+        await act(async () => {
+            await new Promise((r) => setTimeout(r, 500));
+        });
+        consoleSpy.mockRestore();
+
+        expect(result.current.isAuthenticated).toBe(false);
+        expect(result.current.user).toBeNull();
+    });
+
+    it('treats a served empty profile response as authoritative and clears the cache', async () => {
+        mockSupa.auth.getSession.mockResolvedValue({ data: { session: MOCK_SESSION } });
+        mockProfileFetch(null); // HTTP response received — NOT a network failure
+        mockCacheInStorage(cacheEntry());
+
+        const consoleSpy = jest.spyOn(console, 'error').mockImplementation();
+        const { result } = renderHook(() => useAuth(), { wrapper });
+        await act(async () => {
+            await new Promise((r) => setTimeout(r, 500));
+        });
+        consoleSpy.mockRestore();
+
+        expect(result.current.isAuthenticated).toBe(false);
+        expect(AsyncStorage.removeItem).toHaveBeenCalledWith(CACHE_KEY);
+    });
+
+    it('offline grace: an expired session that only failed to refresh offline lands authed on the cache', async () => {
+        jest.useFakeTimers();
+        try {
+            // getSession refreshes expired sessions internally; offline it
+            // resolves { session: null } with a retryable error.
+            mockSupa.auth.getSession.mockResolvedValue({ data: { session: null }, error: authRetryableError() });
+            mockSupa.auth.refreshSession.mockRejectedValue(new TypeError('Network request failed'));
+            mockCacheInStorage(cacheEntry());
+
+            const { result } = renderHook(() => useAuth(), { wrapper });
+            await act(async () => {
+                await jest.runAllTimersAsync();
+            });
+
+            expect(result.current.isAuthenticated).toBe(true);
+            expect(result.current.session).toBeNull(); // grace state — no token yet
+            expect(result.current.user?.full_name).toBe('Cached User');
+
+            // Reconnect recovery: NetworkContext refreshes the session and the
+            // TOKEN_REFRESHED handler merges it into the grace state.
+            const authCallback = mockSupa.auth.onAuthStateChange.mock.calls[0][0];
+            await act(async () => {
+                await authCallback('TOKEN_REFRESHED', MOCK_SESSION);
+            });
+            expect(result.current.isAuthenticated).toBe(true);
+            expect(result.current.session).toBeTruthy();
+        } finally {
+            jest.useRealTimers();
+        }
+    });
+
+    it('offline grace without a cache still routes to login', async () => {
+        jest.useFakeTimers();
+        try {
+            mockSupa.auth.getSession.mockResolvedValue({ data: { session: null }, error: authRetryableError() });
+            mockSupa.auth.refreshSession.mockRejectedValue(new TypeError('Network request failed'));
+            mockCacheInStorage(null);
+
+            const { result } = renderHook(() => useAuth(), { wrapper });
+            await act(async () => {
+                await jest.runAllTimersAsync();
+            });
+
+            expect(result.current.isAuthenticated).toBe(false);
+            expect(result.current.session).toBeNull();
+        } finally {
+            jest.useRealTimers();
+        }
+    });
+
+    it('falls back to the cached invitation status when the invitation check hits a network failure', async () => {
+        mockSupa.auth.getSession.mockResolvedValue({ data: { session: MOCK_SESSION } });
+        mockSupa.auth.refreshSession.mockResolvedValue({ data: { session: null }, error: null });
+
+        // Profile fetch succeeds (post-cutoff user → invitation check runs)
+        const postCutoffProfile = { ...MOCK_PROFILE, created_at: '2026-04-01T00:00:00Z' };
+        mockProfileFetch(postCutoffProfile);
+        mockCacheInStorage(cacheEntry({ invitationStatus: 'valid' }));
+
+        // The invitation query dies at the network layer — postgrest RESOLVES
+        // this shape, it never throws.
+        const memberInvChain = mockSupa.__getChain('member_invitations');
+        mockResolve(memberInvChain, {
+            data: null,
+            error: { message: 'TypeError: Network request failed', details: '', hint: '', code: '' },
+            status: 0,
+        });
+
+        const { result } = renderHook(() => useAuth(), { wrapper });
+        await act(async () => {});
+
+        expect(result.current.isAuthenticated).toBe(true);
+        expect(result.current.invitationStatus).toBe('valid');
+    });
+
+    it('biometric unlock falls back to the local session + cached profile when offline', async () => {
+        mockSupa.auth.getSession.mockResolvedValue({ data: { session: MOCK_SESSION } });
+        mockBio.isBiometricsEnabled.mockResolvedValue(true);
+        mockBio.isBiometricsAvailable.mockResolvedValue(true);
+        mockBio.authenticate.mockResolvedValue(true);
+        mockBio.getBiometricRefreshToken.mockResolvedValue('stored-tok');
+        // Refresh dies at the network layer; the biometric sign-out flow never
+        // revoked the local session, so unlock must fall back to it.
+        mockSupa.auth.refreshSession.mockRejectedValue(new TypeError('Network request failed'));
+        mockProfileFetchOffline();
+        mockCacheInStorage(cacheEntry());
+
+        const consoleSpy = jest.spyOn(console, 'error').mockImplementation();
+        const { result } = renderHook(() => useAuth(), { wrapper });
+        await act(async () => {});
+        expect(result.current.pendingBiometricSession).toBe(true);
+
+        await act(async () => {
+            const res = await result.current.authenticateWithBiometrics();
+            expect(res.success).toBe(true);
+        });
+        consoleSpy.mockRestore();
+
+        expect(result.current.isAuthenticated).toBe(true);
+        expect(result.current.user?.full_name).toBe('Cached User');
+        // The stored token must survive for the next ONLINE unlock
+        expect(mockBio.clearBiometricRefreshToken).not.toHaveBeenCalled();
+    });
+
+    it('signOut (no biometrics) clears the cached profile', async () => {
+        mockSupa.auth.getSession.mockResolvedValue({ data: { session: MOCK_SESSION } });
+
+        const { result } = renderHook(() => useAuth(), { wrapper });
+        await act(async () => {});
+        expect(result.current.isAuthenticated).toBe(true);
+
+        await act(async () => {
+            await result.current.signOut();
+        });
+
+        expect(AsyncStorage.removeItem).toHaveBeenCalledWith(CACHE_KEY);
+    });
+});
+
 // ── Hook isolation ──
 
 describe('Hook isolation', () => {

@@ -7,6 +7,8 @@ import {
     setBiometricsEnabled,
     storeBiometricRefreshToken,
 } from '@/lib/biometrics';
+import { isNetworkError, isNetworkErrorResult } from '@/lib/offline';
+import { clearCachedProfile, loadCachedProfile, saveCachedProfile } from '@/lib/profileCache';
 import { clearSentryUser, setSentryUser } from '@/lib/sentry';
 import { clearCachedSession, setCachedSession } from '@/lib/sessionCache';
 import { supabase } from '@/lib/supabase';
@@ -69,15 +71,33 @@ const BiometricsContext = createContext<BiometricsContextType | undefined>(undef
 const INVITATION_SYSTEM_CUTOFF = '2026-03-29T00:00:00Z';
 
 /**
+ * auth-js never surfaces raw fetch failures — they arrive as
+ * AuthRetryableFetchError (status 0), sometimes resolved on the error field,
+ * sometimes thrown. Either way the refresh token is still safe in storage
+ * (auth-js only removes the session on auth-level failures), so the failure
+ * is connectivity, not a revoked session.
+ */
+function isAuthNetworkFailure(e: unknown): boolean {
+    if (!e || typeof e !== 'object') return false;
+    const err = e as { name?: string; status?: number; message?: string };
+    if (err.name === 'AuthRetryableFetchError') return true;
+    return typeof err.message === 'string' && isNetworkErrorResult({ message: err.message }, err.status);
+}
+
+/**
  * Fetch the user profile from public.users.
  * The handle_new_user DB trigger creates the row on auth signup,
  * so we retry briefly if the row hasn't appeared yet (race condition).
+ *
+ * `networkFailed` is true only when every attempt died at the transport layer
+ * (no HTTP response at all) — the caller may then fall back to the cached
+ * profile. A served response (even 4xx or zero rows) is authoritative.
  */
 async function fetchUserProfile(
     userId: string,
     accessToken: string | null,
     _phone?: string | null,
-): Promise<User | null> {
+): Promise<{ profile: User | null; networkFailed: boolean }> {
     // The previous iteration showed `onAuthStateChange` firing SIGNED_IN with a
     // valid session.user, but `supabase.auth.getSession()` returning no
     // access_token in the same JS tick — supabase-js hadn't yet committed the
@@ -101,16 +121,17 @@ async function fetchUserProfile(
         token = session?.access_token ?? null;
     }
     if (!token) {
-        return null;
+        return { profile: null, networkFailed: false };
     }
 
     const supaUrl = process.env.EXPO_PUBLIC_SUPABASE_URL;
     const apikey = process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY;
     if (!supaUrl || !apikey) {
-        return null;
+        return { profile: null, networkFailed: false };
     }
     const url = `${supaUrl}/rest/v1/users?id=eq.${encodeURIComponent(userId)}&select=*`;
 
+    let sawHttpResponse = false;
     for (let attempt = 0; attempt < 3; attempt++) {
         try {
             const resp = await fetch(url, {
@@ -121,11 +142,12 @@ async function fetchUserProfile(
                     'Accept-Profile': 'public',
                 },
             });
+            sawHttpResponse = true;
             const bodyText = await resp.text();
             if (resp.ok) {
                 const rows = JSON.parse(bodyText) as User[];
                 if (Array.isArray(rows) && rows.length === 1) {
-                    return rows[0];
+                    return { profile: rows[0], networkFailed: false };
                 }
             }
         } catch (err) {
@@ -135,7 +157,7 @@ async function fetchUserProfile(
         if (attempt < 2) await new Promise((r) => setTimeout(r, 150));
     }
     if (__DEV__) console.error('User profile not found after retries');
-    return null;
+    return { profile: null, networkFailed: !sawHttpResponse };
 }
 
 /**
@@ -149,8 +171,22 @@ async function checkInvitationStatus(userId: string, createdAt: string | null): 
         return 'skipped';
     }
 
+    // postgrest resolves network failures as { error, status: 0 } instead of
+    // throwing — offline must not read as "no invitation row" and bounce a
+    // previously admitted user to the rejection screen. Fall back to the last
+    // status they passed the gate with; only authoritative empty results
+    // reject. (The cache only ever holds 'valid' / 'skipped'.)
+    const offlineFallback = async (): Promise<InvitationStatus> => {
+        const cached = await loadCachedProfile(userId);
+        return cached ? cached.invitationStatus : 'rejected';
+    };
+
     // Check member_invitations (new system)
-    const { data: memberInv } = await supabase
+    const {
+        data: memberInv,
+        error: memberErr,
+        status: memberStatus,
+    } = await supabase
         .from('member_invitations')
         .select('id')
         .eq('accepted_by_id', userId)
@@ -158,19 +194,54 @@ async function checkInvitationStatus(userId: string, createdAt: string | null): 
         .limit(1)
         .maybeSingle();
 
+    if (isNetworkErrorResult(memberErr, memberStatus)) return offlineFallback();
     if (memberInv) return 'valid';
 
     // Check legacy invitations (lyfe-sg candidate flow)
-    const { data: legacyInv } = await supabase
-        .from('invitations')
-        .select('id')
-        .eq('user_id', userId)
-        .limit(1)
-        .maybeSingle();
+    const {
+        data: legacyInv,
+        error: legacyErr,
+        status: legacyStatus,
+    } = await supabase.from('invitations').select('id').eq('user_id', userId).limit(1).maybeSingle();
 
+    if (isNetworkErrorResult(legacyErr, legacyStatus)) return offlineFallback();
     if (legacyInv) return 'valid';
 
     return 'rejected';
+}
+
+/**
+ * Resolve the profile + invitation status for an authenticated session,
+ * falling back to the last-known-good cache when the NETWORK — not the
+ * server — is what failed. An offline cold start must not bounce a validly
+ * signed-in user to a login screen that itself needs connectivity (audit C2).
+ * A served "no such profile" stays authoritative: it rejects and clears the
+ * cache so a deleted account can't live on offline.
+ */
+async function resolveProfileAndInvitation(
+    session: Session,
+): Promise<{ profile: User | null; invitationStatus: InvitationStatus }> {
+    const { profile, networkFailed } = await fetchUserProfile(
+        session.user.id,
+        session.access_token,
+        session.user.phone || null,
+    );
+    if (profile) {
+        const invitationStatus = await checkInvitationStatus(profile.id, profile.created_at);
+        if (invitationStatus === 'valid' || invitationStatus === 'skipped') {
+            saveCachedProfile(profile, invitationStatus).catch(() => {});
+        }
+        return { profile, invitationStatus };
+    }
+    if (networkFailed) {
+        const cached = await loadCachedProfile(session.user.id);
+        if (cached) {
+            return { profile: cached.profile, invitationStatus: cached.invitationStatus };
+        }
+    } else {
+        await clearCachedProfile();
+    }
+    return { profile: null, invitationStatus: 'rejected' };
 }
 
 async function updateLastLogin(userId: string) {
@@ -223,7 +294,10 @@ function BiometricsProvider({
 }: {
     children: React.ReactNode;
     sessionRef: React.MutableRefObject<Session | null>;
-    onBiometricUnlock: (session: Session, profile: User | null) => void;
+    onBiometricUnlock: (
+        session: Session | null,
+        resolved: { profile: User | null; invitationStatus: InvitationStatus },
+    ) => void;
 }) {
     const [biometricsEnabled, setBiometricsEnabledState] = useState(false);
 
@@ -238,41 +312,71 @@ function BiometricsProvider({
             if (!success) return { success: false };
 
             let session: Session | null = null;
+            let networkFailed = false;
 
             // Try stored refresh token first (saved during sign-out with biometrics)
             const storedToken = await getBiometricRefreshToken();
             if (storedToken) {
-                const { data, error } = await supabase.auth.refreshSession({
-                    refresh_token: storedToken,
-                });
-                if (error || !data.session) {
-                    await clearBiometricRefreshToken();
-                    return { success: false, error: 'Session expired — please sign in with OTP.' };
+                try {
+                    const { data, error } = await supabase.auth.refreshSession({
+                        refresh_token: storedToken,
+                    });
+                    if (data?.session) {
+                        session = data.session;
+                        await clearBiometricRefreshToken();
+                    } else if (isAuthNetworkFailure(error)) {
+                        // Offline — keep the stored token for the next online
+                        // unlock and fall through to the local-session fallback.
+                        networkFailed = true;
+                    } else {
+                        await clearBiometricRefreshToken();
+                        return { success: false, error: 'Session expired — please sign in with OTP.' };
+                    }
+                } catch (e) {
+                    if (!isNetworkError(e) && !isAuthNetworkFailure(e)) throw e;
+                    networkFailed = true;
                 }
-                session = data.session;
-                await clearBiometricRefreshToken();
-            } else {
-                // Fallback: try existing session in storage (first launch after enabling biometrics)
-                const {
-                    data: { session: existingSession },
-                } = await supabase.auth.getSession();
-                session = existingSession;
             }
 
             if (!session) {
-                return { success: false, error: 'Session expired — please sign in with OTP.' };
+                // No stored token (first launch after enabling biometrics) or
+                // the refresh couldn't reach the server. The biometric sign-out
+                // flow never revokes the local session, so fall back to it.
+                const {
+                    data: { session: existingSession },
+                    error,
+                } = await supabase.auth.getSession();
+                session = existingSession;
+                if (!session && isAuthNetworkFailure(error)) networkFailed = true;
             }
 
-            const profile = await fetchUserProfile(session.user.id, session.access_token, session.user.phone || null);
-            if (profile) {
-                await updateLastLogin(session.user.id);
-                syncAuthMetadata().catch((e) => {
-                    if (__DEV__) console.error('[BiometricsContext] syncAuthMetadata failed:', e);
-                });
+            if (session) {
+                const resolved = await resolveProfileAndInvitation(session);
+                if (resolved.profile) {
+                    await updateLastLogin(session.user.id);
+                    syncAuthMetadata().catch((e) => {
+                        if (__DEV__) console.error('[BiometricsContext] syncAuthMetadata failed:', e);
+                    });
+                }
+                onBiometricUnlock(session, resolved);
+                return { success: true };
             }
 
-            onBiometricUnlock(session, profile);
-            return { success: true };
+            if (networkFailed) {
+                // Offline cold start with an expired session (audit C2): the
+                // refresh token survives in storage — auth-js keeps it on
+                // retryable failures — so land on the last-known-good profile.
+                // NetworkContext refreshes the session on reconnect and the
+                // TOKEN_REFRESHED handler merges it back into auth state.
+                const cached = await loadCachedProfile();
+                if (cached) {
+                    onBiometricUnlock(null, { profile: cached.profile, invitationStatus: cached.invitationStatus });
+                    return { success: true };
+                }
+                return { success: false, error: 'You appear to be offline — reconnect and try again.' };
+            }
+
+            return { success: false, error: 'Session expired — please sign in with OTP.' };
         } catch (e) {
             if (__DEV__) console.error('[BiometricsContext] authenticateWithBiometrics error:', e);
             return { success: false };
@@ -355,8 +459,13 @@ function ProfileProvider({
 
     const refreshUser = useCallback(async () => {
         if (sessionRef.current?.user) {
-            const profile = await fetchUserProfile(sessionRef.current.user.id, sessionRef.current.access_token);
-            setUser(profile);
+            const { profile, networkFailed } = await fetchUserProfile(
+                sessionRef.current.user.id,
+                sessionRef.current.access_token,
+            );
+            // Don't wipe a perfectly good in-memory profile because the
+            // refresh ran offline — only authoritative answers update state.
+            if (!networkFailed) setUser(profile);
         }
     }, [sessionRef, setUser]);
 
@@ -374,23 +483,31 @@ function ProfileProvider({
 // Retry an explicit refresh with backoff before declaring the user logged out.
 // Bail early on auth errors — refresh token genuinely invalid means really
 // signed out (revoked elsewhere, expired) and no amount of retrying will help.
-async function restoreSessionWithRetry(): Promise<Session | null> {
+async function restoreSessionWithRetry(): Promise<{ session: Session | null; networkFailed: boolean }> {
     const initial = await supabase.auth.getSession();
-    if (initial.data.session) return initial.data.session;
+    if (initial.data.session) return { session: initial.data.session, networkFailed: false };
+    // getSession refreshes expired sessions internally; offline that surfaces
+    // as a retryable fetch error with the refresh token still safe in storage.
+    let networkFailed = isAuthNetworkFailure(initial.error);
 
-    // refreshSession throws on network failure but returns cleanly on auth-level
-    // outcomes (success, invalid token, no token). Only retry on thrown errors.
     const delays = [0, 1000, 2500];
     for (const delay of delays) {
         if (delay > 0) await new Promise((r) => setTimeout(r, delay));
         try {
-            const { data } = await supabase.auth.refreshSession();
-            return data?.session ?? null;
-        } catch {
-            // network error — keep retrying
+            const { data, error } = await supabase.auth.refreshSession();
+            if (data?.session) return { session: data.session, networkFailed: false };
+            if (isAuthNetworkFailure(error)) {
+                networkFailed = true;
+                continue;
+            }
+            // Auth-level outcome (invalid / absent token): genuinely signed out.
+            return { session: null, networkFailed: false };
+        } catch (e) {
+            // Transport-level throw — keep retrying
+            if (isNetworkError(e) || isAuthNetworkFailure(e)) networkFailed = true;
         }
     }
-    return null;
+    return { session: null, networkFailed };
 }
 
 export function AuthProvider({ children }: { children: React.ReactNode }) {
@@ -415,39 +532,48 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
             access_token: authState.session.access_token,
             user_id: authState.session.user?.id ?? null,
         });
+    } else if (authState.isAuthenticated && user) {
+        // Offline grace (expired session, network-only failure): no token to
+        // mirror, but stamp the user id so offline-queued writes still carry
+        // ownership for the SyncManager's per-user replay check.
+        setCachedSession({ access_token: null, user_id: user.id });
     } else {
         clearCachedSession();
     }
 
-    /** Called by BiometricsProvider after successful Face ID */
-    const handleBiometricUnlock = useCallback(async (session: Session, profile: User | null) => {
-        if (profile) {
-            const invStatus = await checkInvitationStatus(profile.id, profile.created_at);
-            setSentryUser({ id: session.user.id, phone: session.user.phone, role: profile.role });
-            setUser(profile);
-            // Re-register push token on biometric unlock too — covers the
-            // reinstall + biometric-only flow where the OTP path never runs.
-            registerPushToken(session.user.id).catch((e) => {
-                if (__DEV__) console.error('[AuthContext] registerPushToken (biometric) failed:', e);
-            });
-            setAuthState((prev) => ({
-                ...prev,
-                session,
-                isAuthenticated: true,
-                pendingBiometricSession: false,
-                invitationStatus: invStatus,
-            }));
-        } else {
-            setUser(null);
-            setAuthState((prev) => ({
-                ...prev,
-                session,
-                isAuthenticated: false,
-                pendingBiometricSession: false,
-                invitationStatus: 'rejected',
-            }));
-        }
-    }, []);
+    /** Called by BiometricsProvider after successful Face ID. `session` is
+     *  null in the offline-grace path (expired session, cached profile). */
+    const handleBiometricUnlock = useCallback(
+        (session: Session | null, resolved: { profile: User | null; invitationStatus: InvitationStatus }) => {
+            const { profile, invitationStatus } = resolved;
+            if (profile) {
+                setSentryUser({ id: profile.id, phone: profile.phone, role: profile.role });
+                setUser(profile);
+                // Re-register push token on biometric unlock too — covers the
+                // reinstall + biometric-only flow where the OTP path never runs.
+                registerPushToken(profile.id).catch((e) => {
+                    if (__DEV__) console.error('[AuthContext] registerPushToken (biometric) failed:', e);
+                });
+                setAuthState((prev) => ({
+                    ...prev,
+                    session,
+                    isAuthenticated: true,
+                    pendingBiometricSession: false,
+                    invitationStatus,
+                }));
+            } else {
+                setUser(null);
+                setAuthState((prev) => ({
+                    ...prev,
+                    session,
+                    isAuthenticated: false,
+                    pendingBiometricSession: false,
+                    invitationStatus: 'rejected',
+                }));
+            }
+        },
+        [],
+    );
 
     useEffect(() => {
         const initAuth = async () => {
@@ -461,15 +587,19 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
                     await AsyncStorage.removeItem(OTA_RELOAD_FLAG_KEY);
                 }
 
-                const session = await restoreSessionWithRetry();
+                const { session, networkFailed: restoreNetworkFailed } = await restoreSessionWithRetry();
 
                 const bioEnabled = await isBiometricsEnabled();
                 const bioAvailable = bioEnabled && (await isBiometricsAvailable());
 
                 if (bioEnabled && bioAvailable && !skipBioGate) {
-                    // Biometric gate: show prompt whether we have a session or a stored refresh token
+                    // Biometric gate: show prompt whether we have a session, a
+                    // stored refresh token, or an offline-grace cached profile
+                    // (expired session that only failed to refresh because the
+                    // device is offline — the unlock path serves the cache).
                     const hasStoredToken = !!(await getBiometricRefreshToken());
-                    if (session?.user || hasStoredToken) {
+                    const hasOfflineGrace = restoreNetworkFailed && !!(await loadCachedProfile());
+                    if (session?.user || hasStoredToken || hasOfflineGrace) {
                         setAuthState({
                             session: null,
                             isLoading: false,
@@ -483,9 +613,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
                 if (session?.user) {
                     const phone = session.user.phone || null;
-                    const profile = await fetchUserProfile(session.user.id, session.access_token, phone);
+                    const { profile, invitationStatus } = await resolveProfileAndInvitation(session);
                     if (profile) {
-                        const invStatus = await checkInvitationStatus(profile.id, profile.created_at);
                         await updateLastLogin(session.user.id);
                         syncAuthMetadata().catch((e) => {
                             if (__DEV__) console.error('[AuthContext] syncAuthMetadata failed:', e);
@@ -500,7 +629,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
                             isLoading: false,
                             isAuthenticated: true,
                             pendingBiometricSession: false,
-                            invitationStatus: invStatus,
+                            invitationStatus,
                         });
                     } else {
                         setUser(null);
@@ -510,6 +639,39 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
                             isAuthenticated: false,
                             pendingBiometricSession: false,
                             invitationStatus: 'rejected',
+                        });
+                    }
+                } else if (restoreNetworkFailed) {
+                    // Offline grace (audit C2): the session couldn't be restored
+                    // ONLY because the network is down — auth-js keeps the
+                    // refresh token in storage on retryable failures. Land the
+                    // device's last signed-in (never signed-out) user on their
+                    // cached profile instead of bouncing them to an OTP login
+                    // screen that itself needs connectivity. On reconnect,
+                    // NetworkContext refreshes the session and the
+                    // TOKEN_REFRESHED handler merges it into this state.
+                    const cached = await loadCachedProfile();
+                    if (cached) {
+                        setSentryUser({
+                            id: cached.profile.id,
+                            phone: cached.profile.phone,
+                            role: cached.profile.role,
+                        });
+                        setUser(cached.profile);
+                        setAuthState({
+                            session: null,
+                            isLoading: false,
+                            isAuthenticated: true,
+                            pendingBiometricSession: false,
+                            invitationStatus: cached.invitationStatus,
+                        });
+                    } else {
+                        setAuthState({
+                            session: null,
+                            isLoading: false,
+                            isAuthenticated: false,
+                            pendingBiometricSession: false,
+                            invitationStatus: 'checking',
                         });
                     }
                 } else {
@@ -550,13 +712,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
             }
 
             if (session?.user) {
-                const profile = await fetchUserProfile(
-                    session.user.id,
-                    session.access_token,
-                    session.user.phone || null,
-                );
+                const { profile, invitationStatus } = await resolveProfileAndInvitation(session);
                 if (profile) {
-                    const invStatus = await checkInvitationStatus(profile.id, profile.created_at);
                     registerPushToken(session.user.id).catch((e) => {
                         if (__DEV__) console.error('[AuthContext] registerPushToken failed:', e);
                     });
@@ -572,7 +729,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
                         isLoading: false,
                         isAuthenticated: true,
                         pendingBiometricSession: false,
-                        invitationStatus: invStatus,
+                        invitationStatus,
                     }));
                 } else {
                     setUser(null);
@@ -586,6 +743,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
                     }));
                 }
             } else {
+                // SIGNED_OUT / revoked: the last-known-good cache must not
+                // outlive the account's access.
+                clearCachedProfile().catch(() => {});
                 clearSentryUser();
                 setUser(null);
                 setAuthState((prev) => ({
@@ -653,6 +813,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
             }
         } else {
             await supabase.auth.signOut();
+            // Real sign-out: drop the last-known-good profile so the offline
+            // grace path can't resurrect a signed-out account. (Biometric
+            // "sign-out" keeps it — Face ID unlock may need it offline.)
+            await clearCachedProfile();
         }
 
         clearSentryUser();

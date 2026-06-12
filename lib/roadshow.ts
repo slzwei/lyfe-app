@@ -6,7 +6,8 @@ import type { Json } from '@/types/shared/database.types';
 import { friendlyError } from './errors';
 import { applyPageRange, resolvePage } from './pagination';
 import { supabase } from './supabase';
-import { queueMutation, enqueueWrite, isNetworkError } from './offline';
+import { queueMutation, enqueueWrite, isNetworkError, isNetworkErrorResult } from './offline';
+import type { OfflineOperation } from './offline';
 
 /** PostgREST error code: "no rows found" from .single() */
 const PGRST_NO_ROWS = 'PGRST116';
@@ -14,6 +15,22 @@ const PGRST_NO_ROWS = 'PGRST116';
 const PG_UNIQUE_VIOLATION = '23505';
 
 // ── Helpers ──────────────────────────────────────────────────
+
+/**
+ * Queue a write that failed because the device is offline. Returns the
+ * caller-facing result: no error when queued, an actionable message when the
+ * queue refused the item (full / not allowlisted) — never a silent drop.
+ */
+async function queueOfflineWrite(
+    table: string,
+    operation: OfflineOperation,
+    payload: Record<string, unknown>,
+    filters?: Record<string, unknown>,
+    onConflict?: string,
+): Promise<{ error: string | null }> {
+    const queued = await enqueueWrite(table, operation, payload, filters, onConflict);
+    return queued ? { error: null } : { error: 'Could not save offline — please try again when connected.' };
+}
 
 /** Compute daily/slot cost client-side */
 function computeCosts(config: { weekly_cost: number; slots_per_day: number }): {
@@ -105,14 +122,17 @@ export async function saveRoadshowConfig(
 ): Promise<{ error: string | null }> {
     const row = { event_id: eventId, ...input };
     try {
-        const { error } = await supabase.from('roadshow_configs').upsert(row, { onConflict: 'event_id' });
-        if (error) return { error: friendlyError(error.message, error.code) };
-        return { error: null };
+        const { error, status } = await supabase.from('roadshow_configs').upsert(row, { onConflict: 'event_id' });
+        if (!error) return { error: null };
+        // Offline → queue the config upsert (replays on reconnect). postgrest
+        // resolves network failures (status 0) instead of throwing.
+        if (isNetworkErrorResult(error, status)) {
+            return queueOfflineWrite('roadshow_configs', 'upsert', row, undefined, 'event_id');
+        }
+        return { error: friendlyError(error.message, error.code) };
     } catch (e) {
-        // Offline → queue the config upsert (replays on reconnect).
         if (isNetworkError(e)) {
-            await enqueueWrite('roadshow_configs', 'upsert', row, undefined, 'event_id');
-            return { error: null };
+            return queueOfflineWrite('roadshow_configs', 'upsert', row, undefined, 'event_id');
         }
         throw e;
     }
@@ -198,16 +218,19 @@ export async function logRoadshowAttendanceWithPledge(
         pledged_afyc: pledges.afyc,
     };
     try {
-        const { error } = await supabase.from('roadshow_attendance').insert(payload);
+        const { error, status } = await supabase.from('roadshow_attendance').insert(payload);
         if (!error) return { error: null };
         if (error.code === PG_UNIQUE_VIOLATION) return { error: null, alreadyCheckedIn: true };
-        return { error: friendlyError(error.message, error.code) };
-    } catch (e) {
         // Offline → queue the check-in (replays on reconnect; a duplicate that
         // already exists will simply fail the unique constraint on replay).
+        // postgrest resolves network failures (status 0) instead of throwing.
+        if (isNetworkErrorResult(error, status)) {
+            return queueOfflineWrite('roadshow_attendance', 'insert', payload);
+        }
+        return { error: friendlyError(error.message, error.code) };
+    } catch (e) {
         if (isNetworkError(e)) {
-            await enqueueWrite('roadshow_attendance', 'insert', payload);
-            return { error: null };
+            return queueOfflineWrite('roadshow_attendance', 'insert', payload);
         }
         throw e;
     }
@@ -233,14 +256,16 @@ export async function managerCheckIn(
         pledged_afyc: pledges.afyc,
     };
     try {
-        const { error } = await supabase.from('roadshow_attendance').insert(payload);
+        const { error, status } = await supabase.from('roadshow_attendance').insert(payload);
         if (!error) return { error: null };
         if (error.code === PG_UNIQUE_VIOLATION) return { error: null, alreadyCheckedIn: true };
+        if (isNetworkErrorResult(error, status)) {
+            return queueOfflineWrite('roadshow_attendance', 'insert', payload);
+        }
         return { error: friendlyError(error.message, error.code) };
     } catch (e) {
         if (isNetworkError(e)) {
-            await enqueueWrite('roadshow_attendance', 'insert', payload);
-            return { error: null };
+            return queueOfflineWrite('roadshow_attendance', 'insert', payload);
         }
         throw e;
     }

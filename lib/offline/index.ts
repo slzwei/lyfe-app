@@ -13,6 +13,7 @@ export {
     runOnlineOnly,
     enqueueWrite,
     isNetworkError,
+    isNetworkErrorResult,
     OFFLINE_ACTION_MESSAGE,
 } from './safeQuery';
 export type { SafeQueryResult, SafeMutationResult } from './safeQuery';

@@ -43,37 +43,58 @@ export interface SafeMutationResult<T> {
     queued: boolean;
 }
 
+function isNetworkErrorMessage(message: string): boolean {
+    const msg = message.toLowerCase();
+    return (
+        msg.includes('network request failed') ||
+        msg.includes('failed to fetch') ||
+        msg.includes('fetch failed') ||
+        msg.includes('networkerror') ||
+        msg.includes('the internet connection appears to be offline')
+    );
+}
+
 export function isNetworkError(e: unknown): boolean {
     if (e instanceof TypeError && e.message === 'Network request failed') return true;
-    if (e instanceof Error) {
-        const msg = e.message.toLowerCase();
-        return (
-            msg.includes('network request failed') ||
-            msg.includes('failed to fetch') ||
-            msg.includes('networkerror') ||
-            msg.includes('the internet connection appears to be offline')
-        );
-    }
+    if (e instanceof Error) return isNetworkErrorMessage(e.message);
     return false;
 }
 
+/**
+ * postgrest-js NEVER rejects on a network failure — the fetch rejection is
+ * caught internally and RESOLVED as `{ data: null, error: { message:
+ * 'TypeError: Network request failed', ... }, status: 0 }`. So offline
+ * detection must classify resolved results, not just thrown errors.
+ * `status === 0` means the request never received an HTTP response (a real
+ * PostgREST error always carries status >= 400); clients that don't report a
+ * status at all (storage-js, auth-js) are classified by message alone.
+ * Aborted requests also resolve with status 0 but an 'AbortError: …' message,
+ * which the matcher deliberately rejects — an intentional cancel must not be
+ * queued for replay.
+ */
+export function isNetworkErrorResult(error: { message?: string } | null | undefined, status?: number): boolean {
+    if (!error?.message) return false;
+    if (status !== undefined && status !== 0) return false;
+    return isNetworkErrorMessage(error.message);
+}
+
 export async function safeQuery<T>(
-    queryFn: () => PromiseLike<{ data: T | null; error: { message: string } | null }>,
+    queryFn: () => PromiseLike<{ data: T | null; error: { message: string } | null; status?: number }>,
 ): Promise<SafeQueryResult<T>> {
+    const offlineResult: SafeQueryResult<T> = {
+        data: null,
+        error: 'You are offline. Please check your connection.',
+        isOffline: true,
+    };
     try {
-        const { data, error } = await queryFn();
+        const { data, error, status } = await queryFn();
         if (error) {
+            if (isNetworkErrorResult(error, status)) return offlineResult;
             return { data, error: error.message ?? String(error), isOffline: false };
         }
         return { data, error: null, isOffline: false };
     } catch (e: unknown) {
-        if (isNetworkError(e)) {
-            return {
-                data: null,
-                error: 'You are offline. Please check your connection.',
-                isOffline: true,
-            };
-        }
+        if (isNetworkError(e)) return offlineResult;
         throw e;
     }
 }
@@ -83,31 +104,42 @@ export async function safeMutation<T>(
     operation: OfflineOperation,
     payload: Record<string, unknown>,
     filters: Record<string, unknown> | undefined,
-    queryFn: () => PromiseLike<{ data: T | null; error: { message: string } | null }>,
+    queryFn: () => PromiseLike<{ data: T | null; error: { message: string } | null; status?: number }>,
     queue: OfflineQueue,
     onConflict?: string,
 ): Promise<SafeMutationResult<T>> {
+    const enqueueOffline = async (): Promise<SafeMutationResult<T>> => {
+        if (!ALLOWED_SYNC_TABLES.has(table)) {
+            return { data: null, error: `Table "${table}" is not allowed for offline queuing`, queued: false };
+        }
+        const item = await queue.enqueue({
+            table,
+            operation,
+            payload,
+            filters,
+            onConflict,
+            userId: getCachedUserId() ?? undefined,
+        });
+        if (!item) {
+            // Queue full — fail loudly rather than pretend the write is saved
+            return {
+                data: null,
+                error: 'Offline queue is full — this change was not saved. Reconnect and try again.',
+                queued: false,
+            };
+        }
+        return { data: null, error: null, queued: true };
+    };
+
     try {
-        const { data, error } = await queryFn();
+        const { data, error, status } = await queryFn();
         if (error) {
+            if (isNetworkErrorResult(error, status)) return enqueueOffline();
             return { data, error: error.message ?? String(error), queued: false };
         }
         return { data, error: null, queued: false };
     } catch (e: unknown) {
-        if (isNetworkError(e)) {
-            if (!ALLOWED_SYNC_TABLES.has(table)) {
-                return { data: null, error: `Table "${table}" is not allowed for offline queuing`, queued: false };
-            }
-            await queue.enqueue({
-                table,
-                operation,
-                payload,
-                filters,
-                onConflict,
-                userId: getCachedUserId() ?? undefined,
-            });
-            return { data: null, error: null, queued: true };
-        }
+        if (isNetworkError(e)) return enqueueOffline();
         throw e;
     }
 }
@@ -125,7 +157,7 @@ export function queueMutation<T>(
     operation: OfflineOperation,
     payload: Record<string, unknown>,
     filters: Record<string, unknown> | undefined,
-    queryFn: () => PromiseLike<{ data: T | null; error: { message: string } | null }>,
+    queryFn: () => PromiseLike<{ data: T | null; error: { message: string } | null; status?: number }>,
     onConflict?: string,
 ): Promise<SafeMutationResult<T>> {
     return safeMutation(table, operation, payload, filters, queryFn, offlineQueue, onConflict);
@@ -146,6 +178,12 @@ export async function runOnlineOnly<T>(
 ): Promise<{ data: T | null; error: string | null; offline: boolean }> {
     try {
         const data = await queryFn();
+        // Supabase sub-clients resolve network failures into their `{ error }`
+        // envelope rather than throwing — probe the resolved value too.
+        const envelope = data as { error?: { message?: string } | null; status?: number } | null;
+        if (envelope && typeof envelope === 'object' && isNetworkErrorResult(envelope.error, envelope.status)) {
+            return { data: null, error: OFFLINE_ACTION_MESSAGE, offline: true };
+        }
         return { data, error: null, offline: false };
     } catch (e: unknown) {
         if (isNetworkError(e)) {
@@ -160,7 +198,8 @@ export async function runOnlineOnly<T>(
  * allowlist). For the rare call sites that can't use `queueMutation` because
  * they need the live error CODE on the online path — e.g. idempotent check-ins
  * that treat a unique-violation as success. Returns false if the table isn't
- * allowlisted (the caller should then surface a normal error).
+ * allowlisted or the queue is full (the caller should then surface a normal
+ * error instead of pretending the write is saved).
  */
 export async function enqueueWrite(
     table: string,
@@ -170,7 +209,7 @@ export async function enqueueWrite(
     onConflict?: string,
 ): Promise<boolean> {
     if (!ALLOWED_SYNC_TABLES.has(table)) return false;
-    await offlineQueue.enqueue({
+    const item = await offlineQueue.enqueue({
         table,
         operation,
         payload,
@@ -178,5 +217,5 @@ export async function enqueueWrite(
         onConflict,
         userId: getCachedUserId() ?? undefined,
     });
-    return true;
+    return item !== null;
 }

@@ -1,9 +1,27 @@
-import { safeQuery, safeMutation } from '@/lib/offline/safeQuery';
+import { safeQuery, safeMutation, isNetworkErrorResult } from '@/lib/offline/safeQuery';
 import { OfflineQueue } from '@/lib/offline/queue';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
 const mockGetItem = AsyncStorage.getItem as jest.Mock;
 const mockSetItem = AsyncStorage.setItem as jest.Mock;
+
+/**
+ * The EXACT shape postgrest-js (2.98) resolves with on a network failure —
+ * it catches the fetch rejection internally and resolves, it never throws.
+ * (See PostgrestBuilder.then's `.catch(fetchError => ...)` handler.)
+ */
+const POSTGREST_NETWORK_FAILURE = {
+    data: null,
+    error: {
+        message: 'TypeError: Network request failed',
+        details: 'TypeError: Network request failed\n    at anonymous (fetch.umd.js:535:33)',
+        hint: '',
+        code: '',
+    },
+    count: null,
+    status: 0,
+    statusText: '',
+};
 
 describe('safeQuery', () => {
     it('returns data on success', async () => {
@@ -30,6 +48,23 @@ describe('safeQuery', () => {
         expect(result.data).toBeNull();
         expect(result.error).toBe('You are offline. Please check your connection.');
         expect(result.isOffline).toBe(true);
+    });
+
+    it('returns offline result when the client RESOLVES a network failure (postgrest-js behavior)', async () => {
+        const result = await safeQuery(() => Promise.resolve(POSTGREST_NETWORK_FAILURE));
+
+        expect(result.data).toBeNull();
+        expect(result.error).toBe('You are offline. Please check your connection.');
+        expect(result.isOffline).toBe(true);
+    });
+
+    it('does NOT classify a real server error as offline even if it mentions networking', async () => {
+        const result = await safeQuery(() =>
+            Promise.resolve({ data: null, error: { message: 'network request failed in trigger fn' }, status: 500 }),
+        );
+
+        expect(result.isOffline).toBe(false);
+        expect(result.error).toBe('network request failed in trigger fn');
     });
 
     it('detects "Failed to fetch" as network error', async () => {
@@ -142,5 +177,79 @@ describe('safeMutation', () => {
                 queue,
             ),
         ).rejects.toThrow('Permission denied');
+    });
+
+    it('queues when the client RESOLVES a network failure (postgrest-js behavior)', async () => {
+        const result = await safeMutation(
+            'leads',
+            'update',
+            { status: 'contacted' },
+            { id: 'L1' },
+            () => Promise.resolve(POSTGREST_NETWORK_FAILURE),
+            queue,
+        );
+
+        expect(result.data).toBeNull();
+        expect(result.error).toBeNull();
+        expect(result.queued).toBe(true);
+
+        const items = await queue.getAll();
+        expect(items).toHaveLength(1);
+        expect(items[0].table).toBe('leads');
+        expect(items[0].payload).toEqual({ status: 'contacted' });
+        expect(items[0].filters).toEqual({ id: 'L1' });
+    });
+
+    it('does NOT queue an aborted request (status 0 but AbortError)', async () => {
+        const result = await safeMutation(
+            'leads',
+            'update',
+            { status: 'contacted' },
+            { id: 'L1' },
+            () =>
+                Promise.resolve({
+                    data: null,
+                    error: { message: 'AbortError: Aborted', details: '', hint: '', code: '' },
+                    status: 0,
+                }),
+            queue,
+        );
+
+        expect(result.queued).toBe(false);
+        expect(result.error).toBe('AbortError: Aborted');
+        expect(await queue.size()).toBe(0);
+    });
+
+    it('fails loudly (queued: false + error) when the queue is full', async () => {
+        jest.spyOn(queue, 'enqueue').mockResolvedValue(null);
+
+        const result = await safeMutation(
+            'leads',
+            'update',
+            { status: 'contacted' },
+            { id: 'L1' },
+            () => Promise.resolve(POSTGREST_NETWORK_FAILURE),
+            queue,
+        );
+
+        expect(result.queued).toBe(false);
+        expect(result.error).toMatch(/queue is full/i);
+    });
+});
+
+describe('isNetworkErrorResult', () => {
+    it('matches the resolved postgrest-js network-failure shape', () => {
+        expect(isNetworkErrorResult(POSTGREST_NETWORK_FAILURE.error, POSTGREST_NETWORK_FAILURE.status)).toBe(true);
+    });
+
+    it('matches by message alone when the client reports no status (storage-js/auth-js)', () => {
+        expect(isNetworkErrorResult({ message: 'Network request failed' })).toBe(true);
+    });
+
+    it('rejects real HTTP errors, aborts, and missing errors', () => {
+        expect(isNetworkErrorResult({ message: 'network request failed' }, 500)).toBe(false);
+        expect(isNetworkErrorResult({ message: 'AbortError: Aborted' }, 0)).toBe(false);
+        expect(isNetworkErrorResult({ message: 'duplicate key value' }, 409)).toBe(false);
+        expect(isNetworkErrorResult(null, 0)).toBe(false);
     });
 });

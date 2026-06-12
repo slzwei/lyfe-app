@@ -19,11 +19,19 @@ export interface QueueItem {
 }
 
 function generateId(): string {
-    const bytes = new Uint8Array(16);
-    crypto.getRandomValues(bytes);
-    return Array.from(bytes)
-        .map((b) => b.toString(16).padStart(2, '0'))
-        .join('');
+    // Hermes ships no WebCrypto and this app installs no polyfill, so reaching
+    // for the global unconditionally would make every on-device enqueue throw.
+    // Ids only need to be unique within this device's queue — fall back to a
+    // timestamp + Math.random id when crypto is unavailable.
+    const cryptoObj = (globalThis as { crypto?: { getRandomValues?: (array: Uint8Array) => Uint8Array } }).crypto;
+    if (cryptoObj?.getRandomValues) {
+        const bytes = new Uint8Array(16);
+        cryptoObj.getRandomValues(bytes);
+        return Array.from(bytes)
+            .map((b) => b.toString(16).padStart(2, '0'))
+            .join('');
+    }
+    return `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 12)}-${Math.random().toString(36).slice(2, 12)}`;
 }
 
 export class OfflineQueue {
@@ -69,15 +77,24 @@ export class OfflineQueue {
             return null;
         }
         // Dedup: newer operation for the same record replaces the older one
+        let payload = item.payload;
         const key = this.dedupKey(item);
         if (key) {
             const existingIndex = this.items.findIndex((existing) => this.dedupKey(existing) === key);
             if (existingIndex !== -1) {
-                this.items.splice(existingIndex, 1);
+                const [existing] = this.items.splice(existingIndex, 1);
+                // Same-operation writes to the same record merge field-wise —
+                // a queued { status } change must survive a later { notes }
+                // change to the same row; replacing the whole payload would
+                // silently drop the earlier field.
+                if (existing.operation === item.operation && item.operation !== 'delete') {
+                    payload = { ...existing.payload, ...payload };
+                }
             }
         }
         const queueItem: QueueItem = {
             ...item,
+            payload,
             id: generateId(),
             createdAt: new Date().toISOString(),
             retryCount: 0,

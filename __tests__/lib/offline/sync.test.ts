@@ -167,6 +167,87 @@ describe('SyncManager', () => {
         });
     });
 
+    describe('network failure during replay (still offline)', () => {
+        // postgrest-js resolves network failures with status 0 — it never
+        // throws. NetInfo can flap "online" while requests still fail; those
+        // flaps must not consume retry budget or dead-letter queued writes.
+        const networkFailureClient = () =>
+            ({
+                from: jest.fn(() => ({
+                    insert: jest.fn().mockResolvedValue({
+                        data: null,
+                        error: {
+                            message: 'TypeError: Network request failed',
+                            details: '',
+                            hint: '',
+                            code: '',
+                        },
+                        count: null,
+                        status: 0,
+                        statusText: '',
+                    }),
+                })),
+                auth: {
+                    getSession: jest.fn().mockResolvedValue({
+                        data: { session: { user: { id: 'test-user-id' } } },
+                    }),
+                },
+            }) as any;
+
+        it('keeps items and their retry budget intact, and stops draining', async () => {
+            const client = networkFailureClient();
+            const manager = new SyncManager(client, queue);
+
+            await queue.enqueue({ table: 'leads', operation: 'insert', payload: { name: 'A' } });
+            await queue.enqueue({ table: 'leads', operation: 'insert', payload: { name: 'B' } });
+
+            const status = await manager.sync();
+
+            expect(status.pending).toBe(2);
+            const items = await queue.getAll();
+            expect(items[0].retryCount).toBe(0);
+            expect(items[1].retryCount).toBe(0);
+            // Halted after the first network failure — no point hammering offline
+            expect(client.from).toHaveBeenCalledTimes(1);
+        });
+
+        it('never dead-letters items through repeated offline sync attempts', async () => {
+            const client = networkFailureClient();
+            const manager = new SyncManager(client, queue);
+
+            await queue.enqueue({ table: 'leads', operation: 'insert', payload: {} });
+
+            // 5 NetInfo flaps while genuinely offline (> MAX_RETRIES)
+            for (let i = 0; i < 5; i++) {
+                await manager.sync();
+            }
+
+            expect(await queue.size()).toBe(1);
+            expect((await queue.getAll())[0].retryCount).toBe(0);
+        });
+    });
+
+    describe('signed-out guard', () => {
+        it('leaves the queue untouched when there is no session (cold start on login screen)', async () => {
+            // Anonymous replays would only collect RLS errors and burn retry budget
+            const client = {
+                from: jest.fn(),
+                auth: {
+                    getSession: jest.fn().mockResolvedValue({ data: { session: null } }),
+                },
+            } as any;
+            const manager = new SyncManager(client, queue);
+
+            await queue.enqueue({ table: 'leads', operation: 'insert', payload: {} });
+
+            const status = await manager.sync();
+
+            expect(client.from).not.toHaveBeenCalled();
+            expect(status.pending).toBe(1);
+            expect((await queue.getAll())[0].retryCount).toBe(0);
+        });
+    });
+
     describe('retry and dead-lettering', () => {
         it('increments retry count on failure', async () => {
             const client = createMockClient({ insertError: 'DB error' });

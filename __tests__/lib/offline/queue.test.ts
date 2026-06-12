@@ -45,6 +45,57 @@ describe('OfflineQueue', () => {
             });
             expect(item.filters).toEqual({ id: '123' });
         });
+
+        it('merges payloads when deduping same-operation updates to the same record', async () => {
+            await queue.enqueue({
+                table: 'leads',
+                operation: 'update',
+                payload: { status: 'contacted' },
+                filters: { id: 'L1' },
+            });
+            await queue.enqueue({
+                table: 'leads',
+                operation: 'update',
+                payload: { notes: 'called twice' },
+                filters: { id: 'L1' },
+            });
+
+            const items = await queue.getAll();
+            expect(items).toHaveLength(1);
+            // The earlier status change must survive the later notes change
+            expect(items[0].payload).toEqual({ status: 'contacted', notes: 'called twice' });
+        });
+
+        it('lets a later delete replace a queued update for the same record', async () => {
+            await queue.enqueue({
+                table: 'leads',
+                operation: 'update',
+                payload: { status: 'contacted' },
+                filters: { id: 'L1' },
+            });
+            await queue.enqueue({ table: 'leads', operation: 'delete', payload: {}, filters: { id: 'L1' } });
+
+            const items = await queue.getAll();
+            expect(items).toHaveLength(1);
+            expect(items[0].operation).toBe('delete');
+            expect(items[0].payload).toEqual({});
+        });
+
+        it('generates ids without WebCrypto (Hermes has no crypto global)', async () => {
+            // Jest runs on Node, which HAS crypto.getRandomValues — Hermes does
+            // not (and no polyfill is installed). Simulate the device runtime.
+            const original = Object.getOwnPropertyDescriptor(globalThis, 'crypto');
+            Object.defineProperty(globalThis, 'crypto', { value: undefined, configurable: true });
+            try {
+                const item1 = await queue.enqueue({ table: 'leads', operation: 'insert', payload: { a: 1 } });
+                const item2 = await queue.enqueue({ table: 'leads', operation: 'insert', payload: { b: 2 } });
+                expect(item1?.id).toBeTruthy();
+                expect(item2?.id).toBeTruthy();
+                expect(item1!.id).not.toBe(item2!.id);
+            } finally {
+                if (original) Object.defineProperty(globalThis, 'crypto', original);
+            }
+        });
     });
 
     describe('dequeue', () => {
