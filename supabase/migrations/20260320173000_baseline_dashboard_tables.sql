@@ -43,8 +43,9 @@
 --   - users_select_authenticated USING(true)  → audit H3 (to be replaced,
 --     not reproduced)
 --   - leads dual PERMISSIVE DELETE policies   → audit H5
---   - get_lead_pipeline_stats(uuid,boolean) 2-arg overload → audit H2
 --   - synthetic_* tables exist in migrations but were hand-dropped in prod
+-- (The get_lead_pipeline_stats(uuid,boolean) 2-arg overload was codified +
+--  hardened in 20260613000000_secure_pipeline_stats_rpc — audit H2 resolved.)
 -- =====================================================================
 
 -- ── Dashboard-created functions ───────────────────────────────────────
