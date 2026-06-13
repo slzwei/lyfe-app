@@ -72,6 +72,11 @@ export function useEventDetail(eventId: string | undefined, userId: string | und
         useCallback((att: RoadshowAttendance) => {
             setAttendance((prev) => [...prev, att]);
         }, []),
+        useCallback(() => {
+            // Realtime reconnected after a drop — silently reload so the live view
+            // reflects any inserts missed while offline (audit H6).
+            loadEvent(false);
+        }, [loadEvent]),
     );
 
     return {

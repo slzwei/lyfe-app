@@ -125,6 +125,39 @@ describe('useEventDetail', () => {
         expect(mockFetchRoadshowActivities).toHaveBeenCalledWith('e1');
     });
 
+    it('passes an onResync callback that reloads roadshow data on reconnect', async () => {
+        // Audit H6: on a realtime reconnect the live roadshow view must backfill
+        // any inserts missed while offline — useEventDetail wires that to a reload.
+        const { useRoadshowRealtime } = require('@/hooks/useRoadshowRealtime');
+        mockFetchEventById.mockResolvedValue({
+            data: {
+                id: 'e1',
+                title: 'Roadshow',
+                event_type: 'roadshow',
+                event_date: '2026-03-09',
+                start_time: '09:00',
+                end_time: '17:00',
+                attendees: [],
+            },
+        });
+        mockFetchRoadshowConfig.mockResolvedValue({ data: null });
+        mockFetchRoadshowAttendance.mockResolvedValue({ data: [] });
+        mockFetchRoadshowActivities.mockResolvedValue({ data: [] });
+
+        renderHook(() => useEventDetail('e1', 'user1'));
+        await waitFor(() => expect(mockFetchEventById).toHaveBeenCalled());
+
+        const calls = (useRoadshowRealtime as jest.Mock).mock.calls;
+        const onResync = calls[calls.length - 1][5];
+        expect(typeof onResync).toBe('function');
+
+        mockFetchEventById.mockClear();
+        await act(async () => {
+            onResync();
+        });
+        expect(mockFetchEventById).toHaveBeenCalledWith('e1'); // resync re-fetched event data
+    });
+
     it('returns null event when eventId is undefined', async () => {
         const { result } = renderHook(() => useEventDetail(undefined, 'user1'));
 

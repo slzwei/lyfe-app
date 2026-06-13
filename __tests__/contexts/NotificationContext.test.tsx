@@ -5,6 +5,7 @@ import React from 'react';
 import { renderHook, act } from '@testing-library/react-native';
 
 import { NotificationProvider, useNotifications } from '@/contexts/NotificationContext';
+import { supabase } from '@/lib/supabase';
 
 // Mock AuthContext
 let mockUser: any = null;
@@ -133,6 +134,62 @@ describe('NotificationContext', () => {
         });
 
         expect(result.current.unreadCount).toBe(4);
+    });
+
+    it('refetches the unread count when the realtime channel (re)subscribes', async () => {
+        // Audit H6: the badge must reconcile against the server whenever the
+        // realtime channel (re)connects, so INSERTs missed during a dropped
+        // connection don't leave the count stale forever.
+        mockUser = { id: 'user-1' };
+        mockFetchUnreadCount.mockResolvedValue({ count: 2, error: null });
+
+        let statusCb: ((status: string) => void) | undefined;
+        (supabase.channel as jest.Mock).mockImplementationOnce(() => ({
+            on: jest.fn().mockReturnThis(),
+            subscribe: jest.fn((cb?: (status: string) => void) => {
+                statusCb = cb;
+                return { unsubscribe: jest.fn() };
+            }),
+            unsubscribe: jest.fn(),
+        }));
+
+        const { result } = renderHook(() => useNotifications(), { wrapper });
+        await act(async () => {});
+
+        expect(mockFetchUnreadCount).toHaveBeenCalledTimes(1); // mount fetch
+
+        mockFetchUnreadCount.mockResolvedValue({ count: 9, error: null });
+        await act(async () => {
+            statusCb?.('SUBSCRIBED');
+        });
+
+        expect(mockFetchUnreadCount).toHaveBeenCalledTimes(2); // reconciled on (re)subscribe
+        expect(result.current.unreadCount).toBe(9);
+    });
+
+    it('does not refetch on non-SUBSCRIBED channel status', async () => {
+        mockUser = { id: 'user-1' };
+        mockFetchUnreadCount.mockResolvedValue({ count: 2, error: null });
+
+        let statusCb: ((status: string) => void) | undefined;
+        (supabase.channel as jest.Mock).mockImplementationOnce(() => ({
+            on: jest.fn().mockReturnThis(),
+            subscribe: jest.fn((cb?: (status: string) => void) => {
+                statusCb = cb;
+                return { unsubscribe: jest.fn() };
+            }),
+            unsubscribe: jest.fn(),
+        }));
+
+        renderHook(() => useNotifications(), { wrapper });
+        await act(async () => {});
+        expect(mockFetchUnreadCount).toHaveBeenCalledTimes(1);
+
+        await act(async () => {
+            statusCb?.('CHANNEL_ERROR');
+            statusCb?.('CLOSED');
+        });
+        expect(mockFetchUnreadCount).toHaveBeenCalledTimes(1); // only SUBSCRIBED reconciles
     });
 
     it('throws when used outside provider', () => {

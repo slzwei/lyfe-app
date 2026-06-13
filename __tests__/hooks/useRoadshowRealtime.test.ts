@@ -117,6 +117,47 @@ describe('useRoadshowRealtime', () => {
         jest.useRealTimers();
     });
 
+    it('calls onResync on re-subscribe but not on the first subscribe', () => {
+        // Audit H6: the consumer already loads on mount/focus, so resync only on
+        // a *re*-subscribe (after a dropped connection) to backfill missed inserts.
+        let statusCallback: Function = () => {};
+        mockChannel.subscribe.mockImplementation((cb?: Function) => {
+            if (cb) statusCallback = cb;
+            return mockChannel;
+        });
+        const onResync = jest.fn();
+
+        renderHook(() => useRoadshowRealtime('evt-1', true, 'user-1', jest.fn(), jest.fn(), onResync));
+
+        statusCallback('SUBSCRIBED'); // first join — no resync
+        expect(onResync).not.toHaveBeenCalled();
+
+        statusCallback('SUBSCRIBED'); // re-join after a drop — resync
+        expect(onResync).toHaveBeenCalledTimes(1);
+    });
+
+    it('re-attaches the status handler when reconnecting after CHANNEL_ERROR', () => {
+        jest.useFakeTimers();
+        let statusCallback: Function = () => {};
+        mockChannel.subscribe.mockImplementation((cb?: Function) => {
+            if (cb) statusCallback = cb;
+            return mockChannel;
+        });
+
+        renderHook(() => useRoadshowRealtime('evt-1', true, 'user-1', jest.fn(), jest.fn(), jest.fn()));
+
+        statusCallback('CHANNEL_ERROR');
+        jest.advanceTimersByTime(2000);
+
+        expect(mockSupa.removeChannel).toHaveBeenCalled();
+        // The recreated channel must subscribe WITH a status handler — pre-fix it
+        // resubscribed with no callback, so a second drop could never reconnect
+        // or resync, and the leaderboard would silently die after one blip.
+        expect(mockChannel.subscribe).toHaveBeenLastCalledWith(expect.any(Function));
+
+        jest.useRealTimers();
+    });
+
     it('cleans up channel on unmount', () => {
         const { unmount } = renderHook(() => useRoadshowRealtime('evt-1', true, 'user-1', jest.fn(), jest.fn()));
 

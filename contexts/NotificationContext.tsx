@@ -7,7 +7,7 @@
 import { useAuth } from '@/contexts/AuthContext';
 import { fetchUnreadCount, markAllAsRead as markAllAsReadSvc, markAsRead as markAsReadSvc } from '@/lib/notifications';
 import { supabase } from '@/lib/supabase';
-import React, { createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react';
+import React, { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react';
 
 interface NotificationContextType {
     unreadCount: number;
@@ -37,6 +37,11 @@ export function NotificationProvider({ children }: { children: React.ReactNode }
         refreshUnreadCount();
     }, [user?.id, refreshUnreadCount]);
 
+    // Stable ref so the realtime status callback always reconciles with the
+    // latest fetch without forcing the channel to re-subscribe.
+    const refreshRef = useRef(refreshUnreadCount);
+    refreshRef.current = refreshUnreadCount;
+
     // Subscribe to realtime INSERT → increment count
     useEffect(() => {
         if (!user?.id) return;
@@ -55,7 +60,15 @@ export function NotificationProvider({ children }: { children: React.ReactNode }
                     setUnreadCount((prev) => prev + 1);
                 },
             )
-            .subscribe();
+            .subscribe((status) => {
+                // On every (re)connect, reconcile against the server so the badge
+                // can't drift from INSERTs missed while the channel was down
+                // (audit H6). Supabase auto-rejoins the channel after a socket
+                // blip, which re-fires SUBSCRIBED here.
+                if (status === 'SUBSCRIBED') {
+                    refreshRef.current();
+                }
+            });
 
         return () => {
             channel.unsubscribe?.();
