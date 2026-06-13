@@ -1,0 +1,63 @@
+-- =====================================================================
+-- H5 — Lead hard-DELETE is actually allowed (kill the conflicting allow policy)
+--
+-- WHY:
+--   public.leads carried TWO PERMISSIVE DELETE policies for `authenticated`:
+--       deny_delete_leads  USING (false)
+--           — created by 20260331080000_phase2_high_severity.sql; intent:
+--             leads are non-deletable by users (preserve the audit trail).
+--       leads_delete       USING (can_access_lead(assigned_to, created_by))
+--           — a Dashboard-created, PROD-ONLY policy present in NO migration
+--             (drift; the same class as the H2/H3 prod-only objects that
+--             20260320173000's note flagged as "leads dual-DELETE").
+--   PostgreSQL OR-combines permissive policies for the same command, so the
+--   effective DELETE filter was `false OR can_access_lead(...)` =
+--   `can_access_lead(...)`. The deny was dead: any user who can access a lead
+--   (assigned agent, creator, the agent's manager, an assigned PA, or an
+--   admin/director) could permanently erase the lead and its history.
+--
+--   Verified live 2026-06-13 (rolled-back impersonation, role='agent'): for a
+--   real lead, deny_delete_leads → false, leads_delete → true, and the
+--   OR-combined effective DELETE → TRUE. A plain agent could hard-delete a
+--   lead it is assigned to.
+--
+-- WHAT:
+--   Drop the leads_delete allow policy and (re-)assert the deny so this single
+--   migration is the authoritative, replay-safe statement of the end state:
+--   public.leads has exactly ONE permissive DELETE policy, USING (false). This
+--   matches every other non-deletable table in 20260331080000 (deny_delete_users
+--   / candidates / exam_attempts / lead_activities / ... — each a lone
+--   USING(false) policy with no companion allow policy).
+--
+--   This also resolves the repo↔prod drift: leads_delete is removed from prod
+--   and was never in the chain, so a from-zero rebuild converges to the same
+--   shape (the DROPs are guarded with IF EXISTS, so the rebuild path is a clean
+--   no-op rather than an error).
+--
+--   Safe for every legitimate deleter — all lead deletion is service-role and
+--   bypasses RLS:
+--     * lyfe-app delete-account EF (functions/delete-account/index.ts, Phase 5)
+--       deletes lead_activities + leads for the departing user via the admin
+--       (service-role) client.
+--     * lyfe-sg account/user deletion (src/lib/users/delete.ts, Phase 5) does
+--       the same via getAdminClient() (service role).
+--   No RLS-enforced (authenticated-client) code path deletes leads: a grep of
+--   `from('leads')` across lyfe-app + lyfe-sg shows only SELECT/INSERT/UPDATE on
+--   the user client; the co-located admin leads page only SELECTs.
+--
+-- ROLLBACK (re-introduces the vulnerability — for reference only):
+--   CREATE POLICY leads_delete ON public.leads
+--     FOR DELETE TO authenticated
+--     USING (can_access_lead(assigned_to, created_by));
+-- =====================================================================
+
+-- Remove the conflicting allow policy. PROD-only, so IF EXISTS makes a
+-- from-zero rebuild (where it never existed) a clean no-op.
+DROP POLICY IF EXISTS leads_delete ON public.leads;
+
+-- (Re-)assert the deny as the SOLE DELETE policy, idempotently. Normally
+-- created by 20260331080000; restated here so this migration fully owns the
+-- end state and is safe to replay.
+DROP POLICY IF EXISTS deny_delete_leads ON public.leads;
+CREATE POLICY deny_delete_leads ON public.leads
+  FOR DELETE TO authenticated USING (false);
