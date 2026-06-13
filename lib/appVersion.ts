@@ -1,3 +1,4 @@
+import * as Application from 'expo-application';
 import Constants from 'expo-constants';
 import * as Updates from 'expo-updates';
 
@@ -8,19 +9,63 @@ import * as Updates from 'expo-updates';
  * before we read static properties. Module-load eager eval of these was the
  * suspected cause of an iOS startup crash on 2026-05-16.
  *
+ * The pure formatting is split into formatAppVersionLabel() so it can be
+ * unit-tested without the native bridges (__tests__/lib/appVersion.test.ts).
+ *
  * Returns one of:
- *   v1.3.1 (28) · production · 019e352e   — full resolution
- *   v1.3.1 · production · 019e352e        — build number missing (e.g. Expo Go)
- *   v1.3.1 (28) · production · embedded   — no OTA applied; running bundled JS
- *   v1.3.1 (28) · 019e352e                — channel unavailable, OTA id known
- *   v1.3.1 (28) · unknown                 — last resort if expo-updates is dark
+ *   v1.3.1 (28) · production · 019e352e            — running a downloaded OTA update (its id)
+ *   v1.3.1 (28) · production · embedded (019e352e) — no OTA applied; running the build's own bundle
+ *   v1.3.1 · production · 019e352e                 — build number missing (e.g. Expo Go)
+ *   v1.3.1 (28) · 019e352e                         — channel unavailable, OTA id known
+ *   v1.3.1 (28) · production · unknown             — expo-updates dark / disabled
  */
+export interface AppVersionParts {
+    version: string;
+    buildNumber: string | null;
+    channel: string | null;
+    updateId: string | null;
+    isEmbeddedLaunch: boolean;
+}
+
+/**
+ * Pure label formatter. An embedded launch is labelled `embedded (…)` rather
+ * than its raw id: on SDK 54 `Updates.updateId` is a non-null UUID even when
+ * running the bundle baked into the build, so showing the bare slice made an
+ * embedded build look like it was on a published OTA update (it isn't). The
+ * embedded id is kept in parens for build correlation.
+ */
+export function formatAppVersionLabel({
+    version,
+    buildNumber,
+    channel,
+    updateId,
+    isEmbeddedLaunch,
+}: AppVersionParts): string {
+    const shortId = updateId && updateId.length > 0 ? updateId.slice(0, 8) : null;
+
+    let updateLabel: string;
+    if (isEmbeddedLaunch) {
+        updateLabel = shortId ? `embedded (${shortId})` : 'embedded';
+    } else if (shortId) {
+        updateLabel = shortId;
+    } else {
+        updateLabel = 'unknown';
+    }
+
+    const versionPart = buildNumber ? `v${version} (${buildNumber})` : `v${version}`;
+    return [versionPart, channel, updateLabel].filter(Boolean).join(' · ');
+}
+
 export function buildAppVersionLabel(): string {
     const version = Constants.expoConfig?.version ?? '1.3.1';
 
     let buildNumber: string | null = null;
     try {
-        const native = Constants.nativeBuildVersion;
+        // expo-application, NOT Constants.nativeBuildVersion — the latter is
+        // @deprecated and resolves to null on SDK 54. Application reads the
+        // native Android versionCode / iOS CFBundleVersion. Already linked
+        // (transitive via expo-notifications), so this stays OTA-safe.
+        const native = Application.nativeBuildVersion;
         if (typeof native === 'string' && native.length > 0) buildNumber = native;
     } catch {
         buildNumber = null;
@@ -34,18 +79,16 @@ export function buildAppVersionLabel(): string {
         channel = null;
     }
 
-    let updateLabel = 'unknown';
+    let updateId: string | null = null;
+    let isEmbeddedLaunch = false;
     try {
         const id = Updates.updateId;
-        if (typeof id === 'string' && id.length > 0) {
-            updateLabel = id.slice(0, 8);
-        } else if (Updates.isEmbeddedLaunch) {
-            updateLabel = 'embedded';
-        }
+        if (typeof id === 'string' && id.length > 0) updateId = id;
+        isEmbeddedLaunch = Updates.isEmbeddedLaunch === true;
     } catch {
-        updateLabel = 'unknown';
+        updateId = null;
+        isEmbeddedLaunch = false;
     }
 
-    const versionPart = buildNumber ? `v${version} (${buildNumber})` : `v${version}`;
-    return [versionPart, channel, updateLabel].filter(Boolean).join(' · ');
+    return formatAppVersionLabel({ version, buildNumber, channel, updateId, isEmbeddedLaunch });
 }
