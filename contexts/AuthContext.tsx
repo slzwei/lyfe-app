@@ -44,6 +44,40 @@ interface AuthContextType extends AuthState {
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
+// Explicit column list for the self-profile fetch. Mirrors every public.users
+// column EXCEPT push_token, which migration 20260613010000 locks to
+// service_role only (audit H3) — a `select=*` now 403s against the
+// column-level grant. push_token is intentionally omitted: it is never read
+// client-side (only written by registerForPushNotifications, and read by the
+// send-push-notification edge function via the service role). If a new users
+// column is added, append it here so it surfaces on the profile.
+export const USER_PROFILE_COLUMNS = [
+    'id',
+    'email',
+    'phone',
+    'full_name',
+    'avatar_url',
+    'role',
+    'reports_to',
+    'lifecycle_stage',
+    'date_of_birth',
+    'last_login_at',
+    'is_active',
+    'created_at',
+    'updated_at',
+    'external_id',
+    'notification_preferences',
+    'onboarding_complete',
+    'email_verified',
+    'last_seen_at',
+    'face_registered_at',
+    'consent_tos_at',
+    'consent_privacy_at',
+    'consent_operational_push_at',
+    'consent_marketing_at',
+    'is_test_data',
+].join(',');
+
 // ── Profile context ───────────────────────────────────────────
 interface ProfileContextType {
     user: User | null;
@@ -129,7 +163,7 @@ async function fetchUserProfile(
     if (!supaUrl || !apikey) {
         return { profile: null, networkFailed: false };
     }
-    const url = `${supaUrl}/rest/v1/users?id=eq.${encodeURIComponent(userId)}&select=*`;
+    const url = `${supaUrl}/rest/v1/users?id=eq.${encodeURIComponent(userId)}&select=${USER_PROFILE_COLUMNS}`;
 
     let sawHttpResponse = false;
     for (let attempt = 0; attempt < 3; attempt++) {
