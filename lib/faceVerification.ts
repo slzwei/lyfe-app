@@ -6,9 +6,37 @@
  */
 import { File } from 'expo-file-system/next';
 import { convertToJpeg } from '../modules/face-detection/src';
+import { isNetworkError } from './offline/safeQuery';
 import { supabase } from './supabase';
 
 export const MATCH_THRESHOLD = 99.0;
+
+// Uploaded images are downsized so a flaky connection isn't asked to push
+// multiple megabytes (full-res selfies were ~1.3-4MB base64). convertToJpeg
+// downsamples the long edge natively, preserving EXIF orientation. Kept
+// generous so Rekognition's sharpness gate (>=50) and the strict 99% match
+// threshold against existing references still pass.
+const MAX_UPLOAD_EDGE = 1600;
+const UPLOAD_QUALITY = 0.85;
+
+// Fail fast on a stalled upload instead of waiting out the ~60s OS default. A
+// timeout aborts the invoke's fetch, which supabase-js surfaces as a
+// FunctionsFetchError ("Failed to send a request to the Edge Function") — the
+// same shape a real transport drop produces, so isConnectivityError catches both.
+const INVOKE_TIMEOUT_MS = 30_000;
+
+/**
+ * True when a thrown error (or an error-message string) represents a
+ * transport/connectivity failure — no HTTP response — rather than a server or
+ * face-quality rejection. Covers supabase-js's FunctionsFetchError message and
+ * invoke timeouts, both of which reach callers as a plain Error whose message is
+ * "Failed to send a request to the Edge Function" (registerFace/verifyFace
+ * rethrow `error.message`, dropping the SDK error name — so classify by message).
+ */
+export function isConnectivityError(input: unknown): boolean {
+    if (typeof input === 'string') return isNetworkError(new Error(input));
+    return isNetworkError(input);
+}
 
 export type FaceQualityReason =
     | 'no_face'
@@ -56,19 +84,24 @@ export async function checkFaceRegistration(): Promise<FaceRegistrationStatus> {
     };
 }
 
-async function readPhotoAsBase64(filePath: string): Promise<string> {
-    // VisionCamera saves as HEIC on modern iPhones — convert to JPEG
-    const jpegPath = await convertToJpeg(filePath, 0.5);
-    // Ensure file:// prefix (Android returns raw paths, File constructor needs URI)
-    const uri = jpegPath.startsWith('file://') ? jpegPath : `file://${jpegPath}`;
-    const file = new File(uri);
-    const bytes = await file.bytes();
-    console.log(`[FaceVerify] JPEG: ${bytes.length} bytes, header: ${bytes[0]},${bytes[1]},${bytes[2]}`);
+function bytesToBase64(bytes: Uint8Array): string {
     let binary = '';
     for (let i = 0; i < bytes.length; i++) {
         binary += String.fromCharCode(bytes[i]);
     }
     return btoa(binary);
+}
+
+async function readPhotoAsBase64(filePath: string): Promise<string> {
+    // VisionCamera saves as HEIC on modern iPhones — convert to JPEG and
+    // downscale to MAX_UPLOAD_EDGE in a single native pass (orientation-safe).
+    const jpegPath = await convertToJpeg(filePath, UPLOAD_QUALITY, MAX_UPLOAD_EDGE);
+    // Ensure file:// prefix (Android returns raw paths, File constructor needs URI)
+    const uri = jpegPath.startsWith('file://') ? jpegPath : `file://${jpegPath}`;
+    const file = new File(uri);
+    const bytes = await file.bytes();
+    console.log(`[FaceVerify] JPEG: ${bytes.length} bytes, header: ${bytes[0]},${bytes[1]},${bytes[2]}`);
+    return bytesToBase64(bytes);
 }
 
 /**
@@ -89,6 +122,7 @@ export async function registerFace(photoPath: string): Promise<FaceRegisterResul
 
     const { data, error } = await supabase.functions.invoke('verify-face', {
         body: { action: 'register', photo: base64 },
+        timeout: INVOKE_TIMEOUT_MS,
     });
 
     console.log('[FaceVerify] Register response:', JSON.stringify(data), 'error:', JSON.stringify(error));
@@ -124,6 +158,7 @@ export async function verifyFace(photoPath: string): Promise<FaceVerifyResult> {
 
     const { data, error } = await supabase.functions.invoke('verify-face', {
         body: { action: 'verify', photo: base64 },
+        timeout: INVOKE_TIMEOUT_MS,
     });
 
     // Try to read the actual error body
