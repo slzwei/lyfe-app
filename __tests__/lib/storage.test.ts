@@ -63,16 +63,7 @@ afterEach(() => {
 // ── pickAndUploadAvatar ──
 
 describe('pickAndUploadAvatar', () => {
-    it('returns error when permission is denied', async () => {
-        mockImagePicker.requestMediaLibraryPermissionsAsync.mockResolvedValue({ status: 'denied' });
-
-        const result = await pickAndUploadAvatar('user-1');
-        expect(result.error).toBe('Permission to access photos is required.');
-        expect(result.url).toBeNull();
-    });
-
     it('returns null url and null error when user cancels', async () => {
-        mockImagePicker.requestMediaLibraryPermissionsAsync.mockResolvedValue({ status: 'granted' });
         mockImagePicker.launchImageLibraryAsync.mockResolvedValue({ canceled: true });
 
         const result = await pickAndUploadAvatar('user-1');

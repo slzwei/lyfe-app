@@ -73,10 +73,20 @@ module.exports = {
                 'android.permission.USE_BIOMETRIC',
                 'android.permission.USE_FINGERPRINT',
                 'android.permission.CAMERA',
-                'android.permission.READ_MEDIA_IMAGES',
                 'android.permission.ACCESS_FINE_LOCATION',
                 'android.permission.ACCESS_COARSE_LOCATION',
                 'android.permission.POST_NOTIFICATIONS',
+            ],
+            // Strip the restricted photo/video permissions that expo-image-picker
+            // would otherwise add. The avatar picker uses the Android system
+            // Photo Picker (launchImageLibraryAsync), which needs no permission,
+            // so declaring these would trigger Google Play's photo/video policy
+            // declaration for no reason. prebuild emits tools:node="remove" for
+            // each, removing them from the merged manifest.
+            blockedPermissions: [
+                'android.permission.READ_MEDIA_IMAGES',
+                'android.permission.READ_MEDIA_VIDEO',
+                'android.permission.READ_EXTERNAL_STORAGE',
             ],
             config: {
                 googleMaps: {

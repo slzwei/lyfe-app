@@ -19,9 +19,10 @@ export async function pickAndUploadAvatar(userId: string): Promise<{ url: string
     const ImagePicker = getImagePicker();
     if (!ImagePicker) return { url: null, error: 'Photo uploads require a native rebuild (npx expo run:ios).' };
 
-    const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
-    if (status !== 'granted') return { url: null, error: 'Permission to access photos is required.' };
-
+    // No runtime permission needed: launchImageLibraryAsync uses the Android
+    // system Photo Picker (and iOS PHPicker), which grants one-shot access to
+    // only the single image the user taps — so the app no longer declares the
+    // restricted READ_MEDIA_IMAGES permission.
     const result = await ImagePicker.launchImageLibraryAsync({
         mediaTypes: ['images'],
         allowsEditing: true,
