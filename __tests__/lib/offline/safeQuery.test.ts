@@ -1,4 +1,4 @@
-import { safeQuery, safeMutation, isNetworkErrorResult } from '@/lib/offline/safeQuery';
+import { safeQuery, safeMutation, isNetworkError, isNetworkErrorResult } from '@/lib/offline/safeQuery';
 import { OfflineQueue } from '@/lib/offline/queue';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
@@ -244,6 +244,11 @@ describe('isNetworkErrorResult', () => {
 
     it('matches by message alone when the client reports no status (storage-js/auth-js)', () => {
         expect(isNetworkErrorResult({ message: 'Network request failed' })).toBe(true);
+    });
+
+    it('matches the supabase FunctionsFetchError message (edge-function transport failure)', () => {
+        expect(isNetworkErrorResult({ message: 'Failed to send a request to the Edge Function' })).toBe(true);
+        expect(isNetworkError(new Error('Failed to send a request to the Edge Function'))).toBe(true);
     });
 
     it('rejects real HTTP errors, aborts, and missing errors', () => {

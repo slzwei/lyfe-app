@@ -12,7 +12,8 @@ import { FaceTurnPrompt } from '@/components/face/FaceTurnPrompt';
 import { ShimmerOverlay } from '@/components/roadshow/atoms/ShimmerOverlay';
 import { TAB_BAR_HEIGHT, TAB_BAR_PADDING_BOTTOM, TAB_BAR_PADDING_TOP } from '@/constants/platform';
 import { useTheme } from '@/contexts/ThemeContext';
-import type { FaceQualityReason } from '@/lib/faceVerification';
+import { useNetworkStatus } from '@/hooks/useNetworkStatus';
+import { isConnectivityError, type FaceQualityReason } from '@/lib/faceVerification';
 import { Ionicons } from '@expo/vector-icons';
 import { useNavigation } from 'expo-router';
 import * as Haptics from 'expo-haptics';
@@ -86,9 +87,77 @@ const VIEWFINDER_PROMPTS: Record<LivenessStep, string> = {
     done: '✓ Got it',
 };
 
+// ── Mode-specific copy ─────────────────────────────────────
+// The sheet is shared by enrollment (`register`) and roadshow check-in
+// (`verify`). Kept as PLAIN STRINGS — a module-level object holding JSX that
+// referenced `styles` (defined at file end) would hit a TDZ crash; the
+// italic-accent JSX is assembled in render.
+
+interface ModeCopy {
+    eyebrow: string;
+    titleLead: string;
+    titleAccent: string;
+    titleTail: string;
+    ctaActive: string;
+    ctaCapturing: string;
+    successLead: string;
+    successAccent: string;
+    successTail: string;
+    successSub: string;
+    successCta: string;
+    showProximityTick: boolean;
+    showMatchTick: boolean;
+}
+
+function getModeCopy(mode: FaceCaptureMode): ModeCopy {
+    if (mode === 'register') {
+        return {
+            eyebrow: 'SET UP YOUR LYFE ID',
+            titleLead: 'Hold still. ',
+            titleAccent: 'Turn your head',
+            titleTail: ' to register.',
+            ctaActive: 'Register my face',
+            ctaCapturing: 'Capturing…',
+            successLead: "You're ",
+            successAccent: 'all set',
+            successTail: '.',
+            successSub: 'Your Lyfe ID is registered.',
+            successCta: 'Done',
+            showProximityTick: false,
+            showMatchTick: false,
+        };
+    }
+    // verify → roadshow check-in (copy unchanged from the original sheet)
+    return {
+        eyebrow: 'STEP 2 / 3 · FACE',
+        titleLead: 'Hold still. ',
+        titleAccent: 'Turn your head',
+        titleTail: ' when prompted.',
+        ctaActive: 'Check me in',
+        ctaCapturing: 'Capturing…',
+        successLead: '',
+        successAccent: 'Checked',
+        successTail: ' in.',
+        successSub: "You're on the booth. Go get them.",
+        successCta: "Let's go",
+        showProximityTick: true,
+        showMatchTick: true,
+    };
+}
+
 // ── Result overlays ────────────────────────────────────────
 
-function CheckedInOverlay({ onDismiss }: { onDismiss: () => void }) {
+function SuccessOverlay({
+    titleNode,
+    sub,
+    cta,
+    onDismiss,
+}: {
+    titleNode: React.ReactNode;
+    sub: string;
+    cta: string;
+    onDismiss: () => void;
+}) {
     const cardScale = useSharedValue(0.88);
     const cardOpacity = useSharedValue(0);
 
@@ -115,10 +184,8 @@ function CheckedInOverlay({ onDismiss }: { onDismiss: () => void }) {
                 >
                     <Text style={[styles.protoIconGlyph, { color: PROTO_COLORS.sage }]}>✓</Text>
                 </View>
-                <Text style={styles.protoTitle}>
-                    <Text style={styles.protoTitleItalic}>Checked</Text> in.
-                </Text>
-                <Text style={styles.protoSub}>You're on the booth. Go get them.</Text>
+                <Text style={styles.protoTitle}>{titleNode}</Text>
+                <Text style={styles.protoSub}>{sub}</Text>
                 <Pressable
                     testID="face-capture-success-dismiss"
                     onPress={onDismiss}
@@ -131,7 +198,7 @@ function CheckedInOverlay({ onDismiss }: { onDismiss: () => void }) {
                     ]}
                     accessibilityLabel="Dismiss"
                 >
-                    <Text style={styles.protoCtaText}>Let's go</Text>
+                    <Text style={styles.protoCtaText}>{cta}</Text>
                     <Text style={styles.protoCtaArrow}>→</Text>
                 </Pressable>
             </Animated.View>
@@ -200,6 +267,59 @@ function FailedOverlay({
     );
 }
 
+function NetworkOverlay({ onDismiss, onRetry }: { onDismiss: () => void; onRetry: () => void }) {
+    const cardScale = useSharedValue(0.88);
+    const cardOpacity = useSharedValue(0);
+
+    useEffect(() => {
+        cardScale.value = withSpring(1, { damping: 18, stiffness: 180 });
+        cardOpacity.value = withTiming(1, { duration: 240 });
+    }, [cardScale, cardOpacity]);
+
+    const cardStyle = useAnimatedStyle(() => ({
+        transform: [{ scale: cardScale.value }],
+        opacity: cardOpacity.value,
+    }));
+
+    // Calm slate — not a hard failure, just "no signal; we'll retry".
+    const slate = '#6E7E89';
+    const slateTint = '#DCE3E7';
+
+    return (
+        <Animated.View entering={FadeIn.duration(240)} style={styles.protoOverlay}>
+            <Animated.View style={[styles.protoCard, cardStyle]}>
+                <View style={[styles.protoIconRing, { backgroundColor: slateTint, borderColor: slate }]}>
+                    <Ionicons name="cloud-offline-outline" size={30} color={slate} />
+                </View>
+                <Text style={styles.protoTitle}>No connection</Text>
+                <Text style={styles.protoSub}>
+                    We couldn&apos;t reach the server. We&apos;ll try again automatically once you&apos;re back online.
+                </Text>
+                <View style={styles.protoCtaCol}>
+                    <Pressable
+                        onPress={onRetry}
+                        style={({ pressed }) => [
+                            styles.protoCta,
+                            { backgroundColor: pressed ? PROTO_COLORS.terra + 'CC' : PROTO_COLORS.terra },
+                        ]}
+                        accessibilityLabel="Try again"
+                    >
+                        <Text style={styles.protoCtaText}>Try again</Text>
+                        <Text style={styles.protoCtaArrow}>↻</Text>
+                    </Pressable>
+                    <Pressable
+                        onPress={onDismiss}
+                        style={({ pressed }) => [styles.protoCtaGhost, { opacity: pressed ? 0.6 : 1 }]}
+                        accessibilityLabel="Cancel"
+                    >
+                        <Text style={[styles.protoGhostText, { color: PROTO_COLORS.muted }]}>Cancel</Text>
+                    </Pressable>
+                </View>
+            </Animated.View>
+        </Animated.View>
+    );
+}
+
 function ProcessingOverlay() {
     return (
         <Animated.View entering={FadeIn.duration(200)} exiting={FadeOut.duration(200)} style={styles.resultOverlay}>
@@ -238,6 +358,7 @@ export function FaceCaptureFlow({ mode, onPhotoCaptured, onDismiss, showDebug = 
     const { colors } = useTheme();
     const navigation = useNavigation();
     const insets = useSafeAreaInsets();
+    const { isConnected, isInternetReachable } = useNetworkStatus();
     const cameraRef = useRef<CameraRef>(null);
 
     const device = useCameraDevice('front');
@@ -252,7 +373,7 @@ export function FaceCaptureFlow({ mode, onPhotoCaptured, onDismiss, showDebug = 
     const [displayFace, setDisplayFace] = useState(false);
     const [captureCount, setCaptureCount] = useState(0);
     const [processing, setProcessing] = useState(false);
-    const [showResult, setShowResult] = useState<'pass' | 'fail' | null>(null);
+    const [showResult, setShowResult] = useState<'pass' | 'fail' | 'network' | null>(null);
     const [failMessage, setFailMessage] = useState<string | null>(null);
     const [cameraLayout, setCameraLayout] = useState({ width: 0, height: 0 });
 
@@ -269,6 +390,14 @@ export function FaceCaptureFlow({ mode, onPhotoCaptured, onDismiss, showDebug = 
     const scanLogCounterRef = useRef(0);
     const straightPhotoRef = useRef<string | null>(null);
     stepRef.current = step;
+
+    // Connectivity — read inside processPhoto without re-creating it on every
+    // network change. `isOnlineRef` mirrors the live online state; `retryingRef`
+    // de-dupes the reconnect auto-retry; `prevOnlineRef` tracks the prior state.
+    const isOnlineRef = useRef(true);
+    isOnlineRef.current = isConnected && isInternetReachable !== false;
+    const retryingRef = useRef(false);
+    const prevOnlineRef = useRef(true);
 
     // ── Permission ───────────────────────────────────────
 
@@ -334,35 +463,52 @@ export function FaceCaptureFlow({ mode, onPhotoCaptured, onDismiss, showDebug = 
             return;
         }
 
+        // Route a failure to the right overlay: a connectivity failure gets the
+        // "No connection" overlay (auto-retries on reconnect); a quality
+        // rejection or server error gets the standard fail overlay.
+        const showFailure = (message: string) => {
+            restoreBrightness();
+            setProcessing(false);
+            setFailMessage(message);
+            if (isConnectivityError(message)) {
+                retryingRef.current = false; // arm one reconnect auto-retry
+                setShowResult('network');
+            } else {
+                Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
+                setShowResult('fail');
+            }
+        };
+
+        // Offline pre-check — skip the upload (and the ~30s timeout wait)
+        // entirely when we already know there's no connection.
+        if (!isOnlineRef.current) {
+            showFailure('Failed to send a request to the Edge Function');
+            return;
+        }
+
         try {
             const result = await onPhotoCaptured(photoPath);
-            restoreBrightness();
 
             if (result.ok) {
+                restoreBrightness();
                 Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
                 setShowResult('pass');
                 // On iOS the tick morph plays in FaceTurnPrompt during the
-                // MORPH_DELAY_MS window before CheckedInOverlay fades in, so
-                // hide the ProcessingOverlay immediately. On Android the
-                // camera was unmounted, so keep ProcessingOverlay visible for
-                // the same window to avoid a blank frame.
+                // MORPH_DELAY_MS window before the success overlay fades in, so
+                // hide the ProcessingOverlay immediately. On Android the camera
+                // was unmounted, so keep ProcessingOverlay visible for the same
+                // window to avoid a blank frame.
                 if (Platform.OS === 'android') {
                     setTimeout(() => setProcessing(false), MORPH_DELAY_MS);
                 } else {
                     setProcessing(false);
                 }
             } else {
-                Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
-                setProcessing(false);
-                setFailMessage(result.message);
-                setShowResult('fail');
+                showFailure(result.message);
             }
         } catch (err) {
             console.error('[FaceCaptureFlow] ERROR:', err instanceof Error ? err.message : String(err));
-            setProcessing(false);
-            restoreBrightness();
-            setFailMessage(err instanceof Error ? err.message : 'An unexpected error occurred.');
-            setShowResult('fail');
+            showFailure(err instanceof Error ? err.message : 'An unexpected error occurred.');
         }
     }, [onPhotoCaptured]);
 
@@ -482,6 +628,7 @@ export function FaceCaptureFlow({ mode, onPhotoCaptured, onDismiss, showDebug = 
 
     const handleRetry = useCallback(() => {
         // Reset everything and start the same flow fresh.
+        retryingRef.current = false;
         setShowResult(null);
         setFailMessage(null);
         setStep('look_straight');
@@ -495,7 +642,30 @@ export function FaceCaptureFlow({ mode, onPhotoCaptured, onDismiss, showDebug = 
         setScanning(true);
     }, []);
 
+    // Auto-retry the capture once connectivity returns after a network failure.
+    // Gate on isInternetReachable too — isConnected initializes true and a
+    // transient drop may never flip it, so manual "Try again" stays the fallback
+    // for those cases. retryingRef de-dupes against repeated connectivity ticks.
+    useEffect(() => {
+        const online = isConnected && isInternetReachable !== false;
+        const wasOffline = !prevOnlineRef.current;
+        prevOnlineRef.current = online;
+        if (showResult === 'network' && online && wasOffline && !retryingRef.current) {
+            retryingRef.current = true;
+            handleRetry();
+        }
+    }, [isConnected, isInternetReachable, showResult, handleRetry]);
+
     // ── Render ───────────────────────────────────────────
+
+    const copy = getModeCopy(mode);
+    const successTitleNode = (
+        <>
+            {copy.successLead}
+            <Text style={styles.protoTitleItalic}>{copy.successAccent}</Text>
+            {copy.successTail}
+        </>
+    );
 
     const e2eBypassEnabledEarly = process.env.EXPO_PUBLIC_E2E_FACE_BYPASS === '1';
 
@@ -530,7 +700,15 @@ export function FaceCaptureFlow({ mode, onPhotoCaptured, onDismiss, showDebug = 
                         <Text style={{ color: '#000', fontSize: 14, fontWeight: '600' }}>Skip face check (E2E)</Text>
                     </Pressable>
                 ) : null}
-                {showResult === 'pass' && <CheckedInOverlay onDismiss={handleDismissResult} />}
+                {showResult === 'pass' && (
+                    <SuccessOverlay
+                        titleNode={successTitleNode}
+                        sub={copy.successSub}
+                        cta={copy.successCta}
+                        onDismiss={handleDismissResult}
+                    />
+                )}
+                {showResult === 'network' && <NetworkOverlay onDismiss={handleDismissResult} onRetry={handleRetry} />}
                 {showResult === 'fail' && (
                     <FailedOverlay
                         onDismiss={handleDismissResult}
@@ -631,9 +809,11 @@ export function FaceCaptureFlow({ mode, onPhotoCaptured, onDismiss, showDebug = 
                     <View style={styles.handle} />
 
                     {/* Eyebrow + title */}
-                    <Text style={styles.eyebrow}>STEP 2 / 3 · FACE</Text>
+                    <Text style={styles.eyebrow}>{copy.eyebrow}</Text>
                     <Text style={styles.title}>
-                        Hold still. <Text style={styles.titleItalic}>Turn your head</Text> when prompted.
+                        {copy.titleLead}
+                        <Text style={styles.titleItalic}>{copy.titleAccent}</Text>
+                        {copy.titleTail}
                     </Text>
 
                     {/* Viewfinder: 3:4 aspect, dark bg, camera inside */}
@@ -700,9 +880,26 @@ export function FaceCaptureFlow({ mode, onPhotoCaptured, onDismiss, showDebug = 
 
                     {/* 3 status ticks */}
                     <View style={styles.tickRow}>
-                        <StatusTick label="Proximity" passed={proximityPassed} text="100m OK" />
+                        {copy.showProximityTick && (
+                            <StatusTick label="Proximity" passed={proximityPassed} text="100m OK" />
+                        )}
                         <StatusTick label="Liveness" passed={livenessPassed} text={livenessText} />
-                        <StatusTick label="Match" passed={matchPassed} text={matchText} />
+                        {copy.showMatchTick ? (
+                            <StatusTick label="Match" passed={matchPassed} text={matchText} />
+                        ) : (
+                            <>
+                                <StatusTick
+                                    label="Photo"
+                                    passed={livenessPassed}
+                                    text={livenessPassed ? 'ready' : '—'}
+                                />
+                                <StatusTick
+                                    label="Save"
+                                    passed={matchPassed}
+                                    text={matchPassed ? 'saved' : processing ? 'saving…' : 'queued'}
+                                />
+                            </>
+                        )}
                     </View>
 
                     {/* CTA (informational — scan auto-progresses) */}
@@ -723,7 +920,7 @@ export function FaceCaptureFlow({ mode, onPhotoCaptured, onDismiss, showDebug = 
                                 },
                             ]}
                         >
-                            {livenessPassed ? 'Check me in' : 'Capturing…'}
+                            {livenessPassed ? copy.ctaActive : copy.ctaCapturing}
                         </Text>
                         {livenessPassed ? (
                             <Text style={[styles.ctaArrow, { color: PROTO_COLORS.paperEl }]}>→</Text>
@@ -734,7 +931,15 @@ export function FaceCaptureFlow({ mode, onPhotoCaptured, onDismiss, showDebug = 
 
             {/* Overlays rendered at top level so they survive camera unmount on Android */}
             {processing && <ProcessingOverlay />}
-            {showResult === 'pass' && <CheckedInOverlay onDismiss={handleDismissResult} />}
+            {showResult === 'pass' && (
+                <SuccessOverlay
+                    titleNode={successTitleNode}
+                    sub={copy.successSub}
+                    cta={copy.successCta}
+                    onDismiss={handleDismissResult}
+                />
+            )}
+            {showResult === 'network' && <NetworkOverlay onDismiss={handleDismissResult} onRetry={handleRetry} />}
             {showResult === 'fail' && (
                 <FailedOverlay
                     onDismiss={handleDismissResult}

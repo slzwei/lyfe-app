@@ -1,4 +1,10 @@
-import { checkFaceRegistration, registerFace, verifyFace, MATCH_THRESHOLD } from '@/lib/faceVerification';
+import {
+    checkFaceRegistration,
+    registerFace,
+    verifyFace,
+    isConnectivityError,
+    MATCH_THRESHOLD,
+} from '@/lib/faceVerification';
 
 jest.mock('@/lib/supabase');
 const mockSupabase = require('@/lib/supabase').supabase;
@@ -75,6 +81,7 @@ describe('registerFace', () => {
         expect(result).toEqual({ success: true });
         expect(mockSupabase.functions.invoke).toHaveBeenCalledWith('verify-face', {
             body: { action: 'register', photo: expect.any(String) },
+            timeout: 30000,
         });
     });
 
@@ -136,6 +143,20 @@ describe('registerFace', () => {
         const photo = call[1].body.photo;
         // base64 of [0xff, 0xd8, 0xff, 0xe0] = "/9j/4A=="
         expect(photo).toBe('/9j/4A==');
+    });
+
+    it('downscales the photo and sets a fail-fast timeout on the upload', async () => {
+        mockSupabase.functions.invoke.mockResolvedValue({ data: { success: true }, error: null });
+        const { convertToJpeg } = require('../../modules/face-detection/src');
+
+        await registerFace('/photos/selfie.jpg');
+
+        // convertToJpeg(path, quality, maxDimension) — long edge capped at 1600px.
+        expect(convertToJpeg).toHaveBeenCalledWith('/photos/selfie.jpg', 0.85, 1600);
+        expect(mockSupabase.functions.invoke).toHaveBeenCalledWith(
+            'verify-face',
+            expect.objectContaining({ timeout: 30000 }),
+        );
     });
 });
 
@@ -252,5 +273,26 @@ describe('verifyFace', () => {
 describe('MATCH_THRESHOLD', () => {
     it('is 99.0 (Rekognition percentage)', () => {
         expect(MATCH_THRESHOLD).toBe(99.0);
+    });
+});
+
+// ── isConnectivityError ────────────────────────────────────
+
+describe('isConnectivityError', () => {
+    it('classifies the supabase FunctionsFetchError message (and invoke timeouts) as connectivity', () => {
+        // registerFace/verifyFace rethrow error.message, so the UI sees a plain
+        // string/Error with this exact message for both transport drops and timeouts.
+        expect(isConnectivityError('Failed to send a request to the Edge Function')).toBe(true);
+        expect(isConnectivityError(new Error('Failed to send a request to the Edge Function'))).toBe(true);
+    });
+
+    it('classifies a raw React Native network error as connectivity', () => {
+        expect(isConnectivityError(new TypeError('Network request failed'))).toBe(true);
+    });
+
+    it('does NOT classify quality rejections or server (non-2xx) errors as connectivity', () => {
+        expect(isConnectivityError('Face is partially covered. Remove anything blocking your face.')).toBe(false);
+        expect(isConnectivityError(new Error('Edge Function returned a non-2xx status code'))).toBe(false);
+        expect(isConnectivityError(undefined)).toBe(false);
     });
 });

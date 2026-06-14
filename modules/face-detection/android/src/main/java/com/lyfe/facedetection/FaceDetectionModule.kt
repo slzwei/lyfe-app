@@ -47,8 +47,11 @@ class FaceDetectionModule : Module() {
             }
         }
 
-        AsyncFunction("convertToJpeg") { imagePath: String, quality: Double ->
-            val bitmap = loadBitmap(imagePath) ?: throw FaceDetectionException("Could not load image")
+        AsyncFunction("convertToJpeg") { imagePath: String, quality: Double, maxDimension: Double ->
+            // loadBitmap already subsamples to <=2048px and applies EXIF rotation;
+            // scaleDown trims further to maxDimension (when > 0) to keep uploads small.
+            val loaded = loadBitmap(imagePath) ?: throw FaceDetectionException("Could not load image")
+            val bitmap = scaleDown(loaded, maxDimension)
             val tempFile = File.createTempFile("face_${UUID.randomUUID()}", ".jpg")
             FileOutputStream(tempFile).use { out ->
                 bitmap.compress(Bitmap.CompressFormat.JPEG, (quality * 100).toInt(), out)
@@ -155,6 +158,23 @@ class FaceDetectionModule : Module() {
         val rotated = Bitmap.createBitmap(bitmap, 0, 0, bitmap.width, bitmap.height, matrix, true)
         if (rotated != bitmap) bitmap.recycle()
         return rotated
+    }
+
+    /**
+     * Scale a bitmap so its longest edge is at most maxDimension px, preserving
+     * aspect ratio. Returns the input when maxDimension <= 0 or already small
+     * enough; recycles the source when a smaller copy is produced.
+     */
+    private fun scaleDown(bitmap: Bitmap, maxDimension: Double): Bitmap {
+        if (maxDimension <= 0) return bitmap
+        val longest = max(bitmap.width, bitmap.height)
+        if (longest <= maxDimension) return bitmap
+        val scale = maxDimension / longest
+        val w = (bitmap.width * scale).toInt().coerceAtLeast(1)
+        val h = (bitmap.height * scale).toInt().coerceAtLeast(1)
+        val scaled = Bitmap.createScaledBitmap(bitmap, w, h, true)
+        if (scaled != bitmap) bitmap.recycle()
+        return scaled
     }
 }
 

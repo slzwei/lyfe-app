@@ -25,10 +25,16 @@ const NativeModule = requireNativeModule('FaceDetection');
  * Convert any image (HEIC, PNG, etc.) to JPEG.
  * @param imagePath - Local file path or file:// URI
  * @param quality - JPEG compression quality 0.0-1.0
+ * @param maxDimension - If > 0, downscale so the longest edge is at most this
+ *   many pixels (preserves aspect ratio + EXIF orientation). 0 = no resize.
  * @returns Path to the converted JPEG file
  */
-export async function convertToJpeg(imagePath: string, quality: number = 0.8): Promise<string> {
-    return NativeModule.convertToJpeg(imagePath, quality);
+export async function convertToJpeg(
+    imagePath: string,
+    quality: number = 0.8,
+    maxDimension: number = 0,
+): Promise<string> {
+    return NativeModule.convertToJpeg(imagePath, quality, maxDimension);
 }
 
 /** Set screen brightness to max (fill light for face capture). */

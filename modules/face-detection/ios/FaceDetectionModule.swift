@@ -29,11 +29,14 @@ public class FaceDetectionModule: Module {
         }
 
         /// Convert any image (HEIC, PNG, etc.) to JPEG and return the file path.
-        AsyncFunction("convertToJpeg") { (imagePath: String, quality: Double) -> String in
+        /// When `maxDimension > 0`, the image is downscaled so its longest edge is
+        /// at most that many pixels before encoding — keeps the upload small.
+        AsyncFunction("convertToJpeg") { (imagePath: String, quality: Double, maxDimension: Double) -> String in
             guard let uiImage = Self.loadImage(from: imagePath) else {
                 throw FaceDetectionError.invalidImage
             }
-            guard let jpegData = uiImage.jpegData(compressionQuality: quality) else {
+            let image = Self.downscale(uiImage, maxDimension: maxDimension)
+            guard let jpegData = image.jpegData(compressionQuality: quality) else {
                 throw FaceDetectionError.invalidImage
             }
             let tempDir = NSTemporaryDirectory()
@@ -320,6 +323,26 @@ public class FaceDetectionModule: Module {
     private static func loadImage(from path: String) -> UIImage? {
         let cleanPath = path.hasPrefix("file://") ? String(path.dropFirst(7)) : path
         return UIImage(contentsOfFile: cleanPath)
+    }
+
+    // MARK: - Downscale (orientation-safe)
+
+    /// Scale a UIImage so its longest edge is at most `maxDimension` pixels,
+    /// preserving aspect ratio. Returns the original when `maxDimension <= 0` or
+    /// the image is already small enough. UIGraphicsImageRenderer bakes in the
+    /// image's EXIF orientation, so the result is always upright.
+    private static func downscale(_ image: UIImage, maxDimension: Double) -> UIImage {
+        guard maxDimension > 0 else { return image }
+        let longest = max(image.size.width, image.size.height)
+        guard longest > CGFloat(maxDimension) else { return image }
+        let scale = CGFloat(maxDimension) / longest
+        let newSize = CGSize(width: image.size.width * scale, height: image.size.height * scale)
+        let format = UIGraphicsImageRendererFormat.default()
+        format.scale = 1  // newSize is already in pixels; don't multiply by device scale
+        let renderer = UIGraphicsImageRenderer(size: newSize, format: format)
+        return renderer.image { _ in
+            image.draw(in: CGRect(origin: .zero, size: newSize))
+        }
     }
 
     // MARK: - Bitmap Rendering (handles EXIF rotation)

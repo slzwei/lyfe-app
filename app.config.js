@@ -35,7 +35,7 @@ module.exports = {
         // Bare workflow: runtime version policies aren't supported, so this
         // must be bumped manually whenever native code or native deps change.
         // Keep in sync with `version` above for releases that ship a new binary.
-        runtimeVersion: '1.3.1',
+        runtimeVersion: '1.3.2',
         splash: {
             image: './assets/images/splash-icon.png',
             resizeMode: 'contain',

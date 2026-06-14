@@ -50,7 +50,11 @@ function isNetworkErrorMessage(message: string): boolean {
         msg.includes('failed to fetch') ||
         msg.includes('fetch failed') ||
         msg.includes('networkerror') ||
-        msg.includes('the internet connection appears to be offline')
+        msg.includes('the internet connection appears to be offline') ||
+        // supabase-js FunctionsFetchError (and invoke timeouts): the request to
+        // an edge function never received an HTTP response — always a transport
+        // failure, so treat it as offline/connectivity.
+        msg.includes('failed to send a request to the edge function')
     );
 }
 
