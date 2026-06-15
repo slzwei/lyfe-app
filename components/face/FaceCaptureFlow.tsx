@@ -68,6 +68,10 @@ const YAW_STRAIGHT_MAX = Platform.OS === 'android' ? 18 : 10;
 const YAW_LEFT_THRESHOLD = -15;
 const YAW_RIGHT_THRESHOLD = 15;
 const SCAN_INTERVAL_MS = 400;
+// Settle grace after the camera opens before the first (reference) frame is
+// locked + sent to Rekognition — gives the user a beat to get ready so we don't
+// capture a "not ready" shot. Only gates the look-straight step. Tune 1000-2000.
+const READY_DELAY_MS = 1500;
 // How long the brackets→ring→tick morph plays before the success overlay
 // fades in. Matches the FaceTurnPrompt `morph` withTiming duration.
 const MORPH_DELAY_MS = 600;
@@ -389,6 +393,9 @@ export function FaceCaptureFlow({ mode, onPhotoCaptured, onDismiss, showDebug = 
     // Counter used to throttle dev scan logs to 1 line every 10 captures.
     const scanLogCounterRef = useRef(0);
     const straightPhotoRef = useRef<string | null>(null);
+    // Time before which the look-straight (reference) frame must not be captured —
+    // a short settle delay (READY_DELAY_MS) set when scanning (re)starts.
+    const readyAtRef = useRef(0);
     stepRef.current = step;
 
     // Connectivity — read inside processPhoto without re-creating it on every
@@ -515,6 +522,8 @@ export function FaceCaptureFlow({ mode, onPhotoCaptured, onDismiss, showDebug = 
     useEffect(() => {
         if (!scanning) return;
         let cancelled = false;
+        // Begin the settle grace from when scanning (re)starts.
+        readyAtRef.current = Date.now() + READY_DELAY_MS;
 
         const tick = async () => {
             if (cancelled || scanningRef.current) return;
@@ -556,14 +565,19 @@ export function FaceCaptureFlow({ mode, onPhotoCaptured, onDismiss, showDebug = 
                     setDisplayYaw(Math.round(yaw * 10) / 10);
                     setDisplayFace(true);
 
-                    if (stepRef.current === 'look_straight') {
+                    // During the settle grace, don't lock the reference frame or
+                    // advance past look-straight — gives the user ~READY_DELAY_MS
+                    // to get ready before the first image is captured.
+                    const settling = stepRef.current === 'look_straight' && Date.now() < readyAtRef.current;
+
+                    if (stepRef.current === 'look_straight' && !settling) {
                         straightPhotoRef.current = photoFile.filePath;
                     }
 
                     const currentStep = stepRef.current;
                     if (currentStep !== 'done') {
                         let shouldAdvance = false;
-                        if (currentStep === 'look_straight' && Math.abs(yaw) < YAW_STRAIGHT_MAX) {
+                        if (currentStep === 'look_straight' && !settling && Math.abs(yaw) < YAW_STRAIGHT_MAX) {
                             shouldAdvance = true;
                         } else if (currentStep === 'turn_left' && yaw < YAW_LEFT_THRESHOLD) {
                             shouldAdvance = true;
