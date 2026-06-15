@@ -22,6 +22,17 @@ function requireEnv(key: string): string {
     return val;
 }
 
+// Supabase Auth (GoTrue) expects hook errors in this envelope shape. Returning a
+// bare { error: 'some string' } makes GoTrue fail to parse the response and surface
+// the opaque "invalid payload is sent to hook" message to the client instead of the
+// real `message` below.
+function hookError(httpCode: number, message: string): Response {
+    return new Response(JSON.stringify({ error: { http_code: httpCode, message } }), {
+        status: httpCode,
+        headers: { 'Content-Type': 'application/json' },
+    });
+}
+
 // Uses SNS-scoped IAM user (lyfe-sns-sms), separate from AWS_* which is used by
 // verify-face (rekognition). Kept distinct so a rotation on one does not break the other.
 const aws = new AwsClient({
@@ -46,10 +57,7 @@ serve(async (req) => {
     // ── Input validation ───────────────────────────────────────
     if (!PHONE_RE.test(phone)) {
         console.error(`[custom-sms-hook] Invalid phone format: ${maskPhone(phone)}`);
-        return new Response(JSON.stringify({ error: 'Invalid phone number format' }), {
-            status: 400,
-            headers: { 'Content-Type': 'application/json' },
-        });
+        return hookError(400, 'Invalid phone number format');
     }
 
     // ── Whitelist check — skip SMS, OTP still works ────────────
@@ -64,39 +72,47 @@ serve(async (req) => {
     // ── Country code allowlist — Singapore only ─────────────────
     if (!phone.startsWith('+65')) {
         console.log(`[custom-sms-hook] Blocked non-SG number: ${maskPhone(phone)}`);
-        return new Response(JSON.stringify({ error: 'Unsupported country code' }), {
-            status: 400,
-            headers: { 'Content-Type': 'application/json' },
-        });
+        return hookError(400, 'Unsupported country code');
     }
 
     // ── Invitation gate — block OTP for uninvited numbers ──────
-    // Allow existing users (returning login) and invited numbers
-    // Phone formats: hook receives with '+', DB may store with or without '+'
+    // Allow existing users (returning login) and invited numbers.
+    // Phone formats: hook receives with '+', DB may store with or without '+'.
+    // NOTE: a phone can legitimately match more than one row (e.g. a stray/test
+    // record that shares a number), so we use .limit(1) rather than .maybeSingle()
+    // — the latter ERRORS on multiple matches, which would wrongly block a real
+    // user whose number happens to be duplicated elsewhere in the table.
     const admin = createClient(Deno.env.get('SUPABASE_URL')!, Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!);
     const phoneNoPlus = phone.replace(/^\+/, '');
 
-    const { data: existingUser } = await admin
+    const { data: existingUsers, error: userLookupError } = await admin
         .from('users')
         .select('id')
         .in('phone', [phone, phoneNoPlus])
-        .maybeSingle();
+        .limit(1);
 
-    if (!existingUser) {
+    if (userLookupError) {
+        console.error('[custom-sms-hook] User lookup failed:', userLookupError.message);
+        return hookError(500, 'Could not verify number, please try again');
+    }
+
+    if (!existingUsers || existingUsers.length === 0) {
         // Not an existing user — check for a pending invitation
-        const { data: invitation } = await admin
+        const { data: invitations, error: inviteLookupError } = await admin
             .from('member_invitations')
             .select('id')
             .in('phone', [phone, phoneNoPlus])
             .eq('status', 'pending')
-            .maybeSingle();
+            .limit(1);
 
-        if (!invitation) {
+        if (inviteLookupError) {
+            console.error('[custom-sms-hook] Invitation lookup failed:', inviteLookupError.message);
+            return hookError(500, 'Could not verify number, please try again');
+        }
+
+        if (!invitations || invitations.length === 0) {
             console.log(`[custom-sms-hook] Blocked OTP for uninvited number: ${maskPhone(phone)}`);
-            return new Response(JSON.stringify({ error: 'No invitation found for this number' }), {
-                status: 400,
-                headers: { 'Content-Type': 'application/json' },
-            });
+            return hookError(400, 'No invitation found for this number');
         }
     }
 
@@ -109,7 +125,10 @@ serve(async (req) => {
         'MessageAttributes.entry.1.Value.StringValue': 'Transactional',
         'MessageAttributes.entry.2.Name': 'AWS.SNS.SMS.SenderID',
         'MessageAttributes.entry.2.Value.DataType': 'String',
-        'MessageAttributes.entry.2.Value.StringValue': 'LYFE',
+        // Sender ID must EXACTLY match what is registered & whitelisted in the
+        // Singapore SSIR (smsregistry.sg) — "MKTR" is Live; "LYFE" is unregistered
+        // and would be relabelled "Likely-SCAM" by the SG telcos. Case-sensitive.
+        'MessageAttributes.entry.2.Value.StringValue': 'MKTR',
     });
 
     try {
@@ -130,10 +149,7 @@ serve(async (req) => {
         if (!response.ok) {
             const error = await response.text();
             console.error('[custom-sms-hook] SNS error:', error);
-            return new Response(JSON.stringify({ error: 'SMS delivery failed' }), {
-                status: 400,
-                headers: { 'Content-Type': 'application/json' },
-            });
+            return hookError(400, 'SMS delivery failed');
         }
 
         return new Response(JSON.stringify({}), {
@@ -142,9 +158,6 @@ serve(async (req) => {
         });
     } catch (error) {
         console.error('[custom-sms-hook]', error);
-        return new Response(JSON.stringify({ error: 'Internal server error' }), {
-            status: 500,
-            headers: { 'Content-Type': 'application/json' },
-        });
+        return hookError(500, 'Internal server error');
     }
 });
