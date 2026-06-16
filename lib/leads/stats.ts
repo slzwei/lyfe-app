@@ -17,6 +17,7 @@ export interface LeadPipelineStats {
 export interface ManagerDashboardStats {
     activeCandidates: number;
     agentsManaged: number;
+    teamLeads: number;
 }
 
 /**
@@ -263,10 +264,16 @@ export async function fetchManagerDashboardStats(
 
     const { count: agentCount } = await agentQuery;
 
+    // Team leads: all leads the viewer can access. RLS scopes a manager to their
+    // own + their agents' leads, and directors/admins to the wider team. Replaces
+    // the hero's previous use of the *personal* pipeline total (0 for managers).
+    const { count: leadCount } = await supabase.from('leads').select('id', { count: 'exact', head: true });
+
     return {
         data: {
             activeCandidates: candidateCount || 0,
             agentsManaged: agentCount || 0,
+            teamLeads: leadCount || 0,
         },
         error: null,
     };

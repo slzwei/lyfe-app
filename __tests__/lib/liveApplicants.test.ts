@@ -5,7 +5,12 @@
  * member may see "live". Everything must fail CLOSED on error and never grant
  * global visibility to a non-privileged role.
  */
-import { fetchLiveProgress, fetchLiveScopeMap, resolveLiveScope } from '@/lib/recruitment/liveApplicants';
+import {
+    fetchLiveProgress,
+    fetchLiveScopeMap,
+    fetchTodaysOnboarded,
+    resolveLiveScope,
+} from '@/lib/recruitment/liveApplicants';
 
 // Per-table canned results for a thenable query-builder mock.
 const mockResults: Record<string, { data: unknown; error: unknown }> = {};
@@ -20,6 +25,7 @@ jest.mock('@/lib/supabase', () => {
             in: () => b,
             is: () => b,
             not: () => b,
+            gte: () => b,
             // Thenable so `await builder` resolves the canned result for `table`.
             then: (resolve: (v: unknown) => void) => resolve(mockResults[table] ?? { data: [], error: null }),
         };
@@ -213,5 +219,43 @@ describe('fetchLiveProgress', () => {
             quizAnswered: 0,
             quizCompleted: false,
         });
+    });
+});
+
+describe('fetchTodaysOnboarded', () => {
+    it("returns today's candidates who finished the quiz (and skips unfinished)", async () => {
+        mockResults.candidates = {
+            data: [
+                { id: 'c1', name: 'Aisha Rahman', created_at: '2026-06-17T01:00:00Z', archived_at: null },
+                { id: 'c2', name: 'Ben Tan', created_at: '2026-06-17T02:00:00Z', archived_at: null },
+            ],
+            error: null,
+        };
+        mockResults.candidate_profiles = {
+            data: [
+                { user_id: 'u1', candidate_id: 'c1' },
+                { user_id: 'u2', candidate_id: 'c2' },
+            ],
+            error: null,
+        };
+        mockRpc.value = {
+            data: [
+                { user_id: 'u1', onboarding_step: 6, profile_completed: true, quiz_answered: 36, quiz_completed: true },
+                { user_id: 'u2', onboarding_step: 6, profile_completed: true, quiz_answered: 9, quiz_completed: false },
+            ],
+            error: null,
+        };
+        const res = await fetchTodaysOnboarded();
+        expect(res).toEqual([{ userId: 'u1', candidateId: 'c1', name: 'Aisha Rahman' }]);
+    });
+
+    it('returns [] when nobody was invited today', async () => {
+        mockResults.candidates = { data: [], error: null };
+        expect(await fetchTodaysOnboarded()).toHaveLength(0);
+    });
+
+    it('fails soft ([]) when the candidates query errors', async () => {
+        mockResults.candidates = { data: null, error: { message: 'rls' } };
+        expect(await fetchTodaysOnboarded()).toHaveLength(0);
     });
 });

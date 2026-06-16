@@ -29,9 +29,9 @@ export {
 // ── Tab Configuration (local — depends on IconName) ──
 
 export const ROLE_TABS: Record<UserRole, string[]> = {
-    admin: ['home', 'leads', 'team', 'events', 'profile'],
-    director: ['home', 'leads', 'team', 'events', 'profile'],
-    manager: ['home', 'leads', 'team', 'events', 'profile'],
+    admin: ['home', 'candidates', 'team', 'events', 'profile'],
+    director: ['home', 'candidates', 'team', 'events', 'profile'],
+    manager: ['home', 'candidates', 'team', 'events', 'profile'],
     agent: ['home', 'leads', 'events', 'profile'],
     pa: ['home', 'pa', 'events', 'profile'],
     ro: ['home', 'pa', 'events', 'profile'],
@@ -43,7 +43,7 @@ export function getVisibleTabs(role: UserRole, viewMode?: 'agent' | 'manager'): 
         if (viewMode === 'agent') {
             return ['home', 'leads', 'events', 'profile'];
         }
-        return ['home', 'leads', 'team', 'events', 'profile'];
+        return ['home', 'candidates', 'team', 'events', 'profile'];
     }
     return ROLE_TABS[role] || ['profile'];
 }

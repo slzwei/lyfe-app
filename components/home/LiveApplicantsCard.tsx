@@ -17,10 +17,9 @@ function clamp(n: number, lo: number, hi: number): number {
 }
 
 /**
- * Label + bar fill for an applicant. Uses the precise progress counts when they
- * have loaded (v2); falls back to the coarse broadcast phase until then (v1), so
- * the bar appears instantly and sharpens a beat later. Percentages are clamped —
- * the form occupies 0–50%, the quiz 50–100%.
+ * Label + bar fill for a live applicant. Uses the precise progress counts when
+ * loaded (v2); falls back to the coarse broadcast phase until then. Form occupies
+ * 0–50% of the bar, quiz 50–100%; values are clamped.
  */
 function phaseMeta(a: LiveApplicant, colors: ThemeColors): { label: string; pct: number; color: string } {
     const p = a.progress;
@@ -50,14 +49,14 @@ function phaseMeta(a: LiveApplicant, colors: ThemeColors): { label: string; pct:
 }
 
 /**
- * "Now onboarding" — a privileged-only dashboard card showing applicants who are
- * filling in their application right now. Collapsed to a single line by default;
- * tap to expand per-applicant phase + progress. Renders nothing when no one is
- * live, so it adds zero clutter on a quiet day. Mount this only behind the
- * privileged dashboard gate (managers/directors in manager view, RO, admin).
+ * "Now onboarding" dashboard card (privileged audience only — gated by the
+ * caller). Persistent: it always shows today's state rather than vanishing.
+ *   - Applicants filling their form/quiz right now appear live with a phase bar.
+ *   - When no one is live, it shows "N onboarded today".
+ *   - "Onboarded today" lists candidates invited today (SGT) who finished.
  */
 function LiveApplicantsCard({ colors, onPressApplicant }: Props) {
-    const { applicants } = useLiveApplicants();
+    const { applicants, todaysOnboarded } = useLiveApplicants();
     const [expanded, setExpanded] = useState(false);
 
     // Pulsing "live" dot (matches LiveEventBar's pattern).
@@ -73,15 +72,28 @@ function LiveApplicantsCard({ colors, onPressApplicant }: Props) {
         return () => loop.stop();
     }, [pulse]);
 
-    if (applicants.length === 0) return null;
+    const hasLive = applicants.length > 0;
+    // A live "viewing-results" candidate can also be in today's onboarded set —
+    // show them only once (as live).
+    const liveIds = new Set(applicants.map((a) => a.userId));
+    const completedToday = todaysOnboarded.filter((t) => !liveIds.has(t.userId));
 
-    const count = applicants.length;
-    const title = `${count} onboarding now`;
+    // Show only when there's something today — live applicants OR someone already
+    // onboarded. When nothing has happened yet, render nothing.
+    if (!hasLive && completedToday.length === 0) return null;
+
+    const title = hasLive ? `${applicants.length} onboarding now` : `${completedToday.length} onboarded today`;
+
+    const clusterPeople = hasLive ? applicants : completedToday;
     const names =
-        applicants
+        clusterPeople
             .slice(0, 3)
             .map((a) => a.name.split(' ')[0])
-            .join(', ') + (count > 3 ? ` +${count - 3}` : '');
+            .join(', ') + (clusterPeople.length > 3 ? ` +${clusterPeople.length - 3}` : '');
+
+    const dotColor = hasLive ? colors.statusLive : completedToday.length > 0 ? colors.success : colors.textTertiary;
+    const avatarBg = hasLive ? colors.accentLight : colors.successLight;
+    const avatarFg = hasLive ? colors.accent : colors.success;
 
     return (
         <View style={[styles.card, { backgroundColor: colors.cardBackground, shadowColor: colors.textPrimary }]}>
@@ -93,17 +105,17 @@ function LiveApplicantsCard({ colors, onPressApplicant }: Props) {
                 accessibilityState={{ expanded }}
                 accessibilityLabel={`${title}. Tap to ${expanded ? 'collapse' : 'expand'}.`}
             >
-                <Animated.View style={[styles.dot, { backgroundColor: colors.statusLive, opacity: pulse }]} />
+                <Animated.View style={[styles.dot, { backgroundColor: dotColor, opacity: hasLive ? pulse : 1 }]} />
                 <Text style={[styles.title, { color: colors.textPrimary }]} numberOfLines={1}>
                     {title}
                 </Text>
                 <Ionicons name={expanded ? 'chevron-up' : 'chevron-down'} size={18} color={colors.textTertiary} />
             </TouchableOpacity>
 
-            {!expanded && (
+            {!expanded && clusterPeople.length > 0 && (
                 <TouchableOpacity style={styles.collapsedSub} onPress={() => setExpanded(true)} activeOpacity={0.7}>
                     <View style={styles.cluster}>
-                        {applicants.slice(0, 3).map((a, i) => (
+                        {clusterPeople.slice(0, 3).map((a, i) => (
                             <View
                                 key={a.userId}
                                 style={[
@@ -111,12 +123,7 @@ function LiveApplicantsCard({ colors, onPressApplicant }: Props) {
                                     { borderColor: colors.cardBackground, marginLeft: i === 0 ? 0 : -9 },
                                 ]}
                             >
-                                <Avatar
-                                    name={a.name}
-                                    size={26}
-                                    backgroundColor={colors.accentLight}
-                                    textColor={colors.accent}
-                                />
+                                <Avatar name={a.name} size={26} backgroundColor={avatarBg} textColor={avatarFg} />
                             </View>
                         ))}
                     </View>
@@ -166,6 +173,35 @@ function LiveApplicantsCard({ colors, onPressApplicant }: Props) {
                             </TouchableOpacity>
                         );
                     })}
+
+                    {completedToday.map((c) => (
+                        <TouchableOpacity
+                            key={c.userId}
+                            style={[styles.row, { borderTopColor: colors.hairline }]}
+                            onPress={() => onPressApplicant(c.candidateId)}
+                            activeOpacity={0.7}
+                            accessibilityRole="button"
+                            accessibilityLabel={`${c.name}, onboarded`}
+                        >
+                            <Avatar
+                                name={c.name}
+                                size={38}
+                                backgroundColor={colors.successLight}
+                                textColor={colors.success}
+                            />
+                            <View style={styles.rowMain}>
+                                <View style={styles.rowTop}>
+                                    <Text style={[styles.name, { color: colors.textPrimary }]} numberOfLines={1}>
+                                        {c.name}
+                                    </Text>
+                                    <View style={[styles.doneChip, { backgroundColor: colors.success + '1F' }]}>
+                                        <Ionicons name="checkmark" size={12} color={colors.success} />
+                                        <Text style={[styles.doneText, { color: colors.success }]}>Done</Text>
+                                    </View>
+                                </View>
+                            </View>
+                        </TouchableOpacity>
+                    ))}
                 </View>
             )}
         </View>
@@ -253,6 +289,20 @@ const styles = StyleSheet.create({
         borderRadius: 10,
     },
     chipText: {
+        fontFamily: Fonts.sansSemibold,
+        fontSize: 11,
+        fontWeight: '600',
+        letterSpacing: 0.2,
+    },
+    doneChip: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 3,
+        paddingHorizontal: 9,
+        paddingVertical: 3,
+        borderRadius: 10,
+    },
+    doneText: {
         fontFamily: Fonts.sansSemibold,
         fontSize: 11,
         fontWeight: '600',

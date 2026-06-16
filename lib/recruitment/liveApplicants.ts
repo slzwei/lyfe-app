@@ -176,3 +176,57 @@ export async function fetchLiveProgress(userIds: string[]): Promise<Map<string, 
     }
     return map;
 }
+
+// ─── "Onboarded today" (persistent summary) ─────────────────────────────────
+
+export interface TodayCandidate {
+    userId: string;
+    candidateId: string;
+    name: string;
+}
+
+/** Singapore is UTC+8 year-round (no DST). UTC ISO instant of today's SGT midnight. */
+function sgtTodayStartISO(): string {
+    const sgt = new Date(Date.now() + 8 * 3600 * 1000);
+    const ms = Date.UTC(sgt.getUTCFullYear(), sgt.getUTCMonth(), sgt.getUTCDate()) - 8 * 3600 * 1000;
+    return new Date(ms).toISOString();
+}
+
+/**
+ * Candidates invited today (SGT) who have finished onboarding (quiz completed),
+ * for the widget's "N onboarded today" summary + completed list. Access is
+ * enforced by RLS on the candidates/candidate_profiles reads and by the
+ * per-row access gate inside get_candidates_live_progress. Fails soft to [].
+ */
+export async function fetchTodaysOnboarded(): Promise<TodayCandidate[]> {
+    const since = sgtTodayStartISO();
+
+    // Today's accessible candidates (RLS scopes to what the viewer may see).
+    const { data: cands, error } = await supabase
+        .from('candidates')
+        .select('id, name, created_at, archived_at')
+        .gte('created_at', since)
+        .is('archived_at', null);
+    if (error || !cands || cands.length === 0) return [];
+
+    const byCandidateId = new Map(cands.map((c) => [c.id, c]));
+    const { data: profiles, error: pErr } = await supabase
+        .from('candidate_profiles')
+        .select('user_id, candidate_id')
+        .in('candidate_id', [...byCandidateId.keys()]);
+    if (pErr || !profiles || profiles.length === 0) return [];
+
+    const rows = profiles as { user_id: string | null; candidate_id: string | null }[];
+    const userIds = rows.map((p) => p.user_id).filter((id): id is string => !!id);
+    const progress = await fetchLiveProgress(userIds);
+
+    const result: TodayCandidate[] = [];
+    for (const p of rows) {
+        if (!p.user_id || !p.candidate_id) continue;
+        if (!progress.get(p.user_id)?.quizCompleted) continue; // "onboarded" = quiz finished
+        const candidate = byCandidateId.get(p.candidate_id);
+        if (!candidate) continue;
+        result.push({ userId: p.user_id, candidateId: candidate.id, name: candidate.name ?? 'Applicant' });
+    }
+    return result;
+}
