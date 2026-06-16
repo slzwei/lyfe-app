@@ -4,6 +4,7 @@ import BiometricsPrompt from '@/components/home/BiometricsPrompt';
 import ErrorBanner from '@/components/ErrorBanner';
 import HeroStatsSection from '@/components/home/HeroStatsSection';
 import HomePipelineSection from '@/components/home/HomePipelineSection';
+import LiveApplicantsCard from '@/components/home/LiveApplicantsCard';
 import LyfeLogo from '@/components/LyfeLogo';
 import RoadmapProgressCard from '@/components/home/RoadmapProgressCard';
 import ScreenHeader from '@/components/ScreenHeader';
@@ -194,6 +195,17 @@ export default function HomeScreen() {
                             : undefined
                     }
                 />
+
+                {/* Live applicants — same privileged audience as the pipeline. Ephemeral:
+                    renders only when authorized applicants are filling their form/quiz right now. */}
+                {(isManagerView || isAdminRole || isRo) && !isCandidate && !isPa && (
+                    <LiveApplicantsCard
+                        colors={colors}
+                        onPressApplicant={(id) =>
+                            router.push(`/(tabs)/home/candidate/${id}` as Parameters<typeof router.push>[0])
+                        }
+                    />
+                )}
 
                 {/* Pipeline triage — for managers, directors, admins, ROs. Skips candidates + PAs + agents. */}
                 {(isManagerView || isAdminRole || isRo) && !isCandidate && !isPa && (
