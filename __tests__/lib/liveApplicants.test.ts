@@ -5,10 +5,12 @@
  * member may see "live". Everything must fail CLOSED on error and never grant
  * global visibility to a non-privileged role.
  */
-import { fetchLiveScopeMap, resolveLiveScope } from '@/lib/recruitment/liveApplicants';
+import { fetchLiveProgress, fetchLiveScopeMap, resolveLiveScope } from '@/lib/recruitment/liveApplicants';
 
 // Per-table canned results for a thenable query-builder mock.
 const mockResults: Record<string, { data: unknown; error: unknown }> = {};
+// Canned result for supabase.rpc (the v2 progress RPC).
+const mockRpc: { value: { data: unknown; error: unknown } } = { value: { data: [], error: null } };
 
 jest.mock('@/lib/supabase', () => {
     const makeBuilder = (table: string) => {
@@ -23,11 +25,17 @@ jest.mock('@/lib/supabase', () => {
         };
         return b;
     };
-    return { supabase: { from: jest.fn((t: string) => makeBuilder(t)) } };
+    return {
+        supabase: {
+            from: jest.fn((t: string) => makeBuilder(t)),
+            rpc: jest.fn((_fn: string, _args: unknown) => Promise.resolve(mockRpc.value)),
+        },
+    };
 });
 
 beforeEach(() => {
     for (const k of Object.keys(mockResults)) delete mockResults[k];
+    mockRpc.value = { data: [], error: null };
 });
 
 describe('resolveLiveScope', () => {
@@ -130,5 +138,80 @@ describe('fetchLiveScopeMap', () => {
         const map = await fetchLiveScopeMap({ all: true });
         expect(map.get('a1')?.name).toBe('Applicant');
         expect(map.size).toBe(1);
+    });
+});
+
+describe('fetchLiveProgress', () => {
+    it('returns empty without calling the RPC for no user ids', async () => {
+        const { supabase } = jest.requireMock('@/lib/supabase') as { supabase: { rpc: jest.Mock } };
+        supabase.rpc.mockClear();
+        const map = await fetchLiveProgress([]);
+        expect(map.size).toBe(0);
+        expect(supabase.rpc).not.toHaveBeenCalled();
+    });
+
+    it('maps RPC rows into a per-user progress map', async () => {
+        mockRpc.value = {
+            data: [
+                {
+                    user_id: 'a1',
+                    onboarding_step: 6,
+                    profile_completed: true,
+                    quiz_answered: 24,
+                    quiz_completed: false,
+                },
+                {
+                    user_id: 'a2',
+                    onboarding_step: 3,
+                    profile_completed: false,
+                    quiz_answered: 0,
+                    quiz_completed: false,
+                },
+            ],
+            error: null,
+        };
+        const map = await fetchLiveProgress(['a1', 'a2']);
+        expect(map.get('a1')).toEqual({
+            onboardingStep: 6,
+            profileCompleted: true,
+            quizAnswered: 24,
+            quizCompleted: false,
+        });
+        expect(map.get('a2')?.quizAnswered).toBe(0);
+    });
+
+    it('passes the user ids to the RPC as p_user_ids', async () => {
+        const { supabase } = jest.requireMock('@/lib/supabase') as { supabase: { rpc: jest.Mock } };
+        supabase.rpc.mockClear();
+        await fetchLiveProgress(['x', 'y']);
+        expect(supabase.rpc).toHaveBeenCalledWith('get_candidates_live_progress', { p_user_ids: ['x', 'y'] });
+    });
+
+    it('fails soft (empty map) on RPC error', async () => {
+        mockRpc.value = { data: null, error: { message: 'denied' } };
+        const map = await fetchLiveProgress(['a1']);
+        expect(map.size).toBe(0);
+    });
+
+    it('coerces null fields to safe defaults', async () => {
+        mockRpc.value = {
+            data: [
+                {
+                    user_id: 'a1',
+                    onboarding_step: null,
+                    profile_completed: null,
+                    quiz_answered: null,
+                    quiz_completed: null,
+                },
+            ],
+            error: null,
+        };
+        const map = await fetchLiveProgress(['a1']);
+        expect(map.get('a1')).toEqual({
+            onboardingStep: 1,
+            profileCompleted: false,
+            quizAnswered: 0,
+            quizCompleted: false,
+        });
     });
 });
