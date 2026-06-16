@@ -1,6 +1,7 @@
 import Avatar from '@/components/Avatar';
 import { Fonts } from '@/constants/type';
-import { useLiveApplicants, type LivePhase } from '@/hooks/useLiveApplicants';
+import { useLiveApplicants, type LiveApplicant } from '@/hooks/useLiveApplicants';
+import { FORM_STEPS, QUIZ_TOTAL } from '@/lib/recruitment/liveApplicants';
 import type { ThemeColors } from '@/types/theme';
 import { Ionicons } from '@expo/vector-icons';
 import React, { useEffect, useRef, useState } from 'react';
@@ -11,16 +12,40 @@ interface Props {
     onPressApplicant: (candidateId: string) => void;
 }
 
-/** v1: bar fill + label are driven by the broadcast phase (no per-question counts). */
-function phaseMeta(state: LivePhase, colors: ThemeColors): { label: string; pct: number; color: string } {
-    switch (state) {
+function clamp(n: number, lo: number, hi: number): number {
+    return Math.max(lo, Math.min(hi, n));
+}
+
+/**
+ * Label + bar fill for an applicant. Uses the precise progress counts when they
+ * have loaded (v2); falls back to the coarse broadcast phase until then (v1), so
+ * the bar appears instantly and sharpens a beat later. Percentages are clamped —
+ * the form occupies 0–50%, the quiz 50–100%.
+ */
+function phaseMeta(a: LiveApplicant, colors: ThemeColors): { label: string; pct: number; color: string } {
+    const p = a.progress;
+    switch (a.state) {
         case 'viewing-results':
             return { label: 'Viewing results', pct: 100, color: colors.statusLive };
-        case 'quiz':
-            return { label: 'Taking quiz', pct: 65, color: colors.accent };
+        case 'quiz': {
+            if (!p) return { label: 'Taking quiz', pct: 65, color: colors.accent };
+            const answered = clamp(p.quizAnswered, 0, QUIZ_TOTAL);
+            return {
+                label: `Taking quiz · ${answered}/${QUIZ_TOTAL}`,
+                pct: clamp(50 + (answered / QUIZ_TOTAL) * 50, 50, 100),
+                color: colors.accent,
+            };
+        }
         case 'form':
-        default:
-            return { label: 'Filling form', pct: 25, color: colors.warning };
+        default: {
+            if (!p || p.onboardingStep < 1) return { label: 'Filling form', pct: 25, color: colors.warning };
+            const step = clamp(p.onboardingStep, 1, FORM_STEPS);
+            return {
+                label: `Filling form · ${step}/${FORM_STEPS}`,
+                pct: clamp((step / FORM_STEPS) * 50, 8, 50),
+                color: colors.warning,
+            };
+        }
     }
 }
 
@@ -104,7 +129,7 @@ function LiveApplicantsCard({ colors, onPressApplicant }: Props) {
             {expanded && (
                 <View style={styles.body}>
                     {applicants.map((a) => {
-                        const meta = phaseMeta(a.state, colors);
+                        const meta = phaseMeta(a, colors);
                         return (
                             <TouchableOpacity
                                 key={a.userId}

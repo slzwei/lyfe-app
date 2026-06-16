@@ -121,3 +121,58 @@ export async function fetchLiveScopeMap(scope: LiveScope): Promise<Map<string, S
     }
     return map;
 }
+
+// ─── v2: precise progress (counts) ──────────────────────────────────────────
+
+/** Enneagram quiz length (current flow). Legacy DISC is longer; callers clamp. */
+export const QUIZ_TOTAL = 36;
+/** Onboarding form step count. */
+export const FORM_STEPS = 6;
+
+export interface LiveProgress {
+    onboardingStep: number; // 1..FORM_STEPS
+    profileCompleted: boolean;
+    quizAnswered: number; // 0..QUIZ_TOTAL
+    quizCompleted: boolean;
+}
+
+interface LiveProgressRow {
+    user_id: string;
+    onboarding_step: number | null;
+    profile_completed: boolean | null;
+    quiz_answered: number | null;
+    quiz_completed: boolean | null;
+}
+
+/**
+ * Precise progress for the given live applicants via the
+ * get_candidates_live_progress RPC (SECURITY DEFINER + per-row access gate).
+ * Fails soft — returns an empty map on error so the widget falls back to the
+ * coarse phase bar. The RPC enforces access, so the result only ever contains
+ * candidates the caller is authorised to see.
+ */
+export async function fetchLiveProgress(userIds: string[]): Promise<Map<string, LiveProgress>> {
+    const map = new Map<string, LiveProgress>();
+    if (userIds.length === 0) return map;
+
+    // RPC isn't in the generated types until `gen:types` re-runs post-migration;
+    // cast at the call site (same precedent as get_team_lead_stats in lib/team.ts).
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const { data, error } = await (supabase.rpc as any)('get_candidates_live_progress', {
+        p_user_ids: userIds,
+    });
+    if (error || !data) {
+        if (__DEV__ && error) console.warn('[liveApplicants] fetchLiveProgress failed:', error.message);
+        return map;
+    }
+
+    for (const r of data as LiveProgressRow[]) {
+        map.set(r.user_id, {
+            onboardingStep: r.onboarding_step ?? 1,
+            profileCompleted: !!r.profile_completed,
+            quizAnswered: r.quiz_answered ?? 0,
+            quizCompleted: !!r.quiz_completed,
+        });
+    }
+    return map;
+}

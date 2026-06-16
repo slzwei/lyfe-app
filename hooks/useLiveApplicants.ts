@@ -2,10 +2,12 @@ import { useAuth } from '@/contexts/AuthContext';
 import { supabase } from '@/lib/supabase';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import {
+    fetchLiveProgress,
     fetchLiveScopeMap,
     LIVE_PROGRESS_CHANNEL,
     LIVE_PROGRESS_EVENT,
     resolveLiveScope,
+    type LiveProgress,
     type LiveProgressPayload,
     type LiveState,
     type ScopeCandidate,
@@ -19,12 +21,16 @@ export interface LiveApplicant {
     candidateId: string;
     name: string;
     state: LivePhase;
+    /** Precise counts (v2). Undefined until the progress RPC resolves. */
+    progress?: LiveProgress;
 }
 
 /** Drop a live applicant after this long with no further event (tab closed, idle). */
 const STALE_MS = 180_000;
 /** Bound how often an unknown userId can trigger a scope refetch (public channel). */
 const SCOPE_REFRESH_THROTTLE_MS = 20_000;
+/** Coalesce per-answer bursts into one progress fetch. */
+const PROGRESS_DEBOUNCE_MS = 400;
 /** Cap pending unresolved events so channel spam can't grow memory. */
 const MAX_PENDING = 50;
 
@@ -45,6 +51,7 @@ export function useLiveApplicants(): { applicants: LiveApplicant[]; connected: b
 
     const [states, setStates] = useState<Record<string, LivePhase>>({});
     const [connected, setConnected] = useState(false);
+    const [progress, setProgress] = useState<Record<string, LiveProgress>>({});
 
     const scopeMapRef = useRef<Map<string, ScopeCandidate>>(new Map());
     const pendingRef = useRef<Map<string, LiveState>>(new Map());
@@ -182,12 +189,46 @@ export function useLiveApplicants(): { applicants: LiveApplicant[]; connected: b
         };
     }, [userId, role]);
 
+    // v2: fetch precise counts for the current live applicants (debounced).
+    // Keyed on `states` (the live user_id set); coalesces per-answer bursts into
+    // one RPC call. Fails soft — leaves the coarse phase bar in place on error.
+    useEffect(() => {
+        const liveIds = Object.keys(states);
+        if (liveIds.length === 0) {
+            setProgress((prev) => (Object.keys(prev).length === 0 ? prev : {}));
+            return;
+        }
+        let cancelled = false;
+        const t = setTimeout(async () => {
+            const fresh = await fetchLiveProgress(liveIds);
+            if (cancelled) return;
+            setProgress((prev) => {
+                const next: Record<string, LiveProgress> = {};
+                for (const id of liveIds) {
+                    const v = fresh.get(id) ?? prev[id]; // keep last-known if a refetch missed one
+                    if (v) next[id] = v;
+                }
+                return next;
+            });
+        }, PROGRESS_DEBOUNCE_MS);
+        return () => {
+            cancelled = true;
+            clearTimeout(t);
+        };
+    }, [states]);
+
     const applicants = useMemo<LiveApplicant[]>(() => {
         const list: LiveApplicant[] = [];
         for (const [uid, state] of Object.entries(states)) {
             const candidate = scopeMapRef.current.get(uid);
             if (!candidate) continue;
-            list.push({ userId: uid, candidateId: candidate.candidateId, name: candidate.name, state });
+            list.push({
+                userId: uid,
+                candidateId: candidate.candidateId,
+                name: candidate.name,
+                state,
+                progress: progress[uid],
+            });
         }
         list.sort((a, b) => {
             const pa = PHASE_ORDER[a.state] ?? 9;
@@ -196,7 +237,7 @@ export function useLiveApplicants(): { applicants: LiveApplicant[]; connected: b
             return a.name.localeCompare(b.name);
         });
         return list;
-    }, [states]);
+    }, [states, progress]);
 
     return { applicants, connected };
 }
