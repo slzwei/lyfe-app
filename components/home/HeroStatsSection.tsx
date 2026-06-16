@@ -154,25 +154,26 @@ function HeroStatsSection({
     }
 
     if (isAdminRole || isManagerView) {
-        const teamLeadsValue = stats?.totalLeads ?? 0;
+        const candidatesValue = managerStats?.activeCandidates ?? 0;
+        const teamLeadsValue = managerStats?.teamLeads ?? 0;
         const heroContent = (
             <>
-                <Ionicons name="people" size={80} color="rgba(255,255,255,0.15)" style={styles.heroIconBg} />
-                <Text style={[styles.heroStatValue, { color: colors.textInverse }]}>{teamLeadsValue}</Text>
-                <Text style={[styles.heroStatLabel, { color: colors.textInverse, opacity: 0.9 }]}>Team Leads</Text>
+                <Ionicons name="document-text" size={80} color="rgba(255,255,255,0.15)" style={styles.heroIconBg} />
+                <Text style={[styles.heroStatValue, { color: colors.textInverse }]}>{candidatesValue}</Text>
+                <Text style={[styles.heroStatLabel, { color: colors.textInverse, opacity: 0.9 }]}>Candidates</Text>
             </>
         );
         return (
             <View style={styles.heroStatsContainer}>
                 <View style={styles.statsRow}>
-                    {onTeamLeadsPress ? (
+                    {onCandidatesPress ? (
                         <TouchableOpacity
                             style={[styles.heroCardPrimary, { backgroundColor: colors.accent }]}
-                            onPress={onTeamLeadsPress}
+                            onPress={onCandidatesPress}
                             activeOpacity={0.85}
                             accessibilityRole="button"
-                            accessibilityLabel={`Team Leads, ${teamLeadsValue}`}
-                            testID="home-hero-team-leads"
+                            accessibilityLabel={`Candidates, ${candidatesValue}`}
+                            testID="home-hero-candidates"
                         >
                             {heroContent}
                         </TouchableOpacity>
@@ -181,11 +182,11 @@ function HeroStatsSection({
                     )}
                     <View style={styles.statsColumn}>
                         <StatCardSmall
-                            label="Candidates"
-                            value={(managerStats?.activeCandidates ?? 0).toString()}
+                            label="Team Leads"
+                            value={teamLeadsValue.toString()}
                             colors={colors}
-                            onPress={onCandidatesPress}
-                            testID="home-hero-candidates"
+                            onPress={onTeamLeadsPress}
+                            testID="home-hero-team-leads"
                         />
                         <StatCardSmall
                             label="Agents"

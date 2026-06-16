@@ -4,6 +4,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import {
     fetchLiveProgress,
     fetchLiveScopeMap,
+    fetchTodaysOnboarded,
     LIVE_PROGRESS_CHANNEL,
     LIVE_PROGRESS_EVENT,
     resolveLiveScope,
@@ -11,6 +12,7 @@ import {
     type LiveProgressPayload,
     type LiveState,
     type ScopeCandidate,
+    type TodayCandidate,
 } from '@/lib/recruitment/liveApplicants';
 
 /** A live phase (never 'signed-out' — that removes the applicant). */
@@ -44,7 +46,11 @@ const PHASE_ORDER: Record<LivePhase, number> = { 'viewing-results': 0, quiz: 1, 
  * STALE_MS of silence. Intended to be mounted only behind the privileged
  * dashboard gate, so non-privileged users never open the subscription.
  */
-export function useLiveApplicants(): { applicants: LiveApplicant[]; connected: boolean } {
+export function useLiveApplicants(): {
+    applicants: LiveApplicant[];
+    todaysOnboarded: TodayCandidate[];
+    connected: boolean;
+} {
     const { user } = useAuth();
     const userId = user?.id;
     const role = user?.role;
@@ -52,6 +58,10 @@ export function useLiveApplicants(): { applicants: LiveApplicant[]; connected: b
     const [states, setStates] = useState<Record<string, LivePhase>>({});
     const [connected, setConnected] = useState(false);
     const [progress, setProgress] = useState<Record<string, LiveProgress>>({});
+    const [todaysOnboarded, setTodaysOnboarded] = useState<TodayCandidate[]>([]);
+    // Bumped on every accepted broadcast event so the progress RPC re-runs even
+    // when the phase string is unchanged (each quiz answer re-broadcasts "quiz").
+    const [progressTick, setProgressTick] = useState(0);
 
     const scopeMapRef = useRef<Map<string, ScopeCandidate>>(new Map());
     const pendingRef = useRef<Map<string, LiveState>>(new Map());
@@ -100,6 +110,9 @@ export function useLiveApplicants(): { applicants: LiveApplicant[]; connected: b
             }
             setStates((prev) => (prev[uid] === state ? prev : { ...prev, [uid]: state }));
             scheduleStale(uid);
+            // Refetch counts on every answer, not just on phase changes — otherwise
+            // quiz_answered freezes at its first value (0) for the whole quiz.
+            setProgressTick((n) => n + 1);
         };
 
         // Apply any events that arrived before their candidate was in scope.
@@ -215,7 +228,25 @@ export function useLiveApplicants(): { applicants: LiveApplicant[]; connected: b
             cancelled = true;
             clearTimeout(t);
         };
-    }, [states]);
+    }, [states, progressTick]);
+
+    // "Onboarded today" — candidates invited today who finished (persistent, not
+    // ephemeral). Refreshed on mount, on each live-phase change (a completion may
+    // have just happened), and on a 45s heartbeat.
+    useEffect(() => {
+        if (!userId || !role) return;
+        let cancelled = false;
+        const load = async () => {
+            const list = await fetchTodaysOnboarded();
+            if (!cancelled) setTodaysOnboarded(list);
+        };
+        void load();
+        const iv = setInterval(() => void load(), 45_000);
+        return () => {
+            cancelled = true;
+            clearInterval(iv);
+        };
+    }, [userId, role, states]);
 
     const applicants = useMemo<LiveApplicant[]>(() => {
         const list: LiveApplicant[] = [];
@@ -239,5 +270,5 @@ export function useLiveApplicants(): { applicants: LiveApplicant[]; connected: b
         return list;
     }, [states, progress]);
 
-    return { applicants, connected };
+    return { applicants, todaysOnboarded, connected };
 }
