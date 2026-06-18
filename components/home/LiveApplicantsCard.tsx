@@ -75,7 +75,7 @@ function phaseMeta(a: LiveApplicant, colors: ThemeColors): { label: string; pct:
  * chevron rotates. Honors Reduce Motion (instant toggle, no pulse).
  */
 function LiveApplicantsCard({ colors, onPressApplicant }: Props) {
-    const { applicants, todaysOnboarded } = useLiveApplicants();
+    const { applicants, inProgressToday, todaysOnboarded } = useLiveApplicants();
     const [expanded, setExpanded] = useState(true);
     const reducedMotion = useReducedMotion();
 
@@ -105,27 +105,44 @@ function LiveApplicantsCard({ colors, onPressApplicant }: Props) {
     }, [expanded, reducedMotion, chevronRot]);
     const chevronStyle = useAnimatedStyle(() => ({ transform: [{ rotate: `${chevronRot.value}deg` }] }));
 
-    // A live "viewing-results" candidate can also be in today's onboarded set —
-    // show them only once (as live).
+    // "Currently onboarding" = live broadcast applicants first, then today's
+    // started-but-unfinished candidates from the DB that aren't already live.
+    // The DB backfill is what makes the card reflect reality on open/refresh
+    // instead of depending on catching an ephemeral broadcast tick; the live
+    // entries just add the pulse + real-time count updates on top. A live
+    // "viewing-results" candidate can also be in today's onboarded set — dedup so
+    // each person shows once, with live taking precedence over completed.
     const liveIds = new Set(applicants.map((a) => a.userId));
-    const completedToday = todaysOnboarded.filter((t) => !liveIds.has(t.userId));
+    const onboarding = [...applicants, ...inProgressToday.filter((a) => !liveIds.has(a.userId))];
+    const onboardingIds = new Set(onboarding.map((a) => a.userId));
+    const completedToday = todaysOnboarded.filter((t) => !onboardingIds.has(t.userId));
 
-    // Show only when there's something today — live applicants OR someone already
+    const hasOnboarding = onboarding.length > 0;
+
+    // Show only when there's something today — someone onboarding OR already
     // onboarded. When nothing has happened yet, render nothing.
-    if (!hasLive && completedToday.length === 0) return null;
+    if (!hasOnboarding && completedToday.length === 0) return null;
 
-    const title = hasLive ? `${applicants.length} onboarding now` : `${completedToday.length} onboarded today`;
+    const title = hasOnboarding
+        ? `${onboarding.length} onboarding ${hasLive ? 'now' : 'today'}`
+        : `${completedToday.length} onboarded today`;
 
-    const clusterPeople = hasLive ? applicants : completedToday;
+    const clusterPeople = hasOnboarding ? onboarding : completedToday;
     const names =
         clusterPeople
             .slice(0, 3)
             .map((a) => a.name.split(' ')[0])
             .join(', ') + (clusterPeople.length > 3 ? ` +${clusterPeople.length - 3}` : '');
 
-    const dotColor = hasLive ? colors.statusLive : completedToday.length > 0 ? colors.success : colors.textTertiary;
-    const avatarBg = hasLive ? colors.accentLight : colors.successLight;
-    const avatarFg = hasLive ? colors.accent : colors.success;
+    const dotColor = hasLive
+        ? colors.statusLive
+        : hasOnboarding
+          ? colors.accent
+          : completedToday.length > 0
+            ? colors.success
+            : colors.textTertiary;
+    const avatarBg = hasOnboarding ? colors.accentLight : colors.successLight;
+    const avatarFg = hasOnboarding ? colors.accent : colors.success;
 
     return (
         <Reanimated.View
@@ -154,24 +171,75 @@ function LiveApplicantsCard({ colors, onPressApplicant }: Props) {
                     entering={reducedMotion ? undefined : FadeIn.duration(200)}
                     exiting={reducedMotion ? undefined : FadeOut.duration(150)}
                 >
-                    <TouchableOpacity style={styles.collapsedSub} onPress={() => setExpanded(true)} activeOpacity={0.7}>
-                        <View style={styles.cluster}>
-                            {clusterPeople.slice(0, 3).map((a, i) => (
-                                <View
-                                    key={a.userId}
-                                    style={[
-                                        styles.clusterAv,
-                                        { borderColor: colors.cardBackground, marginLeft: i === 0 ? 0 : -9 },
-                                    ]}
-                                >
-                                    <Avatar name={a.name} size={26} backgroundColor={avatarBg} textColor={avatarFg} />
-                                </View>
-                            ))}
-                        </View>
-                        <Text style={[styles.names, { color: colors.textSecondary }]} numberOfLines={1}>
-                            {names}
-                        </Text>
-                    </TouchableOpacity>
+                    {hasOnboarding ? (
+                        // Compact onboarding rows — name on the left, a slim progress bar on the
+                        // right, so progress reads at a glance without expanding. Mirrors the
+                        // expanded set (live broadcast + today's in-progress backfill).
+                        <TouchableOpacity
+                            style={styles.collapsedList}
+                            onPress={() => setExpanded(true)}
+                            activeOpacity={0.7}
+                            accessibilityRole="button"
+                            accessibilityLabel={`${title}. Tap to expand.`}
+                        >
+                            {onboarding.map((a) => {
+                                const meta = phaseMeta(a, colors);
+                                return (
+                                    <View key={a.userId} style={styles.collapsedRow}>
+                                        <Avatar
+                                            name={a.name}
+                                            size={26}
+                                            backgroundColor={colors.accentLight}
+                                            textColor={colors.accent}
+                                        />
+                                        <Text
+                                            style={[styles.collapsedName, { color: colors.textSecondary }]}
+                                            numberOfLines={1}
+                                        >
+                                            {a.name.split(' ')[0]}
+                                        </Text>
+                                        <View style={[styles.miniTrack, { backgroundColor: colors.border }]}>
+                                            <View
+                                                style={[
+                                                    styles.miniFill,
+                                                    { backgroundColor: meta.color, width: `${meta.pct}%` },
+                                                ]}
+                                            />
+                                        </View>
+                                    </View>
+                                );
+                            })}
+                        </TouchableOpacity>
+                    ) : (
+                        // No one live — just who finished onboarding today (no progress bar to show).
+                        <TouchableOpacity
+                            style={styles.collapsedSub}
+                            onPress={() => setExpanded(true)}
+                            activeOpacity={0.7}
+                        >
+                            <View style={styles.cluster}>
+                                {clusterPeople.slice(0, 3).map((a, i) => (
+                                    <View
+                                        key={a.userId}
+                                        style={[
+                                            styles.clusterAv,
+                                            { borderColor: colors.cardBackground, marginLeft: i === 0 ? 0 : -9 },
+                                        ]}
+                                    >
+                                        <Avatar
+                                            name={a.name}
+                                            size={26}
+                                            backgroundColor={avatarBg}
+                                            textColor={avatarFg}
+                                        />
+                                    </View>
+                                ))}
+                            </View>
+                            <Text style={[styles.names, { color: colors.textSecondary }]} numberOfLines={1}>
+                                {names}
+                            </Text>
+                        </TouchableOpacity>
+                    )}
                 </Reanimated.View>
             )}
 
@@ -181,7 +249,7 @@ function LiveApplicantsCard({ colors, onPressApplicant }: Props) {
                     entering={reducedMotion ? undefined : FadeInDown.duration(300).easing(EXPO)}
                     exiting={reducedMotion ? undefined : FadeOutUp.duration(200)}
                 >
-                    {applicants.map((a) => {
+                    {onboarding.map((a) => {
                         const meta = phaseMeta(a, colors);
                         return (
                             <TouchableOpacity
@@ -299,6 +367,33 @@ const styles = StyleSheet.create({
         flex: 1,
         fontFamily: Fonts.sans,
         fontSize: 13,
+    },
+    collapsedList: {
+        marginTop: 12,
+        gap: 10,
+    },
+    collapsedRow: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 10,
+    },
+    collapsedName: {
+        flex: 1,
+        fontFamily: Fonts.sansSemibold,
+        fontSize: 13,
+        fontWeight: '600',
+        letterSpacing: -0.1,
+    },
+    miniTrack: {
+        width: 84,
+        height: 6,
+        borderRadius: 3,
+        overflow: 'hidden',
+        flexShrink: 0,
+    },
+    miniFill: {
+        height: '100%',
+        borderRadius: 3,
     },
     body: {
         marginTop: 6,

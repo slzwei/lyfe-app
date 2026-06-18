@@ -177,12 +177,30 @@ export async function fetchLiveProgress(userIds: string[]): Promise<Map<string, 
     return map;
 }
 
-// ─── "Onboarded today" (persistent summary) ─────────────────────────────────
+// ─── Today's onboarding (persistent: in-progress + completed) ────────────────
 
 export interface TodayCandidate {
     userId: string;
     candidateId: string;
     name: string;
+}
+
+/**
+ * A candidate who started onboarding today but hasn't finished the quiz yet,
+ * carrying their last-known progress so the widget can show a real phase bar
+ * even when no live broadcast is arriving (app cold-opened, candidate paused).
+ * Shaped to be directly renderable as a LiveApplicant (form/quiz + counts).
+ */
+export interface TodayInProgress extends TodayCandidate {
+    state: 'form' | 'quiz';
+    progress: LiveProgress;
+}
+
+export interface TodaysOnboarding {
+    /** Started, quiz not yet finished — rendered with a phase bar (DB-backed). */
+    inProgress: TodayInProgress[];
+    /** Quiz finished — rendered as "Done". */
+    completed: TodayCandidate[];
 }
 
 /** Singapore is UTC+8 year-round (no DST). UTC ISO instant of today's SGT midnight. */
@@ -192,13 +210,21 @@ function sgtTodayStartISO(): string {
     return new Date(ms).toISOString();
 }
 
+/** Genuine engagement vs. a fresh invite sitting untouched at form step 1. */
+function hasStartedOnboarding(p: LiveProgress): boolean {
+    return p.onboardingStep > 1 || p.profileCompleted || p.quizAnswered > 0;
+}
+
 /**
- * Candidates invited today (SGT) who have finished onboarding (quiz completed),
- * for the widget's "N onboarded today" summary + completed list. Access is
- * enforced by RLS on the candidates/candidate_profiles reads and by the
- * per-row access gate inside get_candidates_live_progress. Fails soft to [].
+ * Today's (SGT) onboarding cohort, split into in-progress and completed, for the
+ * dashboard's "Now onboarding" card. DB-backed so the card reflects the true
+ * current state on open/refresh — the realtime broadcast is only a live overlay
+ * on top of this, never the sole source. Access is enforced by RLS on the
+ * candidates/candidate_profiles reads and by the per-row gate inside
+ * get_candidates_live_progress. Fails soft to empty.
  */
-export async function fetchTodaysOnboarded(): Promise<TodayCandidate[]> {
+export async function fetchTodaysOnboarding(): Promise<TodaysOnboarding> {
+    const empty: TodaysOnboarding = { inProgress: [], completed: [] };
     const since = sgtTodayStartISO();
 
     // Today's accessible candidates (RLS scopes to what the viewer may see).
@@ -207,26 +233,49 @@ export async function fetchTodaysOnboarded(): Promise<TodayCandidate[]> {
         .select('id, name, created_at, archived_at')
         .gte('created_at', since)
         .is('archived_at', null);
-    if (error || !cands || cands.length === 0) return [];
+    if (error || !cands || cands.length === 0) return empty;
 
     const byCandidateId = new Map(cands.map((c) => [c.id, c]));
     const { data: profiles, error: pErr } = await supabase
         .from('candidate_profiles')
         .select('user_id, candidate_id')
         .in('candidate_id', [...byCandidateId.keys()]);
-    if (pErr || !profiles || profiles.length === 0) return [];
+    if (pErr || !profiles || profiles.length === 0) return empty;
 
     const rows = profiles as { user_id: string | null; candidate_id: string | null }[];
     const userIds = rows.map((p) => p.user_id).filter((id): id is string => !!id);
     const progress = await fetchLiveProgress(userIds);
 
-    const result: TodayCandidate[] = [];
+    const result: TodaysOnboarding = { inProgress: [], completed: [] };
     for (const p of rows) {
         if (!p.user_id || !p.candidate_id) continue;
-        if (!progress.get(p.user_id)?.quizCompleted) continue; // "onboarded" = quiz finished
         const candidate = byCandidateId.get(p.candidate_id);
         if (!candidate) continue;
-        result.push({ userId: p.user_id, candidateId: candidate.id, name: candidate.name ?? 'Applicant' });
+        const name = candidate.name ?? 'Applicant';
+        const prog = progress.get(p.user_id);
+
+        if (prog?.quizCompleted) {
+            result.completed.push({ userId: p.user_id, candidateId: candidate.id, name });
+        } else if (prog && hasStartedOnboarding(prog)) {
+            // On the quiz once the form is done or any answer is recorded; else still on the form.
+            const state: 'form' | 'quiz' = prog.profileCompleted || prog.quizAnswered > 0 ? 'quiz' : 'form';
+            result.inProgress.push({ userId: p.user_id, candidateId: candidate.id, name, state, progress: prog });
+        }
+        // else: invited today but untouched — surfaced by the pipeline triage, not here.
     }
+
+    // Most-progressed first (quiz before form), then alphabetical — stable order.
+    result.inProgress.sort((a, b) => {
+        if (a.state !== b.state) return a.state === 'quiz' ? -1 : 1;
+        return a.name.localeCompare(b.name);
+    });
     return result;
+}
+
+/**
+ * Back-compat wrapper: today's candidates who finished the quiz ("onboarded").
+ * Prefer fetchTodaysOnboarding() for the full in-progress + completed split.
+ */
+export async function fetchTodaysOnboarded(): Promise<TodayCandidate[]> {
+    return (await fetchTodaysOnboarding()).completed;
 }
