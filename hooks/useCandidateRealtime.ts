@@ -17,7 +17,7 @@ import { useEffect, useRef } from 'react';
  * is what actually works. Channel name includes user.id so stale server-side
  * topics from a previous session don't collide.
  */
-export function useCandidateRealtime(onUpdate: () => void) {
+export function useCandidateRealtime(onUpdate: () => void, enabled = true) {
     const { user } = useAuth();
     const retryCountRef = useRef(0);
     const retryTimeoutRef = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
@@ -25,7 +25,7 @@ export function useCandidateRealtime(onUpdate: () => void) {
     onUpdateRef.current = onUpdate;
 
     useEffect(() => {
-        if (!user?.id) return;
+        if (!user?.id || !enabled) return;
         const userId = user.id;
 
         let channel: ReturnType<typeof supabase.channel> | null = null;
@@ -70,5 +70,5 @@ export function useCandidateRealtime(onUpdate: () => void) {
             clearTimeout(retryTimeoutRef.current);
             if (channel) supabase.removeChannel(channel);
         };
-    }, [user?.id]);
+    }, [user?.id, enabled]);
 }

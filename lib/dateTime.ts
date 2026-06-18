@@ -24,6 +24,11 @@ export function formatDateLong(dateStr: string): string {
     });
 }
 
+/** Today as "FRIDAY, 17 JUNE" (uppercase, no year) — for the Home greeting eyebrow */
+export function formatTodayEyebrow(now: Date = new Date()): string {
+    return now.toLocaleDateString('en-SG', { weekday: 'long', day: 'numeric', month: 'long' }).toUpperCase();
+}
+
 /** Format YYYY-MM-DD as "Mon, 8 Mar" */
 export function formatDateShort(dateStr: string): string {
     const dt = new Date(dateStr + 'T00:00:00');

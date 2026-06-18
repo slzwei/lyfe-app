@@ -1,5 +1,6 @@
 import { Fonts } from '@/constants/type';
 import type { ThemeColors } from '@/types/theme';
+import { Ionicons } from '@expo/vector-icons';
 import React, { memo } from 'react';
 import { StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 
@@ -10,6 +11,10 @@ type StatCardSmallProps = {
     onPress?: () => void;
     accessibilityLabel?: string;
     testID?: string;
+    /** Optional editorial meta line under the label (e.g. "+5 new this week"). */
+    meta?: { text: string; tone: 'success' | 'muted' };
+    /** Show a chevron-forward affordance top-right (for tappable tiles that drill in). */
+    showChevron?: boolean;
 };
 
 const StatCardSmall = memo(function StatCardSmall({
@@ -19,6 +24,8 @@ const StatCardSmall = memo(function StatCardSmall({
     onPress,
     accessibilityLabel,
     testID,
+    meta,
+    showChevron,
 }: StatCardSmallProps) {
     const cardStyle = [
         styles.statCardSmall,
@@ -26,10 +33,26 @@ const StatCardSmall = memo(function StatCardSmall({
     ];
     const content = (
         <>
+            {showChevron && (
+                <Ionicons name="chevron-forward" size={16} color={colors.textTertiary} style={styles.chevron} />
+            )}
             <Text style={[styles.statValueSmall, { color: colors.textPrimary }]}>{value}</Text>
             <Text style={[styles.statLabelSmall, { color: colors.textTertiary }]}>{label}</Text>
+            {meta && (
+                <Text
+                    style={[
+                        styles.statMetaSmall,
+                        { color: meta.tone === 'success' ? colors.success : colors.textTertiary },
+                    ]}
+                    numberOfLines={1}
+                >
+                    {meta.text}
+                </Text>
+            )}
         </>
     );
+
+    const a11yLabel = accessibilityLabel ?? `${label}, ${value}${meta ? `, ${meta.text}` : ''}`;
 
     if (onPress) {
         return (
@@ -38,7 +61,7 @@ const StatCardSmall = memo(function StatCardSmall({
                 onPress={onPress}
                 activeOpacity={0.7}
                 accessibilityRole="button"
-                accessibilityLabel={accessibilityLabel ?? `${label}, ${value}`}
+                accessibilityLabel={a11yLabel}
                 testID={testID}
             >
                 {content}
@@ -62,6 +85,11 @@ const styles = StyleSheet.create({
         shadowRadius: 8,
         elevation: 1,
     },
+    chevron: {
+        position: 'absolute',
+        top: 12,
+        right: 12,
+    },
     statValueSmall: {
         fontFamily: Fonts.sansSemibold,
         fontSize: 22,
@@ -70,4 +98,5 @@ const styles = StyleSheet.create({
         letterSpacing: -0.4,
     },
     statLabelSmall: { fontFamily: Fonts.sans, fontSize: 13, fontWeight: '500', lineHeight: 16 },
+    statMetaSmall: { fontFamily: Fonts.sansSemibold, fontSize: 11, fontWeight: '600', marginTop: 3, lineHeight: 14 },
 });
