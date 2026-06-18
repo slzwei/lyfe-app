@@ -4,7 +4,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import {
     fetchLiveProgress,
     fetchLiveScopeMap,
-    fetchTodaysOnboarded,
+    fetchTodaysOnboarding,
     LIVE_PROGRESS_CHANNEL,
     LIVE_PROGRESS_EVENT,
     resolveLiveScope,
@@ -48,6 +48,8 @@ const PHASE_ORDER: Record<LivePhase, number> = { 'viewing-results': 0, quiz: 1, 
  */
 export function useLiveApplicants(): {
     applicants: LiveApplicant[];
+    /** Today's started-but-unfinished candidates (DB-backed; persists without a live tick). */
+    inProgressToday: LiveApplicant[];
     todaysOnboarded: TodayCandidate[];
     connected: boolean;
 } {
@@ -59,6 +61,7 @@ export function useLiveApplicants(): {
     const [connected, setConnected] = useState(false);
     const [progress, setProgress] = useState<Record<string, LiveProgress>>({});
     const [todaysOnboarded, setTodaysOnboarded] = useState<TodayCandidate[]>([]);
+    const [inProgressToday, setInProgressToday] = useState<LiveApplicant[]>([]);
     // Bumped on every accepted broadcast event so the progress RPC re-runs even
     // when the phase string is unchanged (each quiz answer re-broadcasts "quiz").
     const [progressTick, setProgressTick] = useState(0);
@@ -230,15 +233,20 @@ export function useLiveApplicants(): {
         };
     }, [states, progressTick]);
 
-    // "Onboarded today" — candidates invited today who finished (persistent, not
-    // ephemeral). Refreshed on mount, on each live-phase change (a completion may
-    // have just happened), and on a 45s heartbeat.
+    // Today's onboarding cohort (DB-backed, persistent — not ephemeral): both the
+    // in-progress and the finished candidates invited today. This is what makes
+    // the card survive a cold open / missed broadcast — a candidate mid-form/quiz
+    // shows from the DB even if no live tick is arriving. Refreshed on mount, on
+    // each live-phase change (a tick may have just moved someone in/out of these
+    // sets), and on a 45s heartbeat.
     useEffect(() => {
         if (!userId || !role) return;
         let cancelled = false;
         const load = async () => {
-            const list = await fetchTodaysOnboarded();
-            if (!cancelled) setTodaysOnboarded(list);
+            const { inProgress, completed } = await fetchTodaysOnboarding();
+            if (cancelled) return;
+            setInProgressToday(inProgress);
+            setTodaysOnboarded(completed);
         };
         void load();
         const iv = setInterval(() => void load(), 45_000);
@@ -270,5 +278,5 @@ export function useLiveApplicants(): {
         return list;
     }, [states, progress]);
 
-    return { applicants, todaysOnboarded, connected };
+    return { applicants, inProgressToday, todaysOnboarded, connected };
 }

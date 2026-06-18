@@ -9,6 +9,7 @@ import {
     fetchLiveProgress,
     fetchLiveScopeMap,
     fetchTodaysOnboarded,
+    fetchTodaysOnboarding,
     resolveLiveScope,
 } from '@/lib/recruitment/liveApplicants';
 
@@ -257,5 +258,89 @@ describe('fetchTodaysOnboarded', () => {
     it('fails soft ([]) when the candidates query errors', async () => {
         mockResults.candidates = { data: null, error: { message: 'rls' } };
         expect(await fetchTodaysOnboarded()).toHaveLength(0);
+    });
+});
+
+describe('fetchTodaysOnboarding', () => {
+    it('splits today into completed (quiz done) and in-progress (started, not done)', async () => {
+        mockResults.candidates = {
+            data: [
+                { id: 'c1', name: 'Aisha Rahman', created_at: '2026-06-17T01:00:00Z', archived_at: null },
+                { id: 'c2', name: 'Ben Tan', created_at: '2026-06-17T02:00:00Z', archived_at: null },
+                { id: 'c3', name: 'Chong Wei', created_at: '2026-06-17T03:00:00Z', archived_at: null },
+                { id: 'c4', name: 'Devi Menon', created_at: '2026-06-17T04:00:00Z', archived_at: null },
+            ],
+            error: null,
+        };
+        mockResults.candidate_profiles = {
+            data: [
+                { user_id: 'u1', candidate_id: 'c1' }, // quiz done       → completed
+                { user_id: 'u2', candidate_id: 'c2' }, // mid-form        → in-progress (form)
+                { user_id: 'u3', candidate_id: 'c3' }, // mid-quiz        → in-progress (quiz)
+                { user_id: 'u4', candidate_id: 'c4' }, // untouched step 1 → excluded
+            ],
+            error: null,
+        };
+        mockRpc.value = {
+            data: [
+                { user_id: 'u1', onboarding_step: 6, profile_completed: true, quiz_answered: 36, quiz_completed: true },
+                {
+                    user_id: 'u2',
+                    onboarding_step: 3,
+                    profile_completed: false,
+                    quiz_answered: 0,
+                    quiz_completed: false,
+                },
+                {
+                    user_id: 'u3',
+                    onboarding_step: 6,
+                    profile_completed: true,
+                    quiz_answered: 12,
+                    quiz_completed: false,
+                },
+                {
+                    user_id: 'u4',
+                    onboarding_step: 1,
+                    profile_completed: false,
+                    quiz_answered: 0,
+                    quiz_completed: false,
+                },
+            ],
+            error: null,
+        };
+
+        const { inProgress, completed } = await fetchTodaysOnboarding();
+
+        expect(completed).toEqual([{ userId: 'u1', candidateId: 'c1', name: 'Aisha Rahman' }]);
+        // u3 (quiz) sorts ahead of u2 (form); u4 excluded as untouched.
+        expect(inProgress.map((a) => ({ userId: a.userId, state: a.state }))).toEqual([
+            { userId: 'u3', state: 'quiz' },
+            { userId: 'u2', state: 'form' },
+        ]);
+        // Last-known counts ride along so the card can draw a real phase bar offline.
+        expect(inProgress.find((a) => a.userId === 'u2')?.progress.onboardingStep).toBe(3);
+        expect(inProgress.find((a) => a.userId === 'u3')?.progress.quizAnswered).toBe(12);
+    });
+
+    it('treats a finished-form / not-yet-answered candidate as on the quiz', async () => {
+        mockResults.candidates = {
+            data: [{ id: 'c1', name: 'Priya Selvaraj', created_at: '2026-06-17T01:00:00Z', archived_at: null }],
+            error: null,
+        };
+        mockResults.candidate_profiles = { data: [{ user_id: 'u1', candidate_id: 'c1' }], error: null };
+        mockRpc.value = {
+            data: [
+                { user_id: 'u1', onboarding_step: 6, profile_completed: true, quiz_answered: 0, quiz_completed: false },
+            ],
+            error: null,
+        };
+        const { inProgress } = await fetchTodaysOnboarding();
+        expect(inProgress).toHaveLength(1);
+        expect(inProgress[0].state).toBe('quiz');
+    });
+
+    it('fails soft (empty buckets) when the candidates query errors', async () => {
+        mockResults.candidates = { data: null, error: { message: 'rls' } };
+        expect(await fetchTodaysOnboarding()).toEqual({ inProgress: [], completed: [] });
     });
 });
