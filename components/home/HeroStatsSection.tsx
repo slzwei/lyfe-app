@@ -53,6 +53,7 @@ function HeroStatsSection({
         const candidateHeroContent = (
             <>
                 <Ionicons name="map" size={80} color="rgba(255,255,255,0.15)" style={styles.heroIconBg} />
+                <Text style={[styles.heroEyebrow, { color: colors.textInverse }]}>YOUR PROGRESS</Text>
                 <Text style={[styles.heroStatValue, { color: colors.textInverse }]}>
                     {currentProgramme ? `${currentProgramme.percentage}%` : '\u2014'}
                 </Text>
@@ -109,6 +110,7 @@ function HeroStatsSection({
         const paHeroContent = (
             <>
                 <Ionicons name="document-text" size={80} color="rgba(255,255,255,0.15)" style={styles.heroIconBg} />
+                <Text style={[styles.heroEyebrow, { color: colors.textInverse }]}>IN PIPELINE</Text>
                 <Text style={[styles.heroStatValue, { color: colors.textInverse }]}>{paStats.candidateCount}</Text>
                 <Text style={[styles.heroStatLabel, { color: colors.textInverse, opacity: 0.9 }]}>Candidates</Text>
             </>
@@ -156,11 +158,23 @@ function HeroStatsSection({
     if (isAdminRole || isManagerView) {
         const candidatesValue = managerStats?.activeCandidates ?? 0;
         const teamLeadsValue = managerStats?.teamLeads ?? 0;
+        const candidatesThisWeek = managerStats?.candidatesThisWeek ?? 0;
+        const newLeadsThisWeek = stats?.newThisWeek ?? 0;
         const heroContent = (
             <>
                 <Ionicons name="document-text" size={80} color="rgba(255,255,255,0.15)" style={styles.heroIconBg} />
+                <Text style={[styles.heroEyebrow, { color: colors.textInverse }]}>IN PIPELINE</Text>
                 <Text style={[styles.heroStatValue, { color: colors.textInverse }]}>{candidatesValue}</Text>
-                <Text style={[styles.heroStatLabel, { color: colors.textInverse, opacity: 0.9 }]}>Candidates</Text>
+                <View style={styles.heroLabelRow}>
+                    <Text style={[styles.heroStatLabel, { color: colors.textInverse, opacity: 0.9 }]}>Candidates</Text>
+                    {candidatesThisWeek > 0 && (
+                        <View style={[styles.heroPill, { backgroundColor: colors.textInverse + '33' }]}>
+                            <Text style={[styles.heroPillText, { color: colors.textInverse }]}>
+                                +{candidatesThisWeek} this week
+                            </Text>
+                        </View>
+                    )}
+                </View>
             </>
         );
         return (
@@ -186,6 +200,11 @@ function HeroStatsSection({
                             value={teamLeadsValue.toString()}
                             colors={colors}
                             onPress={onTeamLeadsPress}
+                            meta={
+                                newLeadsThisWeek > 0
+                                    ? { text: `+${newLeadsThisWeek} new this week`, tone: 'success' }
+                                    : undefined
+                            }
                             testID="home-hero-team-leads"
                         />
                         <StatCardSmall
@@ -193,6 +212,7 @@ function HeroStatsSection({
                             value={(managerStats?.agentsManaged ?? 0).toString()}
                             colors={colors}
                             onPress={onAgentsPress}
+                            showChevron={!!onAgentsPress}
                             testID="home-hero-agents"
                         />
                     </View>
@@ -205,6 +225,7 @@ function HeroStatsSection({
     const agentHeroContent = (
         <>
             <Ionicons name="briefcase" size={80} color="rgba(255,255,255,0.15)" style={styles.heroIconBg} />
+            <Text style={[styles.heroEyebrow, { color: colors.textInverse }]}>YOUR PIPELINE</Text>
             <Text style={[styles.heroStatValue, { color: colors.textInverse }]}>{agentStats.totalLeads}</Text>
             <Text style={[styles.heroStatLabel, { color: colors.textInverse, opacity: 0.9 }]}>Total Leads</Text>
         </>
@@ -271,6 +292,15 @@ const styles = StyleSheet.create({
         right: -10,
         transform: [{ rotate: '15deg' }],
     },
+    heroEyebrow: {
+        fontFamily: Fonts.sansSemibold,
+        fontSize: 11,
+        fontWeight: '600',
+        letterSpacing: 1,
+        textTransform: 'uppercase',
+        opacity: 0.82,
+        marginBottom: 6,
+    },
     heroStatValue: {
         fontFamily: Fonts.serif,
         fontSize: 40,
@@ -279,6 +309,23 @@ const styles = StyleSheet.create({
         letterSpacing: letterSpacing(-1),
     },
     heroStatLabel: { fontFamily: Fonts.sans, fontSize: 15, fontWeight: '500' },
+    heroLabelRow: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        flexWrap: 'wrap',
+        gap: 8,
+    },
+    heroPill: {
+        paddingHorizontal: 8,
+        paddingVertical: 2,
+        borderRadius: 999,
+    },
+    heroPillText: {
+        fontFamily: Fonts.sansSemibold,
+        fontSize: 11,
+        fontWeight: '600',
+        letterSpacing: letterSpacing(-0.1),
+    },
     statsColumn: {
         flex: 1,
         gap: 12,

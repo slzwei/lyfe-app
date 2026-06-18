@@ -16,9 +16,13 @@ export interface LeadPipelineStats {
 
 export interface ManagerDashboardStats {
     activeCandidates: number;
+    /** Active candidates created in the last 7 days (manager-scoped). Drives the hero "+N this week" pill. */
+    candidatesThisWeek: number;
     agentsManaged: number;
     teamLeads: number;
 }
+
+const ACTIVE_CANDIDATE_STATUSES = ['applied', 'interview_scheduled', 'interviewed', 'approved', 'exam_prep'] as const;
 
 /**
  * Fetch aggregate pipeline stats for the home dashboard.
@@ -243,13 +247,28 @@ export async function fetchManagerDashboardStats(
     let candidateQuery = supabase
         .from('candidates')
         .select('id', { count: 'exact', head: true })
-        .in('status', ['applied', 'interview_scheduled', 'interviewed', 'approved', 'exam_prep']);
+        .in('status', ACTIVE_CANDIDATE_STATUSES);
 
     if (userRole === 'manager') {
         candidateQuery = candidateQuery.eq('assigned_manager_id', userId);
     }
 
-    const { count: candidateCount } = await candidateQuery;
+    // Active candidates added in the last 7 days — same scoping as the total above.
+    const weekAgoIso = new Date(Date.now() - 7 * 86400000).toISOString();
+    let candidatesThisWeekQuery = supabase
+        .from('candidates')
+        .select('id', { count: 'exact', head: true })
+        .in('status', ACTIVE_CANDIDATE_STATUSES)
+        .gte('created_at', weekAgoIso);
+
+    if (userRole === 'manager') {
+        candidatesThisWeekQuery = candidatesThisWeekQuery.eq('assigned_manager_id', userId);
+    }
+
+    const [{ count: candidateCount }, { count: candidatesThisWeek }] = await Promise.all([
+        candidateQuery,
+        candidatesThisWeekQuery,
+    ]);
 
     let agentQuery = supabase
         .from('users')
@@ -272,6 +291,7 @@ export async function fetchManagerDashboardStats(
     return {
         data: {
             activeCandidates: candidateCount || 0,
+            candidatesThisWeek: candidatesThisWeek || 0,
             agentsManaged: agentCount || 0,
             teamLeads: leadCount || 0,
         },

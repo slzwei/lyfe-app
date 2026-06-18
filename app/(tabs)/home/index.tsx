@@ -1,4 +1,5 @@
 import { letterSpacing } from '@/constants/platform';
+import { Fonts } from '@/constants/type';
 import Avatar from '@/components/Avatar';
 import BiometricsPrompt from '@/components/home/BiometricsPrompt';
 import ErrorBanner from '@/components/ErrorBanner';
@@ -21,8 +22,10 @@ import {
     markBiometricsPromptShown,
     type BiometryType,
 } from '@/lib/biometrics';
+import { useCandidatePipeline } from '@/hooks/useCandidatePipeline';
 import { useDashboard } from '@/hooks/useDashboard';
 import { useTypedRouter } from '@/hooks/useTypedRouter';
+import { formatTodayEyebrow } from '@/lib/dateTime';
 import { Ionicons } from '@expo/vector-icons';
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { RefreshControl, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
@@ -96,10 +99,45 @@ export default function HomeScreen() {
         onRefresh,
     } = useDashboard({ userId: user?.id, role, isManagerView, isAdminRole });
 
+    // Agent = the personal-leads view (incl. managers/directors toggled to agent view).
+    const isAgent = !isCandidate && !isPa && !isRo && !isManagerView && !isAdminRole;
+    // Privileged pipeline audience — managers, directors, admins, ROs (RO is global-scoped).
+    const showPipeline = (isManagerView || isAdminRole || isRo) && !isCandidate && !isPa;
+
+    // One pipeline fetch + realtime subscription, shared by the greeting subline and
+    // the pipeline section. Inert (no fetch/channel) for non-privileged roles.
+    const pipeline = useCandidatePipeline({
+        isManagerView: isManagerView || isAdminRole || isRo,
+        enabled: showPipeline,
+    });
+
     const greeting = useMemo(() => getGreeting(), []);
+    const dateLine = useMemo(() => formatTodayEyebrow(), []);
     const firstName = user?.full_name?.split(' ')[0] || 'there';
 
     const currentProgramme = candidateRoadmap.find((p) => !p.isLocked && p.percentage < 100) ?? candidateRoadmap[0];
+
+    // Honest, role-aware greeting subline — only shown once its real data has loaded.
+    let greetingSubline: string | null = null;
+    if (showPipeline && !pipeline.isLoading && !isLoading) {
+        const heroCandidates = isRo ? paStats.candidateCount : (managerStats?.activeCandidates ?? 0);
+        const atRisk = pipeline.counts['at-risk'];
+        const noun = heroCandidates === 1 ? 'candidate' : 'candidates';
+        greetingSubline =
+            atRisk > 0
+                ? `${heroCandidates} ${noun} · ${atRisk} need you now`
+                : `${heroCandidates} ${noun} in your pipeline`;
+    } else if (isAgent && !isLoading && stats) {
+        const noun = stats.totalLeads === 1 ? 'lead' : 'leads';
+        greetingSubline =
+            stats.newThisWeek > 0
+                ? `${stats.totalLeads} ${noun} · ${stats.newThisWeek} new this week`
+                : `${stats.totalLeads} ${noun}`;
+    }
+
+    const handleRefresh = useCallback(async () => {
+        await Promise.all([onRefresh(), pipeline.refresh()]);
+    }, [onRefresh, pipeline]);
 
     return (
         <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]} edges={['top']}>
@@ -154,14 +192,22 @@ export default function HomeScreen() {
                 contentContainerStyle={styles.scrollContent}
                 showsVerticalScrollIndicator={false}
                 refreshControl={
-                    <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={colors.accent} />
+                    <RefreshControl refreshing={refreshing} onRefresh={handleRefresh} tintColor={colors.accent} />
                 }
             >
-                <View style={styles.greetingRow}>
-                    <Text style={[styles.greetingText, { letterSpacing: letterSpacing(-0.3) }]} numberOfLines={1}>
-                        <Text style={{ color: colors.textSecondary }}>{greeting}, </Text>
-                        <Text style={{ color: colors.textPrimary, fontWeight: '700' }}>{firstName}</Text>
+                <View style={styles.greetingBlock}>
+                    <Text style={[styles.dateEyebrow, { color: colors.textTertiary }]} numberOfLines={1}>
+                        {dateLine}
                     </Text>
+                    <Text style={[styles.greetingHeadline, { color: colors.textPrimary }]} numberOfLines={2}>
+                        <Text style={{ color: colors.textSecondary }}>{greeting}, </Text>
+                        <Text style={{ fontFamily: Fonts.serifItalic, color: colors.accent }}>{firstName}.</Text>
+                    </Text>
+                    {greetingSubline && (
+                        <Text style={[styles.greetingSubline, { color: colors.textSecondary }]} numberOfLines={1}>
+                            {greetingSubline}
+                        </Text>
+                    )}
                 </View>
 
                 {error && <ErrorBanner message={error} onRetry={loadDashboardData} onDismiss={() => setError(null)} />}
@@ -198,7 +244,7 @@ export default function HomeScreen() {
 
                 {/* Live applicants — same privileged audience as the pipeline. Ephemeral:
                     renders only when authorized applicants are filling their form/quiz right now. */}
-                {(isManagerView || isAdminRole || isRo) && !isCandidate && !isPa && (
+                {showPipeline && (
                     <LiveApplicantsCard
                         colors={colors}
                         onPressApplicant={(id) =>
@@ -208,9 +254,12 @@ export default function HomeScreen() {
                 )}
 
                 {/* Pipeline triage — for managers, directors, admins, ROs. Skips candidates + PAs + agents. */}
-                {(isManagerView || isAdminRole || isRo) && !isCandidate && !isPa && (
+                {showPipeline && (
                     <HomePipelineSection
-                        isManagerView={isManagerView || isAdminRole || isRo}
+                        rows={pipeline.rows}
+                        counts={pipeline.counts}
+                        isLoading={pipeline.isLoading}
+                        error={pipeline.error}
                         onCandidatePress={(id) =>
                             router.push(`/(tabs)/home/candidate/${id}` as Parameters<typeof router.push>[0])
                         }
@@ -275,15 +324,32 @@ export default function HomeScreen() {
 const styles = StyleSheet.create({
     container: { flex: 1 },
     scrollContent: { paddingBottom: 40, paddingTop: 4 },
-    greetingRow: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        justifyContent: 'space-between',
+    greetingBlock: {
         paddingHorizontal: 20,
         marginTop: 12,
         marginBottom: 16,
     },
-    greetingText: { fontSize: 22 },
+    dateEyebrow: {
+        fontFamily: Fonts.sansSemibold,
+        fontSize: 11,
+        fontWeight: '600',
+        letterSpacing: 1.4,
+        textTransform: 'uppercase',
+        marginBottom: 8,
+    },
+    greetingHeadline: {
+        fontFamily: Fonts.serif,
+        fontSize: 32,
+        fontWeight: '500',
+        lineHeight: 36,
+        letterSpacing: letterSpacing(-0.6),
+    },
+    greetingSubline: {
+        fontFamily: Fonts.sans,
+        fontSize: 15,
+        lineHeight: 20,
+        marginTop: 8,
+    },
     headerRight: {
         flexDirection: 'row',
         alignItems: 'center',

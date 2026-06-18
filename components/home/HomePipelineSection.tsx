@@ -2,15 +2,14 @@
  * HomePipelineSection — boxed 3-section pipeline card on the Home tab.
  *
  * Surfaces the "who needs you today" signal at the top of Home for
- * managers/directors/admins. Each urgency bucket renders as its own card with
- * up to MAX_ROWS_PER_SECTION candidates visible; a "See all →" link drops into
- * the Candidates tab (where the full list lives, with the Pipeline sort toggle
- * already documented).
+ * managers/directors/admins/ROs. Each urgency bucket renders as its own card
+ * with up to MAX_ROWS_PER_SECTION candidates visible; a "See all →" link drops
+ * into the Candidates tab (where the full list lives, with the Pipeline sort
+ * toggle already documented).
  *
- * Roles:
- *   - Manager (managerView): their own pipeline
- *   - Director / Admin: team-wide pipeline (isManagerView = true)
- *   - Candidate / PA / agent: component is not rendered (caller decides)
+ * Presentational: the pipeline snapshot is fetched once by the Home screen
+ * (via useCandidatePipeline) and passed in as props, so the greeting subline and
+ * this section share a single fetch + realtime subscription.
  *
  * Tap targets:
  *   - Row → candidate detail
@@ -21,8 +20,8 @@
 import { letterSpacing } from '@/constants/platform';
 import { Fonts } from '@/constants/type';
 import { useTheme } from '@/contexts/ThemeContext';
-import { useCandidatePipeline } from '@/hooks/useCandidatePipeline';
 import { pipelineAnalytics } from '@/lib/analytics';
+import type { PipelineSnapshot } from '@/lib/recruitment/pipelineFetch';
 import type { NextStep, Urgency } from '@/lib/recruitment/pipeline';
 import type { RecruitmentCandidate } from '@/types/recruitment';
 import { Ionicons } from '@expo/vector-icons';
@@ -32,7 +31,10 @@ import { ActivityIndicator, StyleSheet, Text, TouchableOpacity, View } from 'rea
 const MAX_ROWS_PER_SECTION = 2;
 
 interface HomePipelineSectionProps {
-    isManagerView: boolean;
+    rows: PipelineSnapshot['rows'];
+    counts: PipelineSnapshot['counts'];
+    isLoading: boolean;
+    error: string | null;
     onCandidatePress: (candidateId: string) => void;
     onSeeAll: () => void;
 }
@@ -47,9 +49,15 @@ interface Bucket {
     tintVar: 'danger' | 'warning' | 'success';
 }
 
-function HomePipelineSectionImpl({ isManagerView, onCandidatePress, onSeeAll }: HomePipelineSectionProps) {
+function HomePipelineSectionImpl({
+    rows,
+    counts,
+    isLoading,
+    error,
+    onCandidatePress,
+    onSeeAll,
+}: HomePipelineSectionProps) {
     const { colors } = useTheme();
-    const { rows, counts, isLoading, error } = useCandidatePipeline({ isManagerView, enabled: true });
 
     const buckets: Bucket[] = useMemo(() => {
         const byUrgency = (u: Urgency) => rows.filter((r) => r.nextStep.urgency === u);
@@ -109,6 +117,11 @@ function HomePipelineSectionImpl({ isManagerView, onCandidatePress, onSeeAll }: 
 
     return (
         <View>
+            <View style={styles.pipelineHeader}>
+                <Text style={[styles.pipelineTitle, { color: colors.textPrimary }]}>Pipeline</Text>
+                <Text style={[styles.pipelineMeta, { color: colors.textTertiary }]}>{totalActionable} need action</Text>
+            </View>
+
             {buckets.map((b) => {
                 if (b.total === 0) return null;
                 const dotColor =
@@ -238,6 +251,27 @@ const styles = StyleSheet.create({
         fontSize: 13,
         textAlign: 'center',
         lineHeight: 18,
+    },
+
+    // Section header — "Pipeline" + "N need action" (sans per role rules).
+    pipelineHeader: {
+        flexDirection: 'row',
+        alignItems: 'baseline',
+        justifyContent: 'space-between',
+        paddingHorizontal: 16,
+        marginBottom: 12,
+    },
+    pipelineTitle: {
+        fontFamily: Fonts.sansSemibold,
+        fontSize: 16,
+        fontWeight: '600',
+        letterSpacing: letterSpacing(-0.2),
+    },
+    pipelineMeta: {
+        fontFamily: Fonts.sans,
+        fontSize: 13,
+        fontWeight: '500',
+        letterSpacing: letterSpacing(-0.1),
     },
 
     sectionCard: {

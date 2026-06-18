@@ -586,6 +586,7 @@ describe('fetchManagerDashboardStats', () => {
 
         const result = await fetchManagerDashboardStats('mgr-1', 'manager');
         expect(result.data.activeCandidates).toBe(12);
+        expect(result.data.candidatesThisWeek).toBe(12);
         expect(result.data.agentsManaged).toBe(5);
     });
 

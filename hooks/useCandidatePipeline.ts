@@ -90,17 +90,21 @@ export function useCandidatePipeline({
 
     useFocusEffect(
         useCallback(() => {
+            // Disabled consumers stay fully inert — no fetch scheduled, no setState
+            // (avoids needless work + act() noise for roles that never see the pipeline).
+            if (!enabled) return;
             // Defer to next tick so synchronous setState calls in `load`
             // (setError(null), setIsLoading(false)) never fire during render.
             // The jest mock for useFocusEffect calls the callback synchronously,
             // and setState-during-render trips React's "too many re-renders" guard.
             const id = setTimeout(load, 0);
             return () => clearTimeout(id);
-        }, [load]),
+        }, [load, enabled]),
     );
 
-    // Realtime — re-fetch on any candidate-pipeline DB change.
-    useCandidateRealtime(load);
+    // Realtime — re-fetch on any candidate-pipeline DB change. Gated by `enabled`
+    // so roles that never see the pipeline don't open a candidate channel.
+    useCandidateRealtime(load, enabled);
 
     const refresh = useCallback(async () => {
         if (!enabled) return;

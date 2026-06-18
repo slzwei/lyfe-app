@@ -6,11 +6,26 @@ import type { ThemeColors } from '@/types/theme';
 import { Ionicons } from '@expo/vector-icons';
 import React, { useEffect, useRef, useState } from 'react';
 import { Animated, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import Reanimated, {
+    Easing,
+    FadeIn,
+    FadeInDown,
+    FadeOut,
+    FadeOutUp,
+    LinearTransition,
+    useAnimatedStyle,
+    useReducedMotion,
+    useSharedValue,
+    withTiming,
+} from 'react-native-reanimated';
 
 interface Props {
     colors: ThemeColors;
     onPressApplicant: (candidateId: string) => void;
 }
+
+// Ease-out-expo — the design system's standard curve (cubic-bezier(0.16,1,0.3,1)).
+const EXPO = Easing.bezier(0.16, 1, 0.3, 1);
 
 function clamp(n: number, lo: number, hi: number): number {
     return Math.max(lo, Math.min(hi, n));
@@ -54,14 +69,24 @@ function phaseMeta(a: LiveApplicant, colors: ThemeColors): { label: string; pct:
  *   - Applicants filling their form/quiz right now appear live with a phase bar.
  *   - When no one is live, it shows "N onboarded today".
  *   - "Onboarded today" lists candidates invited today (SGT) who finished.
+ *
+ * Opens EXPANDED by default. Tapping the header toggles; the card height
+ * animates (Reanimated LinearTransition) while the body fades/slides and the
+ * chevron rotates. Honors Reduce Motion (instant toggle, no pulse).
  */
 function LiveApplicantsCard({ colors, onPressApplicant }: Props) {
     const { applicants, todaysOnboarded } = useLiveApplicants();
-    const [expanded, setExpanded] = useState(false);
+    const [expanded, setExpanded] = useState(true);
+    const reducedMotion = useReducedMotion();
 
-    // Pulsing "live" dot (matches LiveEventBar's pattern).
+    // Pulsing "live" dot (matches LiveEventBar's pattern). Paused under Reduce Motion.
     const pulse = useRef(new Animated.Value(1)).current;
+    const hasLive = applicants.length > 0;
     useEffect(() => {
+        if (reducedMotion || !hasLive) {
+            pulse.setValue(1);
+            return;
+        }
         const loop = Animated.loop(
             Animated.sequence([
                 Animated.timing(pulse, { toValue: 0.35, duration: 700, useNativeDriver: true }),
@@ -70,9 +95,16 @@ function LiveApplicantsCard({ colors, onPressApplicant }: Props) {
         );
         loop.start();
         return () => loop.stop();
-    }, [pulse]);
+    }, [pulse, reducedMotion, hasLive]);
 
-    const hasLive = applicants.length > 0;
+    // Chevron rotation: 0deg (down = collapsed) ↔ 180deg (up = expanded).
+    const chevronRot = useSharedValue(expanded ? 180 : 0);
+    useEffect(() => {
+        const target = expanded ? 180 : 0;
+        chevronRot.value = reducedMotion ? target : withTiming(target, { duration: 300, easing: EXPO });
+    }, [expanded, reducedMotion, chevronRot]);
+    const chevronStyle = useAnimatedStyle(() => ({ transform: [{ rotate: `${chevronRot.value}deg` }] }));
+
     // A live "viewing-results" candidate can also be in today's onboarded set —
     // show them only once (as live).
     const liveIds = new Set(applicants.map((a) => a.userId));
@@ -96,7 +128,10 @@ function LiveApplicantsCard({ colors, onPressApplicant }: Props) {
     const avatarFg = hasLive ? colors.accent : colors.success;
 
     return (
-        <View style={[styles.card, { backgroundColor: colors.cardBackground, shadowColor: colors.textPrimary }]}>
+        <Reanimated.View
+            layout={reducedMotion ? undefined : LinearTransition.duration(420).easing(EXPO)}
+            style={[styles.card, { backgroundColor: colors.cardBackground, shadowColor: colors.textPrimary }]}
+        >
             <TouchableOpacity
                 style={styles.header}
                 onPress={() => setExpanded((e) => !e)}
@@ -109,32 +144,43 @@ function LiveApplicantsCard({ colors, onPressApplicant }: Props) {
                 <Text style={[styles.title, { color: colors.textPrimary }]} numberOfLines={1}>
                     {title}
                 </Text>
-                <Ionicons name={expanded ? 'chevron-up' : 'chevron-down'} size={18} color={colors.textTertiary} />
+                <Reanimated.View style={chevronStyle}>
+                    <Ionicons name="chevron-down" size={18} color={colors.textTertiary} />
+                </Reanimated.View>
             </TouchableOpacity>
 
             {!expanded && clusterPeople.length > 0 && (
-                <TouchableOpacity style={styles.collapsedSub} onPress={() => setExpanded(true)} activeOpacity={0.7}>
-                    <View style={styles.cluster}>
-                        {clusterPeople.slice(0, 3).map((a, i) => (
-                            <View
-                                key={a.userId}
-                                style={[
-                                    styles.clusterAv,
-                                    { borderColor: colors.cardBackground, marginLeft: i === 0 ? 0 : -9 },
-                                ]}
-                            >
-                                <Avatar name={a.name} size={26} backgroundColor={avatarBg} textColor={avatarFg} />
-                            </View>
-                        ))}
-                    </View>
-                    <Text style={[styles.names, { color: colors.textSecondary }]} numberOfLines={1}>
-                        {names}
-                    </Text>
-                </TouchableOpacity>
+                <Reanimated.View
+                    entering={reducedMotion ? undefined : FadeIn.duration(200)}
+                    exiting={reducedMotion ? undefined : FadeOut.duration(150)}
+                >
+                    <TouchableOpacity style={styles.collapsedSub} onPress={() => setExpanded(true)} activeOpacity={0.7}>
+                        <View style={styles.cluster}>
+                            {clusterPeople.slice(0, 3).map((a, i) => (
+                                <View
+                                    key={a.userId}
+                                    style={[
+                                        styles.clusterAv,
+                                        { borderColor: colors.cardBackground, marginLeft: i === 0 ? 0 : -9 },
+                                    ]}
+                                >
+                                    <Avatar name={a.name} size={26} backgroundColor={avatarBg} textColor={avatarFg} />
+                                </View>
+                            ))}
+                        </View>
+                        <Text style={[styles.names, { color: colors.textSecondary }]} numberOfLines={1}>
+                            {names}
+                        </Text>
+                    </TouchableOpacity>
+                </Reanimated.View>
             )}
 
             {expanded && (
-                <View style={styles.body}>
+                <Reanimated.View
+                    style={styles.body}
+                    entering={reducedMotion ? undefined : FadeInDown.duration(300).easing(EXPO)}
+                    exiting={reducedMotion ? undefined : FadeOutUp.duration(200)}
+                >
                     {applicants.map((a) => {
                         const meta = phaseMeta(a, colors);
                         return (
@@ -202,9 +248,9 @@ function LiveApplicantsCard({ colors, onPressApplicant }: Props) {
                             </View>
                         </TouchableOpacity>
                     ))}
-                </View>
+                </Reanimated.View>
             )}
-        </View>
+        </Reanimated.View>
     );
 }
 

@@ -53,6 +53,14 @@ describe('useCandidateRealtime', () => {
         expect(supabase.channel).not.toHaveBeenCalled();
     });
 
+    it('does not subscribe when disabled', () => {
+        const onUpdate = jest.fn();
+        renderHook(() => useCandidateRealtime(onUpdate, false));
+
+        const { supabase } = require('@/lib/supabase');
+        expect(supabase.channel).not.toHaveBeenCalled();
+    });
+
     it('subscribes to progress_signals for the current user', () => {
         const onUpdate = jest.fn();
         renderHook(() => useCandidateRealtime(onUpdate));
