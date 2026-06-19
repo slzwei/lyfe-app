@@ -1,3 +1,4 @@
+import { letterSpacing } from '@/constants/platform';
 import Avatar from '@/components/Avatar';
 import { Fonts } from '@/constants/type';
 import { useLiveApplicants, type LiveApplicant } from '@/hooks/useLiveApplicants';
@@ -223,7 +224,7 @@ function LiveApplicantsCard({ colors, onPressApplicant }: Props) {
                                         key={a.userId}
                                         style={[
                                             styles.clusterAv,
-                                            { borderColor: colors.cardBackground, marginLeft: i === 0 ? 0 : -9 },
+                                            { borderColor: colors.cardBackground, marginLeft: i === 0 ? 0 : -8 },
                                         ]}
                                     >
                                         <Avatar
@@ -260,12 +261,26 @@ function LiveApplicantsCard({ colors, onPressApplicant }: Props) {
                                 accessibilityRole="button"
                                 accessibilityLabel={`${a.name}, ${meta.label}`}
                             >
-                                <Avatar
-                                    name={a.name}
-                                    size={38}
-                                    backgroundColor={colors.accentLight}
-                                    textColor={colors.accent}
-                                />
+                                <View style={styles.avatarWrap}>
+                                    <Avatar
+                                        name={a.name}
+                                        size={38}
+                                        backgroundColor={colors.accentLight}
+                                        textColor={colors.accent}
+                                    />
+                                    {liveIds.has(a.userId) && (
+                                        <Animated.View
+                                            style={[
+                                                styles.livePresence,
+                                                {
+                                                    backgroundColor: colors.statusLive,
+                                                    borderColor: colors.cardBackground,
+                                                    opacity: pulse,
+                                                },
+                                            ]}
+                                        />
+                                    )}
+                                </View>
                                 <View style={styles.rowMain}>
                                     <View style={styles.rowTop}>
                                         <Text style={[styles.name, { color: colors.textPrimary }]} numberOfLines={1}>
@@ -275,7 +290,7 @@ function LiveApplicantsCard({ colors, onPressApplicant }: Props) {
                                             <Text style={[styles.chipText, { color: meta.color }]}>{meta.label}</Text>
                                         </View>
                                     </View>
-                                    <View style={styles.track}>
+                                    <View style={[styles.track, { backgroundColor: colors.border }]}>
                                         <View
                                             style={[
                                                 styles.fill,
@@ -310,7 +325,7 @@ function LiveApplicantsCard({ colors, onPressApplicant }: Props) {
                                     </Text>
                                     <View style={[styles.doneChip, { backgroundColor: colors.success + '1F' }]}>
                                         <Ionicons name="checkmark" size={12} color={colors.success} />
-                                        <Text style={[styles.doneText, { color: colors.success }]}>Done</Text>
+                                        <Text style={[styles.doneText, { color: colors.success }]}>Finished</Text>
                                     </View>
                                 </View>
                             </View>
@@ -339,16 +354,16 @@ const styles = StyleSheet.create({
         gap: 10,
     },
     dot: {
-        width: 9,
-        height: 9,
-        borderRadius: 5,
+        width: 8,
+        height: 8,
+        borderRadius: 4,
     },
     title: {
         flex: 1,
         fontFamily: Fonts.sansSemibold,
-        fontSize: 15,
+        fontSize: 16,
         fontWeight: '600',
-        letterSpacing: -0.1,
+        letterSpacing: letterSpacing(-0.1),
     },
     collapsedSub: {
         flexDirection: 'row',
@@ -382,7 +397,7 @@ const styles = StyleSheet.create({
         fontFamily: Fonts.sansSemibold,
         fontSize: 13,
         fontWeight: '600',
-        letterSpacing: -0.1,
+        letterSpacing: letterSpacing(-0.1),
     },
     miniTrack: {
         width: 84,
@@ -397,6 +412,21 @@ const styles = StyleSheet.create({
     },
     body: {
         marginTop: 6,
+    },
+    avatarWrap: {
+        position: 'relative',
+    },
+    // Presence badge on the avatar — pulses for candidates broadcasting live right
+    // now (vs DB-backed in-progress, which show no badge — we don't imply "stalled"
+    // without an idle-time signal).
+    livePresence: {
+        position: 'absolute',
+        right: -1,
+        bottom: -1,
+        width: 12,
+        height: 12,
+        borderRadius: 6,
+        borderWidth: 2,
     },
     row: {
         flexDirection: 'row',
@@ -415,17 +445,17 @@ const styles = StyleSheet.create({
         alignItems: 'center',
         justifyContent: 'space-between',
         gap: 8,
-        marginBottom: 9,
+        marginBottom: 8,
     },
     name: {
         flex: 1,
         fontFamily: Fonts.sansSemibold,
         fontSize: 15,
         fontWeight: '600',
-        letterSpacing: -0.1,
+        letterSpacing: letterSpacing(-0.1),
     },
     chip: {
-        paddingHorizontal: 9,
+        paddingHorizontal: 8,
         paddingVertical: 3,
         borderRadius: 10,
     },
@@ -439,7 +469,7 @@ const styles = StyleSheet.create({
         flexDirection: 'row',
         alignItems: 'center',
         gap: 3,
-        paddingHorizontal: 9,
+        paddingHorizontal: 8,
         paddingVertical: 3,
         borderRadius: 10,
     },
@@ -452,7 +482,6 @@ const styles = StyleSheet.create({
     track: {
         height: 8,
         borderRadius: 4,
-        backgroundColor: 'rgba(0,0,0,0.06)',
         overflow: 'hidden',
     },
     fill: {
