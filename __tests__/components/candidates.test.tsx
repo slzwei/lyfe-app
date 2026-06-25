@@ -2,6 +2,7 @@
  * Tests for components/candidates/ — active components.
  */
 import React from 'react';
+import { Linking } from 'react-native';
 import { render, fireEvent } from '@testing-library/react-native';
 import { Colors } from '@/constants/Colors';
 
@@ -9,7 +10,7 @@ import ContactOutcomeSheet from '@/components/candidates/ContactOutcomeSheet';
 import { DocumentList, AddDocumentSheet } from '@/components/candidates/DocumentSection';
 import InterviewSchedulerSheet from '@/components/candidates/InterviewSchedulerSheet';
 import NoteSheet from '@/components/candidates/NoteSheet';
-import PdfViewerModal from '@/components/candidates/PdfViewerModal';
+import DocumentViewerModal from '@/components/candidates/DocumentViewerModal';
 import QuickActionsBar from '@/components/candidates/QuickActionsBar';
 
 import type { Interview, CandidateDocument } from '@/types/recruitment';
@@ -491,15 +492,16 @@ describe('NoteSheet', () => {
 });
 
 // ────────────────────────────────────────────────────────────────
-// 5. PdfViewerModal
+// 5. DocumentViewerModal
 // ────────────────────────────────────────────────────────────────
-describe('PdfViewerModal', () => {
+describe('DocumentViewerModal', () => {
     it('renders title and close button', () => {
         const { getByText } = render(
-            <PdfViewerModal
+            <DocumentViewerModal
                 visible={true}
-                pdfUrl="https://example.com/test.pdf"
-                pdfTitle="Resume"
+                url="https://example.com/test.pdf"
+                title="Resume"
+                fileName="resume.pdf"
                 colors={colors}
                 onClose={jest.fn()}
             />,
@@ -507,12 +509,27 @@ describe('PdfViewerModal', () => {
         expect(getByText('Resume')).toBeTruthy();
     });
 
-    it('renders Pdf component when pdfUrl is provided', () => {
-        const { getByTestId } = render(
-            <PdfViewerModal
+    it('renders the Pdf component for a PDF file', () => {
+        const { getByTestId, queryByTestId } = render(
+            <DocumentViewerModal
                 visible={true}
-                pdfUrl="https://example.com/test.pdf"
-                pdfTitle="Resume"
+                url="https://example.com/test.pdf"
+                title="Resume"
+                fileName="resume.pdf"
+                colors={colors}
+                onClose={jest.fn()}
+            />,
+        );
+        expect(getByTestId('mock-pdf-view')).toBeTruthy();
+        expect(queryByTestId('document-image')).toBeNull();
+    });
+
+    it('defaults to the Pdf component when no fileName is given (generated PDFs)', () => {
+        const { getByTestId } = render(
+            <DocumentViewerModal
+                visible={true}
+                url="https://example.com/generated.pdf"
+                title="Registration Form"
                 colors={colors}
                 onClose={jest.fn()}
             />,
@@ -520,20 +537,58 @@ describe('PdfViewerModal', () => {
         expect(getByTestId('mock-pdf-view')).toBeTruthy();
     });
 
-    it('does not render Pdf component when pdfUrl is null', () => {
+    it('renders an Image (not the Pdf component) for an image file', () => {
+        const { getByTestId, queryByTestId } = render(
+            <DocumentViewerModal
+                visible={true}
+                url="https://example.com/scan.jpeg"
+                title="M9A"
+                fileName="WhatsApp_Image.jpeg"
+                colors={colors}
+                onClose={jest.fn()}
+            />,
+        );
+        expect(getByTestId('document-image')).toBeTruthy();
+        expect(queryByTestId('mock-pdf-view')).toBeNull();
+    });
+
+    it('shows an unsupported state with an Open action for non-previewable files (docx)', () => {
+        const openURL = jest.spyOn(Linking, 'openURL').mockResolvedValue(undefined as never);
+        const { getByText, queryByTestId } = render(
+            <DocumentViewerModal
+                visible={true}
+                url="https://example.com/cv.docx"
+                title="Resume"
+                fileName="Kim_David_Schaeffer.docx"
+                colors={colors}
+                onClose={jest.fn()}
+            />,
+        );
+        expect(getByText('Preview not available')).toBeTruthy();
+        expect(queryByTestId('mock-pdf-view')).toBeNull();
+        expect(queryByTestId('document-image')).toBeNull();
+
+        fireEvent.press(getByText('Open'));
+        expect(openURL).toHaveBeenCalledWith('https://example.com/cv.docx');
+        openURL.mockRestore();
+    });
+
+    it('renders nothing to view when url is null', () => {
         const { queryByTestId } = render(
-            <PdfViewerModal visible={true} pdfUrl={null} pdfTitle="Resume" colors={colors} onClose={jest.fn()} />,
+            <DocumentViewerModal visible={true} url={null} title="Resume" colors={colors} onClose={jest.fn()} />,
         );
         expect(queryByTestId('mock-pdf-view')).toBeNull();
+        expect(queryByTestId('document-image')).toBeNull();
     });
 
     it('calls onClose when close button is pressed', () => {
         const onClose = jest.fn();
         const { UNSAFE_root } = render(
-            <PdfViewerModal
+            <DocumentViewerModal
                 visible={true}
-                pdfUrl="https://example.com/test.pdf"
-                pdfTitle="Resume"
+                url="https://example.com/test.pdf"
+                title="Resume"
+                fileName="resume.pdf"
                 colors={colors}
                 onClose={onClose}
             />,

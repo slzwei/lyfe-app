@@ -8,6 +8,7 @@ import {
     deleteCandidateDocument,
     getCandidateDocumentUrl,
 } from '@/lib/recruitment/documents';
+import { getDocumentKind } from '@/lib/recruitment/documentKind';
 import type { CandidateDocument } from '@/types/recruitment';
 
 jest.mock('@/lib/supabase');
@@ -344,5 +345,42 @@ describe('getCandidateDocumentUrl', () => {
         const result = await getCandidateDocumentUrl('cand-1/docs/missing.pdf');
 
         expect(result).toBeNull();
+    });
+});
+
+// ── getDocumentKind ──
+
+describe('getDocumentKind', () => {
+    it('classifies PDF files (case-insensitive)', () => {
+        expect(getDocumentKind('resume.pdf')).toBe('pdf');
+        expect(getDocumentKind('REPORT.PDF')).toBe('pdf');
+        expect(getDocumentKind('candidates/c1/123_form.pdf')).toBe('pdf');
+    });
+
+    it('classifies image files (the web ATS allows JPEG/PNG)', () => {
+        ['photo.jpg', 'pic.jpeg', 'scan.PNG', 'img.webp', 'live.heic', 'old.bmp', 'frame.gif'].forEach((f) =>
+            expect(getDocumentKind(f)).toBe('image'),
+        );
+    });
+
+    it('classifies Word and other office files as other', () => {
+        ['cv.docx', 'old.doc', 'sheet.xlsx', 'notes.txt', 'deck.pptx'].forEach((f) =>
+            expect(getDocumentKind(f)).toBe('other'),
+        );
+    });
+
+    it('ignores signed-URL query strings when reading the extension', () => {
+        expect(getDocumentKind('candidates/c1/123_WhatsApp_Image.jpeg?token=abc')).toBe('image');
+        expect(getDocumentKind('https://x/y/file.pdf?token=z&expires=1')).toBe('pdf');
+    });
+
+    it('defaults to pdf when no name is given (generated registration/DISC PDFs)', () => {
+        expect(getDocumentKind()).toBe('pdf');
+        expect(getDocumentKind(null)).toBe('pdf');
+        expect(getDocumentKind('')).toBe('pdf');
+    });
+
+    it('treats names without an extension as other (safer than failing in the PDF viewer)', () => {
+        expect(getDocumentKind('noextfile')).toBe('other');
     });
 });

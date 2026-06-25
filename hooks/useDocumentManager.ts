@@ -29,6 +29,7 @@ interface DocumentManagerState {
     showPdf: boolean;
     pdfUrl: string | null;
     pdfTitle: string;
+    pdfFileName: string | null;
     showAddDoc: boolean;
     addDocLabel: string;
     addDocCustomLabel: string;
@@ -41,7 +42,7 @@ interface DocumentManagerState {
     setAddDocCustomLabel: (v: string) => void;
     loadDocuments: () => Promise<CandidateDocument[]>;
     handleViewDocument: (doc: CandidateDocument) => Promise<void>;
-    openPdfViewer: (url: string, title: string) => void;
+    openPdfViewer: (url: string, title: string, fileName?: string | null) => void;
     handleDeleteDocument: (doc: CandidateDocument) => void;
     handleSelectLabel: (label: string) => Promise<void>;
     pickAndUploadDocument: (label: string) => Promise<void>;
@@ -53,6 +54,7 @@ export function useDocumentManager({ candidateId }: UseDocumentManagerParams): D
     const [showPdf, setShowPdf] = useState(false);
     const [pdfUrl, setPdfUrl] = useState<string | null>(null);
     const [pdfTitle, setPdfTitle] = useState('');
+    const [pdfFileName, setPdfFileName] = useState<string | null>(null);
     const [showAddDoc, setShowAddDoc] = useState(false);
     const [addDocLabel, setAddDocLabel] = useState('');
     const [addDocCustomLabel, setAddDocCustomLabel] = useState('');
@@ -65,9 +67,10 @@ export function useDocumentManager({ candidateId }: UseDocumentManagerParams): D
         return data;
     }, [candidateId]);
 
-    const openPdfViewer = useCallback((url: string, title: string) => {
+    const openPdfViewer = useCallback((url: string, title: string, fileName: string | null = null) => {
         setPdfUrl(url);
         setPdfTitle(title);
+        setPdfFileName(fileName);
         setShowPdf(true);
     }, []);
 
@@ -78,7 +81,7 @@ export function useDocumentManager({ candidateId }: UseDocumentManagerParams): D
                 Alert.alert('Unable to open document', 'This file could not be loaded. Please try again.');
                 return;
             }
-            openPdfViewer(url, doc.label);
+            openPdfViewer(url, doc.label, doc.file_name);
         },
         [openPdfViewer],
     );
@@ -157,6 +160,7 @@ export function useDocumentManager({ candidateId }: UseDocumentManagerParams): D
         showPdf,
         pdfUrl,
         pdfTitle,
+        pdfFileName,
         showAddDoc,
         addDocLabel,
         addDocCustomLabel,

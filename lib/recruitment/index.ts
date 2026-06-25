@@ -32,6 +32,8 @@ export {
     getGeneratedPdfUrl,
     getCandidateDocumentUrl,
 } from './documents';
+export { getDocumentKind } from './documentKind';
+export type { DocumentKind } from './documentKind';
 export { fetchPAManagerIds, fetchPAManagers, fetchPACandidateCount, fetchPAInterviewCount } from './pa-helpers';
 export {
     fetchPaperAttempts,

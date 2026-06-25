@@ -64,6 +64,7 @@ describe('useDocumentManager', () => {
         const { result } = renderHook(() => useDocumentManager({ candidateId: 'c1' }));
         expect(result.current.documents).toEqual([]);
         expect(result.current.showPdf).toBe(false);
+        expect(result.current.pdfFileName).toBeNull();
         expect(result.current.showAddDoc).toBe(false);
     });
 
@@ -95,6 +96,8 @@ describe('useDocumentManager', () => {
         expect(result.current.showPdf).toBe(true);
         expect(result.current.pdfUrl).toBe('https://signed.example.com/c1/docs/1700000000000_resume.pdf?token=abc');
         expect(result.current.pdfTitle).toBe('Resume');
+        // file_name is threaded through so the viewer can pick the right renderer
+        expect(result.current.pdfFileName).toBe('resume.pdf');
     });
 
     it('handleViewDocument does not open viewer when URL resolution fails', async () => {
@@ -122,6 +125,8 @@ describe('useDocumentManager', () => {
         expect(result.current.showPdf).toBe(true);
         expect(result.current.pdfUrl).toBe('https://signed.example.com/generated.pdf');
         expect(result.current.pdfTitle).toBe('Registration Form');
+        // No file name passed → viewer defaults to PDF rendering
+        expect(result.current.pdfFileName).toBeNull();
     });
 
     it('handleDeleteDocument removes document from list', async () => {

@@ -61,7 +61,7 @@ jest.mock('@/components/candidates/QuickActionsBar', () => {
 jest.mock('@/components/candidates/ContactOutcomeSheet', () => () => null);
 jest.mock('@/components/candidates/InterviewSchedulerSheet', () => () => null);
 jest.mock('@/components/candidates/NoteSheet', () => () => null);
-jest.mock('@/components/candidates/PdfViewerModal', () => () => null);
+jest.mock('@/components/candidates/DocumentViewerModal', () => () => null);
 jest.mock('@/components/candidates/DocumentSection', () => ({
     AddDocumentSheet: () => null,
     DocumentList: () => {

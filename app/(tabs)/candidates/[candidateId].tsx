@@ -10,7 +10,7 @@ import MilestonesSection from '@/components/candidates/MilestonesSection';
 import NoteSheet from '@/components/candidates/NoteSheet';
 import EmockScoresSection from '@/components/candidates/EmockScoresSection';
 import PapersSection from '@/components/candidates/PapersSection';
-import PdfViewerModal from '@/components/candidates/PdfViewerModal';
+import DocumentViewerModal from '@/components/candidates/DocumentViewerModal';
 import PrepCourseMarkSheet from '@/components/candidates/PrepCourseMarkSheet';
 import PrepCourseSection from '@/components/candidates/PrepCourseSection';
 import ReassignManagerSheet from '@/components/candidates/ReassignManagerSheet';
@@ -205,6 +205,7 @@ export default function CandidateDetailScreen() {
         showPdf,
         pdfUrl,
         pdfTitle,
+        pdfFileName,
         showAddDoc,
         addDocLabel,
         addDocCustomLabel,
@@ -1589,10 +1590,11 @@ export default function CandidateDetailScreen() {
                 onCustomLabelChange={setAddDocCustomLabel}
                 onPickAndUpload={pickAndUploadDocument}
             />
-            <PdfViewerModal
+            <DocumentViewerModal
                 visible={showPdf}
-                pdfUrl={pdfUrl}
-                pdfTitle={pdfTitle}
+                url={pdfUrl}
+                title={pdfTitle}
+                fileName={pdfFileName}
                 colors={colors}
                 onClose={() => setShowPdf(false)}
             />
