@@ -1,22 +1,24 @@
-import EmptyState from '@/components/EmptyState';
 import ErrorBanner from '@/components/ErrorBanner';
-import LeadCard from '@/components/LeadCard';
-import LoadingState from '@/components/LoadingState';
-import ScreenHeader from '@/components/ScreenHeader';
+import { LeadListCard } from '@/components/leads/LeadListCard';
+import { Txt, LivePill, LeadCardSkeleton, LeadsEmptyState, CompactEmpty } from '@/components/leads/ui';
 import { useAuth } from '@/contexts/AuthContext';
-import { useTheme } from '@/contexts/ThemeContext';
 import { useViewMode } from '@/contexts/ViewModeContext';
 import { useLeadRealtime } from '@/hooks/useLeadRealtime';
 import { fetchLeads } from '@/lib/leads';
+import { useLeadsTheme, spacing } from '@/lib/leads/theme';
 import type { Lead, LeadStatus } from '@/types/lead';
 import { useFilteredList } from '@/hooks/useFilteredList';
 import { Ionicons } from '@expo/vector-icons';
 import { useFocusEffect, useRouter } from 'expo-router';
 import React, { useCallback, useState } from 'react';
-import { FlatList, RefreshControl, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
+import { FlatList, RefreshControl, StyleSheet, TextInput, TouchableOpacity, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import Animated, { FadeInUp, useReducedMotion } from 'react-native-reanimated';
+
 const LEAD_SEARCH_FIELDS: (keyof Lead)[] = ['full_name', 'phone'];
 
+// Archived/Disputed are intentionally absent until the parity plan lands the
+// `archived_at` column + `disputed` enum (LYFE_LEADS_UIUX_PLAN.md §4/§6) — no dead filters.
 const FILTER_TABS: { key: LeadStatus | 'all'; label: string }[] = [
     { key: 'all', label: 'All' },
     { key: 'new', label: 'New' },
@@ -28,10 +30,11 @@ const FILTER_TABS: { key: LeadStatus | 'all'; label: string }[] = [
 ];
 
 export default function LeadsListScreen() {
-    const { colors } = useTheme();
+    const { colors } = useLeadsTheme();
     const { user } = useAuth();
     const { viewMode, canToggle } = useViewMode();
     const router = useRouter();
+    const reduced = useReducedMotion();
     const isManagerView = canToggle && viewMode === 'manager';
 
     const [search, setSearch] = useState('');
@@ -44,14 +47,12 @@ export default function LeadsListScreen() {
     // Realtime: prepend new leads from MKTR (or any source)
     const handleNewLead = useCallback((newLead: Lead) => {
         setLeads((prev) => {
-            // Avoid duplicates
             if (prev.some((l) => l.id === newLead.id)) return prev;
             return [newLead, ...prev];
         });
     }, []);
     useLeadRealtime(handleNewLead);
 
-    // Fetch leads from Supabase
     const loadLeads = useCallback(async () => {
         if (!user?.id) return;
         setError(null);
@@ -64,7 +65,6 @@ export default function LeadsListScreen() {
         setIsLoading(false);
     }, [user?.id, isManagerView]);
 
-    // Re-fetch on focus (e.g., after adding a lead)
     useFocusEffect(
         useCallback(() => {
             loadLeads();
@@ -85,141 +85,159 @@ export default function LeadsListScreen() {
         setRefreshing(false);
     }, [loadLeads]);
 
+    // ── Header: editorial title + Add ───────────────────────────────────────
+    const header = (
+        <View style={styles.titleRow}>
+            <Txt role="display" weight="semibold" size={30} color={colors.text} tracking={-0.5}>
+                Leads
+            </Txt>
+            <TouchableOpacity
+                style={[styles.addButton, { backgroundColor: colors.accent }]}
+                onPress={() => router.push('/(tabs)/leads/add')}
+                accessibilityRole="button"
+                testID="leads-add-button"
+                accessibilityLabel="Add new lead"
+            >
+                <Ionicons name="add" size={20} color={colors.textInverse} />
+                <Txt role="body" weight="bold" size={14} color={colors.textInverse}>
+                    Add
+                </Txt>
+            </TouchableOpacity>
+        </View>
+    );
+
+    const controls = (
+        <View style={styles.controls}>
+            <View style={[styles.searchBar, { backgroundColor: colors.surface, borderColor: colors.border }]}>
+                <Ionicons name="search" size={18} color={colors.textFaint} />
+                <TextInput
+                    testID="leads-search-input"
+                    style={[styles.searchInput, { color: colors.text }]}
+                    placeholder="Search by name or phone…"
+                    placeholderTextColor={colors.textFaint}
+                    value={search}
+                    onChangeText={setSearch}
+                    returnKeyType="search"
+                    accessibilityLabel="Search leads"
+                    accessibilityHint="Search by name or phone number"
+                />
+                {search.length > 0 && (
+                    <TouchableOpacity
+                        onPress={() => setSearch('')}
+                        hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                        accessibilityRole="button"
+                        accessibilityLabel="Clear search"
+                    >
+                        <Ionicons name="close-circle" size={18} color={colors.textFaint} />
+                    </TouchableOpacity>
+                )}
+            </View>
+
+            <FlatList
+                data={FILTER_TABS}
+                horizontal
+                showsHorizontalScrollIndicator={false}
+                keyExtractor={(item) => item.key}
+                style={styles.filterList}
+                contentContainerStyle={styles.filterRow}
+                renderItem={({ item }) => {
+                    const isActive = activeFilter === item.key;
+                    const count = counts[item.key] || 0;
+                    return (
+                        <TouchableOpacity
+                            testID={`leads-filter-chip-${item.key}`}
+                            style={[
+                                styles.filterChip,
+                                {
+                                    backgroundColor: isActive ? colors.accent : colors.surface,
+                                    borderColor: isActive ? colors.accent : colors.border,
+                                },
+                            ]}
+                            onPress={() => setActiveFilter(item.key)}
+                            accessibilityRole="button"
+                            accessibilityLabel={`Filter by ${item.label}`}
+                            accessibilityState={{ selected: isActive }}
+                        >
+                            <Txt
+                                role="body"
+                                weight="semibold"
+                                size={13}
+                                color={isActive ? colors.textInverse : colors.textMuted}
+                            >
+                                {item.label}
+                            </Txt>
+                            <Txt role="mono" size={12} color={isActive ? colors.textInverse : colors.textFaint}>
+                                {count}
+                            </Txt>
+                        </TouchableOpacity>
+                    );
+                }}
+            />
+        </View>
+    );
+
     if (isLoading) {
         return (
             <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]} edges={['top']}>
-                <ScreenHeader title="Leads" />
-                <LoadingState />
+                <View style={styles.stickyHeader}>
+                    {header}
+                    {controls}
+                </View>
+                <View style={styles.listContent}>
+                    {[0, 1, 2, 3].map((i) => (
+                        <LeadCardSkeleton key={i} opacity={1 - i * 0.18} />
+                    ))}
+                </View>
             </SafeAreaView>
         );
     }
 
+    const emptyNode =
+        search.trim().length > 0 ? (
+            <CompactEmpty icon="search-outline" text={`No results for "${search}"`} />
+        ) : leads.length === 0 ? (
+            <LeadsEmptyState
+                icon="flash-outline"
+                title="You're all caught up"
+                body="New leads land here the moment they arrive — we'll buzz your phone, so keep it close."
+                footer={<LivePill label="Listening for new leads…" />}
+            />
+        ) : (
+            <CompactEmpty icon="funnel-outline" text="No leads match this filter." />
+        );
+
     return (
         <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]} edges={['top']}>
-            {/* Header */}
-            <ScreenHeader
-                title="Leads"
-                rightAction={
-                    <TouchableOpacity
-                        style={[styles.addButton, { backgroundColor: colors.accent }]}
-                        onPress={() => router.push('/(tabs)/leads/add')}
-                        accessibilityRole="button"
-                        testID="leads-add-button"
-                        accessibilityLabel="Add new lead"
-                    >
-                        <Ionicons name="add" size={20} color={colors.textInverse} />
-                        <Text style={[styles.addButtonText, { color: colors.textInverse }]}>Add</Text>
-                    </TouchableOpacity>
-                }
-            />
-
-            {/* Search */}
             <View style={styles.stickyHeader}>
-                <View
-                    style={[styles.searchBar, { backgroundColor: colors.cardBackground, borderColor: colors.border }]}
-                >
-                    <Ionicons name="search" size={18} color={colors.textTertiary} />
-                    <TextInput
-                        testID="leads-search-input"
-                        style={[styles.searchInput, { color: colors.textPrimary }]}
-                        placeholder="Search by name or phone..."
-                        placeholderTextColor={colors.textTertiary}
-                        value={search}
-                        onChangeText={setSearch}
-                        returnKeyType="search"
-                        accessibilityLabel="Search leads"
-                        accessibilityHint="Search by name or phone number"
-                    />
-                    {search.length > 0 && (
-                        <TouchableOpacity
-                            onPress={() => setSearch('')}
-                            hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-                            accessibilityRole="button"
-                            accessibilityLabel="Clear search"
-                        >
-                            <Ionicons name="close-circle" size={18} color={colors.textTertiary} />
-                        </TouchableOpacity>
-                    )}
-                </View>
-
-                {/* Filter Chips */}
-                <FlatList
-                    data={FILTER_TABS}
-                    horizontal
-                    showsHorizontalScrollIndicator={false}
-                    keyExtractor={(item) => item.key}
-                    style={styles.filterList}
-                    contentContainerStyle={styles.filterRow}
-                    renderItem={({ item }) => {
-                        const isActive = activeFilter === item.key;
-                        const count = counts[item.key] || 0;
-                        return (
-                            <TouchableOpacity
-                                testID={`leads-filter-chip-${item.key}`}
-                                style={[
-                                    styles.filterChip,
-                                    {
-                                        backgroundColor: isActive ? colors.accent : colors.cardBackground,
-                                        borderColor: isActive ? colors.accent : colors.border,
-                                    },
-                                ]}
-                                onPress={() => setActiveFilter(item.key)}
-                                accessibilityRole="button"
-                                accessibilityLabel={`Filter by ${item.label}`}
-                                accessibilityState={{ selected: isActive }}
-                            >
-                                <Text
-                                    style={[
-                                        styles.filterChipText,
-                                        { color: isActive ? colors.textInverse : colors.textSecondary },
-                                    ]}
-                                >
-                                    {item.label}
-                                </Text>
-                                <Text
-                                    style={[
-                                        styles.filterChipCount,
-                                        { color: isActive ? 'rgba(255,255,255,0.8)' : colors.textTertiary },
-                                    ]}
-                                >
-                                    {count}
-                                </Text>
-                            </TouchableOpacity>
-                        );
-                    }}
-                />
+                {header}
+                {controls}
             </View>
 
-            {/* Error Banner */}
             {error && (
-                <View style={{ paddingHorizontal: 16 }}>
+                <View style={{ paddingHorizontal: spacing.lg }}>
                     <ErrorBanner message={error} onRetry={loadLeads} />
                 </View>
             )}
 
-            {/* Lead List */}
             <FlatList
                 testID="leads-list"
                 data={filteredLeads}
                 keyExtractor={(item) => item.id}
-                contentContainerStyle={styles.listContent}
+                contentContainerStyle={filteredLeads.length === 0 ? styles.listEmpty : styles.listContent}
                 showsVerticalScrollIndicator={false}
                 refreshControl={
                     <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={colors.accent} />
                 }
-                removeClippedSubviews={true}
                 maxToRenderPerBatch={10}
                 windowSize={5}
                 initialNumToRender={10}
-                ListEmptyComponent={
-                    <EmptyState
-                        icon="search-outline"
-                        title="No leads found"
-                        subtitle={search.trim() ? `No results for "${search}"` : 'No leads match this filter'}
-                    />
-                }
-                renderItem={({ item }) => (
-                    <LeadCard lead={item} onPress={() => router.push(`/(tabs)/leads/${item.id}`)} />
+                ListEmptyComponent={<View style={styles.emptyWrap}>{emptyNode}</View>}
+                renderItem={({ item, index }) => (
+                    <Animated.View
+                        entering={reduced ? undefined : FadeInUp.duration(280).delay(Math.min(index, 6) * 55)}
+                    >
+                        <LeadListCard lead={item} onPress={() => router.push(`/(tabs)/leads/${item.id}`)} />
+                    </Animated.View>
                 )}
             />
         </SafeAreaView>
@@ -228,6 +246,13 @@ export default function LeadsListScreen() {
 
 const styles = StyleSheet.create({
     container: { flex: 1 },
+    stickyHeader: { paddingHorizontal: spacing.lg, paddingTop: spacing.md },
+    titleRow: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'space-between',
+        marginBottom: spacing.md,
+    },
     addButton: {
         flexDirection: 'row',
         alignItems: 'center',
@@ -236,12 +261,7 @@ const styles = StyleSheet.create({
         paddingVertical: 9,
         borderRadius: 20,
     },
-    addButtonText: { fontSize: 14, fontWeight: '700' },
-    stickyHeader: {
-        paddingHorizontal: 16,
-        paddingTop: 16,
-        paddingBottom: 4,
-    },
+    controls: {},
     searchBar: {
         flexDirection: 'row',
         alignItems: 'center',
@@ -250,22 +270,11 @@ const styles = StyleSheet.create({
         borderWidth: 1,
         paddingHorizontal: 14,
         paddingVertical: 10,
-        marginBottom: 16,
+        marginBottom: spacing.md,
     },
-    searchInput: {
-        flex: 1,
-        fontSize: 15,
-        padding: 0,
-    },
-    filterList: {
-        flexGrow: 0,
-        marginHorizontal: -16,
-    },
-    filterRow: {
-        gap: 8,
-        paddingHorizontal: 16,
-        paddingBottom: 4,
-    },
+    searchInput: { flex: 1, fontSize: 15, padding: 0 },
+    filterList: { flexGrow: 0, marginHorizontal: -spacing.lg },
+    filterRow: { gap: 8, paddingHorizontal: spacing.lg, paddingBottom: spacing.xs },
     filterChip: {
         flexDirection: 'row',
         alignItems: 'center',
@@ -275,12 +284,7 @@ const styles = StyleSheet.create({
         borderRadius: 20,
         borderWidth: 1,
     },
-    filterChipText: { fontSize: 13, fontWeight: '600' },
-    filterChipCount: { fontSize: 12, fontWeight: '500' },
-    listContent: {
-        paddingHorizontal: 16,
-        paddingTop: 8,
-        paddingBottom: 16,
-        flexGrow: 1,
-    },
+    listContent: { paddingHorizontal: spacing.lg, paddingTop: spacing.sm, paddingBottom: spacing.lg, flexGrow: 1 },
+    listEmpty: { flexGrow: 1 },
+    emptyWrap: { flex: 1, minHeight: 340, alignItems: 'center', justifyContent: 'center', paddingBottom: 40 },
 });
