@@ -6,6 +6,7 @@ import ReassignModal from '@/components/leads/ReassignModal';
 import RecordingCard from '@/components/leads/RecordingCard';
 import { LogActivitySheet, type LogResult, type LogType } from '@/components/leads/LogActivitySheet';
 import { FollowUpSheet } from '@/components/leads/FollowUpSheet';
+import { KeyFactsSheet } from '@/components/leads/KeyFactsSheet';
 import { Txt, Eyebrow, Monogram, StatusChip } from '@/components/leads/ui';
 import { useAuth } from '@/contexts/AuthContext';
 import { useViewMode } from '@/contexts/ViewModeContext';
@@ -13,7 +14,15 @@ import { useLeadDetail } from '@/hooks/useLeadDetail';
 import { timeAgo } from '@/lib/dateTime';
 import { addLeadActivity } from '@/lib/leads';
 import { scheduleFollowUpReminder, cancelFollowUpReminder, warnRemindersDisabled } from '@/lib/leads/reminders';
-import { resolveLeadSource, displayLeadId, parseLeadNotes, timelineActivities, deriveFollowUp } from '@/lib/leads/meta';
+import {
+    resolveLeadSource,
+    displayLeadId,
+    parseLeadNotes,
+    timelineActivities,
+    deriveFollowUp,
+    deriveKeyFacts,
+    type KeyFact,
+} from '@/lib/leads/meta';
 import {
     useLeadsTheme,
     useLeadsThemedStyles,
@@ -91,6 +100,10 @@ export default function LeadDetailScreen() {
     // Follow-ups — owner-only.
     const [followUpOpen, setFollowUpOpen] = useState(false);
     const [followUpBusy, setFollowUpBusy] = useState(false);
+
+    // Key facts — owner-only edit.
+    const [keyFactsOpen, setKeyFactsOpen] = useState(false);
+    const [keyFactsBusy, setKeyFactsBusy] = useState(false);
 
     useEffect(() => {
         const subscription = AppState.addEventListener('change', (nextState) => {
@@ -242,6 +255,18 @@ export default function LeadDetailScreen() {
         }
     };
 
+    const saveKeyFacts = async (facts: KeyFact[]) => {
+        if (!user?.id || !leadId) return;
+        setKeyFactsBusy(true);
+        try {
+            await addLeadActivity(leadId, user.id, 'key_facts', null, { facts });
+            setKeyFactsOpen(false);
+            await loadData();
+        } finally {
+            setKeyFactsBusy(false);
+        }
+    };
+
     const src = resolveLeadSource(lead);
     const leadIdLabel = displayLeadId(lead);
     const mktrRows = lead.source_name === 'mktr' ? parseLeadNotes(lead.notes) : [];
@@ -256,6 +281,7 @@ export default function LeadDetailScreen() {
               minute: '2-digit',
           })
         : null;
+    const keyFacts = deriveKeyFacts(activities);
 
     return (
         <SafeAreaView style={styles.root} edges={['top']}>
@@ -590,6 +616,57 @@ export default function LeadDetailScreen() {
                     </View>
                 </View>
 
+                {/* key facts — visible to all; editable by the owner */}
+                {keyFacts.length || !isManagerView ? (
+                    <View style={styles.card}>
+                        <View style={styles.cardHead}>
+                            <Ionicons name="bookmark" size={16} color={colors.accent} />
+                            <Txt role="body" weight="bold" size={14.5} color={colors.text}>
+                                Key facts
+                            </Txt>
+                            <View style={{ flex: 1 }} />
+                            {!isManagerView ? (
+                                <Pressable
+                                    testID="lead-keyfacts-edit"
+                                    onPress={() => setKeyFactsOpen(true)}
+                                    hitSlop={8}
+                                    accessibilityRole="button"
+                                    accessibilityLabel="Edit key facts"
+                                >
+                                    <Txt role="body" weight="semibold" size={13.5} color={colors.accent}>
+                                        Edit
+                                    </Txt>
+                                </Pressable>
+                            ) : null}
+                        </View>
+                        {keyFacts.length ? (
+                            <View style={{ gap: 11 }}>
+                                {keyFacts.map((f, i) => (
+                                    <View key={`${f.label}-${i}`} style={styles.factRow}>
+                                        <Txt role="body" size={13} color={colors.textFaint} style={styles.factLabel}>
+                                            {f.label}
+                                        </Txt>
+                                        <Txt
+                                            role="body"
+                                            weight="medium"
+                                            size={14}
+                                            color={colors.text}
+                                            leading={20}
+                                            style={{ flex: 1 }}
+                                        >
+                                            {f.value}
+                                        </Txt>
+                                    </View>
+                                ))}
+                            </View>
+                        ) : (
+                            <Txt role="body" size={13.5} color={colors.textFaint} leading={20}>
+                                No key facts yet — tap Edit to capture what matters (looking for, budget, good to know).
+                            </Txt>
+                        )}
+                    </View>
+                ) : null}
+
                 {/* recording / transcript */}
                 {lead.recording_url || lead.transcript ? (
                     <RecordingCard recordingUrl={lead.recording_url} transcript={lead.transcript} />
@@ -667,6 +744,13 @@ export default function LeadDetailScreen() {
                         initial={followUp}
                         busy={followUpBusy}
                         onSave={saveFollowUp}
+                    />
+                    <KeyFactsSheet
+                        visible={keyFactsOpen}
+                        onClose={() => setKeyFactsOpen(false)}
+                        initial={keyFacts}
+                        busy={keyFactsBusy}
+                        onSave={saveKeyFacts}
                     />
                 </>
             ) : null}
