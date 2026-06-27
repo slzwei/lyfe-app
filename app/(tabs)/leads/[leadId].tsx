@@ -4,11 +4,14 @@ import ContactConfirmModal from '@/components/leads/ContactConfirmModal';
 import NoteInput from '@/components/leads/NoteInput';
 import ReassignModal from '@/components/leads/ReassignModal';
 import RecordingCard from '@/components/leads/RecordingCard';
+import { LogActivitySheet, type LogResult, type LogType } from '@/components/leads/LogActivitySheet';
 import { Txt, Eyebrow, Monogram, StatusChip } from '@/components/leads/ui';
 import { useAuth } from '@/contexts/AuthContext';
 import { useViewMode } from '@/contexts/ViewModeContext';
 import { useLeadDetail } from '@/hooks/useLeadDetail';
 import { timeAgo } from '@/lib/dateTime';
+import { addLeadActivity } from '@/lib/leads';
+import { scheduleFollowUpReminder, warnRemindersDisabled } from '@/lib/leads/reminders';
 import { resolveLeadSource, displayLeadId, parseLeadNotes, timelineActivities } from '@/lib/leads/meta';
 import {
     useLeadsTheme,
@@ -78,6 +81,11 @@ export default function LeadDetailScreen() {
     const [confettiKey, setConfettiKey] = useState(0);
     const confettiTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
     useEffect(() => () => clearTimeout(confettiTimer.current), []);
+
+    // Rich activity logging (＋ Log) — owner-only.
+    const [logOpen, setLogOpen] = useState(false);
+    const [logType, setLogType] = useState<LogType>('note');
+    const [logBusy, setLogBusy] = useState(false);
 
     useEffect(() => {
         const subscription = AppState.addEventListener('change', (nextState) => {
@@ -173,6 +181,34 @@ export default function LeadDetailScreen() {
         setShowConfetti(true);
         clearTimeout(confettiTimer.current);
         confettiTimer.current = setTimeout(() => setShowConfetti(false), CONFETTI_DURATION);
+    };
+
+    const saveLog = async (r: LogResult) => {
+        if (!user?.id || !leadId) return;
+        setLogBusy(true);
+        try {
+            const desc = r.note || `${r.type.charAt(0).toUpperCase()}${r.type.slice(1)}`;
+            await addLeadActivity(leadId, user.id, r.type, desc, {
+                ...(r.outcome ? { outcome: r.outcome } : {}),
+                ...(r.nextStep ? { next_step: r.nextStep } : {}),
+            });
+            if (r.followUp) {
+                let reminderId: string | null = null;
+                const res = await scheduleFollowUpReminder(r.followUp.at, lead.full_name || 'Lead', r.followUp.task);
+                if (res.result === 'scheduled') reminderId = res.id;
+                else if (res.result === 'denied') warnRemindersDisabled();
+                await addLeadActivity(leadId, user.id, 'follow_up', r.followUp.task, {
+                    next_follow_up_at: r.followUp.at.toISOString(),
+                    task: r.followUp.task,
+                    remind: r.followUp.remind,
+                    ...(reminderId ? { reminder_id: reminderId } : {}),
+                });
+            }
+            setLogOpen(false);
+            await loadData();
+        } finally {
+            setLogBusy(false);
+        }
     };
 
     const src = resolveLeadSource(lead);
@@ -479,6 +515,25 @@ export default function LeadDetailScreen() {
                                 {timelineActivities(activities).length}
                             </Txt>
                         </View>
+                        <View style={{ flex: 1 }} />
+                        {!isManagerView ? (
+                            <Pressable
+                                testID="lead-log-action"
+                                onPress={() => {
+                                    setLogType('note');
+                                    setLogOpen(true);
+                                }}
+                                style={[styles.logPill, { backgroundColor: alpha(colors.accent, 0.14) }]}
+                                accessibilityRole="button"
+                                accessibilityLabel="Log activity"
+                                hitSlop={6}
+                            >
+                                <Ionicons name="add" size={14} color={colors.accent} />
+                                <Txt role="body" weight="bold" size={13} color={colors.accent}>
+                                    Log
+                                </Txt>
+                            </Pressable>
+                        ) : null}
                     </View>
                     {timelineActivities(activities).length ? (
                         <ActivityFeed activities={activities} />
@@ -506,6 +561,17 @@ export default function LeadDetailScreen() {
                 onSelect={handleReassign}
                 onClose={() => setShowReassignModal(false)}
             />
+
+            {!isManagerView ? (
+                <LogActivitySheet
+                    visible={logOpen}
+                    onClose={() => setLogOpen(false)}
+                    leadName={lead.full_name || 'Lead'}
+                    defaultType={logType}
+                    busy={logBusy}
+                    onSave={saveLog}
+                />
+            ) : null}
 
             <Confetti visible={showConfetti} confettiKey={confettiKey} />
         </SafeAreaView>
@@ -618,5 +684,13 @@ const makeStyles = ({ colors }: LeadsTheme) =>
         factRow: { flexDirection: 'row', gap: 12 },
         factLabel: { width: 88, flexShrink: 0 },
         activityHead: { flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 14 },
+        logPill: {
+            flexDirection: 'row',
+            alignItems: 'center',
+            gap: 5,
+            paddingVertical: 6,
+            paddingHorizontal: 11,
+            borderRadius: 99,
+        },
         countPill: { minWidth: 24, paddingHorizontal: 7, paddingVertical: 2, borderRadius: 99, alignItems: 'center' },
     });
