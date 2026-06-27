@@ -14,15 +14,19 @@ jest.mock('@/contexts/AuthContext', () => ({
 
 const mockSupa = supabase as any;
 
-let channelCallback: Function;
+let insertCallback: Function;
+let updateCallback: Function;
 let mockChannel: any;
 
 beforeEach(() => {
     jest.clearAllMocks();
 
+    insertCallback = undefined as any;
+    updateCallback = undefined as any;
     mockChannel = {
-        on: jest.fn((_event: string, _opts: any, callback: Function) => {
-            channelCallback = callback;
+        on: jest.fn((_event: string, opts: any, callback: Function) => {
+            if (opts?.event === 'UPDATE') updateCallback = callback;
+            else insertCallback = callback;
             return mockChannel;
         }),
         subscribe: jest.fn().mockReturnThis(),
@@ -57,9 +61,39 @@ describe('useLeadRealtime', () => {
         renderHook(() => useLeadRealtime(onNewLead));
 
         const newLead = { id: 'lead-1', full_name: 'John Tan', assigned_to: 'user-1' };
-        channelCallback({ new: newLead });
+        insertCallback({ new: newLead });
 
         expect(onNewLead).toHaveBeenCalledWith(newLead);
+    });
+
+    it('subscribes to UPDATE and calls onUpdate when an owned lead changes', () => {
+        const onNewLead = jest.fn();
+        const onUpdate = jest.fn();
+
+        renderHook(() => useLeadRealtime(onNewLead, onUpdate));
+
+        expect(mockChannel.on).toHaveBeenCalledWith(
+            'postgres_changes',
+            {
+                event: 'UPDATE',
+                schema: 'public',
+                table: 'leads',
+                filter: 'assigned_to=eq.user-1',
+            },
+            expect.any(Function),
+        );
+
+        updateCallback({ new: { id: 'lead-1', status: 'archived' } });
+        expect(onUpdate).toHaveBeenCalledTimes(1);
+        expect(onNewLead).not.toHaveBeenCalled();
+    });
+
+    it('does not throw when onUpdate is omitted and an update arrives', () => {
+        const onNewLead = jest.fn();
+
+        renderHook(() => useLeadRealtime(onNewLead));
+
+        expect(() => updateCallback({ new: { id: 'lead-1' } })).not.toThrow();
     });
 
     it('resets retry count on SUBSCRIBED status', () => {

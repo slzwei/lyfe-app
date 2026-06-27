@@ -8,6 +8,7 @@ import { LogActivitySheet, type LogResult, type LogType } from '@/components/lea
 import { FollowUpSheet } from '@/components/leads/FollowUpSheet';
 import { KeyFactsSheet } from '@/components/leads/KeyFactsSheet';
 import { LeadActionsSheet } from '@/components/leads/LeadActionsSheet';
+import { ScPrConfirmDialog } from '@/components/leads/ScPrConfirmDialog';
 import { Txt, Eyebrow, Monogram, StatusChip } from '@/components/leads/ui';
 import { useAuth } from '@/contexts/AuthContext';
 import { useViewMode } from '@/contexts/ViewModeContext';
@@ -36,7 +37,7 @@ import {
     type LeadsTheme,
 } from '@/lib/leads/theme';
 import { formatSgPhone } from '@/lib/phone';
-import { LEAD_STATUSES, PRODUCT_LABELS, SOURCE_LABELS } from '@/types/lead';
+import { LEAD_STATUSES, PRODUCT_LABELS, SOURCE_LABELS, type LeadStatus } from '@/types/lead';
 import { Ionicons } from '@expo/vector-icons';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { KeyboardAwareScrollView } from 'react-native-keyboard-controller';
@@ -108,6 +109,10 @@ export default function LeadDetailScreen() {
 
     // Archive actions — owner-only.
     const [actionsOpen, setActionsOpen] = useState(false);
+
+    // SC/PR confirm gate before `qualified` (fires ConfirmedResident to Meta).
+    const [scPrOpen, setScPrOpen] = useState(false);
+    const [scPrBusy, setScPrBusy] = useState(false);
 
     useEffect(() => {
         const subscription = AppState.addEventListener('change', (nextState) => {
@@ -281,6 +286,32 @@ export default function LeadDetailScreen() {
         if (!user?.id || !leadId) return;
         setActionsOpen(false);
         await setLeadArchived(leadId, false, user.id);
+        await loadData();
+    };
+
+    // Status changes. `qualified` is gated behind the SC/PR confirm (it reports a
+    // ConfirmedResident conversion to Meta via the live outcome trigger); `won`
+    // celebrates only on a confirmed transition.
+    const onStatusPress = async (s: LeadStatus) => {
+        if (s === currentStatus) return;
+        if (s === 'qualified') {
+            setScPrOpen(true);
+            return;
+        }
+        const wasWon = currentStatus === 'won';
+        const ok = await handleChangeStatus(s);
+        if (ok && s === 'won' && !wasWon) celebrateWin();
+    };
+    const confirmScPrYes = async () => {
+        setScPrBusy(true);
+        const ok = await handleChangeStatus('qualified');
+        setScPrBusy(false);
+        if (ok) setScPrOpen(false);
+    };
+    const confirmScPrNo = async () => {
+        if (!user?.id || !leadId) return;
+        setScPrOpen(false);
+        await addLeadActivity(leadId, user.id, 'note', 'Marked not Singapore Citizen / PR', { sc_pr: false });
         await loadData();
     };
 
@@ -541,13 +572,7 @@ export default function LeadDetailScreen() {
                                         key={s}
                                         testID={`lead-status-pill-${s}`}
                                         disabled={isUpdatingStatus}
-                                        onPress={async () => {
-                                            const wasWon = currentStatus === 'won';
-                                            const ok = await handleChangeStatus(s);
-                                            // Only celebrate once the server actually confirms the win
-                                            // (handleChangeStatus is optimistic + rolls back on failure).
-                                            if (ok && s === 'won' && !wasWon) celebrateWin();
-                                        }}
+                                        onPress={() => onStatusPress(s)}
                                         accessibilityRole="button"
                                         accessibilityState={{ selected: active }}
                                         accessibilityLabel={`Set status ${STATUS_LABELS[s]}`}
@@ -784,6 +809,13 @@ export default function LeadDetailScreen() {
                         isArchived={!!lead.archived_at}
                         onArchive={doArchive}
                         onUnarchive={doUnarchive}
+                    />
+                    <ScPrConfirmDialog
+                        visible={scPrOpen}
+                        busy={scPrBusy}
+                        onYes={confirmScPrYes}
+                        onNo={confirmScPrNo}
+                        onClose={() => setScPrOpen(false)}
                     />
                 </>
             ) : null}

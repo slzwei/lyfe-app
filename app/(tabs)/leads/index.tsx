@@ -60,7 +60,6 @@ export default function LeadsListScreen() {
         },
         [showArchived],
     );
-    useLeadRealtime(handleNewLead);
 
     const loadLeads = useCallback(async () => {
         if (!user?.id) return;
@@ -79,6 +78,9 @@ export default function LeadsListScreen() {
         }
         setIsLoading(false);
     }, [user?.id, isManagerView, showArchived]);
+
+    // INSERT prepends a new lead; UPDATE (reassign/archive/status) refetches.
+    useLeadRealtime(handleNewLead, loadLeads);
 
     useFocusEffect(
         useCallback(() => {
