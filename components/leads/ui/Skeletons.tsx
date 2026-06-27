@@ -15,7 +15,7 @@ export function LivePill({ label }: { label: string }) {
     return (
         <View style={[styles.pill, { backgroundColor: colors.surfaceAlt }]}>
             <View style={[styles.dot, { backgroundColor: colors.success }]} />
-            <Txt role="mono" size={12.5} color={colors.textMuted}>
+            <Txt role="body" size={13} color={colors.textMuted}>
                 {label}
             </Txt>
         </View>

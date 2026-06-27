@@ -10,7 +10,7 @@ import type { Lead, LeadStatus } from '@/types/lead';
 import { useFilteredList } from '@/hooks/useFilteredList';
 import { Ionicons } from '@expo/vector-icons';
 import { useFocusEffect, useRouter } from 'expo-router';
-import React, { useCallback, useState } from 'react';
+import React, { useCallback, useRef, useState } from 'react';
 import { FlatList, RefreshControl, StyleSheet, TextInput, TouchableOpacity, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import Animated, { FadeInUp, useReducedMotion } from 'react-native-reanimated';
@@ -36,6 +36,9 @@ export default function LeadsListScreen() {
     const router = useRouter();
     const reduced = useReducedMotion();
     const isManagerView = canToggle && viewMode === 'manager';
+    // Track which rows have already animated, so virtualization recycle doesn't
+    // re-fire FadeInUp (and leave recycled rows briefly blank) on scroll-back.
+    const seenIds = useRef<Set<string>>(new Set());
 
     const [search, setSearch] = useState('');
     const [activeFilter, setActiveFilter] = useState<LeadStatus | 'all'>('all');
@@ -107,7 +110,7 @@ export default function LeadsListScreen() {
     );
 
     const controls = (
-        <View style={styles.controls}>
+        <View>
             <View style={[styles.searchBar, { backgroundColor: colors.surface, borderColor: colors.border }]}>
                 <Ionicons name="search" size={18} color={colors.textFaint} />
                 <TextInput
@@ -166,7 +169,12 @@ export default function LeadsListScreen() {
                             >
                                 {item.label}
                             </Txt>
-                            <Txt role="mono" size={12} color={isActive ? colors.textInverse : colors.textFaint}>
+                            <Txt
+                                role="body"
+                                weight="semibold"
+                                size={13}
+                                color={isActive ? colors.textInverse : colors.textFaint}
+                            >
                                 {count}
                             </Txt>
                         </TouchableOpacity>
@@ -232,13 +240,23 @@ export default function LeadsListScreen() {
                 windowSize={5}
                 initialNumToRender={10}
                 ListEmptyComponent={<View style={styles.emptyWrap}>{emptyNode}</View>}
-                renderItem={({ item, index }) => (
-                    <Animated.View
-                        entering={reduced ? undefined : FadeInUp.duration(280).delay(Math.min(index, 6) * 55)}
-                    >
-                        <LeadListCard lead={item} onPress={() => router.push(`/(tabs)/leads/${item.id}`)} />
-                    </Animated.View>
-                )}
+                renderItem={({ item, index }) => {
+                    // Animate each row only on its FIRST appearance — recycled rows
+                    // (virtualization) must not re-run the entrance on scroll-back.
+                    const firstSeen = !seenIds.current.has(item.id);
+                    seenIds.current.add(item.id);
+                    return (
+                        <Animated.View
+                            entering={
+                                reduced || !firstSeen
+                                    ? undefined
+                                    : FadeInUp.duration(280).delay(Math.min(index, 6) * 55)
+                            }
+                        >
+                            <LeadListCard lead={item} onPress={() => router.push(`/(tabs)/leads/${item.id}`)} />
+                        </Animated.View>
+                    );
+                }}
             />
         </SafeAreaView>
     );
@@ -261,7 +279,6 @@ const styles = StyleSheet.create({
         paddingVertical: 9,
         borderRadius: 20,
     },
-    controls: {},
     searchBar: {
         flexDirection: 'row',
         alignItems: 'center',
@@ -281,6 +298,7 @@ const styles = StyleSheet.create({
         gap: 6,
         paddingHorizontal: 16,
         paddingVertical: 8,
+        minHeight: 44,
         borderRadius: 20,
         borderWidth: 1,
     },

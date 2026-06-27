@@ -3,7 +3,7 @@ import FormField from '@/components/FormField';
 import { Txt } from '@/components/leads/ui';
 import { KeyboardAwareScrollView } from 'react-native-keyboard-controller';
 import { useAuth } from '@/contexts/AuthContext';
-import { useLeadsTheme, spacing, radius } from '@/lib/leads/theme';
+import { useLeadsTheme, spacing, radius, type LeadsThemeColors } from '@/lib/leads/theme';
 import { createLead, type CreateLeadInput } from '@/lib/leads';
 import { PRODUCT_LABELS, SOURCE_LABELS, type LeadSource, type ProductInterest } from '@/types/lead';
 import { Ionicons } from '@expo/vector-icons';
@@ -75,48 +75,17 @@ export default function AddLeadScreen() {
 
     const canViewLeads = user?.role && ['admin', 'director', 'manager', 'agent'].includes(user.role);
 
-    const Header = ({ cancelLabel }: { cancelLabel: string }) => (
-        <View style={[styles.headerBar, { borderBottomColor: colors.border }]}>
-            <TouchableOpacity
-                onPress={() => router.back()}
-                style={styles.cancelBtn}
-                accessibilityRole="button"
-                accessibilityLabel={cancelLabel === 'Cancel' ? 'Cancel and go back' : 'Go back'}
-            >
-                <Txt role="body" weight="semibold" size={15} color={colors.textMuted}>
-                    {cancelLabel}
-                </Txt>
-            </TouchableOpacity>
-            <Txt role="display" weight="semibold" size={18} color={colors.text} tracking={-0.3}>
-                New Lead
-            </Txt>
-            {cancelLabel === 'Cancel' ? (
-                <TouchableOpacity
-                    onPress={handleSave}
-                    style={[styles.saveBtn, { backgroundColor: colors.accent, opacity: isSaving ? 0.5 : 1 }]}
-                    disabled={isSaving}
-                    accessibilityRole="button"
-                    testID="add-lead-save"
-                    accessibilityLabel="Save new lead"
-                >
-                    {isSaving ? (
-                        <ActivityIndicator size="small" color={colors.textInverse} />
-                    ) : (
-                        <Txt role="body" weight="bold" size={14} color={colors.textInverse}>
-                            Save
-                        </Txt>
-                    )}
-                </TouchableOpacity>
-            ) : (
-                <View style={styles.cancelBtn} />
-            )}
-        </View>
-    );
-
     if (!canViewLeads) {
         return (
             <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]}>
-                <Header cancelLabel="Back" />
+                <AddLeadHeader
+                    colors={colors}
+                    cancelLabel="Back"
+                    showSave={false}
+                    isSaving={isSaving}
+                    onBack={() => router.back()}
+                    onSave={handleSave}
+                />
                 <View style={styles.lockWrap}>
                     <Ionicons name="lock-closed-outline" size={48} color={colors.textFaint} />
                     <Txt role="display" weight="semibold" size={18} color={colors.text} style={{ marginTop: 16 }}>
@@ -132,7 +101,14 @@ export default function AddLeadScreen() {
 
     return (
         <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]}>
-            <Header cancelLabel="Cancel" />
+            <AddLeadHeader
+                colors={colors}
+                cancelLabel="Cancel"
+                showSave
+                isSaving={isSaving}
+                onBack={() => router.back()}
+                onSave={handleSave}
+            />
 
             <KeyboardAwareScrollView
                 style={styles.scrollView}
@@ -251,6 +227,60 @@ export default function AddLeadScreen() {
                 </View>
             </Modal>
         </SafeAreaView>
+    );
+}
+
+function AddLeadHeader({
+    colors,
+    cancelLabel,
+    showSave,
+    isSaving,
+    onBack,
+    onSave,
+}: {
+    colors: LeadsThemeColors;
+    cancelLabel: string;
+    showSave: boolean;
+    isSaving: boolean;
+    onBack: () => void;
+    onSave: () => void;
+}) {
+    return (
+        <View style={[styles.headerBar, { borderBottomColor: colors.border }]}>
+            <TouchableOpacity
+                onPress={onBack}
+                style={styles.cancelBtn}
+                accessibilityRole="button"
+                accessibilityLabel={showSave ? 'Cancel and go back' : 'Go back'}
+            >
+                <Txt role="body" weight="semibold" size={15} color={colors.textMuted}>
+                    {cancelLabel}
+                </Txt>
+            </TouchableOpacity>
+            <Txt role="display" weight="semibold" size={18} color={colors.text} tracking={-0.3}>
+                New Lead
+            </Txt>
+            {showSave ? (
+                <TouchableOpacity
+                    onPress={onSave}
+                    style={[styles.saveBtn, { backgroundColor: colors.accent, opacity: isSaving ? 0.5 : 1 }]}
+                    disabled={isSaving}
+                    accessibilityRole="button"
+                    testID="add-lead-save"
+                    accessibilityLabel="Save new lead"
+                >
+                    {isSaving ? (
+                        <ActivityIndicator size="small" color={colors.textInverse} />
+                    ) : (
+                        <Txt role="body" weight="bold" size={14} color={colors.textInverse}>
+                            Save
+                        </Txt>
+                    )}
+                </TouchableOpacity>
+            ) : (
+                <View style={styles.cancelBtn} />
+            )}
+        </View>
     );
 }
 

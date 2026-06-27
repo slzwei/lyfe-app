@@ -82,8 +82,8 @@ function useLeadStatus({
     const [isUpdatingStatus, setIsUpdatingStatus] = useState(false);
 
     const handleChangeStatus = useCallback(
-        async (newStatus: LeadStatus) => {
-            if (!lead || newStatus === currentStatus || !userId) return;
+        async (newStatus: LeadStatus): Promise<boolean> => {
+            if (!lead || newStatus === currentStatus || !userId) return false;
 
             const previousStatus = currentStatus;
 
@@ -97,11 +97,12 @@ function useLeadStatus({
             if (!error) {
                 const { data: updatedActivities } = await fetchLeadActivities(lead.id);
                 if (updatedActivities) setActivities(updatedActivities);
-            } else {
-                setCurrentStatus(previousStatus);
-                setError('Failed to update status');
-                if (__DEV__) console.error('Failed to update status:', error);
+                return true;
             }
+            setCurrentStatus(previousStatus);
+            setError('Failed to update status');
+            if (__DEV__) console.error('Failed to update status:', error);
+            return false;
         },
         [lead, currentStatus, userId, setCurrentStatus, setActivities, setError],
     );

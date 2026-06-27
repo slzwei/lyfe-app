@@ -69,12 +69,12 @@ function LeadListCardBase({ lead, onPress }: { lead: Lead; onPress: () => void }
             </View>
 
             <View style={styles.footer}>
-                <Txt role="body" size={12.5} color={colors.textFaint} numberOfLines={1} style={styles.sub}>
+                <Txt role="body" size={13} color={colors.textFaint} numberOfLines={1} style={styles.sub}>
                     {sub}
                 </Txt>
                 <View style={styles.timeRow}>
-                    <Ionicons name="time-outline" size={12} color={isWon ? colors.success : colors.textFaint} />
-                    <Txt role="mono" size={12} color={isWon ? colors.success : colors.textFaint}>
+                    <Ionicons name="time-outline" size={13} color={isWon ? colors.success : colors.textFaint} />
+                    <Txt role="mono" size={13} color={isWon ? colors.success : colors.textFaint}>
                         {timeAgo(lead.updated_at)}
                     </Txt>
                 </View>

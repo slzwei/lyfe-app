@@ -1,13 +1,13 @@
-# Leads: Agent transitions a lead's status via the inline picker.
+# Leads: Agent transitions a lead's status via the always-visible pill grid.
 #
-# Validates the status-action → picker → status-option-X → badge-updates
-# loop. 02-lead-lifecycle already covers "new → contacted"; this exercises
-# a different status (won) so we have orthogonal coverage. Idempotent: if
-# the tapped lead is already 'won' from a prior run, the no-op leaves the
-# badge in 'won' state and the visible-assertion still passes.
+# Validates the lead-status-pill-X → status-updates loop. 02-lead-lifecycle
+# already covers "new → contacted"; this exercises a different status (won)
+# so we have orthogonal coverage. Idempotent: if the tapped lead is already
+# 'won' from a prior run, the no-op leaves it 'won' and the assertion passes.
 #
-# Logged in as AGENT because the status-action quick action is hidden in
-# manager view (see app/(tabs)/leads/[leadId].tsx — `!isManagerView` gate).
+# Logged in as AGENT because the status pill grid is hidden in manager view
+# (see app/(tabs)/leads/[leadId].tsx — `!isManagerView` gate; manager sees a
+# static lead-status-chip instead).
 appId: com.shawnlee.lyfe
 ---
 
@@ -32,15 +32,12 @@ appId: com.shawnlee.lyfe
 - waitForAnimationToEnd
 - extendedWaitUntil:
     visible:
-      id: "lead-status-badge"
+      id: "lead-status-grid"
     timeout: 10000
 
-# Open status picker, tap 'Won', assert the badge updates.
+# Status pills are always visible (no picker step). Tap 'Won', assert it lands.
 - tapOn:
-    id: "lead-status-action"
-- waitForAnimationToEnd
-- tapOn:
-    id: "status-option-won"
+    id: "lead-status-pill-won"
 - waitForAnimationToEnd
 
 - extendedWaitUntil:

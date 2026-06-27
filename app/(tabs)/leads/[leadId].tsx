@@ -18,10 +18,11 @@ import {
     radius,
     statusColors,
     pillText,
+    STATUS_LABELS,
     type LeadsTheme,
 } from '@/lib/leads/theme';
 import { formatSgPhone } from '@/lib/phone';
-import { LEAD_STATUSES, PRODUCT_LABELS, SOURCE_LABELS, type LeadStatus } from '@/types/lead';
+import { LEAD_STATUSES, PRODUCT_LABELS, SOURCE_LABELS } from '@/types/lead';
 import { Ionicons } from '@expo/vector-icons';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { KeyboardAwareScrollView } from 'react-native-keyboard-controller';
@@ -30,15 +31,6 @@ import { ActivityIndicator, AppState, Linking, Pressable, StyleSheet, TouchableO
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useReducedMotion } from 'react-native-reanimated';
 import * as Haptics from 'expo-haptics';
-
-const STATUS_LABELS: Record<LeadStatus, string> = {
-    new: 'New',
-    contacted: 'Contacted',
-    qualified: 'Qualified',
-    proposed: 'Proposed',
-    won: 'Won',
-    lost: 'Lost',
-};
 
 export default function LeadDetailScreen() {
     const { leadId } = useLocalSearchParams<{ leadId: string }>();
@@ -56,6 +48,7 @@ export default function LeadDetailScreen() {
         currentStatus,
         isLoading,
         error,
+        setError,
         loadData,
         logActivity,
         handleChangeStatus,
@@ -224,7 +217,7 @@ export default function LeadDetailScreen() {
             {isManagerView ? (
                 <View testID="manager-banner" style={[styles.banner, { backgroundColor: alpha(colors.accent, 0.1) }]}>
                     <Ionicons name="eye-outline" size={15} color={colors.accent} />
-                    <Txt role="body" size={12.5} color={colors.accent}>
+                    <Txt role="body" size={13} color={colors.accent}>
                         Manager View — limited actions available.
                     </Txt>
                 </View>
@@ -233,13 +226,21 @@ export default function LeadDetailScreen() {
             {error ? (
                 <View testID="error-banner" style={[styles.banner, { backgroundColor: alpha(colors.danger, 0.1) }]}>
                     <Ionicons name="warning-outline" size={15} color={colors.danger} />
-                    <Txt role="body" size={12.5} color={colors.danger} style={{ flex: 1 }}>
+                    <Txt role="body" size={13} color={colors.danger} style={{ flex: 1 }}>
                         {error}
                     </Txt>
-                    <Pressable onPress={loadData} hitSlop={8}>
-                        <Txt role="body" weight="bold" size={12.5} color={colors.danger}>
+                    <Pressable onPress={loadData} hitSlop={8} accessibilityRole="button" accessibilityLabel="Retry">
+                        <Txt role="body" weight="bold" size={13} color={colors.danger}>
                             Retry
                         </Txt>
+                    </Pressable>
+                    <Pressable
+                        onPress={() => setError(null)}
+                        hitSlop={8}
+                        accessibilityRole="button"
+                        accessibilityLabel="Dismiss error"
+                    >
+                        <Ionicons name="close" size={16} color={colors.danger} />
                     </Pressable>
                 </View>
             ) : null}
@@ -252,7 +253,7 @@ export default function LeadDetailScreen() {
             >
                 {/* identity */}
                 <View style={styles.identity}>
-                    <Monogram name={lead.full_name} status={lead.status} size={58} />
+                    <Monogram name={lead.full_name} status={currentStatus} size={58} />
                     <View style={{ flex: 1, minWidth: 0 }}>
                         <Txt
                             role="display"
@@ -282,7 +283,7 @@ export default function LeadDetailScreen() {
                     <View style={styles.tagRow}>
                         {tags.map((t, i) => (
                             <View key={`${t}-${i}`} style={styles.tag}>
-                                <Txt role="body" weight="semibold" size={12.5} color={colors.textMuted}>
+                                <Txt role="body" weight="semibold" size={13} color={colors.textMuted}>
                                     {t}
                                 </Txt>
                             </View>
@@ -293,15 +294,15 @@ export default function LeadDetailScreen() {
                 {/* won banner */}
                 {currentStatus === 'won' ? (
                     <View style={styles.wonBanner}>
-                        <Txt role="display" weight="bold" size={28} color="#06140B" tracking={-0.4}>
+                        <Txt role="display" weight="bold" size={28} color={colors.textInverse} tracking={-0.4}>
                             Won!
                         </Txt>
                         <Txt
                             role="body"
                             weight="semibold"
                             size={13}
-                            color="#0a1f10"
-                            style={{ marginTop: 4, opacity: 0.82 }}
+                            color={colors.textInverse}
+                            style={{ marginTop: 4, opacity: 0.85 }}
                         >
                             Nice work closing this one.
                         </Txt>
@@ -339,8 +340,8 @@ export default function LeadDetailScreen() {
                             (pressed || !lead.phone) && { opacity: 0.6 },
                         ]}
                     >
-                        <Ionicons name="logo-whatsapp" size={20} color="#0F0E0D" />
-                        <Txt role="body" weight="bold" size={16} color="#0F0E0D">
+                        <Ionicons name="logo-whatsapp" size={20} color={colors.inkOnBrand} />
+                        <Txt role="body" weight="bold" size={16} color={colors.inkOnBrand}>
                             WhatsApp
                         </Txt>
                     </Pressable>
@@ -350,7 +351,7 @@ export default function LeadDetailScreen() {
                 <View>
                     <Eyebrow style={{ marginBottom: 10 }}>Status</Eyebrow>
                     {isManagerView ? (
-                        <View style={{ alignSelf: 'flex-start' }}>
+                        <View testID="lead-status-chip" style={{ alignSelf: 'flex-start' }}>
                             <StatusChip status={currentStatus} />
                         </View>
                     ) : (
@@ -363,9 +364,12 @@ export default function LeadDetailScreen() {
                                         key={s}
                                         testID={`lead-status-pill-${s}`}
                                         disabled={isUpdatingStatus}
-                                        onPress={() => {
-                                            if (s === 'won' && currentStatus !== 'won') celebrateWin();
-                                            handleChangeStatus(s);
+                                        onPress={async () => {
+                                            const wasWon = currentStatus === 'won';
+                                            const ok = await handleChangeStatus(s);
+                                            // Only celebrate once the server actually confirms the win
+                                            // (handleChangeStatus is optimistic + rolls back on failure).
+                                            if (ok && s === 'won' && !wasWon) celebrateWin();
                                         }}
                                         accessibilityRole="button"
                                         accessibilityState={{ selected: active }}
@@ -438,28 +442,26 @@ export default function LeadDetailScreen() {
                         </Txt>
                     </View>
                     <View style={{ gap: 11 }}>
-                        {mktrRows.length ? (
-                            mktrRows.map((d, i) => (
-                                <View key={`${d.label ?? 'note'}-${i}`} style={styles.factRow}>
-                                    {d.label ? (
-                                        <Txt role="body" size={13} color={colors.textFaint} style={styles.factLabel}>
-                                            {d.label}
-                                        </Txt>
-                                    ) : null}
-                                    <Txt role="body" weight="medium" size={14} color={colors.text} style={{ flex: 1 }}>
-                                        {d.value}
+                        {mktrRows.map((d, i) => (
+                            <View key={`${d.label ?? 'note'}-${i}`} style={styles.factRow}>
+                                {d.label ? (
+                                    <Txt role="body" size={13} color={colors.textFaint} style={styles.factLabel}>
+                                        {d.label}
                                     </Txt>
-                                </View>
-                            ))
-                        ) : (
-                            <>
-                                <DetailRow
-                                    label="Source"
-                                    value={lead.source_name === 'mktr' ? 'MKTR' : SOURCE_LABELS[lead.source]}
-                                />
-                                <DetailRow label="Added" value={timeAgo(lead.created_at)} />
-                            </>
-                        )}
+                                ) : null}
+                                <Txt role="body" weight="medium" size={14} color={colors.text} style={{ flex: 1 }}>
+                                    {d.value}
+                                </Txt>
+                            </View>
+                        ))}
+                        {/* Source shows only when enrichment rows didn't already carry it; Added is ALWAYS shown. */}
+                        {mktrRows.length === 0 ? (
+                            <DetailRow
+                                label="Source"
+                                value={lead.source_name === 'mktr' ? 'MKTR' : SOURCE_LABELS[lead.source]}
+                            />
+                        ) : null}
+                        <DetailRow label="Added" value={timeAgo(lead.created_at)} />
                     </View>
                 </View>
 
@@ -473,7 +475,7 @@ export default function LeadDetailScreen() {
                     <View style={styles.activityHead}>
                         <Eyebrow>Activity</Eyebrow>
                         <View style={[styles.countPill, { backgroundColor: alpha(colors.accent, 0.14) }]}>
-                            <Txt testID="lead-activity-count" role="mono" weight="bold" size={12} color={colors.accent}>
+                            <Txt testID="lead-activity-count" role="body" weight="bold" size={13} color={colors.accent}>
                                 {activities.length}
                             </Txt>
                         </View>
@@ -591,6 +593,7 @@ const makeStyles = ({ colors }: LeadsTheme) =>
             gap: 5,
             paddingVertical: 9,
             paddingHorizontal: 14,
+            minHeight: 44,
             borderRadius: radius.chip,
             borderWidth: 1.5,
         },

@@ -42,27 +42,46 @@ export interface LeadDetailRow {
     value: string;
 }
 
-/** Enrichment labels the MKTR receiver writes into `leads.notes` as "Label: value | …". */
-const KNOWN_NOTE_LABELS = ['Birthday', 'Postal', 'Company', 'Title', 'Industry', 'Source', 'Campaign', 'QR'];
+/**
+ * Enrichment labels the lyfe `receive-mktr-lead` edge function writes into
+ * `leads.notes` as "Label: value | …" (see supabase/functions/receive-mktr-lead/
+ * index.ts) — INCLUDING `Tags` + `Sentiment`, which Retell/voice leads carry.
+ */
+const KNOWN_NOTE_LABELS = [
+    'Birthday',
+    'Postal',
+    'Company',
+    'Title',
+    'Industry',
+    'Source',
+    'Tags',
+    'Sentiment',
+    'Campaign',
+    'QR',
+];
 
 /**
- * Parses the ` | `-joined enrichment string MKTR writes into `leads.notes` into
- * labeled rows (splitting on the FIRST ": " so values may contain colons). If the
- * text isn't in that structured shape (e.g. a free-text note), it's returned
- * verbatim as one label-less row — never mangled.
+ * Parses the ` | `-joined enrichment string into labeled rows (splitting on the
+ * FIRST ": " so values may contain colons). Unknown/label-less segments are
+ * skipped — a single unrecognized label must NOT collapse the whole parse. Only
+ * when no known label is present at all is the text returned verbatim as one
+ * label-less row (legacy free-text note), never mangled.
  */
 export function parseLeadNotes(notes: string | null | undefined): LeadDetailRow[] {
     const text = notes?.trim();
     if (!text) return [];
     const rows: LeadDetailRow[] = [];
+    let sawKnown = false;
     for (const seg of text.split(' | ')) {
         const s = seg.trim();
         const i = s.indexOf(': ');
         const label = i === -1 ? null : s.slice(0, i).trim();
-        if (!label || !KNOWN_NOTE_LABELS.includes(label)) {
-            return [{ label: null, value: text }];
+        if (label && KNOWN_NOTE_LABELS.includes(label)) {
+            sawKnown = true;
+            const value = s.slice(i + 2).trim();
+            if (value) rows.push({ label, value });
         }
-        rows.push({ label, value: s.slice(i + 2).trim() });
     }
-    return rows.filter((r) => r.value.length > 0);
+    if (!sawKnown) return [{ label: null, value: text }];
+    return rows;
 }

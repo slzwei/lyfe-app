@@ -57,19 +57,16 @@ export function alpha(hex: string, a: number): string {
     return `rgba(${r}, ${g}, ${b}, ${Math.max(0, Math.min(1, a))})`;
 }
 
-/** Relative-luminance pick of a readable foreground (warm ink vs cream) over `hex`. */
-export function onColor(hex: string): string {
-    const h = hex.replace('#', '');
-    const toLin = (c: number) => {
-        const s = c / 255;
-        return s <= 0.03928 ? s / 12.92 : ((s + 0.055) / 1.055) ** 2.4;
-    };
-    const L =
-        0.2126 * toLin(parseInt(h.slice(0, 2), 16)) +
-        0.7152 * toLin(parseInt(h.slice(2, 4), 16)) +
-        0.0722 * toLin(parseInt(h.slice(4, 6), 16));
-    return L > 0.4 ? '#1B1A17' : '#FBF7EE';
-}
+/** Display labels for lead statuses — the single source for the leads module. */
+export const STATUS_LABELS: Record<LeadStatusKey, string> = {
+    new: 'New',
+    contacted: 'Contacted',
+    qualified: 'Qualified',
+    proposed: 'Proposed',
+    won: 'Won',
+    lost: 'Lost',
+    disputed: 'Disputed',
+};
 
 /**
  * Leads `colors` = lyfe's live theme colors + aliases under mktr's token names,
@@ -93,6 +90,9 @@ function bridgeColors(base: ReturnType<typeof useTheme>['colors']) {
         // leads-only additions
         secondary: base.accentMuted,
         wonSurface: base.successLight,
+        // Fixed dark ink for text/icons on bright brand-color fills (WhatsApp green) —
+        // contrast-verified in both themes; replaces hardcoded screen hex.
+        inkOnBrand: '#10110F',
     };
 }
 

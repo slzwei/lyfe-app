@@ -50,8 +50,9 @@ appId: com.shawnlee.lyfe
 - tapOn: "E2E MKTR Lead"
 - waitForAnimationToEnd
 
+# The Call CTA is always present on the detail regardless of owner/manager view.
 - extendedWaitUntil:
     visible:
-      id: "lead-status-badge"
+      id: "lead-call-action"
     timeout: 10000
 - assertVisible: "E2E MKTR Lead"

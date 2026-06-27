@@ -7,23 +7,13 @@
 import React from 'react';
 import { View, StyleSheet } from 'react-native';
 import { Txt } from './Txt';
-import { statusColors, pillText, radius, type LeadStatusKey } from '@/lib/leads/theme';
-
-const LABELS: Record<LeadStatusKey, string> = {
-    new: 'New',
-    contacted: 'Contacted',
-    qualified: 'Qualified',
-    proposed: 'Proposed',
-    won: 'Won',
-    lost: 'Lost',
-    disputed: 'Disputed',
-};
+import { statusColors, pillText, STATUS_LABELS, radius, type LeadStatusKey } from '@/lib/leads/theme';
 
 export function StatusChip({ status }: { status: LeadStatusKey }) {
     return (
         <View style={[styles.chip, { backgroundColor: statusColors[status] }]}>
             <Txt role="body" weight="bold" size={13} color={pillText[status]}>
-                {LABELS[status]}
+                {STATUS_LABELS[status]}
             </Txt>
         </View>
     );
