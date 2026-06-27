@@ -1,0 +1,12 @@
+-- Leads parity (Phase 0): add 'key_facts' to lead_activity_type.
+--
+-- Structured key-facts (looking-for / budget / good-to-know) are captured as a
+-- dedicated lead_activities row whose `metadata` carries the payload — the same
+-- metadata-on-activity model the timeline + follow-ups already use (no leads
+-- table schema change).
+--
+-- DB-FIRST: this migration ONLY adds the enum value and never USES it (Postgres
+-- forbids using a freshly-added enum value in the same transaction). App code
+-- that emits 'key_facts' ships after this is deployed. Precedent:
+-- 20260427180000_lead_activity_type_add_unassignment.sql.
+ALTER TYPE public.lead_activity_type ADD VALUE IF NOT EXISTS 'key_facts';

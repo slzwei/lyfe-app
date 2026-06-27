@@ -62,10 +62,10 @@ appId: com.shawnlee.lyfe
 - waitForAnimationToEnd
 
 # Modal dismisses on selection. Assert we're back on the lead detail
-# (status badge is the most stable element to wait for).
+# (manager view shows a static status chip — the most stable element to wait for).
 - extendedWaitUntil:
     visible:
-      id: "lead-status-badge"
+      id: "lead-status-chip"
     timeout: 10000
 
 # Activity feed records the reassignment.

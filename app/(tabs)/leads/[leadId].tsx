@@ -4,12 +4,27 @@ import ContactConfirmModal from '@/components/leads/ContactConfirmModal';
 import NoteInput from '@/components/leads/NoteInput';
 import ReassignModal from '@/components/leads/ReassignModal';
 import RecordingCard from '@/components/leads/RecordingCard';
+import { LogActivitySheet, type LogResult, type LogType } from '@/components/leads/LogActivitySheet';
+import { FollowUpSheet } from '@/components/leads/FollowUpSheet';
+import { KeyFactsSheet } from '@/components/leads/KeyFactsSheet';
+import { LeadActionsSheet } from '@/components/leads/LeadActionsSheet';
+import { ScPrConfirmDialog } from '@/components/leads/ScPrConfirmDialog';
 import { Txt, Eyebrow, Monogram, StatusChip } from '@/components/leads/ui';
 import { useAuth } from '@/contexts/AuthContext';
 import { useViewMode } from '@/contexts/ViewModeContext';
 import { useLeadDetail } from '@/hooks/useLeadDetail';
 import { timeAgo } from '@/lib/dateTime';
-import { resolveLeadSource, displayLeadId, parseLeadNotes } from '@/lib/leads/meta';
+import { addLeadActivity, setLeadArchived } from '@/lib/leads';
+import { scheduleFollowUpReminder, cancelFollowUpReminder, warnRemindersDisabled } from '@/lib/leads/reminders';
+import {
+    resolveLeadSource,
+    displayLeadId,
+    parseLeadNotes,
+    timelineActivities,
+    deriveFollowUp,
+    deriveKeyFacts,
+    type KeyFact,
+} from '@/lib/leads/meta';
 import {
     useLeadsTheme,
     useLeadsThemedStyles,
@@ -18,6 +33,7 @@ import {
     radius,
     statusColors,
     pillText,
+    STATUS_LABELS,
     type LeadsTheme,
 } from '@/lib/leads/theme';
 import { formatSgPhone } from '@/lib/phone';
@@ -30,15 +46,6 @@ import { ActivityIndicator, AppState, Linking, Pressable, StyleSheet, TouchableO
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useReducedMotion } from 'react-native-reanimated';
 import * as Haptics from 'expo-haptics';
-
-const STATUS_LABELS: Record<LeadStatus, string> = {
-    new: 'New',
-    contacted: 'Contacted',
-    qualified: 'Qualified',
-    proposed: 'Proposed',
-    won: 'Won',
-    lost: 'Lost',
-};
 
 export default function LeadDetailScreen() {
     const { leadId } = useLocalSearchParams<{ leadId: string }>();
@@ -56,6 +63,7 @@ export default function LeadDetailScreen() {
         currentStatus,
         isLoading,
         error,
+        setError,
         loadData,
         logActivity,
         handleChangeStatus,
@@ -85,6 +93,26 @@ export default function LeadDetailScreen() {
     const [confettiKey, setConfettiKey] = useState(0);
     const confettiTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
     useEffect(() => () => clearTimeout(confettiTimer.current), []);
+
+    // Rich activity logging (＋ Log) — owner-only.
+    const [logOpen, setLogOpen] = useState(false);
+    const [logType, setLogType] = useState<LogType>('note');
+    const [logBusy, setLogBusy] = useState(false);
+
+    // Follow-ups — owner-only.
+    const [followUpOpen, setFollowUpOpen] = useState(false);
+    const [followUpBusy, setFollowUpBusy] = useState(false);
+
+    // Key facts — owner-only edit.
+    const [keyFactsOpen, setKeyFactsOpen] = useState(false);
+    const [keyFactsBusy, setKeyFactsBusy] = useState(false);
+
+    // Archive actions — owner-only.
+    const [actionsOpen, setActionsOpen] = useState(false);
+
+    // SC/PR confirm gate before `qualified` (fires ConfirmedResident to Meta).
+    const [scPrOpen, setScPrOpen] = useState(false);
+    const [scPrBusy, setScPrBusy] = useState(false);
 
     useEffect(() => {
         const subscription = AppState.addEventListener('change', (nextState) => {
@@ -182,10 +210,126 @@ export default function LeadDetailScreen() {
         confettiTimer.current = setTimeout(() => setShowConfetti(false), CONFETTI_DURATION);
     };
 
+    const saveLog = async (r: LogResult) => {
+        if (!user?.id || !leadId) return;
+        setLogBusy(true);
+        try {
+            const desc = r.note || `${r.type.charAt(0).toUpperCase()}${r.type.slice(1)}`;
+            await addLeadActivity(leadId, user.id, r.type, desc, {
+                ...(r.outcome ? { outcome: r.outcome } : {}),
+                ...(r.nextStep ? { next_step: r.nextStep } : {}),
+            });
+            if (r.followUp) {
+                let reminderId: string | null = null;
+                const res = await scheduleFollowUpReminder(r.followUp.at, lead.full_name || 'Lead', r.followUp.task);
+                if (res.result === 'scheduled') reminderId = res.id;
+                else if (res.result === 'denied') warnRemindersDisabled();
+                await addLeadActivity(leadId, user.id, 'follow_up', r.followUp.task, {
+                    next_follow_up_at: r.followUp.at.toISOString(),
+                    task: r.followUp.task,
+                    remind: r.followUp.remind,
+                    ...(reminderId ? { reminder_id: reminderId } : {}),
+                });
+            }
+            setLogOpen(false);
+            await loadData();
+        } finally {
+            setLogBusy(false);
+        }
+    };
+
+    const saveFollowUp = async (at: Date, task: string, remind: boolean) => {
+        if (!user?.id || !leadId) return;
+        setFollowUpBusy(true);
+        try {
+            // Reschedule: cancel any reminder from the prior follow-up first.
+            const prior = activities.find((a) => a.type === 'follow_up');
+            await cancelFollowUpReminder((prior?.metadata as { reminder_id?: string } | undefined)?.reminder_id);
+            let reminderId: string | null = null;
+            if (remind) {
+                const res = await scheduleFollowUpReminder(at, lead.full_name || 'Lead', task);
+                if (res.result === 'scheduled') reminderId = res.id;
+                else if (res.result === 'denied') warnRemindersDisabled();
+            }
+            await addLeadActivity(leadId, user.id, 'follow_up', task, {
+                next_follow_up_at: at.toISOString(),
+                task,
+                remind,
+                ...(reminderId ? { reminder_id: reminderId } : {}),
+            });
+            setFollowUpOpen(false);
+            await loadData();
+        } finally {
+            setFollowUpBusy(false);
+        }
+    };
+
+    const saveKeyFacts = async (facts: KeyFact[]) => {
+        if (!user?.id || !leadId) return;
+        setKeyFactsBusy(true);
+        try {
+            await addLeadActivity(leadId, user.id, 'key_facts', null, { facts });
+            setKeyFactsOpen(false);
+            await loadData();
+        } finally {
+            setKeyFactsBusy(false);
+        }
+    };
+
+    const doArchive = async () => {
+        if (!user?.id || !leadId) return;
+        setActionsOpen(false);
+        await setLeadArchived(leadId, true, user.id);
+        router.back(); // archived leads leave the active list
+    };
+    const doUnarchive = async () => {
+        if (!user?.id || !leadId) return;
+        setActionsOpen(false);
+        await setLeadArchived(leadId, false, user.id);
+        await loadData();
+    };
+
+    // Status changes. `qualified` is gated behind the SC/PR confirm (it reports a
+    // ConfirmedResident conversion to Meta via the live outcome trigger); `won`
+    // celebrates only on a confirmed transition.
+    const onStatusPress = async (s: LeadStatus) => {
+        if (s === currentStatus) return;
+        if (s === 'qualified') {
+            setScPrOpen(true);
+            return;
+        }
+        const wasWon = currentStatus === 'won';
+        const ok = await handleChangeStatus(s);
+        if (ok && s === 'won' && !wasWon) celebrateWin();
+    };
+    const confirmScPrYes = async () => {
+        setScPrBusy(true);
+        const ok = await handleChangeStatus('qualified');
+        setScPrBusy(false);
+        if (ok) setScPrOpen(false);
+    };
+    const confirmScPrNo = async () => {
+        if (!user?.id || !leadId) return;
+        setScPrOpen(false);
+        await addLeadActivity(leadId, user.id, 'note', 'Marked not Singapore Citizen / PR', { sc_pr: false });
+        await loadData();
+    };
+
     const src = resolveLeadSource(lead);
     const leadIdLabel = displayLeadId(lead);
     const mktrRows = lead.source_name === 'mktr' ? parseLeadNotes(lead.notes) : [];
     const tags = [PRODUCT_LABELS[lead.product_interest], src.label].filter(Boolean) as string[];
+    const followUp = deriveFollowUp(activities);
+    const followUpWhen = followUp
+        ? new Date(followUp.at).toLocaleString('en-SG', {
+              weekday: 'short',
+              day: 'numeric',
+              month: 'short',
+              hour: 'numeric',
+              minute: '2-digit',
+          })
+        : null;
+    const keyFacts = deriveKeyFacts(activities);
 
     return (
         <SafeAreaView style={styles.root} edges={['top']}>
@@ -217,14 +361,23 @@ export default function LeadDetailScreen() {
                         <Ionicons name="swap-horizontal" size={20} color={colors.textMuted} />
                     </Pressable>
                 ) : (
-                    <View style={styles.pill} />
+                    <Pressable
+                        onPress={() => setActionsOpen(true)}
+                        style={styles.pill}
+                        testID="lead-actions-action"
+                        accessibilityRole="button"
+                        accessibilityLabel="Lead actions"
+                        hitSlop={8}
+                    >
+                        <Ionicons name="ellipsis-horizontal" size={20} color={colors.textMuted} />
+                    </Pressable>
                 )}
             </View>
 
             {isManagerView ? (
                 <View testID="manager-banner" style={[styles.banner, { backgroundColor: alpha(colors.accent, 0.1) }]}>
                     <Ionicons name="eye-outline" size={15} color={colors.accent} />
-                    <Txt role="body" size={12.5} color={colors.accent}>
+                    <Txt role="body" size={13} color={colors.accent}>
                         Manager View — limited actions available.
                     </Txt>
                 </View>
@@ -233,13 +386,21 @@ export default function LeadDetailScreen() {
             {error ? (
                 <View testID="error-banner" style={[styles.banner, { backgroundColor: alpha(colors.danger, 0.1) }]}>
                     <Ionicons name="warning-outline" size={15} color={colors.danger} />
-                    <Txt role="body" size={12.5} color={colors.danger} style={{ flex: 1 }}>
+                    <Txt role="body" size={13} color={colors.danger} style={{ flex: 1 }}>
                         {error}
                     </Txt>
-                    <Pressable onPress={loadData} hitSlop={8}>
-                        <Txt role="body" weight="bold" size={12.5} color={colors.danger}>
+                    <Pressable onPress={loadData} hitSlop={8} accessibilityRole="button" accessibilityLabel="Retry">
+                        <Txt role="body" weight="bold" size={13} color={colors.danger}>
                             Retry
                         </Txt>
+                    </Pressable>
+                    <Pressable
+                        onPress={() => setError(null)}
+                        hitSlop={8}
+                        accessibilityRole="button"
+                        accessibilityLabel="Dismiss error"
+                    >
+                        <Ionicons name="close" size={16} color={colors.danger} />
                     </Pressable>
                 </View>
             ) : null}
@@ -252,7 +413,7 @@ export default function LeadDetailScreen() {
             >
                 {/* identity */}
                 <View style={styles.identity}>
-                    <Monogram name={lead.full_name} status={lead.status} size={58} />
+                    <Monogram name={lead.full_name} status={currentStatus} size={58} />
                     <View style={{ flex: 1, minWidth: 0 }}>
                         <Txt
                             role="display"
@@ -282,7 +443,7 @@ export default function LeadDetailScreen() {
                     <View style={styles.tagRow}>
                         {tags.map((t, i) => (
                             <View key={`${t}-${i}`} style={styles.tag}>
-                                <Txt role="body" weight="semibold" size={12.5} color={colors.textMuted}>
+                                <Txt role="body" weight="semibold" size={13} color={colors.textMuted}>
                                     {t}
                                 </Txt>
                             </View>
@@ -293,15 +454,15 @@ export default function LeadDetailScreen() {
                 {/* won banner */}
                 {currentStatus === 'won' ? (
                     <View style={styles.wonBanner}>
-                        <Txt role="display" weight="bold" size={28} color="#06140B" tracking={-0.4}>
+                        <Txt role="display" weight="bold" size={28} color={colors.textInverse} tracking={-0.4}>
                             Won!
                         </Txt>
                         <Txt
                             role="body"
                             weight="semibold"
                             size={13}
-                            color="#0a1f10"
-                            style={{ marginTop: 4, opacity: 0.82 }}
+                            color={colors.textInverse}
+                            style={{ marginTop: 4, opacity: 0.85 }}
                         >
                             Nice work closing this one.
                         </Txt>
@@ -339,18 +500,66 @@ export default function LeadDetailScreen() {
                             (pressed || !lead.phone) && { opacity: 0.6 },
                         ]}
                     >
-                        <Ionicons name="logo-whatsapp" size={20} color="#0F0E0D" />
-                        <Txt role="body" weight="bold" size={16} color="#0F0E0D">
+                        <Ionicons name="logo-whatsapp" size={20} color={colors.inkOnBrand} />
+                        <Txt role="body" weight="bold" size={16} color={colors.inkOnBrand}>
                             WhatsApp
                         </Txt>
                     </Pressable>
                 </View>
 
+                {/* next follow-up — owner only */}
+                {!isManagerView ? (
+                    followUp ? (
+                        <Pressable
+                            testID="lead-followup-card"
+                            onPress={() => setFollowUpOpen(true)}
+                            style={styles.fuCard}
+                            accessibilityRole="button"
+                            accessibilityLabel="Edit follow-up"
+                        >
+                            <View style={styles.fuIcon}>
+                                <Ionicons name="notifications" size={20} color={colors.accent} />
+                            </View>
+                            <View style={{ flex: 1, minWidth: 0 }}>
+                                <Eyebrow color={colors.accent}>Next follow-up</Eyebrow>
+                                <Txt
+                                    role="body"
+                                    weight="semibold"
+                                    size={15}
+                                    color={colors.text}
+                                    style={{ marginTop: 3 }}
+                                    numberOfLines={2}
+                                >
+                                    {followUp.task}
+                                </Txt>
+                                <Txt role="mono" size={13} color={colors.textMuted} style={{ marginTop: 2 }}>
+                                    {followUpWhen}
+                                </Txt>
+                            </View>
+                            <Ionicons name="pencil" size={18} color={colors.textMuted} />
+                        </Pressable>
+                    ) : (
+                        <Pressable
+                            testID="lead-followup-cta"
+                            onPress={() => setFollowUpOpen(true)}
+                            style={styles.fuGhost}
+                            accessibilityRole="button"
+                            accessibilityLabel="Set a follow-up"
+                        >
+                            <Ionicons name="notifications-outline" size={20} color={colors.accent} />
+                            <Txt role="body" weight="semibold" size={14.5} color={colors.accent} style={{ flex: 1 }}>
+                                Set a follow-up
+                            </Txt>
+                            <Ionicons name="chevron-forward" size={18} color={colors.accent} />
+                        </Pressable>
+                    )
+                ) : null}
+
                 {/* status — pill grid for owner, static chip in manager view */}
                 <View>
                     <Eyebrow style={{ marginBottom: 10 }}>Status</Eyebrow>
                     {isManagerView ? (
-                        <View style={{ alignSelf: 'flex-start' }}>
+                        <View testID="lead-status-chip" style={{ alignSelf: 'flex-start' }}>
                             <StatusChip status={currentStatus} />
                         </View>
                     ) : (
@@ -363,10 +572,7 @@ export default function LeadDetailScreen() {
                                         key={s}
                                         testID={`lead-status-pill-${s}`}
                                         disabled={isUpdatingStatus}
-                                        onPress={() => {
-                                            if (s === 'won' && currentStatus !== 'won') celebrateWin();
-                                            handleChangeStatus(s);
-                                        }}
+                                        onPress={() => onStatusPress(s)}
                                         accessibilityRole="button"
                                         accessibilityState={{ selected: active }}
                                         accessibilityLabel={`Set status ${STATUS_LABELS[s]}`}
@@ -438,30 +644,79 @@ export default function LeadDetailScreen() {
                         </Txt>
                     </View>
                     <View style={{ gap: 11 }}>
-                        {mktrRows.length ? (
-                            mktrRows.map((d, i) => (
-                                <View key={`${d.label ?? 'note'}-${i}`} style={styles.factRow}>
-                                    {d.label ? (
-                                        <Txt role="body" size={13} color={colors.textFaint} style={styles.factLabel}>
-                                            {d.label}
-                                        </Txt>
-                                    ) : null}
-                                    <Txt role="body" weight="medium" size={14} color={colors.text} style={{ flex: 1 }}>
-                                        {d.value}
+                        {mktrRows.map((d, i) => (
+                            <View key={`${d.label ?? 'note'}-${i}`} style={styles.factRow}>
+                                {d.label ? (
+                                    <Txt role="body" size={13} color={colors.textFaint} style={styles.factLabel}>
+                                        {d.label}
                                     </Txt>
-                                </View>
-                            ))
-                        ) : (
-                            <>
-                                <DetailRow
-                                    label="Source"
-                                    value={lead.source_name === 'mktr' ? 'MKTR' : SOURCE_LABELS[lead.source]}
-                                />
-                                <DetailRow label="Added" value={timeAgo(lead.created_at)} />
-                            </>
-                        )}
+                                ) : null}
+                                <Txt role="body" weight="medium" size={14} color={colors.text} style={{ flex: 1 }}>
+                                    {d.value}
+                                </Txt>
+                            </View>
+                        ))}
+                        {/* Source shows only when enrichment rows didn't already carry it; Added is ALWAYS shown. */}
+                        {mktrRows.length === 0 ? (
+                            <DetailRow
+                                label="Source"
+                                value={lead.source_name === 'mktr' ? 'MKTR' : SOURCE_LABELS[lead.source]}
+                            />
+                        ) : null}
+                        <DetailRow label="Added" value={timeAgo(lead.created_at)} />
                     </View>
                 </View>
+
+                {/* key facts — visible to all; editable by the owner */}
+                {keyFacts.length || !isManagerView ? (
+                    <View style={styles.card}>
+                        <View style={styles.cardHead}>
+                            <Ionicons name="bookmark" size={16} color={colors.accent} />
+                            <Txt role="body" weight="bold" size={14.5} color={colors.text}>
+                                Key facts
+                            </Txt>
+                            <View style={{ flex: 1 }} />
+                            {!isManagerView ? (
+                                <Pressable
+                                    testID="lead-keyfacts-edit"
+                                    onPress={() => setKeyFactsOpen(true)}
+                                    hitSlop={8}
+                                    accessibilityRole="button"
+                                    accessibilityLabel="Edit key facts"
+                                >
+                                    <Txt role="body" weight="semibold" size={13.5} color={colors.accent}>
+                                        Edit
+                                    </Txt>
+                                </Pressable>
+                            ) : null}
+                        </View>
+                        {keyFacts.length ? (
+                            <View style={{ gap: 11 }}>
+                                {keyFacts.map((f, i) => (
+                                    <View key={`${f.label}-${i}`} style={styles.factRow}>
+                                        <Txt role="body" size={13} color={colors.textFaint} style={styles.factLabel}>
+                                            {f.label}
+                                        </Txt>
+                                        <Txt
+                                            role="body"
+                                            weight="medium"
+                                            size={14}
+                                            color={colors.text}
+                                            leading={20}
+                                            style={{ flex: 1 }}
+                                        >
+                                            {f.value}
+                                        </Txt>
+                                    </View>
+                                ))}
+                            </View>
+                        ) : (
+                            <Txt role="body" size={13.5} color={colors.textFaint} leading={20}>
+                                No key facts yet — tap Edit to capture what matters (looking for, budget, good to know).
+                            </Txt>
+                        )}
+                    </View>
+                ) : null}
 
                 {/* recording / transcript */}
                 {lead.recording_url || lead.transcript ? (
@@ -473,12 +728,31 @@ export default function LeadDetailScreen() {
                     <View style={styles.activityHead}>
                         <Eyebrow>Activity</Eyebrow>
                         <View style={[styles.countPill, { backgroundColor: alpha(colors.accent, 0.14) }]}>
-                            <Txt testID="lead-activity-count" role="mono" weight="bold" size={12} color={colors.accent}>
-                                {activities.length}
+                            <Txt testID="lead-activity-count" role="body" weight="bold" size={13} color={colors.accent}>
+                                {timelineActivities(activities).length}
                             </Txt>
                         </View>
+                        <View style={{ flex: 1 }} />
+                        {!isManagerView ? (
+                            <Pressable
+                                testID="lead-log-action"
+                                onPress={() => {
+                                    setLogType('note');
+                                    setLogOpen(true);
+                                }}
+                                style={[styles.logPill, { backgroundColor: alpha(colors.accent, 0.14) }]}
+                                accessibilityRole="button"
+                                accessibilityLabel="Log activity"
+                                hitSlop={6}
+                            >
+                                <Ionicons name="add" size={14} color={colors.accent} />
+                                <Txt role="body" weight="bold" size={13} color={colors.accent}>
+                                    Log
+                                </Txt>
+                            </Pressable>
+                        ) : null}
                     </View>
-                    {activities.length ? (
+                    {timelineActivities(activities).length ? (
                         <ActivityFeed activities={activities} />
                     ) : (
                         <Txt testID="lead-activity-empty" role="body" size={13.5} color={colors.textFaint}>
@@ -504,6 +778,47 @@ export default function LeadDetailScreen() {
                 onSelect={handleReassign}
                 onClose={() => setShowReassignModal(false)}
             />
+
+            {!isManagerView ? (
+                <>
+                    <LogActivitySheet
+                        visible={logOpen}
+                        onClose={() => setLogOpen(false)}
+                        leadName={lead.full_name || 'Lead'}
+                        defaultType={logType}
+                        busy={logBusy}
+                        onSave={saveLog}
+                    />
+                    <FollowUpSheet
+                        visible={followUpOpen}
+                        onClose={() => setFollowUpOpen(false)}
+                        initial={followUp}
+                        busy={followUpBusy}
+                        onSave={saveFollowUp}
+                    />
+                    <KeyFactsSheet
+                        visible={keyFactsOpen}
+                        onClose={() => setKeyFactsOpen(false)}
+                        initial={keyFacts}
+                        busy={keyFactsBusy}
+                        onSave={saveKeyFacts}
+                    />
+                    <LeadActionsSheet
+                        visible={actionsOpen}
+                        onClose={() => setActionsOpen(false)}
+                        isArchived={!!lead.archived_at}
+                        onArchive={doArchive}
+                        onUnarchive={doUnarchive}
+                    />
+                    <ScPrConfirmDialog
+                        visible={scPrOpen}
+                        busy={scPrBusy}
+                        onYes={confirmScPrYes}
+                        onNo={confirmScPrNo}
+                        onClose={() => setScPrOpen(false)}
+                    />
+                </>
+            ) : null}
 
             <Confetti visible={showConfetti} confettiKey={confettiKey} />
         </SafeAreaView>
@@ -591,6 +906,7 @@ const makeStyles = ({ colors }: LeadsTheme) =>
             gap: 5,
             paddingVertical: 9,
             paddingHorizontal: 14,
+            minHeight: 44,
             borderRadius: radius.chip,
             borderWidth: 1.5,
         },
@@ -615,5 +931,43 @@ const makeStyles = ({ colors }: LeadsTheme) =>
         factRow: { flexDirection: 'row', gap: 12 },
         factLabel: { width: 88, flexShrink: 0 },
         activityHead: { flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 14 },
+        logPill: {
+            flexDirection: 'row',
+            alignItems: 'center',
+            gap: 5,
+            paddingVertical: 6,
+            paddingHorizontal: 11,
+            borderRadius: 99,
+        },
+        fuCard: {
+            flexDirection: 'row',
+            alignItems: 'center',
+            gap: 13,
+            padding: spacing.lg,
+            borderRadius: radius.card,
+            backgroundColor: alpha(colors.accent, 0.06),
+            borderWidth: 1,
+            borderColor: alpha(colors.accent, 0.4),
+        },
+        fuIcon: {
+            width: 42,
+            height: 42,
+            borderRadius: 12,
+            backgroundColor: alpha(colors.accent, 0.16),
+            alignItems: 'center',
+            justifyContent: 'center',
+        },
+        fuGhost: {
+            flexDirection: 'row',
+            alignItems: 'center',
+            gap: 11,
+            paddingVertical: 14,
+            paddingHorizontal: spacing.lg,
+            borderRadius: radius.card,
+            borderWidth: 1.5,
+            borderStyle: 'dashed',
+            borderColor: alpha(colors.accent, 0.5),
+            backgroundColor: alpha(colors.accent, 0.06),
+        },
         countPill: { minWidth: 24, paddingHorizontal: 7, paddingVertical: 2, borderRadius: 99, alignItems: 'center' },
     });

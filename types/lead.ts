@@ -29,4 +29,6 @@ export const ACTIVITY_ICONS: Record<LeadActivityType, { icon: IconName; color: s
     email: { icon: 'mail', color: '#007AFF' },
     meeting: { icon: 'calendar', color: '#FF3B30' },
     follow_up: { icon: 'time', color: '#FF7600' },
+    unassignment: { icon: 'arrow-undo', color: '#FF9500' },
+    key_facts: { icon: 'bookmark', color: '#8E8E93' },
 };

@@ -1,10 +1,10 @@
 /**
  * Leads-scoped presentation helpers (mktr-leads UI/UX adoption · Option B).
- * Source resolver + display lead-id. Leads-local; no shared file touched.
- * (The parity plan expands this with follow-up/key-facts/timeline derivations.)
+ * Source resolver, lead-id, notes parsing, and the follow-up / key-facts /
+ * timeline derivations from `lead_activities.metadata`. Leads-local.
  */
 import type { IconName } from '@/types/ui';
-import type { Lead } from '@/types/lead';
+import type { Lead, LeadActivity } from '@/types/lead';
 
 export interface LeadSourceMeta {
     key: string;
@@ -42,27 +42,99 @@ export interface LeadDetailRow {
     value: string;
 }
 
-/** Enrichment labels the MKTR receiver writes into `leads.notes` as "Label: value | …". */
-const KNOWN_NOTE_LABELS = ['Birthday', 'Postal', 'Company', 'Title', 'Industry', 'Source', 'Campaign', 'QR'];
+/**
+ * Enrichment labels the lyfe `receive-mktr-lead` edge function writes into
+ * `leads.notes` as "Label: value | …" (see supabase/functions/receive-mktr-lead/
+ * index.ts) — INCLUDING `Tags` + `Sentiment`, which Retell/voice leads carry.
+ */
+const KNOWN_NOTE_LABELS = [
+    'Birthday',
+    'Postal',
+    'Company',
+    'Title',
+    'Industry',
+    'Source',
+    'Tags',
+    'Sentiment',
+    'Campaign',
+    'QR',
+];
 
 /**
- * Parses the ` | `-joined enrichment string MKTR writes into `leads.notes` into
- * labeled rows (splitting on the FIRST ": " so values may contain colons). If the
- * text isn't in that structured shape (e.g. a free-text note), it's returned
- * verbatim as one label-less row — never mangled.
+ * Parses the ` | `-joined enrichment string into labeled rows (splitting on the
+ * FIRST ": " so values may contain colons). Unknown/label-less segments are
+ * skipped — a single unrecognized label must NOT collapse the whole parse. Only
+ * when no known label is present at all is the text returned verbatim as one
+ * label-less row (legacy free-text note), never mangled.
  */
 export function parseLeadNotes(notes: string | null | undefined): LeadDetailRow[] {
     const text = notes?.trim();
     if (!text) return [];
     const rows: LeadDetailRow[] = [];
+    let sawKnown = false;
     for (const seg of text.split(' | ')) {
         const s = seg.trim();
         const i = s.indexOf(': ');
         const label = i === -1 ? null : s.slice(0, i).trim();
-        if (!label || !KNOWN_NOTE_LABELS.includes(label)) {
-            return [{ label: null, value: text }];
+        if (label && KNOWN_NOTE_LABELS.includes(label)) {
+            sawKnown = true;
+            const value = s.slice(i + 2).trim();
+            if (value) rows.push({ label, value });
         }
-        rows.push({ label, value: s.slice(i + 2).trim() });
     }
-    return rows.filter((r) => r.value.length > 0);
+    if (!sawKnown) return [{ label: null, value: text }];
+    return rows;
+}
+
+// ── CRM surfaces derived from lead_activities.metadata ──────────────────────
+// Follow-ups + key-facts are persisted as dedicated activity rows whose
+// `metadata` carries the structured payload (no leads-table schema change) —
+// the same metadata-on-activity model the timeline already uses.
+
+export interface FollowUp {
+    at: string; // ISO timestamp
+    task: string;
+    remind: boolean;
+}
+
+export interface KeyFact {
+    label: string;
+    value: string;
+}
+
+function activityMeta(a: LeadActivity): Record<string, unknown> {
+    return (a.metadata ?? {}) as Record<string, unknown>;
+}
+
+/** Latest follow-up (activities arrive newest-first from `fetchLeadActivities`). */
+export function deriveFollowUp(activities: LeadActivity[]): FollowUp | null {
+    const row = activities.find((a) => a.type === 'follow_up');
+    if (!row) return null;
+    const m = activityMeta(row);
+    const at = typeof m.next_follow_up_at === 'string' ? m.next_follow_up_at : null;
+    if (!at) return null;
+    return {
+        at,
+        task: typeof m.task === 'string' ? m.task : row.description || 'Follow up',
+        remind: m.remind === true,
+    };
+}
+
+/** Latest key-facts set. */
+export function deriveKeyFacts(activities: LeadActivity[]): KeyFact[] {
+    const row = activities.find((a) => a.type === 'key_facts');
+    if (!row) return [];
+    const facts = Array.isArray(activityMeta(row).facts) ? (activityMeta(row).facts as unknown[]) : [];
+    return facts
+        .map((f) => f as Partial<KeyFact>)
+        .filter((f): f is KeyFact => !!f && typeof f.label === 'string' && typeof f.value === 'string')
+        .map((f) => ({ label: f.label, value: f.value }));
+}
+
+/** Config activity types that render in their OWN cards — excluded from the timeline. */
+const TIMELINE_EXCLUDED = new Set(['follow_up', 'key_facts']);
+
+/** Timeline = activities minus the follow-up / key-facts config rows. */
+export function timelineActivities(activities: LeadActivity[]): LeadActivity[] {
+    return activities.filter((a) => !TIMELINE_EXCLUDED.has(a.type));
 }

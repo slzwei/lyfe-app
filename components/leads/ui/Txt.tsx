@@ -82,8 +82,8 @@ export function Txt({
     return <RNText {...rest} style={[base, style]} />;
 }
 
-/** UPPERCASE meta label ("NEXT FOLLOW-UP", section heads). Min 11pt per a11y floor. */
-export function Eyebrow({ color, size = 11, weight = 'bold', tracking = 1.1, style, ...rest }: TxtProps) {
+/** UPPERCASE meta label ("STATUS", "ACTIVITY", section heads). 13pt floor (CLAUDE.md a11y). */
+export function Eyebrow({ color, size = 13, weight = 'bold', tracking = 1.1, style, ...rest }: TxtProps) {
     const { colors } = useLeadsTheme();
     return (
         <Txt

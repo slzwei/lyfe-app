@@ -53,6 +53,22 @@ jest.mock('@/components/leads/NoteInput', () => {
         return <View testID="note-input" />;
     };
 });
+jest.mock('@/components/leads/LogActivitySheet', () => {
+    const { View } = require('react-native');
+    return { LogActivitySheet: () => <View testID="log-activity-sheet" /> };
+});
+jest.mock('@/components/leads/FollowUpSheet', () => {
+    const { View } = require('react-native');
+    return { FollowUpSheet: () => <View testID="follow-up-sheet" /> };
+});
+jest.mock('@/components/leads/KeyFactsSheet', () => {
+    const { View } = require('react-native');
+    return { KeyFactsSheet: () => <View testID="key-facts-sheet" /> };
+});
+jest.mock('@/components/leads/LeadActionsSheet', () => {
+    const { View } = require('react-native');
+    return { LeadActionsSheet: () => <View testID="lead-actions-sheet" /> };
+});
 
 const MOCK_LEAD = {
     id: 'lead-1',

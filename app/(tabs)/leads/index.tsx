@@ -10,7 +10,7 @@ import type { Lead, LeadStatus } from '@/types/lead';
 import { useFilteredList } from '@/hooks/useFilteredList';
 import { Ionicons } from '@expo/vector-icons';
 import { useFocusEffect, useRouter } from 'expo-router';
-import React, { useCallback, useState } from 'react';
+import React, { useCallback, useRef, useState } from 'react';
 import { FlatList, RefreshControl, StyleSheet, TextInput, TouchableOpacity, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import Animated, { FadeInUp, useReducedMotion } from 'react-native-reanimated';
@@ -36,34 +36,51 @@ export default function LeadsListScreen() {
     const router = useRouter();
     const reduced = useReducedMotion();
     const isManagerView = canToggle && viewMode === 'manager';
+    // Track which rows have already animated, so virtualization recycle doesn't
+    // re-fire FadeInUp (and leave recycled rows briefly blank) on scroll-back.
+    const seenIds = useRef<Set<string>>(new Set());
 
     const [search, setSearch] = useState('');
     const [activeFilter, setActiveFilter] = useState<LeadStatus | 'all'>('all');
+    const [showArchived, setShowArchived] = useState(false);
     const [refreshing, setRefreshing] = useState(false);
     const [leads, setLeads] = useState<Lead[]>([]);
     const [isLoading, setIsLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
 
-    // Realtime: prepend new leads from MKTR (or any source)
-    const handleNewLead = useCallback((newLead: Lead) => {
-        setLeads((prev) => {
-            if (prev.some((l) => l.id === newLead.id)) return prev;
-            return [newLead, ...prev];
-        });
-    }, []);
-    useLeadRealtime(handleNewLead);
+    // Realtime: prepend new leads from MKTR (or any source). New leads are active,
+    // so don't inject them into the Archived view.
+    const handleNewLead = useCallback(
+        (newLead: Lead) => {
+            if (showArchived) return;
+            setLeads((prev) => {
+                if (prev.some((l) => l.id === newLead.id)) return prev;
+                return [newLead, ...prev];
+            });
+        },
+        [showArchived],
+    );
 
     const loadLeads = useCallback(async () => {
         if (!user?.id) return;
         setError(null);
-        const { data, error: fetchError } = await fetchLeads(user.id, isManagerView);
+        const { data, error: fetchError } = await fetchLeads(
+            user.id,
+            isManagerView,
+            undefined,
+            undefined,
+            showArchived,
+        );
         if (fetchError) {
             setError(fetchError);
         } else {
             setLeads(data);
         }
         setIsLoading(false);
-    }, [user?.id, isManagerView]);
+    }, [user?.id, isManagerView, showArchived]);
+
+    // INSERT prepends a new lead; UPDATE (reassign/archive/status) refetches.
+    useLeadRealtime(handleNewLead, loadLeads);
 
     useFocusEffect(
         useCallback(() => {
@@ -85,29 +102,56 @@ export default function LeadsListScreen() {
         setRefreshing(false);
     }, [loadLeads]);
 
-    // ── Header: editorial title + Add ───────────────────────────────────────
+    // ── Header: editorial title + Archived toggle + Add ─────────────────────
     const header = (
         <View style={styles.titleRow}>
             <Txt role="display" weight="semibold" size={30} color={colors.text} tracking={-0.5}>
-                Leads
+                {showArchived ? 'Archived' : 'Leads'}
             </Txt>
-            <TouchableOpacity
-                style={[styles.addButton, { backgroundColor: colors.accent }]}
-                onPress={() => router.push('/(tabs)/leads/add')}
-                accessibilityRole="button"
-                testID="leads-add-button"
-                accessibilityLabel="Add new lead"
-            >
-                <Ionicons name="add" size={20} color={colors.textInverse} />
-                <Txt role="body" weight="bold" size={14} color={colors.textInverse}>
-                    Add
-                </Txt>
-            </TouchableOpacity>
+            <View style={styles.headerRight}>
+                <TouchableOpacity
+                    style={[
+                        styles.archiveToggle,
+                        {
+                            backgroundColor: showArchived ? colors.accent : colors.surface,
+                            borderColor: showArchived ? colors.accent : colors.border,
+                        },
+                    ]}
+                    onPress={() => {
+                        setShowArchived((v) => !v);
+                        setIsLoading(true);
+                    }}
+                    accessibilityRole="button"
+                    accessibilityState={{ selected: showArchived }}
+                    testID="leads-archived-toggle"
+                    accessibilityLabel={showArchived ? 'Show active leads' : 'Show archived leads'}
+                >
+                    <Ionicons
+                        name="archive-outline"
+                        size={17}
+                        color={showArchived ? colors.textInverse : colors.textMuted}
+                    />
+                </TouchableOpacity>
+                {!showArchived ? (
+                    <TouchableOpacity
+                        style={[styles.addButton, { backgroundColor: colors.accent }]}
+                        onPress={() => router.push('/(tabs)/leads/add')}
+                        accessibilityRole="button"
+                        testID="leads-add-button"
+                        accessibilityLabel="Add new lead"
+                    >
+                        <Ionicons name="add" size={20} color={colors.textInverse} />
+                        <Txt role="body" weight="bold" size={14} color={colors.textInverse}>
+                            Add
+                        </Txt>
+                    </TouchableOpacity>
+                ) : null}
+            </View>
         </View>
     );
 
     const controls = (
-        <View style={styles.controls}>
+        <View>
             <View style={[styles.searchBar, { backgroundColor: colors.surface, borderColor: colors.border }]}>
                 <Ionicons name="search" size={18} color={colors.textFaint} />
                 <TextInput
@@ -166,7 +210,12 @@ export default function LeadsListScreen() {
                             >
                                 {item.label}
                             </Txt>
-                            <Txt role="mono" size={12} color={isActive ? colors.textInverse : colors.textFaint}>
+                            <Txt
+                                role="body"
+                                weight="semibold"
+                                size={13}
+                                color={isActive ? colors.textInverse : colors.textFaint}
+                            >
                                 {count}
                             </Txt>
                         </TouchableOpacity>
@@ -195,6 +244,8 @@ export default function LeadsListScreen() {
     const emptyNode =
         search.trim().length > 0 ? (
             <CompactEmpty icon="search-outline" text={`No results for "${search}"`} />
+        ) : showArchived ? (
+            <CompactEmpty icon="archive-outline" text="No archived leads." />
         ) : leads.length === 0 ? (
             <LeadsEmptyState
                 icon="flash-outline"
@@ -232,13 +283,23 @@ export default function LeadsListScreen() {
                 windowSize={5}
                 initialNumToRender={10}
                 ListEmptyComponent={<View style={styles.emptyWrap}>{emptyNode}</View>}
-                renderItem={({ item, index }) => (
-                    <Animated.View
-                        entering={reduced ? undefined : FadeInUp.duration(280).delay(Math.min(index, 6) * 55)}
-                    >
-                        <LeadListCard lead={item} onPress={() => router.push(`/(tabs)/leads/${item.id}`)} />
-                    </Animated.View>
-                )}
+                renderItem={({ item, index }) => {
+                    // Animate each row only on its FIRST appearance — recycled rows
+                    // (virtualization) must not re-run the entrance on scroll-back.
+                    const firstSeen = !seenIds.current.has(item.id);
+                    seenIds.current.add(item.id);
+                    return (
+                        <Animated.View
+                            entering={
+                                reduced || !firstSeen
+                                    ? undefined
+                                    : FadeInUp.duration(280).delay(Math.min(index, 6) * 55)
+                            }
+                        >
+                            <LeadListCard lead={item} onPress={() => router.push(`/(tabs)/leads/${item.id}`)} />
+                        </Animated.View>
+                    );
+                }}
             />
         </SafeAreaView>
     );
@@ -253,6 +314,15 @@ const styles = StyleSheet.create({
         justifyContent: 'space-between',
         marginBottom: spacing.md,
     },
+    headerRight: { flexDirection: 'row', alignItems: 'center', gap: 8 },
+    archiveToggle: {
+        width: 40,
+        height: 40,
+        borderRadius: 20,
+        borderWidth: 1,
+        alignItems: 'center',
+        justifyContent: 'center',
+    },
     addButton: {
         flexDirection: 'row',
         alignItems: 'center',
@@ -261,7 +331,6 @@ const styles = StyleSheet.create({
         paddingVertical: 9,
         borderRadius: 20,
     },
-    controls: {},
     searchBar: {
         flexDirection: 'row',
         alignItems: 'center',
@@ -281,6 +350,7 @@ const styles = StyleSheet.create({
         gap: 6,
         paddingHorizontal: 16,
         paddingVertical: 8,
+        minHeight: 44,
         borderRadius: 20,
         borderWidth: 1,
     },

@@ -119,6 +119,19 @@ jest.mock('react-native-reanimated', () => {
         withDelay: jest.fn((_, v) => v),
         runOnJS: jest.fn((fn) => fn),
         runOnUI: jest.fn((fn) => fn),
+        // reanimated/mock omits Easing; useSheetAnimation reads Easing.out(Easing.cubic)
+        // at module scope, so provide identity easings (withTiming ignores them anyway).
+        Easing: {
+            ...(actual.Easing || {}),
+            linear: (t) => t,
+            ease: (t) => t,
+            quad: (t) => t,
+            cubic: (t) => t,
+            in: (fn) => fn || ((t) => t),
+            out: (fn) => fn || ((t) => t),
+            inOut: (fn) => fn || ((t) => t),
+            bezier: () => (t) => t,
+        },
     };
 });
 

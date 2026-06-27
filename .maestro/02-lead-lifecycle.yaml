@@ -27,9 +27,9 @@ appId: com.shawnlee.lyfe
     id: ".*lead-card-.*"
 - waitForAnimationToEnd
 
-# Confirm we're on the lead detail.
+# Confirm we're on the lead detail (owner sees the tappable status pill grid).
 - assertVisible:
-    id: "lead-status-badge"
+    id: "lead-status-grid"
 
 # --- Add a note ---
 - tapOn:
@@ -52,12 +52,9 @@ appId: com.shawnlee.lyfe
     visible: "E2E test note"
     timeout: 10000
 
-# --- Change status to Contacted ---
+# --- Change status to Contacted (status pill grid is always visible now) ---
 - tapOn:
-    id: "lead-status-action"
-- waitForAnimationToEnd
-- tapOn:
-    id: "status-option-contacted"
+    id: "lead-status-pill-contacted"
 - waitForAnimationToEnd
 
 # Assert the status badge reflects the change.

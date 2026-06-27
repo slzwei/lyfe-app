@@ -3,30 +3,40 @@ import { supabase } from '@/lib/supabase';
 import type { Lead } from '@/types/lead';
 import { useEffect, useRef } from 'react';
 
-export function useLeadRealtime(onNewLead: (lead: Lead) => void) {
+export function useLeadRealtime(onNewLead: (lead: Lead) => void, onUpdate?: () => void) {
     const { user } = useAuth();
     const retryCountRef = useRef(0);
     const retryTimeoutRef = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
     const onNewLeadRef = useRef(onNewLead);
     onNewLeadRef.current = onNewLead;
+    const onUpdateRef = useRef(onUpdate);
+    onUpdateRef.current = onUpdate;
 
     useEffect(() => {
         if (!user?.id) return;
 
+        const assignedFilter = `assigned_to=eq.${user.id}`;
         const createChannel = () =>
-            supabase.channel(`leads:${user.id}`).on(
-                'postgres_changes',
-                {
-                    event: 'INSERT',
-                    schema: 'public',
-                    table: 'leads',
-                    filter: `assigned_to=eq.${user.id}`,
-                },
-                (payload) => {
-                    retryCountRef.current = 0;
-                    onNewLeadRef.current(payload.new as Lead);
-                },
-            );
+            supabase
+                .channel(`leads:${user.id}`)
+                .on(
+                    'postgres_changes',
+                    { event: 'INSERT', schema: 'public', table: 'leads', filter: assignedFilter },
+                    (payload) => {
+                        retryCountRef.current = 0;
+                        onNewLeadRef.current(payload.new as Lead);
+                    },
+                )
+                // UPDATE = a reassignment/archive/status change on an owned lead; just
+                // refetch so the foregrounded list reflects it (e.g. an archived lead leaves).
+                .on(
+                    'postgres_changes',
+                    { event: 'UPDATE', schema: 'public', table: 'leads', filter: assignedFilter },
+                    () => {
+                        retryCountRef.current = 0;
+                        onUpdateRef.current?.();
+                    },
+                );
 
         let channel = createChannel().subscribe((status) => {
             if (status === 'SUBSCRIBED') {

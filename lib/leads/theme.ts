@@ -16,7 +16,7 @@ import { useMemo } from 'react';
 import { StyleSheet } from 'react-native';
 import { useTheme } from '@/contexts/ThemeContext';
 
-export type LeadStatusKey = 'new' | 'contacted' | 'qualified' | 'proposed' | 'won' | 'lost' | 'disputed';
+export type LeadStatusKey = 'new' | 'contacted' | 'qualified' | 'proposed' | 'won' | 'lost';
 
 /** 4pt scale + radii ported from mktr (leads-only — does not alter lyfe's global SPACING). */
 export const spacing = { xs: 4, sm: 8, md: 12, lg: 16, xl: 20, xxl: 28 } as const;
@@ -25,8 +25,7 @@ export const radius = { chip: 9, btn: 14, card: 18, hero: 20 } as const;
 /**
  * Filled status-pill colors — leads-only, warm Tropic remap of the brand-violating
  * `STATUS_CONFIG` (#007AFF/#EAB308). Theme-invariant vivid fills (mktr's own pattern),
- * every fill/text pair verified ≥4.5:1 (WCAG AA). `disputed` is defined but stays
- * hidden in the UI until the parity plan adds the enum value.
+ * every fill/text pair verified ≥4.5:1 (WCAG AA).
  */
 export const statusColors: Record<LeadStatusKey, string> = {
     new: '#C24A22', // terracotta — white text ≈4.9:1
@@ -35,7 +34,6 @@ export const statusColors: Record<LeadStatusKey, string> = {
     proposed: '#7B5A94', // deep mauve — white text ≈5.6:1
     won: '#2F7A49', // deep green — white text ≈5.3:1
     lost: '#6E655C', // warm grey — white text ≈5.8:1
-    disputed: '#C0392B', // warm red — white text ≈5.4:1
 };
 
 export const pillText: Record<LeadStatusKey, string> = {
@@ -45,7 +43,6 @@ export const pillText: Record<LeadStatusKey, string> = {
     proposed: '#FFFFFF',
     won: '#FFFFFF',
     lost: '#FFFFFF',
-    disputed: '#FFFFFF',
 };
 
 /** `#RRGGBB` + opacity (0–1) → `rgba()`. Used for tints (rails, chip backgrounds). */
@@ -57,19 +54,15 @@ export function alpha(hex: string, a: number): string {
     return `rgba(${r}, ${g}, ${b}, ${Math.max(0, Math.min(1, a))})`;
 }
 
-/** Relative-luminance pick of a readable foreground (warm ink vs cream) over `hex`. */
-export function onColor(hex: string): string {
-    const h = hex.replace('#', '');
-    const toLin = (c: number) => {
-        const s = c / 255;
-        return s <= 0.03928 ? s / 12.92 : ((s + 0.055) / 1.055) ** 2.4;
-    };
-    const L =
-        0.2126 * toLin(parseInt(h.slice(0, 2), 16)) +
-        0.7152 * toLin(parseInt(h.slice(2, 4), 16)) +
-        0.0722 * toLin(parseInt(h.slice(4, 6), 16));
-    return L > 0.4 ? '#1B1A17' : '#FBF7EE';
-}
+/** Display labels for lead statuses — the single source for the leads module. */
+export const STATUS_LABELS: Record<LeadStatusKey, string> = {
+    new: 'New',
+    contacted: 'Contacted',
+    qualified: 'Qualified',
+    proposed: 'Proposed',
+    won: 'Won',
+    lost: 'Lost',
+};
 
 /**
  * Leads `colors` = lyfe's live theme colors + aliases under mktr's token names,
@@ -93,6 +86,9 @@ function bridgeColors(base: ReturnType<typeof useTheme>['colors']) {
         // leads-only additions
         secondary: base.accentMuted,
         wonSurface: base.successLight,
+        // Fixed dark ink for text/icons on bright brand-color fills (WhatsApp green) —
+        // contrast-verified in both themes; replaces hardcoded screen hex.
+        inkOnBrand: '#10110F',
     };
 }
 

@@ -16,7 +16,9 @@ export type LeadActivityType =
     | 'reassignment'
     | 'email'
     | 'meeting'
-    | 'follow_up';
+    | 'follow_up'
+    | 'unassignment'
+    | 'key_facts';
 
 export interface Lead {
     id: string;
@@ -33,6 +35,8 @@ export interface Lead {
     notes: string | null;
     recording_url: string | null;
     transcript: string | null;
+    archived_at: string | null;
+    archived_by_id: string | null;
     updated_at: string;
     created_at: string;
 }

@@ -19,6 +19,7 @@ import {
     fetchManagerDashboardStats,
     assignLead,
     getTeamLeadSummary,
+    setLeadArchived,
 } from '@/lib/leads';
 
 jest.mock('@/lib/supabase');
@@ -139,6 +140,23 @@ describe('fetchLeads', () => {
         const result = await fetchLeads('agent-1', false, 1, 2);
         expect(result.hasMore).toBe(false);
         expect(result.data).toHaveLength(1);
+    });
+
+    it('excludes archived leads by default (archived_at is null)', async () => {
+        mockFetchResponse([LEAD]);
+
+        await fetchLeads('agent-1', false);
+        const url = mockFetch.mock.calls[0][0] as string;
+        expect(url).toContain('archived_at=is.null');
+        expect(url).not.toContain('archived_at=not.is.null');
+    });
+
+    it('returns ONLY archived leads when archivedOnly is true', async () => {
+        mockFetchResponse([{ ...LEAD, archived_at: '2026-06-27T00:00:00Z' }]);
+
+        await fetchLeads('agent-1', false, undefined, 50, true);
+        const url = mockFetch.mock.calls[0][0] as string;
+        expect(url).toContain('archived_at=not.is.null');
     });
 });
 
@@ -293,6 +311,50 @@ describe('updateLeadStatus', () => {
 
         const result = await updateLeadStatus('lead-1', 'contacted', 'new', 'agent-1');
         expect(result.error).toBe('Invalid status');
+    });
+});
+
+// ── setLeadArchived ──
+
+describe('setLeadArchived', () => {
+    it('archives: sets archived_at + archived_by_id and logs an audit activity', async () => {
+        const leadsChain = mockSupa.__getChain('leads');
+        mockResolve(leadsChain, { error: null });
+        const activitiesChain = mockSupa.__getChain('lead_activities');
+        mockResolve(activitiesChain, { error: null });
+
+        const result = await setLeadArchived('lead-1', true, 'agent-1');
+
+        expect(result.error).toBeNull();
+        expect(mockSupa.from).toHaveBeenCalledWith('leads');
+        expect(mockSupa.from).toHaveBeenCalledWith('lead_activities');
+        const patch = leadsChain.update.mock.calls[0][0];
+        expect(patch.archived_at).toEqual(expect.any(String));
+        expect(patch.archived_by_id).toBe('agent-1');
+    });
+
+    it('unarchives: clears archived_at + archived_by_id', async () => {
+        const leadsChain = mockSupa.__getChain('leads');
+        mockResolve(leadsChain, { error: null });
+        const activitiesChain = mockSupa.__getChain('lead_activities');
+        mockResolve(activitiesChain, { error: null });
+
+        const result = await setLeadArchived('lead-1', false, 'agent-1');
+
+        expect(result.error).toBeNull();
+        const patch = leadsChain.update.mock.calls[0][0];
+        expect(patch.archived_at).toBeNull();
+        expect(patch.archived_by_id).toBeNull();
+    });
+
+    it('returns the error and skips the activity log when the update fails', async () => {
+        const leadsChain = mockSupa.__getChain('leads');
+        mockResolve(leadsChain, { error: { message: 'RLS denied' } });
+
+        const result = await setLeadArchived('lead-1', true, 'agent-1');
+
+        expect(result.error).toBe('RLS denied');
+        expect(mockSupa.from).not.toHaveBeenCalledWith('lead_activities');
     });
 });
 
