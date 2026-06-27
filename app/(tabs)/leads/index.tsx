@@ -42,31 +42,43 @@ export default function LeadsListScreen() {
 
     const [search, setSearch] = useState('');
     const [activeFilter, setActiveFilter] = useState<LeadStatus | 'all'>('all');
+    const [showArchived, setShowArchived] = useState(false);
     const [refreshing, setRefreshing] = useState(false);
     const [leads, setLeads] = useState<Lead[]>([]);
     const [isLoading, setIsLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
 
-    // Realtime: prepend new leads from MKTR (or any source)
-    const handleNewLead = useCallback((newLead: Lead) => {
-        setLeads((prev) => {
-            if (prev.some((l) => l.id === newLead.id)) return prev;
-            return [newLead, ...prev];
-        });
-    }, []);
+    // Realtime: prepend new leads from MKTR (or any source). New leads are active,
+    // so don't inject them into the Archived view.
+    const handleNewLead = useCallback(
+        (newLead: Lead) => {
+            if (showArchived) return;
+            setLeads((prev) => {
+                if (prev.some((l) => l.id === newLead.id)) return prev;
+                return [newLead, ...prev];
+            });
+        },
+        [showArchived],
+    );
     useLeadRealtime(handleNewLead);
 
     const loadLeads = useCallback(async () => {
         if (!user?.id) return;
         setError(null);
-        const { data, error: fetchError } = await fetchLeads(user.id, isManagerView);
+        const { data, error: fetchError } = await fetchLeads(
+            user.id,
+            isManagerView,
+            undefined,
+            undefined,
+            showArchived,
+        );
         if (fetchError) {
             setError(fetchError);
         } else {
             setLeads(data);
         }
         setIsLoading(false);
-    }, [user?.id, isManagerView]);
+    }, [user?.id, isManagerView, showArchived]);
 
     useFocusEffect(
         useCallback(() => {
@@ -88,24 +100,51 @@ export default function LeadsListScreen() {
         setRefreshing(false);
     }, [loadLeads]);
 
-    // ── Header: editorial title + Add ───────────────────────────────────────
+    // ── Header: editorial title + Archived toggle + Add ─────────────────────
     const header = (
         <View style={styles.titleRow}>
             <Txt role="display" weight="semibold" size={30} color={colors.text} tracking={-0.5}>
-                Leads
+                {showArchived ? 'Archived' : 'Leads'}
             </Txt>
-            <TouchableOpacity
-                style={[styles.addButton, { backgroundColor: colors.accent }]}
-                onPress={() => router.push('/(tabs)/leads/add')}
-                accessibilityRole="button"
-                testID="leads-add-button"
-                accessibilityLabel="Add new lead"
-            >
-                <Ionicons name="add" size={20} color={colors.textInverse} />
-                <Txt role="body" weight="bold" size={14} color={colors.textInverse}>
-                    Add
-                </Txt>
-            </TouchableOpacity>
+            <View style={styles.headerRight}>
+                <TouchableOpacity
+                    style={[
+                        styles.archiveToggle,
+                        {
+                            backgroundColor: showArchived ? colors.accent : colors.surface,
+                            borderColor: showArchived ? colors.accent : colors.border,
+                        },
+                    ]}
+                    onPress={() => {
+                        setShowArchived((v) => !v);
+                        setIsLoading(true);
+                    }}
+                    accessibilityRole="button"
+                    accessibilityState={{ selected: showArchived }}
+                    testID="leads-archived-toggle"
+                    accessibilityLabel={showArchived ? 'Show active leads' : 'Show archived leads'}
+                >
+                    <Ionicons
+                        name="archive-outline"
+                        size={17}
+                        color={showArchived ? colors.textInverse : colors.textMuted}
+                    />
+                </TouchableOpacity>
+                {!showArchived ? (
+                    <TouchableOpacity
+                        style={[styles.addButton, { backgroundColor: colors.accent }]}
+                        onPress={() => router.push('/(tabs)/leads/add')}
+                        accessibilityRole="button"
+                        testID="leads-add-button"
+                        accessibilityLabel="Add new lead"
+                    >
+                        <Ionicons name="add" size={20} color={colors.textInverse} />
+                        <Txt role="body" weight="bold" size={14} color={colors.textInverse}>
+                            Add
+                        </Txt>
+                    </TouchableOpacity>
+                ) : null}
+            </View>
         </View>
     );
 
@@ -203,6 +242,8 @@ export default function LeadsListScreen() {
     const emptyNode =
         search.trim().length > 0 ? (
             <CompactEmpty icon="search-outline" text={`No results for "${search}"`} />
+        ) : showArchived ? (
+            <CompactEmpty icon="archive-outline" text="No archived leads." />
         ) : leads.length === 0 ? (
             <LeadsEmptyState
                 icon="flash-outline"
@@ -270,6 +311,15 @@ const styles = StyleSheet.create({
         alignItems: 'center',
         justifyContent: 'space-between',
         marginBottom: spacing.md,
+    },
+    headerRight: { flexDirection: 'row', alignItems: 'center', gap: 8 },
+    archiveToggle: {
+        width: 40,
+        height: 40,
+        borderRadius: 20,
+        borderWidth: 1,
+        alignItems: 'center',
+        justifyContent: 'center',
     },
     addButton: {
         flexDirection: 'row',

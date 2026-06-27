@@ -91,7 +91,11 @@ export async function fetchRecentActivities(
     let leadIdFilter: string[] | null = null;
 
     if (!isManager) {
-        const { data: userLeads } = await supabase.from('leads').select('id').eq('assigned_to', userId);
+        const { data: userLeads } = await supabase
+            .from('leads')
+            .select('id')
+            .eq('assigned_to', userId)
+            .is('archived_at', null);
         leadIdFilter = ((userLeads || []) as { id: string }[]).map((l) => l.id);
     } else {
         const teamDataScope = includeTestData ?? (await resolveTeamDataScope(userId));
@@ -106,7 +110,8 @@ export async function fetchRecentActivities(
         const { data: teamLeads } = await supabase
             .from('leads')
             .select('id')
-            .in('assigned_to', [...agentIds, userId]);
+            .in('assigned_to', [...agentIds, userId])
+            .is('archived_at', null);
         leadIdFilter = ((teamLeads || []) as { id: string }[]).map((l) => l.id);
     }
 
@@ -185,7 +190,8 @@ export async function getTeamLeadSummary(
         const { data: leads, error: leadsError } = await supabase
             .from('leads')
             .select('id, status, full_name')
-            .in('assigned_to', agentIds);
+            .in('assigned_to', agentIds)
+            .is('archived_at', null);
 
         if (leadsError) return { ...emptyResult, error: leadsError.message };
 
@@ -286,7 +292,10 @@ export async function fetchManagerDashboardStats(
     // Team leads: all leads the viewer can access. RLS scopes a manager to their
     // own + their agents' leads, and directors/admins to the wider team. Replaces
     // the hero's previous use of the *personal* pipeline total (0 for managers).
-    const { count: leadCount } = await supabase.from('leads').select('id', { count: 'exact', head: true });
+    const { count: leadCount } = await supabase
+        .from('leads')
+        .select('id', { count: 'exact', head: true })
+        .is('archived_at', null);
 
     return {
         data: {

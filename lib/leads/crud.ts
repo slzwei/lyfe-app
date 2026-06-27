@@ -35,6 +35,7 @@ export async function fetchLeads(
     isManager: boolean,
     page?: number,
     pageSize: number = 50,
+    archivedOnly: boolean = false,
 ): Promise<{ data: Lead[]; error: string | null; hasMore: boolean }> {
     // Read from the module-level session cache first (set by AuthContext on
     // every auth state change). Fall back to supabase.auth.getSession() if
@@ -55,7 +56,9 @@ export async function fetchLeads(
     }
 
     const filter = isManager ? '' : `&assigned_to=eq.${encodeURIComponent(userId)}`;
-    const url = `${supaUrl}/rest/v1/leads?select=*&order=updated_at.desc${filter}`;
+    // Archived leads are hidden from active lists; the Archived tab requests them explicitly.
+    const archiveFilter = archivedOnly ? '&archived_at=not.is.null' : '&archived_at=is.null';
+    const url = `${supaUrl}/rest/v1/leads?select=*&order=updated_at.desc${archiveFilter}${filter}`;
 
     try {
         const resp = await fetch(url, {

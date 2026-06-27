@@ -7,12 +7,13 @@ import RecordingCard from '@/components/leads/RecordingCard';
 import { LogActivitySheet, type LogResult, type LogType } from '@/components/leads/LogActivitySheet';
 import { FollowUpSheet } from '@/components/leads/FollowUpSheet';
 import { KeyFactsSheet } from '@/components/leads/KeyFactsSheet';
+import { LeadActionsSheet } from '@/components/leads/LeadActionsSheet';
 import { Txt, Eyebrow, Monogram, StatusChip } from '@/components/leads/ui';
 import { useAuth } from '@/contexts/AuthContext';
 import { useViewMode } from '@/contexts/ViewModeContext';
 import { useLeadDetail } from '@/hooks/useLeadDetail';
 import { timeAgo } from '@/lib/dateTime';
-import { addLeadActivity } from '@/lib/leads';
+import { addLeadActivity, setLeadArchived } from '@/lib/leads';
 import { scheduleFollowUpReminder, cancelFollowUpReminder, warnRemindersDisabled } from '@/lib/leads/reminders';
 import {
     resolveLeadSource,
@@ -104,6 +105,9 @@ export default function LeadDetailScreen() {
     // Key facts — owner-only edit.
     const [keyFactsOpen, setKeyFactsOpen] = useState(false);
     const [keyFactsBusy, setKeyFactsBusy] = useState(false);
+
+    // Archive actions — owner-only.
+    const [actionsOpen, setActionsOpen] = useState(false);
 
     useEffect(() => {
         const subscription = AppState.addEventListener('change', (nextState) => {
@@ -267,6 +271,19 @@ export default function LeadDetailScreen() {
         }
     };
 
+    const doArchive = async () => {
+        if (!user?.id || !leadId) return;
+        setActionsOpen(false);
+        await setLeadArchived(leadId, true, user.id);
+        router.back(); // archived leads leave the active list
+    };
+    const doUnarchive = async () => {
+        if (!user?.id || !leadId) return;
+        setActionsOpen(false);
+        await setLeadArchived(leadId, false, user.id);
+        await loadData();
+    };
+
     const src = resolveLeadSource(lead);
     const leadIdLabel = displayLeadId(lead);
     const mktrRows = lead.source_name === 'mktr' ? parseLeadNotes(lead.notes) : [];
@@ -313,7 +330,16 @@ export default function LeadDetailScreen() {
                         <Ionicons name="swap-horizontal" size={20} color={colors.textMuted} />
                     </Pressable>
                 ) : (
-                    <View style={styles.pill} />
+                    <Pressable
+                        onPress={() => setActionsOpen(true)}
+                        style={styles.pill}
+                        testID="lead-actions-action"
+                        accessibilityRole="button"
+                        accessibilityLabel="Lead actions"
+                        hitSlop={8}
+                    >
+                        <Ionicons name="ellipsis-horizontal" size={20} color={colors.textMuted} />
+                    </Pressable>
                 )}
             </View>
 
@@ -751,6 +777,13 @@ export default function LeadDetailScreen() {
                         initial={keyFacts}
                         busy={keyFactsBusy}
                         onSave={saveKeyFacts}
+                    />
+                    <LeadActionsSheet
+                        visible={actionsOpen}
+                        onClose={() => setActionsOpen(false)}
+                        isArchived={!!lead.archived_at}
+                        onArchive={doArchive}
+                        onUnarchive={doUnarchive}
                     />
                 </>
             ) : null}

@@ -244,6 +244,7 @@ export async function fetchTeamMember(
                     'id, assigned_to, created_by, full_name, phone, email, source, source_name, external_id, status, product_interest, notes, updated_at, created_at',
                 )
                 .eq('assigned_to', memberId)
+                .is('archived_at', null)
                 .order('updated_at', { ascending: false }),
         ]);
 
@@ -533,12 +534,17 @@ export async function fetchManagerOverview(
                     .select('user_id')
                     .in('user_id', agentIds)
                     .gte('created_at', periodStart),
-                supabase.from('leads').select('assigned_to, status, updated_at').in('assigned_to', agentIds),
+                supabase
+                    .from('leads')
+                    .select('assigned_to, status, updated_at')
+                    .in('assigned_to', agentIds)
+                    .is('archived_at', null),
                 supabase
                     .from('leads')
                     .select('status')
                     .in('assigned_to', agentIds)
                     .in('status', ['won', 'lost'])
+                    .is('archived_at', null)
                     .gte('updated_at', periodStart),
             ]);
 
@@ -689,6 +695,7 @@ export async function getTeamPerformance(
                 .select('assigned_to, status')
                 .in('assigned_to', agentIds)
                 .in('status', ['won', 'lost'])
+                .is('archived_at', null)
                 .gte('updated_at', dateRange.start)
                 .lte('updated_at', dateRange.end),
             supabase

@@ -65,6 +65,10 @@ jest.mock('@/components/leads/KeyFactsSheet', () => {
     const { View } = require('react-native');
     return { KeyFactsSheet: () => <View testID="key-facts-sheet" /> };
 });
+jest.mock('@/components/leads/LeadActionsSheet', () => {
+    const { View } = require('react-native');
+    return { LeadActionsSheet: () => <View testID="lead-actions-sheet" /> };
+});
 
 const MOCK_LEAD = {
     id: 'lead-1',
