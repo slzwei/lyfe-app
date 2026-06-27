@@ -112,7 +112,7 @@ export function KeyFactsSheet({
     );
 }
 
-const makeStyles = ({ colors }: LeadsTheme) =>
+const makeStyles = (_theme: LeadsTheme) =>
     StyleSheet.create({
         factRow: { flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: spacing.sm },
         input: {
