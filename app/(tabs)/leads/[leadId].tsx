@@ -1,86 +1,49 @@
-import EmptyState from '@/components/EmptyState';
-import ErrorBanner from '@/components/ErrorBanner';
-import LeadActivityItem from '@/components/LeadActivityItem';
+import { ActivityFeed } from '@/components/leads/ActivityFeed';
 import ContactConfirmModal from '@/components/leads/ContactConfirmModal';
 import NoteInput from '@/components/leads/NoteInput';
-import QuickAction from '@/components/leads/QuickAction';
 import ReassignModal from '@/components/leads/ReassignModal';
 import RecordingCard from '@/components/leads/RecordingCard';
-import StatusPicker from '@/components/leads/StatusPicker';
-import LoadingState from '@/components/LoadingState';
-import ScreenHeader from '@/components/ScreenHeader';
-import StatusBadge from '@/components/StatusBadge';
-import { letterSpacing, shadow } from '@/constants/platform';
-import { KeyboardAwareScrollView } from 'react-native-keyboard-controller';
+import { Txt, Eyebrow, Monogram, StatusChip } from '@/components/leads/ui';
 import { useAuth } from '@/contexts/AuthContext';
-import { useTheme } from '@/contexts/ThemeContext';
 import { useViewMode } from '@/contexts/ViewModeContext';
 import { useLeadDetail } from '@/hooks/useLeadDetail';
 import { timeAgo } from '@/lib/dateTime';
+import { resolveLeadSource, displayLeadId, parseLeadNotes } from '@/lib/leads/meta';
+import {
+    useLeadsTheme,
+    useLeadsThemedStyles,
+    alpha,
+    spacing,
+    radius,
+    statusColors,
+    pillText,
+    type LeadsTheme,
+} from '@/lib/leads/theme';
 import { formatSgPhone } from '@/lib/phone';
-import { PRODUCT_LABELS, SOURCE_LABELS } from '@/types/lead';
-import type { ThemeColors } from '@/types/theme';
-import type { IconName } from '@/types/ui';
+import { LEAD_STATUSES, PRODUCT_LABELS, SOURCE_LABELS, type LeadStatus } from '@/types/lead';
 import { Ionicons } from '@expo/vector-icons';
-import { useLocalSearchParams, useRouter, useSegments } from 'expo-router';
+import { useLocalSearchParams, useRouter } from 'expo-router';
+import { KeyboardAwareScrollView } from 'react-native-keyboard-controller';
 import React, { useEffect, useRef, useState } from 'react';
-import { AppState, Linking, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { ActivityIndicator, AppState, Linking, Pressable, StyleSheet, TouchableOpacity, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
-// ── Local helper: premium info row with right-aligned value ──
-function InfoRow({
-    icon,
-    label,
-    value,
-    colors,
-    isLast,
-}: {
-    icon: IconName;
-    label: string;
-    value: string;
-    colors: ThemeColors;
-    isLast?: boolean;
-}) {
-    return (
-        <View
-            style={[
-                styles.infoRow,
-                !isLast && { borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: colors.border },
-            ]}
-        >
-            <View style={[styles.infoIconWrap, { backgroundColor: colors.surfaceSecondary }]}>
-                <Ionicons name={icon} size={14} color={colors.textTertiary} />
-            </View>
-            <Text style={[styles.infoLabel, { color: colors.textTertiary }]}>{label}</Text>
-            <Text style={[styles.infoValue, { color: colors.textPrimary }]} numberOfLines={1}>
-                {value}
-            </Text>
-        </View>
-    );
-}
-
-// ── Section header with optional count pill ──
-function SectionHeader({ title, count, colors }: { title: string; count?: number; colors: ThemeColors }) {
-    return (
-        <View style={styles.sectionHeader}>
-            <Text style={[styles.sectionTitle, { color: colors.textPrimary }]}>{title}</Text>
-            {count !== undefined && count > 0 && (
-                <View style={[styles.countPill, { backgroundColor: colors.accentLight }]}>
-                    <Text style={[styles.countPillText, { color: colors.accent }]}>{count}</Text>
-                </View>
-            )}
-        </View>
-    );
-}
+const STATUS_LABELS: Record<LeadStatus, string> = {
+    new: 'New',
+    contacted: 'Contacted',
+    qualified: 'Qualified',
+    proposed: 'Proposed',
+    won: 'Won',
+    lost: 'Lost',
+};
 
 export default function LeadDetailScreen() {
     const { leadId } = useLocalSearchParams<{ leadId: string }>();
-    const { colors } = useTheme();
+    const { colors } = useLeadsTheme();
+    const styles = useLeadsThemedStyles(makeStyles);
     const { user } = useAuth();
     const { viewMode, canToggle } = useViewMode();
     const router = useRouter();
-    const segments = useSegments() as unknown as string[];
-    const backLabel = segments[1] === 'team' ? 'Agent' : segments[1] === 'home' ? 'Back' : 'Leads';
     const isManagerView = canToggle && viewMode === 'manager';
 
     const {
@@ -89,7 +52,6 @@ export default function LeadDetailScreen() {
         currentStatus,
         isLoading,
         error,
-        setError,
         loadData,
         logActivity,
         handleChangeStatus,
@@ -105,12 +67,10 @@ export default function LeadDetailScreen() {
         noteText,
         setNoteText,
         isSavingNote,
-        showStatusPicker,
-        setShowStatusPicker,
         isUpdatingStatus,
     } = useLeadDetail({ leadId, userId: user?.id, userRole: user?.role, fullName: user?.full_name });
 
-    // Contact confirmation (AppState-based)
+    // Contact confirmation (AppState-based) — preserved behavior.
     const [pendingContact, setPendingContact] = useState<{ type: 'call' | 'whatsapp'; phone: string } | null>(null);
     const [showContactConfirm, setShowContactConfirm] = useState(false);
     const hasPendingContact = useRef(false);
@@ -130,42 +90,32 @@ export default function LeadDetailScreen() {
 
     if (isLoading) {
         return (
-            <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]} edges={['top']}>
-                <ScreenHeader showBack backLabel={backLabel} title="Loading..." />
-                <LoadingState />
+            <SafeAreaView style={[styles.root, styles.center]} edges={['top']}>
+                <ActivityIndicator testID="lead-detail-loading" color={colors.accent} />
             </SafeAreaView>
         );
     }
 
-    // Parse MKTR source details from notes (format: "Key: Value | Key: Value")
-    const mktrInfo =
-        lead?.source_name === 'mktr' && lead.notes
-            ? Object.fromEntries(
-                  lead.notes.split(' | ').map((part) => {
-                      const [key, ...rest] = part.split(': ');
-                      return [key.toLowerCase(), rest.join(': ')];
-                  }),
-              )
-            : null;
-
     if (!lead) {
         return (
-            <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]} edges={['top']}>
-                <View style={styles.notFound}>
-                    <View style={[styles.notFoundIconWrap, { backgroundColor: colors.surfaceSecondary }]}>
-                        <Ionicons name="alert-circle-outline" size={32} color={colors.textTertiary} />
-                    </View>
-                    <Text style={[styles.notFoundText, { color: colors.textPrimary }]}>Lead not found</Text>
-                    <Text style={[styles.notFoundSub, { color: colors.textTertiary }]}>
-                        This lead may have been removed
-                    </Text>
-                    <TouchableOpacity
-                        style={[styles.notFoundBtn, { backgroundColor: colors.accent }]}
-                        onPress={() => router.back()}
-                    >
-                        <Text style={[styles.notFoundBtnText, { color: colors.textInverse }]}>Go Back</Text>
-                    </TouchableOpacity>
+            <SafeAreaView style={[styles.root, styles.center]} edges={['top']}>
+                <View style={[styles.notFoundIcon, { backgroundColor: colors.surfaceAlt }]}>
+                    <Ionicons name="alert-circle-outline" size={30} color={colors.textFaint} />
                 </View>
+                <Txt role="display" weight="semibold" size={19} color={colors.text}>
+                    Lead not found
+                </Txt>
+                <Txt role="body" size={14} color={colors.textMuted} center style={{ marginTop: 4 }}>
+                    This lead may have been removed
+                </Txt>
+                <TouchableOpacity
+                    style={[styles.backBtn, { backgroundColor: colors.accent }]}
+                    onPress={() => router.back()}
+                >
+                    <Txt role="body" weight="semibold" size={15} color={colors.textInverse}>
+                        Go Back
+                    </Txt>
+                </TouchableOpacity>
             </SafeAreaView>
         );
     }
@@ -174,12 +124,6 @@ export default function LeadDetailScreen() {
         if (!lead.phone) return;
         hasPendingContact.current = true;
         setPendingContact({ type: 'call', phone: lead.phone });
-        // E2E bypass: production opens tel:, the app backgrounds, and the
-        // modal opens via the AppState 'active' listener when the user
-        // returns from the Phone app. On the iOS sim that handoff doesn't
-        // work cleanly (`wa.me` opens Safari, `tel:` is a no-op), so we
-        // open the modal directly. Production users still hit the real
-        // tel: handoff path.
         if (process.env.EXPO_PUBLIC_E2E_LINKING_BYPASS === '1') {
             setShowContactConfirm(true);
         } else {
@@ -215,230 +159,312 @@ export default function LeadDetailScreen() {
                 : `Sent WhatsApp to ${displayPhone}`;
 
         logActivity(pc.type, description, { phone: pc.phone, outcome });
-
-        // Auto-advance: New -> Contacted on any logged contact attempt
-        if (currentStatus === 'new') {
-            handleChangeStatus('contacted');
-        }
+        if (currentStatus === 'new') handleChangeStatus('contacted');
     };
 
-    // Avatar initial + color
-    const initials = lead.full_name.charAt(0).toUpperCase();
+    const src = resolveLeadSource(lead);
+    const leadIdLabel = displayLeadId(lead);
+    const mktrRows = lead.source_name === 'mktr' ? parseLeadNotes(lead.notes) : [];
+    const tags = [PRODUCT_LABELS[lead.product_interest], src.label].filter(Boolean) as string[];
 
     return (
-        <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]} edges={['top']}>
-            <ScreenHeader
-                showBack
-                backLabel={backLabel}
-                title={lead.full_name}
-                banner={
-                    isManagerView
-                        ? { text: 'Manager View — Limited actions available.', icon: 'shield-outline' }
-                        : undefined
-                }
-            />
+        <SafeAreaView style={styles.root} edges={['top']}>
+            {/* top bar */}
+            <View style={styles.topBar}>
+                <Pressable
+                    onPress={() => router.back()}
+                    style={styles.pill}
+                    testID="lead-back"
+                    accessibilityRole="button"
+                    accessibilityLabel="Back"
+                    hitSlop={8}
+                >
+                    <Ionicons name="chevron-back" size={20} color={colors.accent} />
+                </Pressable>
+                <Txt role="mono" size={13} color={colors.textMuted} tracking={0.3}>
+                    {leadIdLabel}
+                </Txt>
+                {isManagerView ? (
+                    <Pressable
+                        onPress={handleOpenReassign}
+                        disabled={isReassigning}
+                        style={styles.pill}
+                        testID="lead-reassign-action"
+                        accessibilityRole="button"
+                        accessibilityLabel="Reassign lead"
+                        hitSlop={8}
+                    >
+                        <Ionicons name="swap-horizontal" size={20} color={colors.textMuted} />
+                    </Pressable>
+                ) : (
+                    <View style={styles.pill} />
+                )}
+            </View>
 
-            {error && <ErrorBanner message={error} onRetry={loadData} onDismiss={() => setError(null)} />}
+            {isManagerView ? (
+                <View testID="manager-banner" style={[styles.banner, { backgroundColor: alpha(colors.accent, 0.1) }]}>
+                    <Ionicons name="eye-outline" size={15} color={colors.accent} />
+                    <Txt role="body" size={12.5} color={colors.accent}>
+                        Manager View — limited actions available.
+                    </Txt>
+                </View>
+            ) : null}
+
+            {error ? (
+                <View testID="error-banner" style={[styles.banner, { backgroundColor: alpha(colors.danger, 0.1) }]}>
+                    <Ionicons name="warning-outline" size={15} color={colors.danger} />
+                    <Txt role="body" size={12.5} color={colors.danger} style={{ flex: 1 }}>
+                        {error}
+                    </Txt>
+                    <Pressable onPress={loadData} hitSlop={8}>
+                        <Txt role="body" weight="bold" size={12.5} color={colors.danger}>
+                            Retry
+                        </Txt>
+                    </Pressable>
+                </View>
+            ) : null}
 
             <KeyboardAwareScrollView
-                style={styles.scrollView}
-                contentContainerStyle={styles.scrollContent}
+                contentContainerStyle={styles.scroll}
                 showsVerticalScrollIndicator={false}
                 keyboardShouldPersistTaps="handled"
                 bottomOffset={20}
             >
-                {/* ─── Hero Card ─── */}
-                <View style={[styles.hero, { backgroundColor: colors.cardBackground }, shadow('md')]}>
-                    {/* Avatar */}
-                    <View style={styles.avatarSection}>
-                        <View style={[styles.avatarRing, { borderColor: colors.accent + '28' }]}>
-                            <View style={[styles.avatar, { backgroundColor: colors.accentLight }]}>
-                                <Text style={[styles.avatarText, { color: colors.accent }]}>{initials}</Text>
+                {/* identity */}
+                <View style={styles.identity}>
+                    <Monogram name={lead.full_name} status={lead.status} size={58} />
+                    <View style={{ flex: 1, minWidth: 0 }}>
+                        <Txt
+                            role="display"
+                            weight="semibold"
+                            size={26}
+                            color={colors.text}
+                            tracking={-0.5}
+                            numberOfLines={2}
+                        >
+                            {lead.full_name || 'Unknown'}
+                        </Txt>
+                        {lead.phone ? (
+                            <Txt role="mono" size={15} color={colors.textMuted} style={{ marginTop: 4 }}>
+                                {formatSgPhone(lead.phone)}
+                            </Txt>
+                        ) : null}
+                        {lead.email ? (
+                            <Txt role="body" size={13.5} color={colors.textFaint} style={{ marginTop: 2 }}>
+                                {lead.email}
+                            </Txt>
+                        ) : null}
+                    </View>
+                </View>
+
+                {/* tags */}
+                {tags.length ? (
+                    <View style={styles.tagRow}>
+                        {tags.map((t, i) => (
+                            <View key={`${t}-${i}`} style={styles.tag}>
+                                <Txt role="body" weight="semibold" size={12.5} color={colors.textMuted}>
+                                    {t}
+                                </Txt>
                             </View>
+                        ))}
+                    </View>
+                ) : null}
+
+                {/* won banner */}
+                {currentStatus === 'won' ? (
+                    <View style={styles.wonBanner}>
+                        <Txt role="display" weight="bold" size={28} color="#06140B" tracking={-0.4}>
+                            Won!
+                        </Txt>
+                        <Txt
+                            role="body"
+                            weight="semibold"
+                            size={13}
+                            color="#0a1f10"
+                            style={{ marginTop: 4, opacity: 0.82 }}
+                        >
+                            Nice work closing this one.
+                        </Txt>
+                    </View>
+                ) : null}
+
+                {/* CTAs */}
+                <View style={styles.ctaRow}>
+                    <Pressable
+                        onPress={handleCall}
+                        disabled={!lead.phone}
+                        testID="lead-call-action"
+                        accessibilityRole="button"
+                        accessibilityLabel={`Call ${lead.full_name}`}
+                        style={({ pressed }) => [
+                            styles.cta,
+                            styles.callCta,
+                            (pressed || !lead.phone) && { opacity: 0.6 },
+                        ]}
+                    >
+                        <Ionicons name="call" size={20} color={colors.textInverse} />
+                        <Txt role="body" weight="bold" size={16} color={colors.textInverse}>
+                            Call
+                        </Txt>
+                    </Pressable>
+                    <Pressable
+                        onPress={handleWhatsApp}
+                        disabled={!lead.phone}
+                        testID="lead-whatsapp-action"
+                        accessibilityRole="button"
+                        accessibilityLabel={`WhatsApp ${lead.full_name}`}
+                        style={({ pressed }) => [
+                            styles.cta,
+                            styles.waCta,
+                            (pressed || !lead.phone) && { opacity: 0.6 },
+                        ]}
+                    >
+                        <Ionicons name="logo-whatsapp" size={20} color="#0F0E0D" />
+                        <Txt role="body" weight="bold" size={16} color="#0F0E0D">
+                            WhatsApp
+                        </Txt>
+                    </Pressable>
+                </View>
+
+                {/* status — pill grid for owner, static chip in manager view */}
+                <View>
+                    <Eyebrow style={{ marginBottom: 10 }}>Status</Eyebrow>
+                    {isManagerView ? (
+                        <View style={{ alignSelf: 'flex-start' }}>
+                            <StatusChip status={currentStatus} />
                         </View>
-                    </View>
-
-                    {/* Identity */}
-                    <Text style={[styles.heroName, { color: colors.textPrimary }]}>{lead.full_name}</Text>
-
-                    <View testID="lead-status-badge" style={styles.heroStatusRow}>
-                        <StatusBadge status={currentStatus} size="medium" />
-                    </View>
-
-                    {/* Contact info */}
-                    {(lead.phone || lead.email) && (
-                        <View style={styles.contactInfo}>
-                            {lead.phone && (
-                                <View style={styles.contactLine}>
-                                    <Ionicons name="call-outline" size={13} color={colors.textTertiary} />
-                                    <Text style={[styles.heroContact, { color: colors.textSecondary }]}>
-                                        {formatSgPhone(lead.phone)}
-                                    </Text>
-                                </View>
-                            )}
-                            {lead.email && (
-                                <View style={styles.contactLine}>
-                                    <Ionicons name="mail-outline" size={13} color={colors.textTertiary} />
-                                    <Text style={[styles.heroContactSub, { color: colors.textTertiary }]}>
-                                        {lead.email}
-                                    </Text>
-                                </View>
-                            )}
+                    ) : (
+                        <View testID="lead-status-grid" style={styles.statusGrid}>
+                            {LEAD_STATUSES.map((s) => {
+                                const active = s === currentStatus;
+                                const c = statusColors[s];
+                                return (
+                                    <Pressable
+                                        key={s}
+                                        testID={`lead-status-pill-${s}`}
+                                        disabled={isUpdatingStatus}
+                                        onPress={() => handleChangeStatus(s)}
+                                        accessibilityRole="button"
+                                        accessibilityState={{ selected: active }}
+                                        accessibilityLabel={`Set status ${STATUS_LABELS[s]}`}
+                                        style={[
+                                            styles.statusPill,
+                                            active
+                                                ? { backgroundColor: c, borderColor: c }
+                                                : { backgroundColor: 'transparent', borderColor: colors.border },
+                                        ]}
+                                    >
+                                        <Txt
+                                            role="body"
+                                            weight={active ? 'bold' : 'semibold'}
+                                            size={13.5}
+                                            color={active ? pillText[s] : colors.textMuted}
+                                        >
+                                            {STATUS_LABELS[s]}
+                                        </Txt>
+                                    </Pressable>
+                                );
+                            })}
                         </View>
                     )}
+                </View>
 
-                    {/* Divider */}
-                    <View style={[styles.heroDivider, { backgroundColor: colors.border }]} />
+                {/* note affordance + inline input (owner only) */}
+                {!isManagerView ? (
+                    <>
+                        <TouchableOpacity
+                            testID="lead-note-action"
+                            style={[styles.noteBtn, { borderColor: colors.border }]}
+                            onPress={() => setShowNoteInput(!showNoteInput)}
+                            accessibilityRole="button"
+                            accessibilityLabel="Add a note"
+                        >
+                            <Ionicons name="create-outline" size={18} color={colors.accent} />
+                            <Txt role="body" weight="semibold" size={14.5} color={colors.accent} style={{ flex: 1 }}>
+                                Add a note
+                            </Txt>
+                            <Ionicons
+                                name={showNoteInput ? 'chevron-up' : 'chevron-down'}
+                                size={18}
+                                color={colors.textFaint}
+                            />
+                        </TouchableOpacity>
+                        {showNoteInput ? (
+                            <NoteInput
+                                testID="lead-note-input"
+                                noteText={noteText}
+                                onChangeText={setNoteText}
+                                isSaving={isSavingNote}
+                                colors={colors}
+                                onSave={handleAddNote}
+                                onCancel={() => {
+                                    setShowNoteInput(false);
+                                    setNoteText('');
+                                }}
+                            />
+                        ) : null}
+                    </>
+                ) : null}
 
-                    {/* Quick Actions */}
-                    <View style={styles.actionsRow}>
-                        <QuickAction
-                            testID="lead-call-action"
-                            icon="call"
-                            label="Call"
-                            color={colors.success}
-                            bgColor={colors.successLight}
-                            onPress={handleCall}
-                            disabled={!lead.phone}
-                        />
-                        <View style={[styles.actionDivider, { backgroundColor: colors.border }]} />
-                        <QuickAction
-                            testID="lead-whatsapp-action"
-                            icon="logo-whatsapp"
-                            label="WhatsApp"
-                            color={colors.whatsappGreen}
-                            bgColor={colors.successLight}
-                            onPress={handleWhatsApp}
-                            disabled={!lead.phone}
-                        />
-                        {isManagerView ? (
-                            <>
-                                <View style={[styles.actionDivider, { backgroundColor: colors.border }]} />
-                                <QuickAction
-                                    testID="lead-reassign-action"
-                                    icon="git-compare-outline"
-                                    label="Reassign"
-                                    color={colors.statusProposed}
-                                    bgColor={colors.surfaceSecondary}
-                                    onPress={handleOpenReassign}
-                                    disabled={isReassigning}
-                                />
-                            </>
+                {/* lead details */}
+                <View style={styles.card}>
+                    <View style={styles.cardHead}>
+                        <Ionicons name="document-text-outline" size={16} color={colors.accent} />
+                        <Txt role="body" weight="bold" size={14.5} color={colors.text}>
+                            Lead details
+                        </Txt>
+                    </View>
+                    <View style={{ gap: 11 }}>
+                        {mktrRows.length ? (
+                            mktrRows.map((d, i) => (
+                                <View key={`${d.label ?? 'note'}-${i}`} style={styles.factRow}>
+                                    {d.label ? (
+                                        <Txt role="body" size={13} color={colors.textFaint} style={styles.factLabel}>
+                                            {d.label}
+                                        </Txt>
+                                    ) : null}
+                                    <Txt role="body" weight="medium" size={14} color={colors.text} style={{ flex: 1 }}>
+                                        {d.value}
+                                    </Txt>
+                                </View>
+                            ))
                         ) : (
                             <>
-                                <View style={[styles.actionDivider, { backgroundColor: colors.border }]} />
-                                <QuickAction
-                                    testID="lead-status-action"
-                                    icon="swap-horizontal"
-                                    label="Status"
-                                    color={colors.warning}
-                                    bgColor={colors.warningLight}
-                                    onPress={() => setShowStatusPicker(!showStatusPicker)}
+                                <DetailRow
+                                    label="Source"
+                                    value={lead.source_name === 'mktr' ? 'MKTR' : SOURCE_LABELS[lead.source]}
                                 />
-                                <View style={[styles.actionDivider, { backgroundColor: colors.border }]} />
-                                <QuickAction
-                                    testID="lead-note-action"
-                                    icon="create-outline"
-                                    label="Note"
-                                    color={colors.accent}
-                                    bgColor={colors.accentLight}
-                                    onPress={() => setShowNoteInput(!showNoteInput)}
-                                />
+                                <DetailRow label="Added" value={timeAgo(lead.created_at)} />
                             </>
                         )}
                     </View>
                 </View>
 
-                {/* ─── Inline panels (status picker / note) ─── */}
-                {!isManagerView && showStatusPicker && (
-                    <StatusPicker
-                        currentStatus={currentStatus}
-                        isUpdating={isUpdatingStatus}
-                        colors={colors}
-                        onChangeStatus={handleChangeStatus}
-                    />
-                )}
-
-                {!isManagerView && showNoteInput && (
-                    <NoteInput
-                        testID="lead-note-input"
-                        noteText={noteText}
-                        onChangeText={setNoteText}
-                        isSaving={isSavingNote}
-                        colors={colors}
-                        onSave={handleAddNote}
-                        onCancel={() => {
-                            setShowNoteInput(false);
-                            setNoteText('');
-                        }}
-                    />
-                )}
-
-                {/* ─── Details Card ─── */}
-                <View style={[styles.card, { backgroundColor: colors.cardBackground }, shadow('sm')]}>
-                    <SectionHeader title="Details" colors={colors} />
-                    <InfoRow
-                        icon="shield-outline"
-                        label="Product"
-                        value={PRODUCT_LABELS[lead.product_interest]}
-                        colors={colors}
-                    />
-                    <InfoRow
-                        icon="location-outline"
-                        label="Source"
-                        value={lead.source_name === 'mktr' ? 'MKTR' : SOURCE_LABELS[lead.source]}
-                        colors={colors}
-                    />
-                    {lead.source_name === 'mktr' && (
-                        <InfoRow
-                            icon="megaphone-outline"
-                            label="Campaign"
-                            value={mktrInfo?.campaign || 'Unknown'}
-                            colors={colors}
-                        />
-                    )}
-                    {mktrInfo?.qr && (
-                        <InfoRow icon="qr-code-outline" label="QR Code" value={mktrInfo.qr} colors={colors} />
-                    )}
-                    <InfoRow
-                        icon="time-outline"
-                        label="Added"
-                        value={timeAgo(lead.created_at)}
-                        colors={colors}
-                        isLast
-                    />
-                </View>
-
-                {/* ─── Call Recording & Transcript ─── */}
-                {(lead.recording_url || lead.transcript) && (
+                {/* recording / transcript */}
+                {lead.recording_url || lead.transcript ? (
                     <RecordingCard recordingUrl={lead.recording_url} transcript={lead.transcript} />
-                )}
+                ) : null}
 
-                {/* ─── Activity Timeline ─── */}
-                <View
-                    testID="lead-activity-list"
-                    style={[styles.card, { backgroundColor: colors.cardBackground }, shadow('sm')]}
-                >
-                    <SectionHeader title="Activity" count={activities.length} colors={colors} />
-                    {activities.map((act, idx) => (
-                        <LeadActivityItem key={act.id} activity={act} isLast={idx === activities.length - 1} />
-                    ))}
-                    {activities.length === 0 && (
-                        <EmptyState
-                            icon="time-outline"
-                            title="No activity yet"
-                            subtitle="Activity will appear here as you work this lead"
-                        />
+                {/* activity */}
+                <View>
+                    <View style={styles.activityHead}>
+                        <Eyebrow>Activity</Eyebrow>
+                        <View style={[styles.countPill, { backgroundColor: alpha(colors.accent, 0.14) }]}>
+                            <Txt testID="lead-activity-count" role="mono" weight="bold" size={12} color={colors.accent}>
+                                {activities.length}
+                            </Txt>
+                        </View>
+                    </View>
+                    {activities.length ? (
+                        <ActivityFeed activities={activities} />
+                    ) : (
+                        <Txt testID="lead-activity-empty" role="body" size={13.5} color={colors.textFaint}>
+                            No activity yet. Call or WhatsApp to get started.
+                        </Txt>
                     )}
                 </View>
-
-                {/* Metadata footer */}
-                <Text style={[styles.metaFooter, { color: colors.textTertiary }]}>
-                    Lead created {timeAgo(lead.created_at)}
-                </Text>
             </KeyboardAwareScrollView>
 
-            {/* Contact Confirm Modal */}
             <ContactConfirmModal
                 visible={showContactConfirm}
                 contactType={pendingContact?.type ?? null}
@@ -447,7 +473,6 @@ export default function LeadDetailScreen() {
                 onConfirm={handleContactConfirm}
             />
 
-            {/* Reassign Modal */}
             <ReassignModal
                 visible={showReassignModal}
                 leadName={lead.full_name}
@@ -460,191 +485,110 @@ export default function LeadDetailScreen() {
     );
 }
 
-const styles = StyleSheet.create({
-    container: { flex: 1 },
-    scrollView: { flex: 1 },
-    scrollContent: {
-        paddingHorizontal: 16,
-        paddingTop: 16,
-        paddingBottom: 48,
-        gap: 12,
-    },
+function DetailRow({ label, value }: { label: string; value: string }) {
+    const { colors } = useLeadsTheme();
+    return (
+        <View style={{ flexDirection: 'row', gap: 12 }}>
+            <Txt role="body" size={13} color={colors.textFaint} style={{ width: 88 }}>
+                {label}
+            </Txt>
+            <Txt role="body" weight="medium" size={14} color={colors.text} style={{ flex: 1 }}>
+                {value}
+            </Txt>
+        </View>
+    );
+}
 
-    // ── Hero ──
-    hero: {
-        borderRadius: 20,
-        paddingTop: 28,
-        paddingBottom: 0,
-        paddingHorizontal: 24,
-        alignItems: 'center',
-        overflow: 'hidden',
-    },
-    avatarSection: {
-        marginBottom: 16,
-    },
-    avatarRing: {
-        width: 96,
-        height: 96,
-        borderRadius: 48,
-        borderWidth: 3,
-        alignItems: 'center',
-        justifyContent: 'center',
-    },
-    avatar: {
-        width: 84,
-        height: 84,
-        borderRadius: 42,
-        alignItems: 'center',
-        justifyContent: 'center',
-    },
-    avatarText: {
-        fontSize: 34,
-        fontWeight: '700',
-        letterSpacing: letterSpacing(-0.5),
-    },
-    heroName: {
-        fontSize: 24,
-        fontWeight: '700',
-        letterSpacing: letterSpacing(-0.4),
-        textAlign: 'center',
-        lineHeight: 30,
-    },
-    heroStatusRow: {
-        marginTop: 10,
-        marginBottom: 4,
-    },
-    contactInfo: {
-        marginTop: 10,
-        alignItems: 'center',
-        gap: 4,
-    },
-    contactLine: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        gap: 5,
-    },
-    heroContact: {
-        fontSize: 14,
-        fontWeight: '500',
-    },
-    heroContactSub: {
-        fontSize: 13,
-    },
-    heroDivider: {
-        height: StyleSheet.hairlineWidth,
-        width: '120%',
-        marginTop: 20,
-        marginBottom: 4,
-    },
-    actionsRow: {
-        flexDirection: 'row',
-        width: '100%',
-        justifyContent: 'space-evenly',
-        alignItems: 'center',
-        paddingVertical: 16,
-    },
-    actionDivider: {
-        width: StyleSheet.hairlineWidth,
-        height: 36,
-        opacity: 0.6,
-    },
-
-    // ── Cards ──
-    card: {
-        borderRadius: 16,
-        padding: 16,
-    },
-
-    // ── Section header ──
-    sectionHeader: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        justifyContent: 'space-between',
-        marginBottom: 14,
-    },
-    sectionTitle: {
-        fontSize: 15,
-        fontWeight: '700',
-        letterSpacing: letterSpacing(-0.1),
-    },
-    countPill: {
-        minWidth: 24,
-        paddingHorizontal: 8,
-        paddingVertical: 2,
-        borderRadius: 10,
-        alignItems: 'center',
-    },
-    countPillText: {
-        fontSize: 12,
-        fontWeight: '700',
-    },
-
-    // ── Info rows ──
-    infoRow: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        paddingVertical: 11,
-        gap: 10,
-    },
-    infoIconWrap: {
-        width: 26,
-        height: 26,
-        borderRadius: 7,
-        alignItems: 'center',
-        justifyContent: 'center',
-    },
-    infoLabel: {
-        fontSize: 13,
-        width: 72,
-        fontWeight: '500',
-    },
-    infoValue: {
-        flex: 1,
-        fontSize: 14,
-        fontWeight: '500',
-        textAlign: 'right',
-    },
-
-    // ── Not found ──
-    notFound: {
-        flex: 1,
-        alignItems: 'center',
-        justifyContent: 'center',
-        gap: 12,
-        paddingHorizontal: 32,
-    },
-    notFoundIconWrap: {
-        width: 72,
-        height: 72,
-        borderRadius: 36,
-        alignItems: 'center',
-        justifyContent: 'center',
-        marginBottom: 4,
-    },
-    notFoundText: {
-        fontSize: 18,
-        fontWeight: '700',
-        letterSpacing: letterSpacing(-0.2),
-    },
-    notFoundSub: {
-        fontSize: 14,
-        textAlign: 'center',
-    },
-    notFoundBtn: {
-        marginTop: 8,
-        paddingHorizontal: 24,
-        paddingVertical: 12,
-        borderRadius: 12,
-    },
-    notFoundBtnText: {
-        fontSize: 15,
-        fontWeight: '600',
-    },
-
-    // ── Footer metadata ──
-    metaFooter: {
-        textAlign: 'center',
-        fontSize: 12,
-        marginTop: 4,
-    },
-});
+const makeStyles = ({ colors }: LeadsTheme) =>
+    StyleSheet.create({
+        root: { flex: 1, backgroundColor: colors.background },
+        center: { alignItems: 'center', justifyContent: 'center', gap: 4 },
+        notFoundIcon: {
+            width: 64,
+            height: 64,
+            borderRadius: 32,
+            alignItems: 'center',
+            justifyContent: 'center',
+            marginBottom: 8,
+        },
+        backBtn: { marginTop: 16, paddingHorizontal: 24, paddingVertical: 12, borderRadius: 12 },
+        topBar: {
+            flexDirection: 'row',
+            alignItems: 'center',
+            justifyContent: 'space-between',
+            paddingHorizontal: spacing.md,
+            paddingVertical: spacing.sm,
+        },
+        pill: {
+            width: 38,
+            height: 38,
+            borderRadius: 99,
+            backgroundColor: colors.surfaceAlt,
+            alignItems: 'center',
+            justifyContent: 'center',
+        },
+        banner: {
+            flexDirection: 'row',
+            alignItems: 'center',
+            gap: 8,
+            marginHorizontal: spacing.lg,
+            marginBottom: spacing.sm,
+            paddingHorizontal: 14,
+            paddingVertical: 10,
+            borderRadius: radius.chip,
+        },
+        scroll: { paddingHorizontal: spacing.lg, paddingTop: spacing.sm, paddingBottom: spacing.xxl, gap: 18 },
+        identity: { flexDirection: 'row', alignItems: 'center', gap: 14 },
+        tagRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginTop: -6 },
+        tag: { backgroundColor: colors.surfaceAlt, paddingVertical: 5, paddingHorizontal: 10, borderRadius: 7 },
+        wonBanner: {
+            borderRadius: radius.hero,
+            paddingVertical: 18,
+            paddingHorizontal: 22,
+            backgroundColor: colors.success,
+        },
+        ctaRow: { flexDirection: 'row', gap: 11 },
+        cta: {
+            flex: 1,
+            height: 54,
+            borderRadius: radius.btn,
+            flexDirection: 'row',
+            alignItems: 'center',
+            justifyContent: 'center',
+            gap: 9,
+        },
+        callCta: { backgroundColor: colors.accent },
+        waCta: { backgroundColor: colors.whatsapp },
+        statusGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
+        statusPill: {
+            flexDirection: 'row',
+            alignItems: 'center',
+            gap: 5,
+            paddingVertical: 9,
+            paddingHorizontal: 14,
+            borderRadius: radius.chip,
+            borderWidth: 1.5,
+        },
+        noteBtn: {
+            flexDirection: 'row',
+            alignItems: 'center',
+            gap: 11,
+            paddingVertical: 13,
+            paddingHorizontal: spacing.lg,
+            borderRadius: radius.card,
+            borderWidth: 1.5,
+            borderStyle: 'dashed',
+        },
+        card: {
+            backgroundColor: colors.surface,
+            borderRadius: radius.card,
+            borderWidth: 1,
+            borderColor: colors.border,
+            padding: spacing.lg,
+        },
+        cardHead: { flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 13 },
+        factRow: { flexDirection: 'row', gap: 12 },
+        factLabel: { width: 88, flexShrink: 0 },
+        activityHead: { flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 14 },
+        countPill: { minWidth: 24, paddingHorizontal: 7, paddingVertical: 2, borderRadius: 99, alignItems: 'center' },
+    });
