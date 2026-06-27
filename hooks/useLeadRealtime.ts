@@ -15,20 +15,28 @@ export function useLeadRealtime(onNewLead: (lead: Lead) => void, onUpdate?: () =
     useEffect(() => {
         if (!user?.id) return;
 
-        const filter = { schema: 'public', table: 'leads', filter: `assigned_to=eq.${user.id}` };
+        const assignedFilter = `assigned_to=eq.${user.id}`;
         const createChannel = () =>
             supabase
                 .channel(`leads:${user.id}`)
-                .on('postgres_changes', { event: 'INSERT', ...filter }, (payload) => {
-                    retryCountRef.current = 0;
-                    onNewLeadRef.current(payload.new as Lead);
-                })
+                .on(
+                    'postgres_changes',
+                    { event: 'INSERT', schema: 'public', table: 'leads', filter: assignedFilter },
+                    (payload) => {
+                        retryCountRef.current = 0;
+                        onNewLeadRef.current(payload.new as Lead);
+                    },
+                )
                 // UPDATE = a reassignment/archive/status change on an owned lead; just
                 // refetch so the foregrounded list reflects it (e.g. an archived lead leaves).
-                .on('postgres_changes', { event: 'UPDATE', ...filter }, () => {
-                    retryCountRef.current = 0;
-                    onUpdateRef.current?.();
-                });
+                .on(
+                    'postgres_changes',
+                    { event: 'UPDATE', schema: 'public', table: 'leads', filter: assignedFilter },
+                    () => {
+                        retryCountRef.current = 0;
+                        onUpdateRef.current?.();
+                    },
+                );
 
         let channel = createChannel().subscribe((status) => {
             if (status === 'SUBSCRIBED') {
