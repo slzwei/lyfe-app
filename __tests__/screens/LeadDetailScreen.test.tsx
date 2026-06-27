@@ -23,6 +23,7 @@ jest.mock('@/contexts/AuthContext');
 jest.mock('@/contexts/ThemeContext');
 jest.mock('@/contexts/ViewModeContext');
 jest.mock('@/lib/leads');
+jest.mock('expo-haptics');
 
 jest.mock('expo-router', () => ({
     useRouter: jest.fn(() => ({ push: jest.fn(), replace: jest.fn(), back: jest.fn() })),

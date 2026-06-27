@@ -1,3 +1,4 @@
+import Confetti, { CONFETTI_DURATION } from '@/components/Confetti';
 import { ActivityFeed } from '@/components/leads/ActivityFeed';
 import ContactConfirmModal from '@/components/leads/ContactConfirmModal';
 import NoteInput from '@/components/leads/NoteInput';
@@ -27,6 +28,8 @@ import { KeyboardAwareScrollView } from 'react-native-keyboard-controller';
 import React, { useEffect, useRef, useState } from 'react';
 import { ActivityIndicator, AppState, Linking, Pressable, StyleSheet, TouchableOpacity, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { useReducedMotion } from 'react-native-reanimated';
+import * as Haptics from 'expo-haptics';
 
 const STATUS_LABELS: Record<LeadStatus, string> = {
     new: 'New',
@@ -45,6 +48,7 @@ export default function LeadDetailScreen() {
     const { viewMode, canToggle } = useViewMode();
     const router = useRouter();
     const isManagerView = canToggle && viewMode === 'manager';
+    const reduced = useReducedMotion();
 
     const {
         lead,
@@ -75,6 +79,12 @@ export default function LeadDetailScreen() {
     const [showContactConfirm, setShowContactConfirm] = useState(false);
     const hasPendingContact = useRef(false);
     const wentToBackground = useRef(false);
+
+    // Won celebration (P4) — reuse the shared terracotta Confetti.
+    const [showConfetti, setShowConfetti] = useState(false);
+    const [confettiKey, setConfettiKey] = useState(0);
+    const confettiTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
+    useEffect(() => () => clearTimeout(confettiTimer.current), []);
 
     useEffect(() => {
         const subscription = AppState.addEventListener('change', (nextState) => {
@@ -160,6 +170,16 @@ export default function LeadDetailScreen() {
 
         logActivity(pc.type, description, { phone: pc.phone, outcome });
         if (currentStatus === 'new') handleChangeStatus('contacted');
+    };
+
+    // Fired when a lead is moved to Won — a warm, auto-dismissing beat (brand brief).
+    const celebrateWin = () => {
+        Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => {});
+        if (reduced) return; // respect prefers-reduced-motion
+        setConfettiKey((k) => k + 1);
+        setShowConfetti(true);
+        clearTimeout(confettiTimer.current);
+        confettiTimer.current = setTimeout(() => setShowConfetti(false), CONFETTI_DURATION);
     };
 
     const src = resolveLeadSource(lead);
@@ -343,7 +363,10 @@ export default function LeadDetailScreen() {
                                         key={s}
                                         testID={`lead-status-pill-${s}`}
                                         disabled={isUpdatingStatus}
-                                        onPress={() => handleChangeStatus(s)}
+                                        onPress={() => {
+                                            if (s === 'won' && currentStatus !== 'won') celebrateWin();
+                                            handleChangeStatus(s);
+                                        }}
                                         accessibilityRole="button"
                                         accessibilityState={{ selected: active }}
                                         accessibilityLabel={`Set status ${STATUS_LABELS[s]}`}
@@ -481,6 +504,8 @@ export default function LeadDetailScreen() {
                 onSelect={handleReassign}
                 onClose={() => setShowReassignModal(false)}
             />
+
+            <Confetti visible={showConfetti} confettiKey={confettiKey} />
         </SafeAreaView>
     );
 }

@@ -1,21 +1,23 @@
 import ErrorBanner from '@/components/ErrorBanner';
 import FormField from '@/components/FormField';
+import { Txt } from '@/components/leads/ui';
 import { KeyboardAwareScrollView } from 'react-native-keyboard-controller';
 import { useAuth } from '@/contexts/AuthContext';
-import { useTheme } from '@/contexts/ThemeContext';
+import { useLeadsTheme, spacing, radius } from '@/lib/leads/theme';
 import { createLead, type CreateLeadInput } from '@/lib/leads';
 import { PRODUCT_LABELS, SOURCE_LABELS, type LeadSource, type ProductInterest } from '@/types/lead';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import { useSubmitGuard } from '@/hooks/useSubmitGuard';
 import React, { useState } from 'react';
-import { ActivityIndicator, Modal, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
+import { ActivityIndicator, Modal, StyleSheet, TextInput, TouchableOpacity, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+
 const SOURCES: LeadSource[] = ['referral', 'walk_in', 'online', 'event', 'cold_call', 'other'];
 const PRODUCTS: ProductInterest[] = ['life', 'health', 'ilp', 'general'];
 
 export default function AddLeadScreen() {
-    const { colors } = useTheme();
+    const { colors } = useLeadsTheme();
     const { user } = useAuth();
     const router = useRouter();
 
@@ -46,12 +48,10 @@ export default function AddLeadScreen() {
         guard(async () => {
             if (!validate()) return;
             setSaveError(null);
-
             if (!user?.id) {
                 setSaveError('Not authenticated');
                 return;
             }
-
             const input: CreateLeadInput = {
                 full_name: name.trim(),
                 phone: phone.trim() || null,
@@ -60,14 +60,11 @@ export default function AddLeadScreen() {
                 product_interest: product,
                 notes: notes.trim() || null,
             };
-
             const { error } = await createLead(input, user.id);
-
             if (error) {
                 setSaveError(error);
                 return;
             }
-
             setShowSuccessModal(true);
         });
 
@@ -78,47 +75,22 @@ export default function AddLeadScreen() {
 
     const canViewLeads = user?.role && ['admin', 'director', 'manager', 'agent'].includes(user.role);
 
-    if (!canViewLeads) {
-        return (
-            <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]}>
-                <View style={[styles.headerBar, { borderBottomColor: colors.borderLight }]}>
-                    <TouchableOpacity
-                        onPress={() => router.back()}
-                        style={styles.cancelBtn}
-                        accessibilityRole="button"
-                        accessibilityLabel="Go back"
-                    >
-                        <Text style={[styles.cancelText, { color: colors.textSecondary }]}>Back</Text>
-                    </TouchableOpacity>
-                    <Text style={[styles.headerTitle, { color: colors.textPrimary }]}>New Lead</Text>
-                    <View style={styles.cancelBtn} />
-                </View>
-                <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center', padding: 32 }}>
-                    <Ionicons name="lock-closed-outline" size={48} color={colors.textTertiary} />
-                    <Text style={{ fontSize: 17, fontWeight: '600', color: colors.textPrimary, marginTop: 16 }}>
-                        Not Authorized
-                    </Text>
-                    <Text style={{ fontSize: 14, color: colors.textSecondary, textAlign: 'center', marginTop: 8 }}>
-                        You don&apos;t have permission to add leads.
-                    </Text>
-                </View>
-            </SafeAreaView>
-        );
-    }
-
-    return (
-        <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]}>
-            {/* Header */}
-            <View style={[styles.headerBar, { borderBottomColor: colors.borderLight }]}>
-                <TouchableOpacity
-                    onPress={() => router.back()}
-                    style={styles.cancelBtn}
-                    accessibilityRole="button"
-                    accessibilityLabel="Cancel and go back"
-                >
-                    <Text style={[styles.cancelText, { color: colors.textSecondary }]}>Cancel</Text>
-                </TouchableOpacity>
-                <Text style={[styles.headerTitle, { color: colors.textPrimary }]}>New Lead</Text>
+    const Header = ({ cancelLabel }: { cancelLabel: string }) => (
+        <View style={[styles.headerBar, { borderBottomColor: colors.border }]}>
+            <TouchableOpacity
+                onPress={() => router.back()}
+                style={styles.cancelBtn}
+                accessibilityRole="button"
+                accessibilityLabel={cancelLabel === 'Cancel' ? 'Cancel and go back' : 'Go back'}
+            >
+                <Txt role="body" weight="semibold" size={15} color={colors.textMuted}>
+                    {cancelLabel}
+                </Txt>
+            </TouchableOpacity>
+            <Txt role="display" weight="semibold" size={18} color={colors.text} tracking={-0.3}>
+                New Lead
+            </Txt>
+            {cancelLabel === 'Cancel' ? (
                 <TouchableOpacity
                     onPress={handleSave}
                     style={[styles.saveBtn, { backgroundColor: colors.accent, opacity: isSaving ? 0.5 : 1 }]}
@@ -130,10 +102,37 @@ export default function AddLeadScreen() {
                     {isSaving ? (
                         <ActivityIndicator size="small" color={colors.textInverse} />
                     ) : (
-                        <Text style={[styles.saveBtnText, { color: colors.textInverse }]}>Save</Text>
+                        <Txt role="body" weight="bold" size={14} color={colors.textInverse}>
+                            Save
+                        </Txt>
                     )}
                 </TouchableOpacity>
-            </View>
+            ) : (
+                <View style={styles.cancelBtn} />
+            )}
+        </View>
+    );
+
+    if (!canViewLeads) {
+        return (
+            <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]}>
+                <Header cancelLabel="Back" />
+                <View style={styles.lockWrap}>
+                    <Ionicons name="lock-closed-outline" size={48} color={colors.textFaint} />
+                    <Txt role="display" weight="semibold" size={18} color={colors.text} style={{ marginTop: 16 }}>
+                        Not Authorized
+                    </Txt>
+                    <Txt role="body" size={14} color={colors.textMuted} center style={{ marginTop: 8 }}>
+                        You don&apos;t have permission to add leads.
+                    </Txt>
+                </View>
+            </SafeAreaView>
+        );
+    }
+
+    return (
+        <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]}>
+            <Header cancelLabel="Cancel" />
 
             <KeyboardAwareScrollView
                 style={styles.scrollView}
@@ -142,13 +141,12 @@ export default function AddLeadScreen() {
                 keyboardShouldPersistTaps="handled"
                 bottomOffset={20}
             >
-                {/* Save Error */}
                 {saveError && <ErrorBanner message={saveError} />}
 
-                {/* Contact Info */}
-                <View style={[styles.card, { backgroundColor: colors.cardBackground, borderColor: colors.cardBorder }]}>
-                    <Text style={[styles.sectionTitle, { color: colors.textPrimary }]}>Contact Information</Text>
-
+                <View style={[styles.card, { backgroundColor: colors.surface, borderColor: colors.border }]}>
+                    <Txt role="body" weight="bold" size={15} color={colors.text} style={styles.sectionTitle}>
+                        Contact Information
+                    </Txt>
                     <FormField
                         testID="add-lead-name"
                         label="Full Name *"
@@ -184,86 +182,34 @@ export default function AddLeadScreen() {
                     />
                 </View>
 
-                {/* Source */}
-                <View style={[styles.card, { backgroundColor: colors.cardBackground, borderColor: colors.cardBorder }]}>
-                    <Text style={[styles.sectionTitle, { color: colors.textPrimary }]}>Source</Text>
-                    <View style={styles.chipGroup}>
-                        {SOURCES.map((s) => (
-                            <TouchableOpacity
-                                key={s}
-                                style={[
-                                    styles.chip,
-                                    {
-                                        backgroundColor: source === s ? colors.accentLight : colors.surfacePrimary,
-                                        borderColor: source === s ? colors.accent : colors.borderLight,
-                                        borderWidth: source === s ? 1.5 : 0.5,
-                                    },
-                                ]}
-                                onPress={() => setSource(s)}
-                                accessibilityRole="button"
-                                accessibilityLabel={`Source: ${SOURCE_LABELS[s]}`}
-                                accessibilityState={{ selected: source === s }}
-                            >
-                                <Text
-                                    style={[
-                                        styles.chipText,
-                                        { color: source === s ? colors.accent : colors.textSecondary },
-                                    ]}
-                                >
-                                    {SOURCE_LABELS[s]}
-                                </Text>
-                            </TouchableOpacity>
-                        ))}
-                    </View>
-                </View>
+                <ChipSection
+                    title="Source"
+                    options={SOURCES}
+                    labelFor={(s) => SOURCE_LABELS[s]}
+                    selected={source}
+                    onSelect={setSource}
+                    prefix="Source"
+                />
+                <ChipSection
+                    title="Product Interest"
+                    options={PRODUCTS}
+                    labelFor={(p) => PRODUCT_LABELS[p]}
+                    selected={product}
+                    onSelect={setProduct}
+                    prefix="Product"
+                />
 
-                {/* Product Interest */}
-                <View style={[styles.card, { backgroundColor: colors.cardBackground, borderColor: colors.cardBorder }]}>
-                    <Text style={[styles.sectionTitle, { color: colors.textPrimary }]}>Product Interest</Text>
-                    <View style={styles.chipGroup}>
-                        {PRODUCTS.map((p) => (
-                            <TouchableOpacity
-                                key={p}
-                                style={[
-                                    styles.chip,
-                                    {
-                                        backgroundColor: product === p ? colors.accentLight : colors.surfacePrimary,
-                                        borderColor: product === p ? colors.accent : colors.borderLight,
-                                        borderWidth: product === p ? 1.5 : 0.5,
-                                    },
-                                ]}
-                                onPress={() => setProduct(p)}
-                                accessibilityRole="button"
-                                accessibilityLabel={`Product: ${PRODUCT_LABELS[p]}`}
-                                accessibilityState={{ selected: product === p }}
-                            >
-                                <Text
-                                    style={[
-                                        styles.chipText,
-                                        { color: product === p ? colors.accent : colors.textSecondary },
-                                    ]}
-                                >
-                                    {PRODUCT_LABELS[p]}
-                                </Text>
-                            </TouchableOpacity>
-                        ))}
-                    </View>
-                </View>
-
-                {/* Notes */}
-                <View style={[styles.card, { backgroundColor: colors.cardBackground, borderColor: colors.cardBorder }]}>
-                    <Text style={[styles.sectionTitle, { color: colors.textPrimary }]}>Notes</Text>
+                <View style={[styles.card, { backgroundColor: colors.surface, borderColor: colors.border }]}>
+                    <Txt role="body" weight="bold" size={15} color={colors.text} style={styles.sectionTitle}>
+                        Notes
+                    </Txt>
                     <TextInput
                         style={[
                             styles.notesInput,
-                            {
-                                color: colors.textPrimary,
-                                borderColor: colors.borderLight,
-                                backgroundColor: colors.surfacePrimary,
-                            },
+                            { color: colors.text, borderColor: colors.border, backgroundColor: colors.surfaceAlt },
                         ]}
-                        placeholder="Any initial notes about this lead..."
-                        placeholderTextColor={colors.textTertiary}
+                        placeholder="Any initial notes about this lead…"
+                        placeholderTextColor={colors.textFaint}
                         value={notes}
                         onChangeText={setNotes}
                         multiline
@@ -274,15 +220,22 @@ export default function AddLeadScreen() {
                 </View>
             </KeyboardAwareScrollView>
 
-            {/* Success Modal */}
             <Modal visible={showSuccessModal} transparent animationType="fade" onRequestClose={handleSuccessDismiss}>
                 <View style={styles.modalOverlay}>
-                    <View style={[styles.modalContent, { backgroundColor: colors.cardBackground }]}>
+                    <View style={[styles.modalContent, { backgroundColor: colors.surface }]}>
                         <Ionicons name="checkmark-circle" size={48} color={colors.success} />
-                        <Text style={[styles.modalTitle, { color: colors.textPrimary }]}>Lead Created</Text>
-                        <Text style={[styles.modalMessage, { color: colors.textSecondary }]}>
+                        <Txt role="display" weight="semibold" size={18} color={colors.text} style={{ marginTop: 12 }}>
+                            Lead Created
+                        </Txt>
+                        <Txt
+                            role="body"
+                            size={14}
+                            color={colors.textMuted}
+                            center
+                            style={{ marginTop: 6, marginBottom: 22 }}
+                        >
                             {name} has been added to your leads.
-                        </Text>
+                        </Txt>
                         <TouchableOpacity
                             style={[styles.modalOkBtn, { backgroundColor: colors.accent }]}
                             onPress={handleSuccessDismiss}
@@ -290,12 +243,69 @@ export default function AddLeadScreen() {
                             testID="add-lead-success-ok"
                             accessibilityLabel="OK, dismiss"
                         >
-                            <Text style={[styles.modalOkBtnText, { color: colors.textInverse }]}>OK</Text>
+                            <Txt role="body" weight="bold" size={15} color={colors.textInverse}>
+                                OK
+                            </Txt>
                         </TouchableOpacity>
                     </View>
                 </View>
             </Modal>
         </SafeAreaView>
+    );
+}
+
+function ChipSection<T extends string>({
+    title,
+    options,
+    labelFor,
+    selected,
+    onSelect,
+    prefix,
+}: {
+    title: string;
+    options: readonly T[];
+    labelFor: (v: T) => string;
+    selected: T;
+    onSelect: (v: T) => void;
+    prefix: string;
+}) {
+    const { colors } = useLeadsTheme();
+    return (
+        <View style={[styles.card, { backgroundColor: colors.surface, borderColor: colors.border }]}>
+            <Txt role="body" weight="bold" size={15} color={colors.text} style={styles.sectionTitle}>
+                {title}
+            </Txt>
+            <View style={styles.chipGroup}>
+                {options.map((o) => {
+                    const active = selected === o;
+                    return (
+                        <TouchableOpacity
+                            key={o}
+                            style={[
+                                styles.chip,
+                                {
+                                    backgroundColor: active ? colors.accent : colors.surfaceAlt,
+                                    borderColor: active ? colors.accent : colors.border,
+                                },
+                            ]}
+                            onPress={() => onSelect(o)}
+                            accessibilityRole="button"
+                            accessibilityLabel={`${prefix}: ${labelFor(o)}`}
+                            accessibilityState={{ selected: active }}
+                        >
+                            <Txt
+                                role="body"
+                                weight="semibold"
+                                size={14}
+                                color={active ? colors.textInverse : colors.textMuted}
+                            >
+                                {labelFor(o)}
+                            </Txt>
+                        </TouchableOpacity>
+                    );
+                })}
+            </View>
+        </View>
     );
 }
 
@@ -305,50 +315,33 @@ const styles = StyleSheet.create({
         flexDirection: 'row',
         alignItems: 'center',
         justifyContent: 'space-between',
-        paddingHorizontal: 16,
+        paddingHorizontal: spacing.lg,
         paddingVertical: 10,
-        borderBottomWidth: 0.5,
+        borderBottomWidth: StyleSheet.hairlineWidth,
     },
-    cancelBtn: { paddingVertical: 4, paddingHorizontal: 4 },
-    cancelText: { fontSize: 15, fontWeight: '500' },
-    headerTitle: { fontSize: 16, fontWeight: '700' },
+    cancelBtn: { paddingVertical: 4, paddingHorizontal: 4, minWidth: 60 },
     saveBtn: {
         paddingHorizontal: 16,
-        paddingVertical: 7,
-        borderRadius: 8,
+        paddingVertical: 8,
+        borderRadius: radius.chip,
         minWidth: 60,
         alignItems: 'center',
     },
-    saveBtnText: { fontSize: 14, fontWeight: '700' },
+    lockWrap: { flex: 1, alignItems: 'center', justifyContent: 'center', padding: 32 },
     scrollView: { flex: 1 },
-    scrollContent: { padding: 16, paddingBottom: 40 },
-    card: {
-        borderRadius: 14,
-        borderWidth: 0.5,
-        padding: 16,
-        marginBottom: 12,
-    },
-    sectionTitle: { fontSize: 15, fontWeight: '700', marginBottom: 12 },
-    chipGroup: {
-        flexDirection: 'row',
-        flexWrap: 'wrap',
-        gap: 8,
-    },
+    scrollContent: { padding: spacing.lg, paddingBottom: 40, gap: spacing.md },
+    card: { borderRadius: radius.card, borderWidth: 1, padding: spacing.lg },
+    sectionTitle: { marginBottom: 12 },
+    chipGroup: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
     chip: {
         paddingHorizontal: 16,
         paddingVertical: 10,
-        borderRadius: 10,
+        borderRadius: radius.chip,
         minHeight: 44,
-        justifyContent: 'center' as const,
+        justifyContent: 'center',
+        borderWidth: 1,
     },
-    chipText: { fontSize: 14, fontWeight: '600' },
-    notesInput: {
-        borderWidth: 0.5,
-        borderRadius: 10,
-        padding: 14,
-        fontSize: 15,
-        minHeight: 100,
-    },
+    notesInput: { borderWidth: 1, borderRadius: radius.btn, padding: 14, fontSize: 15, minHeight: 100 },
     modalOverlay: {
         flex: 1,
         backgroundColor: 'rgba(0,0,0,0.5)',
@@ -356,32 +349,6 @@ const styles = StyleSheet.create({
         justifyContent: 'center',
         padding: 32,
     },
-    modalContent: {
-        width: '100%',
-        maxWidth: 340,
-        borderRadius: 16,
-        padding: 24,
-        alignItems: 'center',
-    },
-    modalTitle: {
-        fontSize: 18,
-        fontWeight: '700',
-        marginTop: 12,
-        marginBottom: 8,
-    },
-    modalMessage: {
-        fontSize: 14,
-        marginBottom: 24,
-        textAlign: 'center',
-    },
-    modalOkBtn: {
-        width: '100%',
-        paddingVertical: 12,
-        borderRadius: 10,
-        alignItems: 'center',
-    },
-    modalOkBtnText: {
-        fontSize: 14,
-        fontWeight: '600',
-    },
+    modalContent: { width: '100%', maxWidth: 340, borderRadius: radius.hero, padding: 24, alignItems: 'center' },
+    modalOkBtn: { width: '100%', paddingVertical: 13, borderRadius: radius.btn, alignItems: 'center' },
 });
