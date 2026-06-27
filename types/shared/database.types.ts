@@ -865,27 +865,6 @@ export type Database = {
                 };
                 Relationships: [];
             };
-            email_debug_log: {
-                Row: {
-                    context: string | null;
-                    created_at: string;
-                    detail: string | null;
-                    id: number;
-                };
-                Insert: {
-                    context?: string | null;
-                    created_at?: string;
-                    detail?: string | null;
-                    id?: number;
-                };
-                Update: {
-                    context?: string | null;
-                    created_at?: string;
-                    detail?: string | null;
-                    id?: number;
-                };
-                Relationships: [];
-            };
             email_otp_codes: {
                 Row: {
                     code_hash: string;
@@ -1650,6 +1629,8 @@ export type Database = {
             };
             leads: {
                 Row: {
+                    archived_at: string | null;
+                    archived_by_id: string | null;
                     assigned_to: string;
                     created_at: string | null;
                     created_by: string;
@@ -1668,6 +1649,8 @@ export type Database = {
                     updated_at: string | null;
                 };
                 Insert: {
+                    archived_at?: string | null;
+                    archived_by_id?: string | null;
                     assigned_to: string;
                     created_at?: string | null;
                     created_by: string;
@@ -1686,6 +1669,8 @@ export type Database = {
                     updated_at?: string | null;
                 };
                 Update: {
+                    archived_at?: string | null;
+                    archived_by_id?: string | null;
                     assigned_to?: string;
                     created_at?: string | null;
                     created_by?: string;
@@ -1704,6 +1689,13 @@ export type Database = {
                     updated_at?: string | null;
                 };
                 Relationships: [
+                    {
+                        foreignKeyName: 'leads_archived_by_id_fkey';
+                        columns: ['archived_by_id'];
+                        isOneToOne: false;
+                        referencedRelation: 'users';
+                        referencedColumns: ['id'];
+                    },
                     {
                         foreignKeyName: 'leads_assigned_to_fkey';
                         columns: ['assigned_to'];
@@ -2612,6 +2604,16 @@ export type Database = {
                 }[];
             };
             fn_all_papers_passed: { Args: { c: string }; Returns: boolean };
+            get_candidates_live_progress: {
+                Args: { p_user_ids: string[] };
+                Returns: {
+                    onboarding_step: number;
+                    profile_completed: boolean;
+                    quiz_answered: number;
+                    quiz_completed: boolean;
+                    user_id: string;
+                }[];
+            };
             get_enneagram_sampler_questions: {
                 Args: never;
                 Returns: {
@@ -2789,7 +2791,8 @@ export type Database = {
                 | 'meeting'
                 | 'follow_up'
                 | 'whatsapp'
-                | 'unassignment';
+                | 'unassignment'
+                | 'key_facts';
             lead_source: 'referral' | 'walk_in' | 'online' | 'event' | 'cold_call' | 'other';
             lead_status: 'new' | 'contacted' | 'qualified' | 'proposed' | 'won' | 'lost';
             lifecycle_stage:
@@ -2955,6 +2958,7 @@ export const Constants = {
                 'follow_up',
                 'whatsapp',
                 'unassignment',
+                'key_facts',
             ],
             lead_source: ['referral', 'walk_in', 'online', 'event', 'cold_call', 'other'],
             lead_status: ['new', 'contacted', 'qualified', 'proposed', 'won', 'lost'],
