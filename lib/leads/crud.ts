@@ -2,7 +2,7 @@
  * Lead CRUD operations — create, read, update, assign
  */
 import type { Lead, LeadActivityType, LeadSource, LeadStatus, ProductInterest } from '@/types/lead';
-import { applyPageRange, resolvePage } from '../pagination';
+import { resolvePage } from '../pagination';
 import { friendlyError } from '../errors';
 import { captureError } from '../sentry';
 import { getCachedAccessToken } from '../sessionCache';
@@ -301,4 +301,44 @@ export async function assignLead(
         captureError(err, { fn: 'assignLead' });
         return { error: err instanceof Error ? err.message : 'Unknown error assigning lead' };
     }
+}
+
+/**
+ * Reversible soft-archive of a lead. Sets/clears `archived_at` (+ `archived_by_id`)
+ * and logs an audit activity. Archiving HIDES the lead from the agent's active list
+ * (active queries filter `archived_at IS NULL`); it NEVER deletes. `assigned_to` is
+ * preserved. Offline-friendly via `queueMutation`.
+ */
+export async function setLeadArchived(
+    leadId: string,
+    archived: boolean,
+    userId: string,
+): Promise<{ error: string | null }> {
+    const updatedAt = new Date().toISOString();
+    const patch = archived
+        ? { archived_at: updatedAt, archived_by_id: userId, updated_at: updatedAt }
+        : { archived_at: null, archived_by_id: null, updated_at: updatedAt };
+
+    const upd = await queueMutation('leads', 'update', patch, { id: leadId }, () =>
+        supabase.from('leads').update(patch).eq('id', leadId),
+    );
+    if (upd.error) return { error: upd.error };
+
+    const description = archived ? 'Lead archived' : 'Lead unarchived';
+    await queueMutation(
+        'lead_activities',
+        'insert',
+        { lead_id: leadId, user_id: userId, type: 'note', description, metadata: { archived } },
+        undefined,
+        () =>
+            supabase.from('lead_activities').insert({
+                lead_id: leadId,
+                user_id: userId,
+                type: 'note' as LeadActivityType,
+                description,
+                metadata: { archived },
+            }),
+    );
+
+    return { error: null };
 }

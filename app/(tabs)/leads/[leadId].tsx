@@ -9,7 +9,7 @@ import { useAuth } from '@/contexts/AuthContext';
 import { useViewMode } from '@/contexts/ViewModeContext';
 import { useLeadDetail } from '@/hooks/useLeadDetail';
 import { timeAgo } from '@/lib/dateTime';
-import { resolveLeadSource, displayLeadId, parseLeadNotes } from '@/lib/leads/meta';
+import { resolveLeadSource, displayLeadId, parseLeadNotes, timelineActivities } from '@/lib/leads/meta';
 import {
     useLeadsTheme,
     useLeadsThemedStyles,
@@ -476,11 +476,11 @@ export default function LeadDetailScreen() {
                         <Eyebrow>Activity</Eyebrow>
                         <View style={[styles.countPill, { backgroundColor: alpha(colors.accent, 0.14) }]}>
                             <Txt testID="lead-activity-count" role="body" weight="bold" size={13} color={colors.accent}>
-                                {activities.length}
+                                {timelineActivities(activities).length}
                             </Txt>
                         </View>
                     </View>
-                    {activities.length ? (
+                    {timelineActivities(activities).length ? (
                         <ActivityFeed activities={activities} />
                     ) : (
                         <Txt testID="lead-activity-empty" role="body" size={13.5} color={colors.textFaint}>

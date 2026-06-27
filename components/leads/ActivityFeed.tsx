@@ -11,6 +11,7 @@ import { View, StyleSheet } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { Txt } from './ui/Txt';
 import { useLeadsTheme, useLeadsThemedStyles, alpha, spacing, radius, type LeadsTheme } from '@/lib/leads/theme';
+import { timelineActivities } from '@/lib/leads/meta';
 import { timeAgo } from '@/lib/dateTime';
 import { formatSgPhone } from '@/lib/phone';
 import type { LeadActivity, LeadActivityType } from '@/types/lead';
@@ -64,6 +65,9 @@ export function ActivityFeed({ activities }: { activities: LeadActivity[] }) {
     const { colors, statusColors } = useLeadsTheme();
     const styles = useLeadsThemedStyles(makeStyles);
 
+    // follow_up / key_facts are config rows surfaced in their own cards — never timeline events.
+    const items = useMemo(() => timelineActivities(activities), [activities]);
+
     const META = useMemo<Record<string, { icon: IconName; color: string; squircle?: boolean }>>(
         () => ({
             call: { icon: 'call', color: colors.accent, squircle: true },
@@ -82,14 +86,14 @@ export function ActivityFeed({ activities }: { activities: LeadActivity[] }) {
 
     return (
         <View testID="lead-activity-list">
-            {activities.map((a, i) => {
+            {items.map((a, i) => {
                 const m = (a.metadata ?? {}) as Record<string, unknown>;
                 const meta = META[a.type as LeadActivityType] ?? META.note;
                 const title = deriveTitle(a);
                 const outcome = str(m.outcome);
                 const oc = outcome ? outcomeMeta(outcome, colors) : null;
                 const nextStep = str(m.next_step);
-                const last = i === activities.length - 1;
+                const last = i === items.length - 1;
                 const rich = !!(oc || nextStep);
                 return (
                     <View key={a.id} testID={`activity-item-${a.id}`} style={styles.row}>
