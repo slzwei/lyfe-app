@@ -5,14 +5,15 @@ import NoteInput from '@/components/leads/NoteInput';
 import ReassignModal from '@/components/leads/ReassignModal';
 import RecordingCard from '@/components/leads/RecordingCard';
 import { LogActivitySheet, type LogResult, type LogType } from '@/components/leads/LogActivitySheet';
+import { FollowUpSheet } from '@/components/leads/FollowUpSheet';
 import { Txt, Eyebrow, Monogram, StatusChip } from '@/components/leads/ui';
 import { useAuth } from '@/contexts/AuthContext';
 import { useViewMode } from '@/contexts/ViewModeContext';
 import { useLeadDetail } from '@/hooks/useLeadDetail';
 import { timeAgo } from '@/lib/dateTime';
 import { addLeadActivity } from '@/lib/leads';
-import { scheduleFollowUpReminder, warnRemindersDisabled } from '@/lib/leads/reminders';
-import { resolveLeadSource, displayLeadId, parseLeadNotes, timelineActivities } from '@/lib/leads/meta';
+import { scheduleFollowUpReminder, cancelFollowUpReminder, warnRemindersDisabled } from '@/lib/leads/reminders';
+import { resolveLeadSource, displayLeadId, parseLeadNotes, timelineActivities, deriveFollowUp } from '@/lib/leads/meta';
 import {
     useLeadsTheme,
     useLeadsThemedStyles,
@@ -86,6 +87,10 @@ export default function LeadDetailScreen() {
     const [logOpen, setLogOpen] = useState(false);
     const [logType, setLogType] = useState<LogType>('note');
     const [logBusy, setLogBusy] = useState(false);
+
+    // Follow-ups — owner-only.
+    const [followUpOpen, setFollowUpOpen] = useState(false);
+    const [followUpBusy, setFollowUpBusy] = useState(false);
 
     useEffect(() => {
         const subscription = AppState.addEventListener('change', (nextState) => {
@@ -211,10 +216,46 @@ export default function LeadDetailScreen() {
         }
     };
 
+    const saveFollowUp = async (at: Date, task: string, remind: boolean) => {
+        if (!user?.id || !leadId) return;
+        setFollowUpBusy(true);
+        try {
+            // Reschedule: cancel any reminder from the prior follow-up first.
+            const prior = activities.find((a) => a.type === 'follow_up');
+            await cancelFollowUpReminder((prior?.metadata as { reminder_id?: string } | undefined)?.reminder_id);
+            let reminderId: string | null = null;
+            if (remind) {
+                const res = await scheduleFollowUpReminder(at, lead.full_name || 'Lead', task);
+                if (res.result === 'scheduled') reminderId = res.id;
+                else if (res.result === 'denied') warnRemindersDisabled();
+            }
+            await addLeadActivity(leadId, user.id, 'follow_up', task, {
+                next_follow_up_at: at.toISOString(),
+                task,
+                remind,
+                ...(reminderId ? { reminder_id: reminderId } : {}),
+            });
+            setFollowUpOpen(false);
+            await loadData();
+        } finally {
+            setFollowUpBusy(false);
+        }
+    };
+
     const src = resolveLeadSource(lead);
     const leadIdLabel = displayLeadId(lead);
     const mktrRows = lead.source_name === 'mktr' ? parseLeadNotes(lead.notes) : [];
     const tags = [PRODUCT_LABELS[lead.product_interest], src.label].filter(Boolean) as string[];
+    const followUp = deriveFollowUp(activities);
+    const followUpWhen = followUp
+        ? new Date(followUp.at).toLocaleString('en-SG', {
+              weekday: 'short',
+              day: 'numeric',
+              month: 'short',
+              hour: 'numeric',
+              minute: '2-digit',
+          })
+        : null;
 
     return (
         <SafeAreaView style={styles.root} edges={['top']}>
@@ -382,6 +423,54 @@ export default function LeadDetailScreen() {
                         </Txt>
                     </Pressable>
                 </View>
+
+                {/* next follow-up — owner only */}
+                {!isManagerView ? (
+                    followUp ? (
+                        <Pressable
+                            testID="lead-followup-card"
+                            onPress={() => setFollowUpOpen(true)}
+                            style={styles.fuCard}
+                            accessibilityRole="button"
+                            accessibilityLabel="Edit follow-up"
+                        >
+                            <View style={styles.fuIcon}>
+                                <Ionicons name="notifications" size={20} color={colors.accent} />
+                            </View>
+                            <View style={{ flex: 1, minWidth: 0 }}>
+                                <Eyebrow color={colors.accent}>Next follow-up</Eyebrow>
+                                <Txt
+                                    role="body"
+                                    weight="semibold"
+                                    size={15}
+                                    color={colors.text}
+                                    style={{ marginTop: 3 }}
+                                    numberOfLines={2}
+                                >
+                                    {followUp.task}
+                                </Txt>
+                                <Txt role="mono" size={13} color={colors.textMuted} style={{ marginTop: 2 }}>
+                                    {followUpWhen}
+                                </Txt>
+                            </View>
+                            <Ionicons name="pencil" size={18} color={colors.textMuted} />
+                        </Pressable>
+                    ) : (
+                        <Pressable
+                            testID="lead-followup-cta"
+                            onPress={() => setFollowUpOpen(true)}
+                            style={styles.fuGhost}
+                            accessibilityRole="button"
+                            accessibilityLabel="Set a follow-up"
+                        >
+                            <Ionicons name="notifications-outline" size={20} color={colors.accent} />
+                            <Txt role="body" weight="semibold" size={14.5} color={colors.accent} style={{ flex: 1 }}>
+                                Set a follow-up
+                            </Txt>
+                            <Ionicons name="chevron-forward" size={18} color={colors.accent} />
+                        </Pressable>
+                    )
+                ) : null}
 
                 {/* status — pill grid for owner, static chip in manager view */}
                 <View>
@@ -563,14 +652,23 @@ export default function LeadDetailScreen() {
             />
 
             {!isManagerView ? (
-                <LogActivitySheet
-                    visible={logOpen}
-                    onClose={() => setLogOpen(false)}
-                    leadName={lead.full_name || 'Lead'}
-                    defaultType={logType}
-                    busy={logBusy}
-                    onSave={saveLog}
-                />
+                <>
+                    <LogActivitySheet
+                        visible={logOpen}
+                        onClose={() => setLogOpen(false)}
+                        leadName={lead.full_name || 'Lead'}
+                        defaultType={logType}
+                        busy={logBusy}
+                        onSave={saveLog}
+                    />
+                    <FollowUpSheet
+                        visible={followUpOpen}
+                        onClose={() => setFollowUpOpen(false)}
+                        initial={followUp}
+                        busy={followUpBusy}
+                        onSave={saveFollowUp}
+                    />
+                </>
             ) : null}
 
             <Confetti visible={showConfetti} confettiKey={confettiKey} />
@@ -691,6 +789,36 @@ const makeStyles = ({ colors }: LeadsTheme) =>
             paddingVertical: 6,
             paddingHorizontal: 11,
             borderRadius: 99,
+        },
+        fuCard: {
+            flexDirection: 'row',
+            alignItems: 'center',
+            gap: 13,
+            padding: spacing.lg,
+            borderRadius: radius.card,
+            backgroundColor: alpha(colors.accent, 0.06),
+            borderWidth: 1,
+            borderColor: alpha(colors.accent, 0.4),
+        },
+        fuIcon: {
+            width: 42,
+            height: 42,
+            borderRadius: 12,
+            backgroundColor: alpha(colors.accent, 0.16),
+            alignItems: 'center',
+            justifyContent: 'center',
+        },
+        fuGhost: {
+            flexDirection: 'row',
+            alignItems: 'center',
+            gap: 11,
+            paddingVertical: 14,
+            paddingHorizontal: spacing.lg,
+            borderRadius: radius.card,
+            borderWidth: 1.5,
+            borderStyle: 'dashed',
+            borderColor: alpha(colors.accent, 0.5),
+            backgroundColor: alpha(colors.accent, 0.06),
         },
         countPill: { minWidth: 24, paddingHorizontal: 7, paddingVertical: 2, borderRadius: 99, alignItems: 'center' },
     });
