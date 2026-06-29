@@ -3,33 +3,14 @@
  * Source resolver, lead-id, notes parsing, and the follow-up / key-facts /
  * timeline derivations from `lead_activities.metadata`. Leads-local.
  */
-import type { IconName } from '@/types/ui';
 import type { Lead, LeadActivity } from '@/types/lead';
 
-export interface LeadSourceMeta {
-    key: string;
-    label: string;
-    icon: IconName;
-}
-
-/** Maps a lead's `source`/`source_name` to a label + icon for the source badge. */
-export function resolveLeadSource(lead: Pick<Lead, 'source' | 'source_name'>): LeadSourceMeta {
-    if (lead.source_name === 'mktr') return { key: 'mktr', label: 'MKTR', icon: 'megaphone-outline' };
-    switch (lead.source) {
-        case 'referral':
-            return { key: 'referral', label: 'Referral', icon: 'people-outline' };
-        case 'walk_in':
-            return { key: 'walk_in', label: 'Walk-in', icon: 'walk-outline' };
-        case 'online':
-            return { key: 'online', label: 'Online', icon: 'globe-outline' };
-        case 'event':
-            return { key: 'event', label: 'Event', icon: 'calendar-outline' };
-        case 'cold_call':
-            return { key: 'cold_call', label: 'Cold call', icon: 'call-outline' };
-        default:
-            return { key: 'other', label: 'Other', icon: 'ellipsis-horizontal' };
-    }
-}
+/**
+ * Source resolution (notes `Source:` → MKTR identity → manual enum) + the kind → brand-glyph
+ * map now live in lib/leads/sourceBadge.ts + components/leads/ui/SourceBadge.tsx (mktr-leads
+ * parity port — per-platform Facebook / Instagram / TikTok / Google / Meta marks). Import
+ * `resolveLeadSource` from '@/lib/leads/sourceBadge'.
+ */
 
 /** Short display id for the detail header — `MKTR-XXXXXX` for external leads, else `LD-XXXXXX`. */
 export function displayLeadId(lead: Pick<Lead, 'external_id' | 'id'>): string {
@@ -79,11 +60,101 @@ export function parseLeadNotes(notes: string | null | undefined): LeadDetailRow[
         if (label && KNOWN_NOTE_LABELS.includes(label)) {
             sawKnown = true;
             const value = s.slice(i + 2).trim();
-            if (value) rows.push({ label, value });
+            // Normalise a birthday to the app-wide DD/MM/YYYY at the parse boundary.
+            if (value) rows.push({ label, value: label === 'Birthday' ? formatBirthday(value) : value });
         }
     }
     if (!sawKnown) return [{ label: null, value: text }];
     return rows;
+}
+
+// ── Birthday / Age / product derivations (mktr-leads parity · lib/leadMeta.ts) ──
+
+/**
+ * The single source of truth for how a date of birth is displayed across leads: always
+ * `DD/MM/YYYY`. Normalises the two shapes a birthday arrives in — ISO `YYYY-MM-DD` (HTML date
+ * inputs, optionally carrying a time) and an already day-first `D/M/YYYY` — by string parts
+ * only. Working on the parts (never `new Date()`) is deliberate: it's timezone-proof (a
+ * date-only string parsed as a Date can shift a day across zones) AND it won't fall for
+ * `Date.parse`'s lenient acceptance of free text that merely contains a year. Anything else is
+ * returned verbatim, so a birthday is never mangled.
+ */
+export function formatBirthday(input: string | null | undefined): string {
+    const raw = input?.trim();
+    if (!raw) return '';
+    const iso = raw.match(/^(\d{4})-(\d{2})-(\d{2})/);
+    if (iso) {
+        const [, y, m, d] = iso;
+        return `${d}/${m}/${y}`;
+    }
+    const dmy = raw.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})$/);
+    if (dmy) {
+        const [, d, m, y] = dmy;
+        return `${d.padStart(2, '0')}/${m.padStart(2, '0')}/${y}`;
+    }
+    return raw; // unknown shape — never mangle
+}
+
+/**
+ * Current age in whole years from a birthday string, or null if it can't be derived. Accepts
+ * the same shapes as formatBirthday (ISO `YYYY-MM-DD` or day-first `D/M/YYYY`). Age isn't
+ * stored — it's derived from the birthday already on display, so it's always current and needs
+ * no backend change. Computed by calendar parts and bounded to a sane 0–120 so a typo / future
+ * date never yields a negative or absurd age (→ null, no row).
+ */
+export function computeAge(birthday: string | null | undefined): number | null {
+    const raw = birthday?.trim();
+    if (!raw) return null;
+    let y: number, mo: number, d: number;
+    const iso = raw.match(/^(\d{4})-(\d{2})-(\d{2})/);
+    const dmy = raw.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})$/);
+    if (iso) {
+        y = +iso[1];
+        mo = +iso[2];
+        d = +iso[3];
+    } else if (dmy) {
+        d = +dmy[1];
+        mo = +dmy[2];
+        y = +dmy[3];
+    } else {
+        return null;
+    }
+    const now = new Date();
+    let age = now.getFullYear() - y;
+    // Not had this year's birthday yet → one less.
+    const mNow = now.getMonth() + 1;
+    if (mNow < mo || (mNow === mo && now.getDate() < d)) age--;
+    return age >= 0 && age <= 120 ? age : null;
+}
+
+/**
+ * Expands a parsed lead-detail list so an Age row follows any Birthday row. Age is a useful
+ * at-a-glance signal but isn't stored, so it's derived (current age) from the birthday already
+ * on display — keeping parseLeadNotes a pure string parser and the derivation in one helper.
+ * A birthday that can't yield a sane age adds no row.
+ */
+export function withAgeRow(rows: LeadDetailRow[]): LeadDetailRow[] {
+    const out: LeadDetailRow[] = [];
+    for (const r of rows) {
+        out.push(r);
+        if (r.label === 'Birthday') {
+            const age = computeAge(r.value);
+            if (age != null) out.push({ label: 'Age', value: String(age) });
+        }
+    }
+    return out;
+}
+
+/**
+ * MKTR leads carry the literal placeholder product interest `'general'` (the receiver stamps
+ * it when no real product line is sent — receive-mktr-lead/index.ts:343). It's identical on
+ * almost every MKTR lead and carries no signal, so treat it as absent for display: callers
+ * surface a product chip only for a REAL line ("Life", "Health", "ILP"). Returns the value
+ * unchanged when it's real, or null when it's the placeholder.
+ */
+export function realProductInterest(value: string | null | undefined): string | null {
+    const s = value?.trim();
+    return s && s.toLowerCase() !== 'general' ? s : null;
 }
 
 // ── CRM surfaces derived from lead_activities.metadata ──────────────────────

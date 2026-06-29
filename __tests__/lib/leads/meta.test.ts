@@ -5,12 +5,15 @@
  */
 import type { LeadActivity } from '@/types/lead';
 import {
-    resolveLeadSource,
     displayLeadId,
     parseLeadNotes,
     deriveFollowUp,
     deriveKeyFacts,
     timelineActivities,
+    formatBirthday,
+    computeAge,
+    withAgeRow,
+    realProductInterest,
 } from '@/lib/leads/meta';
 
 function act(partial: Partial<LeadActivity>): LeadActivity {
@@ -26,33 +29,7 @@ function act(partial: Partial<LeadActivity>): LeadActivity {
     } as LeadActivity;
 }
 
-describe('resolveLeadSource', () => {
-    it('prioritises mktr source_name over source', () => {
-        expect(resolveLeadSource({ source: 'referral', source_name: 'mktr' })).toEqual({
-            key: 'mktr',
-            label: 'MKTR',
-            icon: 'megaphone-outline',
-        });
-    });
-
-    it.each([
-        ['referral', 'Referral'],
-        ['walk_in', 'Walk-in'],
-        ['online', 'Online'],
-        ['event', 'Event'],
-        ['cold_call', 'Cold call'],
-    ])('maps source %s → %s', (source, label) => {
-        expect(resolveLeadSource({ source: source as any, source_name: null }).label).toBe(label);
-    });
-
-    it('falls back to Other for an unknown source', () => {
-        expect(resolveLeadSource({ source: 'mystery' as any, source_name: null })).toEqual({
-            key: 'other',
-            label: 'Other',
-            icon: 'ellipsis-horizontal',
-        });
-    });
-});
+// resolveLeadSource moved to lib/leads/sourceBadge.ts — covered in sourceBadge.test.ts.
 
 describe('displayLeadId', () => {
     it('uses MKTR prefix + last 6 of external_id', () => {
@@ -103,6 +80,13 @@ describe('parseLeadNotes', () => {
     it('returns legacy free-text verbatim as one label-less row when no known label present', () => {
         expect(parseLeadNotes('Just a freeform note from a call')).toEqual([
             { label: null, value: 'Just a freeform note from a call' },
+        ]);
+    });
+
+    it('normalises a Birthday value to DD/MM/YYYY at the parse boundary', () => {
+        expect(parseLeadNotes('Birthday: 1990-05-15 | Postal: 123456')).toEqual([
+            { label: 'Birthday', value: '15/05/1990' },
+            { label: 'Postal', value: '123456' },
         ]);
     });
 });
@@ -199,5 +183,91 @@ describe('timelineActivities', () => {
 
     it('returns [] for an all-config list', () => {
         expect(timelineActivities([act({ type: 'follow_up' as any }), act({ type: 'key_facts' as any })])).toEqual([]);
+    });
+});
+
+describe('formatBirthday', () => {
+    it('reformats ISO YYYY-MM-DD (with or without a time) to DD/MM/YYYY', () => {
+        expect(formatBirthday('1990-05-15')).toBe('15/05/1990');
+        expect(formatBirthday('1990-05-15T10:30:00Z')).toBe('15/05/1990');
+    });
+
+    it('zero-pads an already day-first D/M/YYYY', () => {
+        expect(formatBirthday('5/5/1990')).toBe('05/05/1990');
+        expect(formatBirthday('15/05/1990')).toBe('15/05/1990');
+    });
+
+    it('returns empty for blank input and never mangles an unknown shape', () => {
+        expect(formatBirthday(null)).toBe('');
+        expect(formatBirthday('   ')).toBe('');
+        expect(formatBirthday('sometime in 1990')).toBe('sometime in 1990');
+    });
+});
+
+describe('computeAge', () => {
+    beforeAll(() => {
+        jest.useFakeTimers().setSystemTime(new Date(2026, 5, 29)); // 29 Jun 2026 (local)
+    });
+    afterAll(() => {
+        jest.useRealTimers();
+    });
+
+    it('computes whole-year age from ISO and day-first shapes', () => {
+        expect(computeAge('1990-05-15')).toBe(36); // birthday already passed this year
+        expect(computeAge('15/05/1990')).toBe(36);
+    });
+
+    it('subtracts a year when this year’s birthday has not happened yet', () => {
+        expect(computeAge('2000-12-31')).toBe(25);
+    });
+
+    it('returns null for a future, out-of-range, or unparseable birthday', () => {
+        expect(computeAge('2030-01-01')).toBeNull(); // future → negative → null
+        expect(computeAge('1000-01-01')).toBeNull(); // > 120 → null
+        expect(computeAge('garbage')).toBeNull();
+        expect(computeAge(null)).toBeNull();
+    });
+});
+
+describe('withAgeRow', () => {
+    beforeAll(() => {
+        jest.useFakeTimers().setSystemTime(new Date(2026, 5, 29));
+    });
+    afterAll(() => {
+        jest.useRealTimers();
+    });
+
+    it('inserts a derived Age row immediately after a Birthday row', () => {
+        expect(
+            withAgeRow([
+                { label: 'Birthday', value: '15/05/1990' },
+                { label: 'Postal', value: '123456' },
+            ]),
+        ).toEqual([
+            { label: 'Birthday', value: '15/05/1990' },
+            { label: 'Age', value: '36' },
+            { label: 'Postal', value: '123456' },
+        ]);
+    });
+
+    it('leaves rows untouched when there is no Birthday, or the age is unparseable', () => {
+        expect(withAgeRow([{ label: 'Postal', value: '123456' }])).toEqual([{ label: 'Postal', value: '123456' }]);
+        expect(withAgeRow([{ label: 'Birthday', value: 'unknown' }])).toEqual([
+            { label: 'Birthday', value: 'unknown' },
+        ]);
+    });
+});
+
+describe('realProductInterest', () => {
+    it('treats the "general" placeholder (any case) as absent', () => {
+        expect(realProductInterest('general')).toBeNull();
+        expect(realProductInterest('General')).toBeNull();
+        expect(realProductInterest(null)).toBeNull();
+        expect(realProductInterest('   ')).toBeNull();
+    });
+
+    it('returns a real product line unchanged', () => {
+        expect(realProductInterest('life')).toBe('life');
+        expect(realProductInterest('health')).toBe('health');
     });
 });

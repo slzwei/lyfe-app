@@ -16,13 +16,15 @@ import { useLeadDetail } from '@/hooks/useLeadDetail';
 import { timeAgo } from '@/lib/dateTime';
 import { addLeadActivity, setLeadArchived } from '@/lib/leads';
 import { scheduleFollowUpReminder, cancelFollowUpReminder, warnRemindersDisabled } from '@/lib/leads/reminders';
+import { resolveLeadSource } from '@/lib/leads/sourceBadge';
 import {
-    resolveLeadSource,
     displayLeadId,
     parseLeadNotes,
     timelineActivities,
     deriveFollowUp,
     deriveKeyFacts,
+    withAgeRow,
+    realProductInterest,
     type KeyFact,
 } from '@/lib/leads/meta';
 import {
@@ -317,8 +319,11 @@ export default function LeadDetailScreen() {
 
     const src = resolveLeadSource(lead);
     const leadIdLabel = displayLeadId(lead);
-    const mktrRows = lead.source_name === 'mktr' ? parseLeadNotes(lead.notes) : [];
-    const tags = [PRODUCT_LABELS[lead.product_interest], src.label].filter(Boolean) as string[];
+    // withAgeRow appends a derived Age row after any Birthday row (age isn't stored).
+    const mktrRows = lead.source_name === 'mktr' ? withAgeRow(parseLeadNotes(lead.notes)) : [];
+    // Drop the MKTR `'general'` placeholder so the chip shows only a real product line.
+    const productLabel = realProductInterest(lead.product_interest) ? PRODUCT_LABELS[lead.product_interest] : null;
+    const tags = [productLabel, src.label].filter(Boolean) as string[];
     const followUp = deriveFollowUp(activities);
     const followUpWhen = followUp
         ? new Date(followUp.at).toLocaleString('en-SG', {

@@ -14,7 +14,8 @@ import { Monogram } from './ui/Monogram';
 import { SourceBadge } from './ui/SourceBadge';
 import { StatusChip } from './ui/StatusChip';
 import { useLeadsTheme, useLeadsThemedStyles, statusColors, spacing, radius, type LeadsTheme } from '@/lib/leads/theme';
-import { resolveLeadSource } from '@/lib/leads/meta';
+import { resolveLeadSource } from '@/lib/leads/sourceBadge';
+import { realProductInterest } from '@/lib/leads/meta';
 import { formatSgPhone } from '@/lib/phone';
 import { timeAgo } from '@/lib/dateTime';
 import { PRODUCT_LABELS, type Lead } from '@/types/lead';
@@ -25,7 +26,8 @@ function LeadListCardBase({ lead, onPress }: { lead: Lead; onPress: () => void }
     const isWon = lead.status === 'won';
     const isNew = lead.status === 'new';
     const src = resolveLeadSource(lead);
-    const sub = [PRODUCT_LABELS[lead.product_interest], src.label].filter(Boolean).join(' · ');
+    const productLabel = realProductInterest(lead.product_interest) ? PRODUCT_LABELS[lead.product_interest] : null;
+    const sub = [productLabel, src.label].filter(Boolean).join(' · ');
 
     return (
         <Pressable
