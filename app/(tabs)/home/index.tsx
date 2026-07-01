@@ -10,6 +10,7 @@ import LyfeLogo from '@/components/LyfeLogo';
 import RoadmapProgressCard from '@/components/home/RoadmapProgressCard';
 import ScreenHeader from '@/components/ScreenHeader';
 import UpcomingEventsCard from '@/components/home/UpcomingEventsCard';
+import UpcomingScheduleCard from '@/components/home/UpcomingScheduleCard';
 import { useAuth } from '@/contexts/AuthContext';
 import { useTheme } from '@/contexts/ThemeContext';
 import { useNotifications } from '@/contexts/NotificationContext';
@@ -23,6 +24,7 @@ import {
     type BiometryType,
 } from '@/lib/biometrics';
 import { useCandidatePipeline } from '@/hooks/useCandidatePipeline';
+import { useCandidateSchedule } from '@/hooks/useCandidateSchedule';
 import { useDashboard } from '@/hooks/useDashboard';
 import { useTypedRouter } from '@/hooks/useTypedRouter';
 import { formatTodayEyebrow } from '@/lib/dateTime';
@@ -117,6 +119,9 @@ export default function HomeScreen() {
 
     const currentProgramme = candidateRoadmap.find((p) => !p.isLocked && p.percentage < 100) ?? candidateRoadmap[0];
 
+    // Candidate "What's next" — next 3 upcoming schedule items (inert for staff).
+    const candidateSchedule = useCandidateSchedule({ enabled: isCandidate, limit: 3 });
+
     // Honest, role-aware greeting subline — only shown once its real data has loaded.
     let greetingSubline: string | null = null;
     if (showPipeline && !pipeline.isLoading && !isLoading) {
@@ -136,8 +141,8 @@ export default function HomeScreen() {
     }
 
     const handleRefresh = useCallback(async () => {
-        await Promise.all([onRefresh(), pipeline.refresh()]);
-    }, [onRefresh, pipeline]);
+        await Promise.all([onRefresh(), pipeline.refresh(), candidateSchedule.refresh()]);
+    }, [onRefresh, pipeline, candidateSchedule]);
 
     return (
         <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]} edges={['top']}>
@@ -264,6 +269,15 @@ export default function HomeScreen() {
                             router.push(`/(tabs)/home/candidate/${id}` as Parameters<typeof router.push>[0])
                         }
                         onSeeAll={() => router.push(isRo ? '/(tabs)/pa' : '/(tabs)/candidates')}
+                    />
+                )}
+
+                {isCandidate && (
+                    <UpcomingScheduleCard
+                        items={candidateSchedule.items}
+                        colors={colors}
+                        isLoading={candidateSchedule.isLoading}
+                        onSeeAll={() => router.push('/(tabs)/home/schedule')}
                     />
                 )}
 
