@@ -22,9 +22,11 @@ import ModuleItemRow from '@/components/roadmap/ModuleItemRow';
 import ErrorBanner from '@/components/ErrorBanner';
 import {
     fetchModule,
+    fetchModuleItems,
     fetchModuleResources,
     fetchModuleProgressForCandidate,
     fetchModuleItemsWithProgress,
+    getCandidateIdForUser,
 } from '@/lib/roadmap';
 import { supabase } from '@/lib/supabase';
 import { TAB_BAR_HEIGHT } from '@/constants/platform';
@@ -67,11 +69,15 @@ export default function ModuleDetailScreen() {
         setIsLoading(true);
         setError(null);
 
+        // candidate_module_(item_)progress rows key on candidates.id, not users.id —
+        // resolve through the candidate_profiles bridge before querying progress.
+        const candidateId = user?.id ? await getCandidateIdForUser(user.id) : null;
+
         const [moduleRes, resourcesRes, progressRes] = await Promise.all([
             fetchModule(moduleId),
             fetchModuleResources(moduleId),
-            user?.id
-                ? fetchModuleProgressForCandidate(user.id, moduleId)
+            candidateId
+                ? fetchModuleProgressForCandidate(candidateId, moduleId)
                 : Promise.resolve({ data: null, error: null }),
         ]);
 
@@ -93,14 +99,16 @@ export default function ModuleDetailScreen() {
         setIsLoading(false);
 
         // Lazy-load items after main content renders
-        if (user?.id) {
-            setIsItemsLoading(true);
-            const itemsRes = await fetchModuleItemsWithProgress(moduleId, user.id);
+        setIsItemsLoading(true);
+        if (candidateId) {
+            const itemsRes = await fetchModuleItemsWithProgress(moduleId, candidateId);
             setItems(itemsRes.data ?? []);
-            setIsItemsLoading(false);
         } else {
-            setIsItemsLoading(false);
+            // No linked candidate record — show the checklist unticked.
+            const itemsRes = await fetchModuleItems(moduleId);
+            setItems((itemsRes.data ?? []).map((item) => ({ ...item, progress: null })));
         }
+        setIsItemsLoading(false);
     }, [moduleId, user?.id]);
 
     useEffect(() => {

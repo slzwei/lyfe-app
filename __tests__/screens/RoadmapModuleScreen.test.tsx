@@ -9,10 +9,14 @@ import { useTheme } from '@/contexts/ThemeContext';
 import { Colors } from '@/constants/Colors';
 import {
     fetchModule,
+    fetchModuleItems,
     fetchModuleResources,
     fetchModuleProgressForCandidate,
     fetchModuleItemsWithProgress,
+    getCandidateIdForUser,
 } from '@/lib/roadmap';
+
+import ModuleDetailScreen from '@/app/(tabs)/roadmap/module/[moduleId]';
 
 jest.mock('@/lib/supabase');
 jest.mock('@/contexts/AuthContext');
@@ -54,8 +58,6 @@ jest.mock('@/components/roadmap/ModuleItemRow', () => {
     };
 });
 
-import ModuleDetailScreen from '@/app/(tabs)/roadmap/module/[moduleId]';
-
 beforeEach(() => {
     jest.clearAllMocks();
 
@@ -72,6 +74,10 @@ beforeEach(() => {
     });
 
     (useLocalSearchParams as jest.Mock).mockReturnValue({ moduleId: 'mod-1' });
+
+    // users.id → candidates.id bridge (candidate_profiles). Progress tables key
+    // on candidates.id, so the screen must resolve this before querying.
+    (getCandidateIdForUser as jest.Mock).mockResolvedValue('cand-1');
 });
 
 describe('ModuleDetailScreen', () => {
@@ -97,9 +103,7 @@ describe('ModuleDetailScreen', () => {
             error: null,
         });
         (fetchModuleResources as jest.Mock).mockResolvedValue({
-            data: [
-                { id: 'res-1', title: 'Guide PDF', file_url: 'https://example.com/file.pdf' },
-            ],
+            data: [{ id: 'res-1', title: 'Guide PDF', file_url: 'https://example.com/file.pdf' }],
             error: null,
         });
         (fetchModuleProgressForCandidate as jest.Mock).mockResolvedValue({
@@ -261,5 +265,65 @@ describe('ModuleDetailScreen', () => {
 
         const { getByTestId } = render(<ModuleDetailScreen />);
         expect(getByTestId('screen-header').children[0]).toBe('Module');
+    });
+
+    // Regression for TRACKER bug #32: progress tables key on candidates.id, but the
+    // screen passed users.id — RLS (can_access_candidate_user) then returned zero
+    // rows, so a candidate's module always rendered as not-started.
+    it('queries progress and items with the resolved candidates.id, never users.id', async () => {
+        (fetchModule as jest.Mock).mockResolvedValue({
+            data: {
+                id: 'mod-1',
+                title: 'Test Module',
+                module_type: 'training',
+                archived_at: null,
+                exam_paper_id: null,
+            },
+            error: null,
+        });
+        (fetchModuleResources as jest.Mock).mockResolvedValue({ data: [], error: null });
+        (fetchModuleProgressForCandidate as jest.Mock).mockResolvedValue({
+            data: { status: 'completed', completed_at: '2026-07-01T00:00:00Z' },
+            error: null,
+        });
+        (fetchModuleItemsWithProgress as jest.Mock).mockResolvedValue({ data: [], error: null });
+
+        render(<ModuleDetailScreen />);
+
+        await waitFor(() => {
+            expect(fetchModuleProgressForCandidate).toHaveBeenCalledWith('cand-1', 'mod-1');
+            expect(fetchModuleItemsWithProgress).toHaveBeenCalledWith('mod-1', 'cand-1');
+        });
+        expect(getCandidateIdForUser).toHaveBeenCalledWith('user-1');
+        expect(fetchModuleProgressForCandidate).not.toHaveBeenCalledWith('user-1', 'mod-1');
+        expect(fetchModuleItemsWithProgress).not.toHaveBeenCalledWith('mod-1', 'user-1');
+    });
+
+    it('renders the checklist unticked when no candidate record is linked', async () => {
+        (getCandidateIdForUser as jest.Mock).mockResolvedValue(null);
+        (fetchModule as jest.Mock).mockResolvedValue({
+            data: {
+                id: 'mod-1',
+                title: 'Test Module',
+                module_type: 'training',
+                archived_at: null,
+                exam_paper_id: null,
+            },
+            error: null,
+        });
+        (fetchModuleResources as jest.Mock).mockResolvedValue({ data: [], error: null });
+        (fetchModuleItems as jest.Mock).mockResolvedValue({
+            data: [{ id: 'item-1', title: 'Read material', item_type: 'material' }],
+            error: null,
+        });
+
+        const { getAllByTestId, getByText } = render(<ModuleDetailScreen />);
+
+        await waitFor(() => {
+            expect(getAllByTestId('module-item-row')).toHaveLength(1);
+            expect(getByText('0/1')).toBeTruthy();
+        });
+        expect(fetchModuleProgressForCandidate).not.toHaveBeenCalled();
+        expect(fetchModuleItemsWithProgress).not.toHaveBeenCalled();
     });
 });
