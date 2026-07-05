@@ -32,6 +32,9 @@
         "production": {
             "channel": "production",
             "autoIncrement": true,
+            "ios": {
+                "image": "latest"
+            },
             "env": {
                 "APP_VARIANT": "production"
             }
