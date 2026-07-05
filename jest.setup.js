@@ -194,6 +194,18 @@ jest.mock('react-native-vision-camera', () => ({
 // Mock native face detection module
 jest.mock('./modules/face-detection/src', () => ({
     detectFaces: jest.fn().mockResolvedValue([]),
+    convertToJpeg: jest.fn().mockResolvedValue('/tmp/mock.jpg'),
+    setMaxBrightness: jest.fn(),
+    restoreBrightness: jest.fn(),
+}));
+
+// Mock the MLKit face-detector plugin (nitro module — no native runtime in tests).
+// Tests drive liveness by invoking the captured onFacesDetected callback.
+jest.mock('react-native-vision-camera-face-detector', () => ({
+    createFaceDetectorOutput: jest.fn((options) => ({
+        __mockFaceDetectorOutput: true,
+        __options: options,
+    })),
 }));
 
 // Mock expo-asset
@@ -220,12 +232,6 @@ jest.mock('react-native-nitro-image', () => ({
             pixelFormat: 'RGBA',
         })),
     }),
-}));
-
-// Mock onnxruntime-react-native
-jest.mock('onnxruntime-react-native', () => ({
-    InferenceSession: { create: jest.fn() },
-    Tensor: jest.fn(),
 }));
 
 // Mock expo-location

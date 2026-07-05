@@ -13,7 +13,7 @@ module.exports = {
     expo: {
         name: 'Lyfe',
         slug: 'lyfe-app',
-        version: '1.3.1',
+        version: '1.4.0',
         // Lock supported platforms to mobile so `expo export --platform all`
         // (which is what eas update runs by default) doesn't try to bundle for
         // web. react-native-pdf has no web fallback and breaks the web bundle.
@@ -35,7 +35,7 @@ module.exports = {
         // Bare workflow: runtime version policies aren't supported, so this
         // must be bumped manually whenever native code or native deps change.
         // Keep in sync with `version` above for releases that ship a new binary.
-        runtimeVersion: '1.3.2',
+        runtimeVersion: '1.4.0',
         splash: {
             image: './assets/images/splash-icon.png',
             resizeMode: 'contain',
