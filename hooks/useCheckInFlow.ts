@@ -11,7 +11,7 @@ import {
     logRoadshowAttendanceWithPledge,
     type PledgeInput,
 } from '@/lib/roadshow';
-import { captureError } from '@/lib/sentry';
+import { captureError, Sentry } from '@/lib/sentry';
 import { supabase } from '@/lib/supabase';
 import type { RoadshowConfig } from '@/types/event';
 
@@ -221,6 +221,18 @@ export function useCheckInFlow({
 
             // Rekognition verify
             const result = await verifyFace(photoPath);
+            // Similarity telemetry — drift watch for the strict 99% threshold.
+            // Aging references trend down; repeated near-misses mean the user
+            // should re-register before they hard-fail at a live event.
+            try {
+                Sentry.captureMessage('face_verify', {
+                    level: 'info',
+                    tags: { face_match: String(result.match) },
+                    extra: { similarity: result.similarity, reason: result.reason ?? null },
+                });
+            } catch {
+                /* telemetry must never block check-in */
+            }
             if (!result.match) {
                 return {
                     ok: false,

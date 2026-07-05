@@ -110,7 +110,7 @@
 | Edit Event | N/A | N/A | DONE | DONE | DONE | DONE | Owner + PA + admin |
 | Delete Event | N/A | N/A | DONE | DONE | N/A | DONE | Owner + admin |
 | Event Detail | DONE | DONE | DONE | DONE | DONE | DONE | |
-| Roadshow Live T1 | N/A | DONE | N/A | N/A | N/A | N/A | Agent: check-in, pledges, logging |
+| Roadshow Live T1 | N/A | DONE | N/A | N/A | N/A | N/A | Agent: check-in, pledges, logging. Face check-in v2 (2026-07-05): blink-first liveness on MLKit frames (head-turn fallback for glasses), circle mask + ring UI, 3-attempt cap, PDPA face-ref cleanup in delete-account, Sentry face_session/face_verify telemetry. VC pinned 5.0.11 (5.1.0 breaks plugin). v1.4.0 native build. |
 | Roadshow Live T2 | N/A | N/A | DONE | DONE | N/A | DONE | Manager: leaderboard, overrides |
 | Check-In Flow | N/A | DONE | DONE | DONE | N/A | DONE | Late detection, pledge form |
 | Activity Logging | N/A | DONE | N/A | N/A | N/A | N/A | Sitdowns, pitches, closed, AFYC |

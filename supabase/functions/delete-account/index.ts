@@ -150,6 +150,15 @@ async function cleanupUserStorage(
     const tasks: Array<{ label: string; run: () => Promise<void> }> = [
         { label: `avatars:${uid}`, run: () => removeUnder(admin, 'avatars', uid) },
         { label: `candidate-pdfs:${uid}`, run: () => removeUnder(admin, 'candidate-pdfs', uid) },
+        {
+            // Biometric reference (PDPA): stored flat as <uid>.jpg by verify-face,
+            // so a prefix listing under uid/ would miss it — remove directly.
+            label: `face-references:${uid}.jpg`,
+            run: async () => {
+                const { error } = await admin.storage.from('face-references').remove([`${uid}.jpg`]);
+                if (error) throw new Error(error.message);
+            },
+        },
     ];
     for (const invId of ownedInvitationIds) {
         tasks.push({
