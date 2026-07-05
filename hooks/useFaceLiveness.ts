@@ -35,13 +35,14 @@ import {
 import { captureError } from '@/lib/sentry';
 
 /**
- * Yaw sign normalization. The previous snapshot pipeline negated the raw
- * detector yaw so that "turn left" prompts matched the mirrored front-camera
- * preview; MLKit reports the same convention on both platforms here. Verified
- * on-device via the debug overlay — flip to +1 if a build/platform ever
- * reports inverted turns (OTA-safe).
+ * Yaw sign normalization so that positive = the user turned toward THEIR
+ * right, matching the prompts. Device-verified on iPhone (2026-07-05): with
+ * -1 (the old snapshot pipeline's convention) the turn prompts were inverted
+ * — "turn right" only registered on a left turn — so MLKit via this plugin
+ * already reports yaw in prompt-space for the front camera. Re-verify on the
+ * Android device pass; branch per-platform if it disagrees (OTA-safe).
  */
-const YAW_SIGN = -1;
+const YAW_SIGN = 1;
 
 export interface LivenessDebugSnapshot {
     phase: LivenessPhase;

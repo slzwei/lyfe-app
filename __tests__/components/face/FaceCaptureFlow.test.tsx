@@ -337,6 +337,36 @@ describe('FaceCaptureFlow', () => {
         expect(mockLiveness.reset).toHaveBeenCalledWith({ preserveLadder: true });
     });
 
+    it('visibly flags the blink → head-turn switch after blink failures', () => {
+        setLiveness({
+            phase: 'challenge_turn_left',
+            challenge: 'turn',
+            guidance: 'turn_left',
+            blinkTimeouts: 2,
+        });
+        const api = renderFlow();
+        expect(api.getByText("Blink didn't register — turn your head instead")).toBeTruthy();
+        expect(api.getByText('Turn your head left…')).toBeTruthy();
+    });
+
+    it('explains the eye-visibility fallback (sunglasses) on the switch chip', () => {
+        setLiveness({
+            phase: 'challenge_turn_left',
+            challenge: 'turn',
+            guidance: 'turn_left',
+            blinkTimeouts: 0,
+            eyeDataMissing: true,
+        });
+        const api = renderFlow();
+        expect(api.getByText("Can't see your eyes (sunglasses?) — turn your head instead")).toBeTruthy();
+    });
+
+    it('shows no switch chip during the blink challenge', () => {
+        setLiveness({ phase: 'challenge_blink', challenge: 'blink', guidance: 'blink' });
+        const api = renderFlow();
+        expect(api.queryByText(/turn your head instead|head turn this time/)).toBeNull();
+    });
+
     it('shows the PDPA consent note in register mode only', () => {
         const registerApi = renderFlow({ mode: 'register' });
         expect(registerApi.getByText(/stored securely and used only to verify/)).toBeTruthy();

@@ -877,6 +877,19 @@ export function FaceCaptureFlow({ mode, onPhotoCaptured, onDismiss, showDebug = 
         return () => clearTimeout(id);
     }, [liveness.guidance, livenessEnabled]);
 
+    // ── Announce the blink → head-turn switch (one-shot) ─
+    // The chip covers sighted users; this covers haptics + screen readers.
+
+    const switchAnnouncedRef = useRef(false);
+    useEffect(() => {
+        if (liveness.challenge !== 'turn' || switchAnnouncedRef.current) return;
+        switchAnnouncedRef.current = true;
+        Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
+        const reason =
+            liveness.blinkTimeouts > 0 ? "Blink didn't register. Turn your head instead." : 'Switching to a head turn.';
+        AccessibilityInfo.announceForAccessibility(reason);
+    }, [liveness.challenge, liveness.blinkTimeouts]);
+
     // ── Dev debug overlay polling ───────────────────────
 
     useEffect(() => {
@@ -903,6 +916,7 @@ export function FaceCaptureFlow({ mode, onPhotoCaptured, onDismiss, showDebug = 
         // ladder is preserved across retries within this sheet session.
         retryingRef.current = false;
         captureStartedRef.current = false;
+        switchAnnouncedRef.current = false;
         straightPhotoRef.current = null;
         setFrozenPhoto(null);
         setShowResult(null);
@@ -1051,6 +1065,16 @@ export function FaceCaptureFlow({ mode, onPhotoCaptured, onDismiss, showDebug = 
 
     const ringColor = livenessPassed ? palette.sage : palette.terra;
 
+    // ── Blink → head-turn switch messaging ──
+    // The turn challenge only ever runs as a fallback, so say WHY, visibly.
+    const inTurnChallenge = liveness.phase === 'challenge_turn_left' || liveness.phase === 'challenge_turn_right';
+    const turnSwitchCopy =
+        liveness.blinkTimeouts > 0
+            ? "Blink didn't register — turn your head instead"
+            : liveness.eyeDataMissing
+              ? "Can't see your eyes (sunglasses?) — turn your head instead"
+              : "We'll use a head turn this time";
+
     // E2E bypass — when the build was produced with the env flag set, render
     // a single button that calls onPhotoCaptured with a dummy path. verifyFace
     // / registerFace short-circuit on the same flag, so the dummy path is
@@ -1172,12 +1196,30 @@ export function FaceCaptureFlow({ mode, onPhotoCaptured, onDismiss, showDebug = 
                             <Text style={[styles.viewfinderPrompt, { color: palette.ink }]}>
                                 {GUIDANCE_COPY[liveness.guidance]}
                             </Text>
-                            {liveness.eyeDataMissing && liveness.challenge === 'turn' ? (
-                                <Text style={[styles.viewfinderHint, { color: palette.muted }]}>
-                                    Wearing sunglasses? Remove them and retry.
-                                </Text>
-                            ) : null}
                         </View>
+
+                        {/* Challenge-switch chip: make the blink → head-turn
+                            fallback unmistakable instead of silently changing
+                            the prompt. Visible for the whole turn challenge. */}
+                        {inTurnChallenge && (
+                            <Animated.View
+                                entering={FadeIn.duration(240)}
+                                style={styles.switchChipWrap}
+                                pointerEvents="none"
+                            >
+                                <View
+                                    style={[
+                                        styles.switchChip,
+                                        { backgroundColor: palette.paperEl, borderColor: palette.rule },
+                                    ]}
+                                >
+                                    <Ionicons name="swap-horizontal" size={13} color={palette.terra} />
+                                    <Text style={[styles.switchChipText, { color: palette.ink }]}>
+                                        {turnSwitchCopy}
+                                    </Text>
+                                </View>
+                            </Animated.View>
+                        )}
 
                         {/* Scanning shimmer inside the circle while working */}
                         {!livenessPassed && cameraLayout.width > 0 && (
@@ -1435,6 +1477,30 @@ const styles = StyleSheet.create({
         fontFamily: 'Inter-SemiBold',
         fontSize: 11,
         textAlign: 'center',
+    },
+
+    // Blink → head-turn switch chip (top of viewfinder)
+    switchChipWrap: {
+        position: 'absolute',
+        top: 12,
+        left: 0,
+        right: 0,
+        alignItems: 'center',
+        zIndex: 2,
+    },
+    switchChip: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 6,
+        borderWidth: 1,
+        borderRadius: 999,
+        paddingHorizontal: 12,
+        paddingVertical: 6,
+        maxWidth: '88%',
+    },
+    switchChipText: {
+        fontFamily: 'Inter-SemiBold',
+        fontSize: 11.5,
     },
 
     // Status ticks row
