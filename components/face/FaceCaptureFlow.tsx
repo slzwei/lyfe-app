@@ -76,6 +76,8 @@ export interface FaceCaptureFlowProps {
     onDismiss: () => void;
     /** Whether to show the dev liveness debug overlay. Defaults to __DEV__. */
     showDebug?: boolean;
+    /** Dev/QA: skip blink and always run the head-turn challenge. */
+    forceTurnChallenge?: boolean;
 }
 
 // ── Constants ──────────────────────────────────────────────
@@ -584,7 +586,13 @@ function StatusTick({
 
 // ── Main component ─────────────────────────────────────────
 
-export function FaceCaptureFlow({ mode, onPhotoCaptured, onDismiss, showDebug = __DEV__ }: FaceCaptureFlowProps) {
+export function FaceCaptureFlow({
+    mode,
+    onPhotoCaptured,
+    onDismiss,
+    showDebug = __DEV__,
+    forceTurnChallenge = false,
+}: FaceCaptureFlowProps) {
     const { colors } = useTheme();
     const palette = usePalette();
     const navigation = useNavigation();
@@ -622,6 +630,7 @@ export function FaceCaptureFlow({ mode, onPhotoCaptured, onDismiss, showDebug = 
         enabled: livenessEnabled,
         viewfinderWidth: cameraLayout.width,
         viewfinderHeight: cameraLayout.height,
+        forceTurnChallenge,
     });
 
     // Refs for the capture/verify pipeline

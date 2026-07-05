@@ -124,6 +124,9 @@ export interface LivenessConfig {
     settleMs: number;
     /** Settling: give up and re-arm after this long. */
     settleMaxMs: number;
+
+    /** Dev/QA: always choose the head-turn challenge, regardless of eye baseline. */
+    forceTurnChallenge?: boolean;
 }
 
 export interface LivenessState {
@@ -561,7 +564,11 @@ function chooseChallenge(state: LivenessState, t: number, config: LivenessConfig
     const nullFrames = next.armingNullEyeFrames;
 
     let useBlink = false;
-    if (next.blinkTimeouts < config.maxBlinkTimeouts && samples.length >= config.armingMinSamplesForBlink) {
+    if (
+        !config.forceTurnChallenge &&
+        next.blinkTimeouts < config.maxBlinkTimeouts &&
+        samples.length >= config.armingMinSamplesForBlink
+    ) {
         const left = samples.map((s) => s.left);
         const right = samples.map((s) => s.right);
         const baseline = Math.min(median(left), median(right));

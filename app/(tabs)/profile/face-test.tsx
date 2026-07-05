@@ -13,7 +13,7 @@ import { checkFaceRegistration, registerFace, verifyFace } from '@/lib/faceVerif
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import React, { useCallback, useEffect, useState } from 'react';
-import { ActivityIndicator, Platform, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { ActivityIndicator, Platform, Pressable, ScrollView, StyleSheet, Switch, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useCameraDevice, useCameraPermission } from 'react-native-vision-camera';
 
@@ -30,6 +30,7 @@ export default function FaceTestScreen() {
     const [registeredAt, setRegisteredAt] = useState<string | null>(null);
     const [checkingRegistration, setCheckingRegistration] = useState(true);
     const [activeMode, setActiveMode] = useState<DevMode | null>(null);
+    const [forceTurn, setForceTurn] = useState(false);
 
     // Ask for permission once on mount
     useEffect(() => {
@@ -117,7 +118,12 @@ export default function FaceTestScreen() {
 
     if (activeMode) {
         return (
-            <FaceCaptureFlow mode={activeMode} onPhotoCaptured={handlePhotoCaptured} onDismiss={handleDismissCapture} />
+            <FaceCaptureFlow
+                mode={activeMode}
+                onPhotoCaptured={handlePhotoCaptured}
+                onDismiss={handleDismissCapture}
+                forceTurnChallenge={forceTurn}
+            />
         );
     }
 
@@ -179,16 +185,32 @@ export default function FaceTestScreen() {
                         <Ionicons name="shield-checkmark" size={20} color={colors.textInverse} />
                         <Text style={[styles.buttonText, { color: colors.textInverse }]}>Verify Face</Text>
                     </Pressable>
+
+                    <View style={styles.toggleRow}>
+                        <View style={{ flex: 1 }}>
+                            <Text style={[styles.toggleLabel, { color: colors.textPrimary }]}>
+                                Force head-turn challenge
+                            </Text>
+                            <Text style={[styles.toggleHint, { color: colors.textSecondary }]}>
+                                Skips blink so the fallback path can be tested on demand.
+                            </Text>
+                        </View>
+                        <Switch
+                            testID="face-test-force-turn"
+                            value={forceTurn}
+                            onValueChange={setForceTurn}
+                            trackColor={{ true: colors.accent }}
+                        />
+                    </View>
                 </View>
 
                 <View style={[styles.card, { backgroundColor: colors.surfacePrimary }]}>
                     <Text style={[styles.cardTitle, { color: colors.textPrimary }]}>How it works</Text>
                     <Text style={[styles.infoText, { color: colors.textSecondary }]}>
-                        1. Look straight → captures reference angle{'\n'}
-                        2. Turn left → liveness check{'\n'}
-                        3. Turn right → liveness check{'\n'}
-                        4. Photo sent to AWS Rekognition for comparison{'\n\n'}
-                        Liveness: Apple Vision (native module){'\n'}
+                        1. Center face in the circle → eye baseline calibrates{'\n'}
+                        2. Blink when asked (head-turn fallback for glasses/sunglasses){'\n'}
+                        3. Settled photo sent to AWS Rekognition for comparison{'\n\n'}
+                        Liveness: MLKit frame detection (vision-camera-face-detector){'\n'}
                         Matching: AWS Rekognition CompareFaces{'\n'}
                         Quality gates: DetectFaces (shared across register + verify){'\n'}
                         Platform: {Platform.OS} ({Platform.Version})
@@ -302,5 +324,8 @@ const styles = StyleSheet.create({
     // color applied inline from theme (colors.textInverse)
     buttonText: { fontSize: 16, fontWeight: '600' },
     infoText: { fontSize: 13, lineHeight: 20 },
+    toggleRow: { flexDirection: 'row', alignItems: 'center', gap: 12, marginTop: 14 },
+    toggleLabel: { fontSize: 14, fontWeight: '600' },
+    toggleHint: { fontSize: 12, lineHeight: 16, marginTop: 2 },
     errorText: { fontSize: 15, textAlign: 'center', marginTop: 40 },
 });

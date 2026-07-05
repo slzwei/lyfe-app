@@ -221,6 +221,21 @@ describe('liveness reducer', () => {
             expect(fresh.eyeDataMissing).toBe(false);
         });
 
+        it('forceTurnChallenge (dev/QA) always selects head-turn despite a perfect baseline', () => {
+            const forced: LivenessConfig = { ...config, forceTurnChallenge: true };
+            let state = initialLivenessState();
+            let t = 1000;
+            state = livenessReducer(state, makeSignal(t), forced);
+            t += 60;
+            state = livenessReducer(state, makeSignal(t), forced);
+            for (let i = 0; i < forced.armingFramesRequired + 2 && state.phase === 'arming'; i++) {
+                t += 60;
+                state = livenessReducer(state, makeSignal(t), forced);
+            }
+            expect(state.phase).toBe('challenge_turn_left');
+            expect(state.challenge).toBe('turn');
+        });
+
         it('after demotion, arming never selects blink again even with a perfect baseline', () => {
             let state = { ...initialLivenessState(), blinkTimeouts: config.maxBlinkTimeouts };
             let t = 1000;

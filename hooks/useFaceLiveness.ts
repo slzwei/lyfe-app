@@ -109,12 +109,21 @@ export function useFaceLiveness({
     enabled,
     viewfinderWidth,
     viewfinderHeight,
+    forceTurnChallenge = false,
 }: {
     enabled: boolean;
     viewfinderWidth: number;
     viewfinderHeight: number;
+    /** Dev/QA: skip blink and always run the head-turn challenge. */
+    forceTurnChallenge?: boolean;
 }): UseFaceLivenessResult {
-    const config = useMemo(() => createLivenessConfig(Platform.OS === 'android' ? 'android' : 'ios'), []);
+    const config = useMemo(
+        () => ({
+            ...createLivenessConfig(Platform.OS === 'android' ? 'android' : 'ios'),
+            forceTurnChallenge,
+        }),
+        [forceTurnChallenge],
+    );
 
     const stateRef = useRef<LivenessState>(initialLivenessState());
     const [display, setDisplay] = useState<DisplayState>(() => toDisplay(stateRef.current));
