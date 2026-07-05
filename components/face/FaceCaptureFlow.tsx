@@ -50,7 +50,6 @@ import Animated, {
     useSharedValue,
     withDelay,
     withRepeat,
-    withSpring,
     withTiming,
 } from 'react-native-reanimated';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -256,13 +255,13 @@ function SuccessOverlay({
     onDismiss: () => void;
     palette: Palette;
 }) {
-    const cardScale = useSharedValue(0.88);
+    const cardScale = useSharedValue(0.96);
     const cardOpacity = useSharedValue(0);
 
     useEffect(() => {
         // Delay the pop-in so the ring's fill-to-sage morph has time to play
         // before the overlay covers it.
-        cardScale.value = withDelay(MORPH_DELAY_MS, withSpring(1, { damping: 18, stiffness: 180 }));
+        cardScale.value = withDelay(MORPH_DELAY_MS, withTiming(1, { duration: 260, easing: Easing.out(Easing.exp) }));
         cardOpacity.value = withDelay(MORPH_DELAY_MS, withTiming(1, { duration: 240 }));
     }, [cardScale, cardOpacity]);
 
@@ -315,11 +314,11 @@ function FailedOverlay({
     subtitle?: string;
     palette: Palette;
 }) {
-    const cardScale = useSharedValue(0.88);
+    const cardScale = useSharedValue(0.96);
     const cardOpacity = useSharedValue(0);
 
     useEffect(() => {
-        cardScale.value = withSpring(1, { damping: 18, stiffness: 180 });
+        cardScale.value = withTiming(1, { duration: 260, easing: Easing.out(Easing.exp) });
         cardOpacity.value = withTiming(1, { duration: 240 });
     }, [cardScale, cardOpacity]);
 
@@ -378,11 +377,11 @@ function NetworkOverlay({
     onRetry: () => void;
     palette: Palette;
 }) {
-    const cardScale = useSharedValue(0.88);
+    const cardScale = useSharedValue(0.96);
     const cardOpacity = useSharedValue(0);
 
     useEffect(() => {
-        cardScale.value = withSpring(1, { damping: 18, stiffness: 180 });
+        cardScale.value = withTiming(1, { duration: 260, easing: Easing.out(Easing.exp) });
         cardOpacity.value = withTiming(1, { duration: 240 });
     }, [cardScale, cardOpacity]);
 
