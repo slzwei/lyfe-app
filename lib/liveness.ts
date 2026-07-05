@@ -167,7 +167,14 @@ export function createLivenessConfig(platform: 'ios' | 'android'): LivenessConfi
         // Circle Ø ≈ 78% of viewfinder width, centered slightly above middle.
         // ry converts the x-radius into y-normalized units for the 3:4 box.
         circle: { cx: 0.5, cy: 0.44, rx: 0.39, ry: 0.39 * (3 / 4) },
-        faceWidthMin: 0.3,
+        // The on-device size gate must be STRICTER than the server's: the
+        // verify-face edge function rejects `too_small` when the face box is
+        // under 10% of the photo area. A roughly square face box at width
+        // fraction w in the 3:4 viewfinder covers ~0.75·w² of the photo, so
+        // the server floor is w ≈ 0.37. 0.45 clears it with margin for
+        // preview-vs-photo field-of-view differences — the user gets coached
+        // "a little closer" live instead of failing after the upload.
+        faceWidthMin: 0.45,
         faceWidthMax: 0.78,
         centerTolerance: 0.5,
         turnToleranceFactor: 2.2,

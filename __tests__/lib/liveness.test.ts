@@ -349,6 +349,24 @@ describe('liveness reducer', () => {
     });
 
     describe('positioning guidance', () => {
+        it('blocks the challenge at distances the server would reject (too_small)', () => {
+            // Regression: faceWidthMin must stay above the verify-face edge
+            // function's 10%-of-photo-area floor (w ≈ 0.37 for a square box in
+            // the 3:4 viewfinder). A face at 0.35 width passed the old 0.3 gate
+            // but always came back `too_small` after the upload.
+            expect(config.faceWidthMin).toBeGreaterThanOrEqual(0.4);
+
+            let state = initialLivenessState();
+            let t = 1000;
+            state = livenessReducer(state, makeSignal(t), config); // → centering
+            for (let i = 0; i < 5; i++) {
+                t += 60;
+                state = livenessReducer(state, makeSignal(t, { box: { cx: 0.5, cy: 0.44, w: 0.35, h: 0.35 } }), config);
+            }
+            expect(state.phase).toBe('centering');
+            expect(state.guidance).toBe('move_closer');
+        });
+
         it('coaches move_closer / move_back / center_face before arming', () => {
             let state = initialLivenessState();
             let t = 1000;
