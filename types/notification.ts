@@ -24,6 +24,9 @@ export type NotificationType =
     | 'roadmap_unlocked'
     | 'new_manager_joined'
     | 'lead_reassigned_global'
+    // Data-change driven (events)
+    | 'event_invite'
+    | 'event_cancelled'
     // Scheduled
     | 'event_reminder'
     | 'interview_reminder'
@@ -50,6 +53,8 @@ export const NOTIFICATION_TYPE_CONFIG: Record<NotificationType, { icon: IconName
     roadmap_unlocked: { icon: 'lock-open', label: 'Programme Unlocked' },
     new_manager_joined: { icon: 'briefcase', label: 'New Manager' },
     lead_reassigned_global: { icon: 'globe', label: 'Cross-Team Reassignment' },
+    event_invite: { icon: 'calendar', label: 'Added to Event' },
+    event_cancelled: { icon: 'calendar-clear', label: 'Event Cancelled' },
     // Scheduled
     event_reminder: { icon: 'alarm', label: 'Event Reminder' },
     interview_reminder: { icon: 'time', label: 'Interview Reminder' },
@@ -63,6 +68,8 @@ export const NOTIFICATION_TYPE_CONFIG: Record<NotificationType, { icon: IconName
 /** Notification types relevant to each role (for the settings screen) */
 export const ROLE_NOTIFICATION_TYPES: Record<UserRole, NotificationType[]> = {
     candidate: [
+        'event_invite',
+        'event_cancelled',
         'event_reminder',
         'interview_scheduled',
         'interview_updated',
@@ -70,9 +77,33 @@ export const ROLE_NOTIFICATION_TYPES: Record<UserRole, NotificationType[]> = {
         'roadmap_unlocked',
         'agency_announcement',
     ],
-    agent: ['new_lead', 'lead_reassigned', 'event_reminder', 'roadshow_summary', 'agency_announcement'],
-    pa: ['candidate_update', 'candidate_assigned', 'interview_reminder', 'event_reminder', 'agency_announcement'],
-    ro: ['candidate_update', 'candidate_assigned', 'interview_reminder', 'event_reminder', 'agency_announcement'],
+    agent: [
+        'new_lead',
+        'lead_reassigned',
+        'event_invite',
+        'event_cancelled',
+        'event_reminder',
+        'roadshow_summary',
+        'agency_announcement',
+    ],
+    pa: [
+        'candidate_update',
+        'candidate_assigned',
+        'interview_reminder',
+        'event_invite',
+        'event_cancelled',
+        'event_reminder',
+        'agency_announcement',
+    ],
+    ro: [
+        'candidate_update',
+        'candidate_assigned',
+        'interview_reminder',
+        'event_invite',
+        'event_cancelled',
+        'event_reminder',
+        'agency_announcement',
+    ],
     manager: [
         'roadshow_pledge',
         'lead_milestone',
@@ -80,6 +111,8 @@ export const ROLE_NOTIFICATION_TYPES: Record<UserRole, NotificationType[]> = {
         'candidate_update',
         'interview_scheduled',
         'agent_invite_accepted',
+        'event_invite',
+        'event_cancelled',
         'event_reminder',
         'roadshow_summary',
         'agency_announcement',
@@ -93,6 +126,8 @@ export const ROLE_NOTIFICATION_TYPES: Record<UserRole, NotificationType[]> = {
         'agent_invite_accepted',
         'new_manager_joined',
         'organic_application',
+        'event_invite',
+        'event_cancelled',
         'event_reminder',
         'roadshow_summary',
         'agency_announcement',
@@ -107,6 +142,8 @@ export const ROLE_NOTIFICATION_TYPES: Record<UserRole, NotificationType[]> = {
         'agent_invite_accepted',
         'new_manager_joined',
         'organic_application',
+        'event_invite',
+        'event_cancelled',
         'event_reminder',
         'roadshow_summary',
         'agency_announcement',
