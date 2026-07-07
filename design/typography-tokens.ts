@@ -3,7 +3,7 @@
  *
  * Lives in its own file (no `.native` sibling) so both typography.ts and
  * typography.native.ts can import from it safely. Previously these tokens
- * lived in typography.ts — but Metro's .native resolution caused
+ * lived in typography.ts, but Metro's .native resolution caused
  * typography.native.ts to re-resolve `./typography` to itself, creating a
  * require cycle + `Fonts is undefined` crash at app startup.
  *
