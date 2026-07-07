@@ -35,8 +35,8 @@ const MONTH_GRID_H = GRID_LABELS_H + GRID_ROW_H * 6;
 const HIT = { top: 12, bottom: 12, left: 12, right: 12 };
 const DOW_LETTERS = ['M', 'T', 'W', 'T', 'F', 'S', 'S'];
 
-/** Build Mon-aligned day strip centered on today */
-function buildStrip(todayStr: string): { dates: string[]; todayWeekIdx: number } {
+/** Build Mon-aligned day strip centered on today (exported for tests) */
+export function buildStrip(todayStr: string): { dates: string[]; todayWeekIdx: number } {
     const d = new Date(todayStr + 'T00:00:00');
     const dow = (d.getDay() + 6) % 7; // Mon=0
     const start = new Date(d);
@@ -52,8 +52,8 @@ function buildStrip(todayStr: string): { dates: string[]; todayWeekIdx: number }
     return { dates, todayWeekIdx: WEEKS_BUFFER };
 }
 
-/** Build a 6-row (42 cell) Mon-first calendar grid for a given month */
-function buildMonthGrid(year: number, month: number): (Date | null)[][] {
+/** Build a 6-row (42 cell) Mon-first calendar grid for a given month (exported for tests) */
+export function buildMonthGrid(year: number, month: number): (Date | null)[][] {
     const firstDay = new Date(year, month, 1);
     const lastDay = new Date(year, month + 1, 0);
     const startDow = (firstDay.getDay() + 6) % 7;
@@ -75,8 +75,8 @@ interface MonthPage {
     grid: (Date | null)[][];
 }
 
-/** Pre-generate month pages centered on today */
-function buildMonthPages(todayStr: string): { pages: MonthPage[]; todayPageIdx: number } {
+/** Pre-generate month pages centered on today (exported for tests) */
+export function buildMonthPages(todayStr: string): { pages: MonthPage[]; todayPageIdx: number } {
     const d = new Date(todayStr + 'T00:00:00');
     const centerYear = d.getFullYear();
     const centerMonth = d.getMonth();
@@ -113,7 +113,11 @@ const StripDayCell = React.memo(function StripDayCell({
     const dow = DOW_LETTERS[(d.getDay() + 6) % 7];
 
     return (
-        <Pressable style={[calStyles.stripCell, { width: CELL_W }]} onPress={() => onPress(dateStr)}>
+        <Pressable
+            testID={`strip-day-${dateStr}`}
+            style={[calStyles.stripCell, { width: CELL_W }]}
+            onPress={() => onPress(dateStr)}
+        >
             <Text style={[calStyles.stripDow, { color: isToday && !isSelected ? colors.accent : colors.textTertiary }]}>
                 {dow}
             </Text>
@@ -137,6 +141,7 @@ const StripDayCell = React.memo(function StripDayCell({
                 </Text>
             </View>
             <View
+                testID={`strip-dot-${dateStr}`}
                 style={[
                     calStyles.dot,
                     {
@@ -171,7 +176,7 @@ const GridDayCell = React.memo(function GridDayCell({
     onPress,
 }: GridDayCellProps) {
     return (
-        <Pressable style={calStyles.gridCell} onPress={() => onPress(dateStr)}>
+        <Pressable testID={`grid-day-${dateStr}`} style={calStyles.gridCell} onPress={() => onPress(dateStr)}>
             <View
                 style={[
                     calStyles.gridCircle,
