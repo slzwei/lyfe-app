@@ -1,3 +1,4 @@
+import EmptyState from '@/components/EmptyState';
 import ErrorBanner from '@/components/ErrorBanner';
 import EventCard from '@/components/events/EventCard';
 import InlineCalendar from '@/components/events/InlineCalendar';
@@ -335,6 +336,27 @@ export default function EventsScreen() {
             <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]} edges={['top']}>
                 {renderEditorialHeader()}
                 <LoadingState />
+            </SafeAreaView>
+        );
+    }
+
+    // First-run empty state teaches the screen instead of three bare
+    // "No Events" header rows.
+    if (allEvents.length === 0 && !eventError) {
+        return (
+            <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]} edges={['top']}>
+                {renderEditorialHeader()}
+                <EmptyState
+                    icon="calendar-outline"
+                    title="No events yet"
+                    subtitle={
+                        canCreateEvents
+                            ? 'Roadshows, meetings and exam sittings you schedule will all land here, laid out day by day.'
+                            : "When you're added to a roadshow, meeting or exam sitting, it'll show up here so you always know what's on."
+                    }
+                    actionLabel={canCreateEvents ? 'Create an event' : undefined}
+                    onAction={canCreateEvents ? () => router.push('/(tabs)/events/create') : undefined}
+                />
             </SafeAreaView>
         );
     }

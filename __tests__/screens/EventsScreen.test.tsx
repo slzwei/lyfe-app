@@ -204,12 +204,14 @@ describe('EventsScreen', () => {
         }
     });
 
-    it('shows empty state when no events exist at all', async () => {
+    it('shows a taught empty state when no events exist at all', async () => {
         mockedFetchEvents.mockResolvedValue({ data: [] as any, error: null });
-        const { getAllByText } = render(<EventsScreen />);
+        const { getByText, queryAllByText } = render(<EventsScreen />);
 
-        // Should show context days with "No Events" — no crash
-        await waitFor(() => expect(getAllByText('No Events').length).toBeGreaterThanOrEqual(1));
+        await waitFor(() => expect(getByText('No events yet')).toBeTruthy());
+        // Agents can't create events — no CTA, and no bare "No Events" rows
+        expect(queryAllByText('No Events')).toHaveLength(0);
+        expect(queryAllByText('Create an event')).toHaveLength(0);
     });
 
     it('does not duplicate section headers for event dates', async () => {

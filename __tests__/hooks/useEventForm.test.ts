@@ -258,6 +258,39 @@ describe('useEventForm', () => {
         expect(result.current.errors.eventDate).toBe('Enter a valid date (YYYY-MM-DD)');
     });
 
+    it('validate rejects past dates when creating', async () => {
+        const { result } = renderHook(() => useEventForm());
+
+        act(() => {
+            result.current.setTitle('Valid Title');
+            result.current.setEventDate('2026-03-01'); // mocked today is 2026-03-09
+        });
+
+        await act(async () => {
+            await result.current.handleSubmit();
+        });
+
+        expect(result.current.errors.eventDate).toBe('Date cannot be in the past');
+    });
+
+    it('validate rejects past roadshow start dates when creating', async () => {
+        const { result } = renderHook(() => useEventForm());
+
+        act(() => {
+            result.current.setTitle('Roadshow');
+            result.current.setEventType('roadshow');
+            result.current.roadshowCfg.setRsStartDate('2026-03-01');
+            result.current.roadshowCfg.setRsEndDate('2026-03-12');
+            result.current.roadshowCfg.setRsWeeklyCost('500');
+        });
+
+        await act(async () => {
+            await result.current.handleSubmit();
+        });
+
+        expect(result.current.errors.rsStartDate).toBe('Start date cannot be in the past');
+    });
+
     it('validate catches roadshow validation errors', async () => {
         const { result } = renderHook(() => useEventForm());
 
@@ -394,8 +427,10 @@ describe('useEventForm', () => {
         });
 
         act(() => {
-            result.current.roadshowCfg.setRsStartDate('2026-03-01');
-            result.current.roadshowCfg.setRsEndDate('2026-03-20');
+            // Future-dated relative to the mocked today (2026-03-09) — past
+            // start dates are rejected by validate() on create.
+            result.current.roadshowCfg.setRsStartDate('2026-03-10');
+            result.current.roadshowCfg.setRsEndDate('2026-03-29');
             result.current.roadshowCfg.setRsWeeklyCost('500');
         });
 

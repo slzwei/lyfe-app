@@ -121,6 +121,7 @@ export function useEventForm() {
         if (!title.trim()) e.title = 'Title is required';
         if (eventType === 'roadshow') {
             if (!isValidDate(rsStartDate)) e.rsStartDate = 'Enter a valid start date (YYYY-MM-DD)';
+            else if (!isEditing && rsStartDate < todayLocalStr()) e.rsStartDate = 'Start date cannot be in the past';
             if (!isValidDate(rsEndDate)) e.rsEndDate = 'Enter a valid end date (YYYY-MM-DD)';
             if (rsStartDate && rsEndDate && rsEndDate < rsStartDate)
                 e.rsEndDate = 'End date must be on or after start date';
@@ -131,6 +132,7 @@ export function useEventForm() {
             if (rsSlots < 1) e.rsSlots = 'Slots must be at least 1';
         } else {
             if (!isValidDate(eventDate)) e.eventDate = 'Enter a valid date (YYYY-MM-DD)';
+            else if (!isEditing && eventDate < todayLocalStr()) e.eventDate = 'Date cannot be in the past';
         }
         if (hasEndTime && toStartTimeStr() >= toEndTimeStr()!) {
             e.endTime = 'End time must be after start time';
