@@ -88,7 +88,9 @@ export function dateRange(start: string, end: string): string[] {
     const cur = new Date(start + 'T00:00:00');
     const last = new Date(end + 'T00:00:00');
     while (cur <= last) {
-        dates.push(cur.toISOString().split('T')[0]);
+        // toDateStr (local), never toISOString (UTC): east-of-UTC timezones
+        // would shift every date -1 day (roadshows landed a day early).
+        dates.push(toDateStr(cur));
         cur.setDate(cur.getDate() + 1);
     }
     return dates;

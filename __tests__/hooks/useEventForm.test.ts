@@ -25,24 +25,12 @@ jest.mock('@/lib/roadshow', () => ({
     saveRoadshowConfig: (...args: any[]) => mockSaveRoadshowConfig(...args),
 }));
 
+// Real pure helpers on purpose — a hand-rolled dateRange mock once
+// reimplemented the same UTC bug the real one had, hiding it from this
+// suite. Only the clock-dependent todayLocalStr stays stubbed.
 jest.mock('@/lib/dateTime', () => ({
+    ...jest.requireActual('@/lib/dateTime'),
     todayLocalStr: () => '2026-03-09',
-    isValidDate: (d: string) => /^\d{4}-\d{2}-\d{2}$/.test(d),
-    dateDiffDays: (a: string, b: string) => {
-        const da = new Date(a);
-        const db = new Date(b);
-        return Math.round((db.getTime() - da.getTime()) / (1000 * 60 * 60 * 24));
-    },
-    dateRange: (start: string, end: string) => {
-        const dates: string[] = [];
-        const d = new Date(start);
-        const e = new Date(end);
-        while (d <= e) {
-            dates.push(d.toISOString().slice(0, 10));
-            d.setDate(d.getDate() + 1);
-        }
-        return dates;
-    },
 }));
 
 jest.mock('@/constants/ui', () => ({

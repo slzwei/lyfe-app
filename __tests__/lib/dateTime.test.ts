@@ -187,15 +187,22 @@ describe('dateDiffDays', () => {
 // ── dateRange ──
 
 describe('dateRange', () => {
+    // Exact-match assertions on purpose: the old tolerant version
+    // ("dates are consecutive, may be offset by TZ") let a UTC off-by-one
+    // slip through — in SGT every roadshow was created one day early.
     it('returns single date for same start/end', () => {
-        const result = dateRange('2026-03-08', '2026-03-08');
-        expect(result).toHaveLength(1);
+        expect(dateRange('2026-03-08', '2026-03-08')).toEqual(['2026-03-08']);
     });
 
-    it('returns correct number of dates inclusive', () => {
-        const result = dateRange('2026-03-06', '2026-03-08');
-        expect(result).toHaveLength(3);
-        // Dates are consecutive (may be offset by TZ due to toISOString in source)
+    it('returns exact inclusive dates', () => {
+        expect(dateRange('2026-03-06', '2026-03-08')).toEqual(['2026-03-06', '2026-03-07', '2026-03-08']);
+    });
+
+    it('boundaries always equal the inputs', () => {
+        const result = dateRange('2026-05-11', '2026-05-24');
+        expect(result).toHaveLength(14);
+        expect(result[0]).toBe('2026-05-11');
+        expect(result[result.length - 1]).toBe('2026-05-24');
         for (let i = 1; i < result.length; i++) {
             expect(dateDiffDays(result[i - 1], result[i])).toBe(1);
         }
@@ -206,12 +213,11 @@ describe('dateRange', () => {
     });
 
     it('works across month boundary', () => {
-        const result = dateRange('2026-02-27', '2026-03-02');
-        expect(result).toHaveLength(4);
-        // Verify consecutive days
-        for (let i = 1; i < result.length; i++) {
-            expect(dateDiffDays(result[i - 1], result[i])).toBe(1);
-        }
+        expect(dateRange('2026-02-27', '2026-03-02')).toEqual(['2026-02-27', '2026-02-28', '2026-03-01', '2026-03-02']);
+    });
+
+    it('works across a year boundary', () => {
+        expect(dateRange('2026-12-30', '2027-01-02')).toEqual(['2026-12-30', '2026-12-31', '2027-01-01', '2027-01-02']);
     });
 });
 
