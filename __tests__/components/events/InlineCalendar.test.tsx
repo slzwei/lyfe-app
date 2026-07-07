@@ -19,24 +19,33 @@ function addDays(base: Date, n: number): Date {
 
 describe('buildStrip', () => {
     it('builds a Mon-aligned strip of full weeks centered on today', () => {
-        const { dates, todayWeekIdx } = buildStrip('2026-07-08'); // a Wednesday
-        expect(dates.length % 7).toBe(0);
+        const { days, todayWeekIdx } = buildStrip('2026-07-08'); // a Wednesday
+        expect(days.length % 7).toBe(0);
         // First date is a Monday: (getDay()+6)%7 === 0
-        const first = new Date(dates[0] + 'T00:00:00');
+        const first = new Date(days[0].dateStr + 'T00:00:00');
         expect((first.getDay() + 6) % 7).toBe(0);
         // Today sits inside the week at todayWeekIdx, at its weekday offset
         const dow = (new Date('2026-07-08T00:00:00').getDay() + 6) % 7;
-        expect(dates[todayWeekIdx * 7 + dow]).toBe('2026-07-08');
+        expect(days[todayWeekIdx * 7 + dow].dateStr).toBe('2026-07-08');
     });
 
     it('produces consecutive unique dates', () => {
-        const { dates } = buildStrip('2026-02-27');
-        expect(new Set(dates).size).toBe(dates.length);
-        for (let i = 1; i < dates.length; i++) {
-            const prev = new Date(dates[i - 1] + 'T00:00:00');
-            const cur = new Date(dates[i] + 'T00:00:00');
+        const { days } = buildStrip('2026-02-27');
+        expect(new Set(days.map((d) => d.dateStr)).size).toBe(days.length);
+        for (let i = 1; i < days.length; i++) {
+            const prev = new Date(days[i - 1].dateStr + 'T00:00:00');
+            const cur = new Date(days[i].dateStr + 'T00:00:00');
             expect(cur.getTime() - prev.getTime()).toBe(86_400_000);
         }
+    });
+
+    it('precomputes display + accessibility strings per day', () => {
+        const { days, todayWeekIdx } = buildStrip('2026-07-08');
+        const dow = (new Date('2026-07-08T00:00:00').getDay() + 6) % 7;
+        const today = days[todayWeekIdx * 7 + dow];
+        expect(today.dayNum).toBe(8);
+        expect(today.dow).toBe('We');
+        expect(today.a11yLabel).toBe('Wednesday 8 July');
     });
 });
 
@@ -60,10 +69,12 @@ describe('buildMonthGrid', () => {
         const flat = grid.flat();
         expect(flat[0]).toBeNull();
         expect(flat[1]).toBeNull();
-        expect(flat[2]?.getDate()).toBe(1);
+        expect(flat[2]?.dayNum).toBe(1);
+        expect(flat[2]?.a11yLabel).toBe('Wednesday 1 July');
         // All non-null cells belong to July
-        flat.filter(Boolean).forEach((d) => expect(d?.getMonth()).toBe(6));
-        expect(flat.filter(Boolean)).toHaveLength(31);
+        const filled = flat.filter((c): c is NonNullable<typeof c> => c !== null);
+        filled.forEach((c) => expect(c.dateStr.startsWith('2026-07')).toBe(true));
+        expect(filled).toHaveLength(31);
     });
 });
 
@@ -171,5 +182,58 @@ describe('InlineCalendar (events)', () => {
         );
 
         expect(scrollToIndexSpy).toHaveBeenCalled();
+    });
+
+    it('clamps to the strip edge instead of desyncing when selectedDate is out of buffer', () => {
+        const { rerender, onSelectDate, scrollToTodayRef } = renderCalendar();
+        scrollToIndexSpy.mockClear();
+
+        rerender(
+            <InlineCalendar
+                selectedDate="2099-01-01"
+                onSelectDate={onSelectDate}
+                eventDates={new Set()}
+                colors={colors}
+                scrollToTodayRef={scrollToTodayRef}
+            />,
+        );
+
+        const stripLen = buildStrip(todayStr).days.length;
+        expect(scrollToIndexSpy).toHaveBeenCalledWith(expect.objectContaining({ index: stripLen - 7 }));
+    });
+
+    it('exposes day cells to assistive tech with state and context', () => {
+        const { getByTestId } = renderCalendar();
+
+        const todayCell = getByTestId(`strip-day-${todayStr}`);
+        expect(todayCell.props.accessibilityRole).toBe('button');
+        expect(todayCell.props.accessibilityLabel).toMatch(/, today$/);
+        expect(todayCell.props.accessibilityState).toEqual({ selected: true });
+
+        const eventCell = getByTestId(`strip-day-${tomorrowStr}`);
+        expect(eventCell.props.accessibilityLabel).toMatch(/, has events$/);
+        expect(eventCell.props.accessibilityState).toEqual({ selected: false });
+    });
+
+    it('handle tap toggles between expand and collapse', () => {
+        const { getByTestId } = renderCalendar();
+
+        const handle = getByTestId('calendar-expand-handle');
+        expect(handle.props.accessibilityLabel).toBe('Expand calendar');
+
+        fireEvent.press(handle);
+        expect(getByTestId('calendar-expand-handle').props.accessibilityLabel).toBe('Collapse calendar');
+
+        fireEvent.press(handle);
+        expect(getByTestId('calendar-expand-handle').props.accessibilityLabel).toBe('Expand calendar');
+    });
+
+    it('grid day tap selects the date once expanded', () => {
+        const { getByTestId, onSelectDate } = renderCalendar();
+
+        fireEvent.press(getByTestId('calendar-expand-handle'));
+        fireEvent.press(getByTestId(`grid-day-${tomorrowStr}`));
+
+        expect(onSelectDate).toHaveBeenCalledWith(tomorrowStr);
     });
 });

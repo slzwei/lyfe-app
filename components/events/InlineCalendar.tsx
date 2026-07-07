@@ -4,7 +4,6 @@ import type { ThemeColors } from '@/types/theme';
 import { Ionicons } from '@expo/vector-icons';
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
-    Animated,
     Dimensions,
     FlatList,
     type NativeScrollEvent,
@@ -16,11 +15,12 @@ import {
     TouchableOpacity,
     View,
 } from 'react-native';
+import Reanimated, { interpolate, useAnimatedStyle, useSharedValue, withSpring } from 'react-native-reanimated';
 
 // ── Calendar layout constants ──────────────────────────────────
 const SCREEN_W = Dimensions.get('window').width;
 const CELL_W = Math.floor(SCREEN_W / 7);
-const WEEKS_BUFFER = 26; // ~6 months each direction
+const WEEKS_BUFFER = 53; // ~1 year each direction
 const MONTHS_BUFFER = 24; // ~2 years each direction
 
 const CAL_HEADER_H = 40;
@@ -32,38 +32,92 @@ const CAL_WEEK_H = CAL_HEADER_H + STRIP_H + CAL_HANDLE_H;
 const CAL_MONTH_H = CAL_HEADER_H + GRID_LABELS_H + GRID_ROW_H * 6 + CAL_HANDLE_H;
 const MONTH_GRID_H = GRID_LABELS_H + GRID_ROW_H * 6;
 
+// Matches the previous RN Animated.spring(tension: 65, friction: 12) feel
+// via the Origami conversion (stiffness = (t-30)*3.62+194, damping = (f-8)*3+25).
+const EXPAND_SPRING = { stiffness: 320, damping: 37 };
+
 const HIT = { top: 12, bottom: 12, left: 12, right: 12 };
-const DOW_LETTERS = ['M', 'T', 'W', 'T', 'F', 'S', 'S'];
+const DOW_LABELS = ['Mo', 'Tu', 'We', 'Th', 'Fr', 'Sa', 'Su'];
+
+// Static names (en only — app is SG-locale throughout). Avoids ~1.5k Intl
+// calls when pre-building strip/grid accessibility labels.
+const WEEKDAY_NAMES = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'];
+const MONTH_NAMES = [
+    'January',
+    'February',
+    'March',
+    'April',
+    'May',
+    'June',
+    'July',
+    'August',
+    'September',
+    'October',
+    'November',
+    'December',
+];
+
+function monthYearLabel(year: number, month: number): string {
+    return `${MONTH_NAMES[month]} ${year}`;
+}
+
+// ── Pre-built cell data (computed once, never per render) ─────
+export interface StripDay {
+    dateStr: string;
+    dayNum: number;
+    dow: string;
+    a11yLabel: string;
+}
 
 /** Build Mon-aligned day strip centered on today (exported for tests) */
-export function buildStrip(todayStr: string): { dates: string[]; todayWeekIdx: number } {
+export function buildStrip(todayStr: string): { days: StripDay[]; todayWeekIdx: number } {
     const d = new Date(todayStr + 'T00:00:00');
     const dow = (d.getDay() + 6) % 7; // Mon=0
     const start = new Date(d);
     start.setDate(d.getDate() - dow - WEEKS_BUFFER * 7);
 
     const totalDays = (WEEKS_BUFFER * 2 + 1) * 7;
-    const dates: string[] = [];
+    const days: StripDay[] = [];
     const cur = new Date(start);
     for (let i = 0; i < totalDays; i++) {
-        dates.push(toDateStr(cur));
+        const dowIdx = (cur.getDay() + 6) % 7;
+        days.push({
+            dateStr: toDateStr(cur),
+            dayNum: cur.getDate(),
+            dow: DOW_LABELS[dowIdx],
+            a11yLabel: `${WEEKDAY_NAMES[dowIdx]} ${cur.getDate()} ${MONTH_NAMES[cur.getMonth()]}`,
+        });
         cur.setDate(cur.getDate() + 1);
     }
-    return { dates, todayWeekIdx: WEEKS_BUFFER };
+    return { days, todayWeekIdx: WEEKS_BUFFER };
+}
+
+export interface GridCell {
+    dateStr: string;
+    dayNum: number;
+    a11yLabel: string;
 }
 
 /** Build a 6-row (42 cell) Mon-first calendar grid for a given month (exported for tests) */
-export function buildMonthGrid(year: number, month: number): (Date | null)[][] {
+export function buildMonthGrid(year: number, month: number): (GridCell | null)[][] {
     const firstDay = new Date(year, month, 1);
     const lastDay = new Date(year, month + 1, 0);
     const startDow = (firstDay.getDay() + 6) % 7;
 
-    const cells: (Date | null)[] = [];
+    const cells: (GridCell | null)[] = [];
     for (let i = 0; i < startDow; i++) cells.push(null);
-    for (let d = 1; d <= lastDay.getDate(); d++) cells.push(new Date(year, month, d));
+    for (let dayNum = 1; dayNum <= lastDay.getDate(); dayNum++) {
+        const date = new Date(year, month, dayNum);
+        const dowIdx = (date.getDay() + 6) % 7;
+        cells.push({
+            dateStr: toDateStr(date),
+            dayNum,
+            a11yLabel: `${WEEKDAY_NAMES[dowIdx]} ${dayNum} ${MONTH_NAMES[month]}`,
+        });
+    }
     while (cells.length < 42) cells.push(null);
 
-    const weeks: (Date | null)[][] = [];
+    const weeks: (GridCell | null)[][] = [];
     for (let i = 0; i < 42; i += 7) weeks.push(cells.slice(i, i + 7));
     return weeks;
 }
@@ -72,7 +126,7 @@ interface MonthPage {
     year: number;
     month: number;
     key: string;
-    grid: (Date | null)[][];
+    grid: (GridCell | null)[][];
 }
 
 /** Pre-generate month pages centered on today (exported for tests) */
@@ -93,7 +147,7 @@ export function buildMonthPages(todayStr: string): { pages: MonthPage[]; todayPa
 
 // ── Memoized strip day cell ────────────────────────────────────
 interface StripDayCellProps {
-    dateStr: string;
+    day: StripDay;
     isSelected: boolean;
     isToday: boolean;
     hasEvent: boolean;
@@ -102,24 +156,24 @@ interface StripDayCellProps {
 }
 
 const StripDayCell = React.memo(function StripDayCell({
-    dateStr,
+    day,
     isSelected,
     isToday,
     hasEvent,
     colors,
     onPress,
 }: StripDayCellProps) {
-    const d = new Date(dateStr + 'T00:00:00');
-    const dow = DOW_LETTERS[(d.getDay() + 6) % 7];
-
     return (
         <Pressable
-            testID={`strip-day-${dateStr}`}
+            testID={`strip-day-${day.dateStr}`}
             style={[calStyles.stripCell, { width: CELL_W }]}
-            onPress={() => onPress(dateStr)}
+            onPress={() => onPress(day.dateStr)}
+            accessibilityRole="button"
+            accessibilityLabel={`${day.a11yLabel}${isToday ? ', today' : ''}${hasEvent ? ', has events' : ''}`}
+            accessibilityState={{ selected: isSelected }}
         >
             <Text style={[calStyles.stripDow, { color: isToday && !isSelected ? colors.accent : colors.textTertiary }]}>
-                {dow}
+                {day.dow}
             </Text>
             <View
                 style={[
@@ -137,11 +191,11 @@ const StripDayCell = React.memo(function StripDayCell({
                         },
                     ]}
                 >
-                    {d.getDate()}
+                    {day.dayNum}
                 </Text>
             </View>
             <View
-                testID={`strip-dot-${dateStr}`}
+                testID={`strip-dot-${day.dateStr}`}
                 style={[
                     calStyles.dot,
                     {
@@ -155,28 +209,31 @@ const StripDayCell = React.memo(function StripDayCell({
 
 // ── Memoized grid day cell ─────────────────────────────────────
 interface GridDayCellProps {
-    dateStr: string;
-    dayNum: number;
+    cell: GridCell;
     isSelected: boolean;
     isToday: boolean;
     hasEvent: boolean;
-    isOtherMonth: boolean;
     colors: ThemeColors;
     onPress: (dateStr: string) => void;
 }
 
 const GridDayCell = React.memo(function GridDayCell({
-    dateStr,
-    dayNum,
+    cell,
     isSelected,
     isToday,
     hasEvent,
-    isOtherMonth,
     colors,
     onPress,
 }: GridDayCellProps) {
     return (
-        <Pressable testID={`grid-day-${dateStr}`} style={calStyles.gridCell} onPress={() => onPress(dateStr)}>
+        <Pressable
+            testID={`grid-day-${cell.dateStr}`}
+            style={calStyles.gridCell}
+            onPress={() => onPress(cell.dateStr)}
+            accessibilityRole="button"
+            accessibilityLabel={`${cell.a11yLabel}${isToday ? ', today' : ''}${hasEvent ? ', has events' : ''}`}
+            accessibilityState={{ selected: isSelected }}
+        >
             <View
                 style={[
                     calStyles.gridCircle,
@@ -188,18 +245,12 @@ const GridDayCell = React.memo(function GridDayCell({
                     style={[
                         calStyles.gridDayText,
                         {
-                            color: isSelected
-                                ? colors.textInverse
-                                : isToday
-                                  ? colors.accent
-                                  : isOtherMonth
-                                    ? colors.textTertiary
-                                    : colors.textPrimary,
+                            color: isSelected ? colors.textInverse : isToday ? colors.accent : colors.textPrimary,
                             fontWeight: isSelected ? '700' : '500',
                         },
                     ]}
                 >
-                    {dayNum}
+                    {cell.dayNum}
                 </Text>
             </View>
             {hasEvent && (
@@ -234,8 +285,13 @@ export default function InlineCalendar({
 }: InlineCalendarProps) {
     const today = toDateStr(new Date());
 
-    // ── Strip data (Mon-aligned, ~6 months each side) ──
-    const { dates: stripDates, todayWeekIdx } = useMemo(() => buildStrip(today), [today]);
+    // ── Strip data (Mon-aligned, ~1 year each side) ──
+    const { days: stripDays, todayWeekIdx } = useMemo(() => buildStrip(today), [today]);
+    const stripIndex = useMemo(() => {
+        const map = new Map<string, number>();
+        stripDays.forEach((d, i) => map.set(d.dateStr, i));
+        return map;
+    }, [stripDays]);
     const stripRef = useRef<FlatList>(null);
     const todayStripIdx = useMemo(() => {
         const dow = (new Date(today + 'T00:00:00').getDay() + 6) % 7;
@@ -246,24 +302,20 @@ export default function InlineCalendar({
     // ── Visible month label (derived from strip scroll) ──
     const [weekMonthLabel, setWeekMonthLabel] = useState(() => {
         const d = new Date(selectedDate + 'T00:00:00');
-        return d.toLocaleDateString('en-SG', { month: 'long', year: 'numeric' });
+        return monthYearLabel(d.getFullYear(), d.getMonth());
     });
-    const todayIdx = useMemo(() => stripDates.indexOf(today), [stripDates, today]);
+    const todayIdx = todayStripIdx;
     const [todayVisible, setTodayVisible] = useState(true);
     const [todayMonthVisible, setTodayMonthVisible] = useState(true);
 
     // ── Expand / collapse (week <-> month) ──
-    const expandAnim = useRef(new Animated.Value(0)).current;
-    const expandAnimValue = useRef(0);
+    // Reanimated drives height + cross-fades (spring settles on the UI
+    // thread); PanResponder still feeds the value from JS during drags —
+    // progressMirror keeps a synchronous copy for release thresholds.
+    const expandProgress = useSharedValue(0);
+    const progressMirror = useRef(0);
     const isExpandedRef = useRef(false);
     const [isExpanded, setIsExpanded] = useState(false);
-
-    useEffect(() => {
-        const id = expandAnim.addListener(({ value }) => {
-            expandAnimValue.current = value;
-        });
-        return () => expandAnim.removeListener(id);
-    }, [expandAnim]);
 
     // ── Month pages (paging FlatList data) ──
     const { pages: monthPages, todayPageIdx } = useMemo(() => buildMonthPages(today), [today]);
@@ -281,55 +333,41 @@ export default function InlineCalendar({
     // ── Month label derived from visible page ──
     const [monthLabel, setMonthLabel] = useState(() => {
         const d = new Date(selectedDate + 'T00:00:00');
-        return d.toLocaleDateString('en-SG', { month: 'long', year: 'numeric' });
+        return monthYearLabel(d.getFullYear(), d.getMonth());
     });
 
-    // ── Animated values ──
-    const calHeight = expandAnim.interpolate({
-        inputRange: [0, 1],
-        outputRange: [CAL_WEEK_H, CAL_MONTH_H],
-        extrapolate: 'clamp',
-    });
-
-    const stripOpacity = expandAnim.interpolate({
-        inputRange: [0, 0.3],
-        outputRange: [1, 0],
-        extrapolate: 'clamp',
-    });
-    const gridOpacity = expandAnim.interpolate({
-        inputRange: [0.7, 1],
-        outputRange: [0, 1],
-        extrapolate: 'clamp',
-    });
-    const weekLabelOpacity = expandAnim.interpolate({
-        inputRange: [0, 0.3],
-        outputRange: [1, 0],
-        extrapolate: 'clamp',
-    });
-    const monthLabelOpacity = expandAnim.interpolate({
-        inputRange: [0.7, 1],
-        outputRange: [0, 1],
-        extrapolate: 'clamp',
-    });
-
-    const contentH = expandAnim.interpolate({
-        inputRange: [0, 1],
-        outputRange: [STRIP_H, MONTH_GRID_H],
-        extrapolate: 'clamp',
-    });
+    // ── Animated styles ──
+    const containerAnimStyle = useAnimatedStyle(() => ({
+        height: interpolate(expandProgress.value, [0, 1], [CAL_WEEK_H, CAL_MONTH_H], 'clamp'),
+    }));
+    const contentAnimStyle = useAnimatedStyle(() => ({
+        height: interpolate(expandProgress.value, [0, 1], [STRIP_H, MONTH_GRID_H], 'clamp'),
+    }));
+    const stripAnimStyle = useAnimatedStyle(() => ({
+        opacity: interpolate(expandProgress.value, [0, 0.3], [1, 0], 'clamp'),
+    }));
+    const gridAnimStyle = useAnimatedStyle(() => ({
+        opacity: interpolate(expandProgress.value, [0.7, 1], [0, 1], 'clamp'),
+    }));
 
     // ── Scroll strip to place a date at position 3 (0-indexed) ──
+    // Out-of-buffer dates clamp to the nearest edge (the viewport-derived
+    // month label then reflects what's actually visible, and the Today
+    // button appears as the way back).
     const scrollStripToDate = useCallback(
         (dateStr: string, animated = true) => {
-            const idx = stripDates.indexOf(dateStr);
-            if (idx >= 3) {
-                stripRef.current?.scrollToIndex({ index: idx - 3, animated, viewPosition: 0 });
+            const idx = stripIndex.get(dateStr);
+            if (idx !== undefined) {
+                stripRef.current?.scrollToIndex({ index: Math.max(0, idx - 3), animated, viewPosition: 0 });
+                return;
             }
+            const clampIdx = dateStr < stripDays[0].dateStr ? 0 : Math.max(0, stripDays.length - 7);
+            stripRef.current?.scrollToIndex({ index: clampIdx, animated, viewPosition: 0 });
         },
-        [stripDates],
+        [stripIndex, stripDays],
     );
 
-    // Expose scroll-to-today for parent to call on tab focus
+    // Expose scroll-to-today for parent to call on tab re-press
     useEffect(() => {
         if (scrollToTodayRef) {
             scrollToTodayRef.current = () => {
@@ -339,20 +377,15 @@ export default function InlineCalendar({
         }
     }, [scrollToTodayRef, today, onSelectDate, scrollStripToDate]);
 
-    // ── Scroll month grid to a page ──
+    // ── Scroll month grid to a page (idx clamped to the buffer) ──
     const scrollMonthToPage = useCallback(
         (idx: number, animated = true) => {
-            if (idx >= 0 && idx < monthPages.length) {
-                monthGridRef.current?.scrollToIndex({ index: idx, animated });
-                visiblePageIdx.current = idx;
-                const page = monthPages[idx];
-                const label = new Date(page.year, page.month, 1).toLocaleDateString('en-SG', {
-                    month: 'long',
-                    year: 'numeric',
-                });
-                setMonthLabel(label);
-                setTodayMonthVisible(idx === todayPageIdx);
-            }
+            const clamped = Math.max(0, Math.min(idx, monthPages.length - 1));
+            monthGridRef.current?.scrollToIndex({ index: clamped, animated });
+            visiblePageIdx.current = clamped;
+            const page = monthPages[clamped];
+            setMonthLabel(monthYearLabel(page.year, page.month));
+            setTodayMonthVisible(clamped === todayPageIdx);
         },
         [monthPages, todayPageIdx],
     );
@@ -367,13 +400,19 @@ export default function InlineCalendar({
         if (isExpandedRef.current) {
             const d = new Date(selectedDate + 'T00:00:00');
             const idx = findPageIdx(d.getFullYear(), d.getMonth());
-            if (idx >= 0 && idx !== visiblePageIdx.current) {
-                scrollMonthToPage(idx, true);
+            const target =
+                idx >= 0
+                    ? idx
+                    : d.getFullYear() * 12 + d.getMonth() < monthPages[0].year * 12 + monthPages[0].month
+                      ? 0
+                      : monthPages.length - 1;
+            if (target !== visiblePageIdx.current) {
+                scrollMonthToPage(target, true);
             }
         } else {
             scrollStripToDate(selectedDate, true);
         }
-    }, [selectedDate, findPageIdx, scrollMonthToPage, scrollStripToDate]);
+    }, [selectedDate, findPageIdx, scrollMonthToPage, scrollStripToDate, monthPages]);
 
     // ── animateTo (stable ref so PanResponder closure never goes stale) ──
     const animateToRef = useRef<(v: number) => void>(() => {});
@@ -388,23 +427,23 @@ export default function InlineCalendar({
             const idx = findPageIdx(d.getFullYear(), d.getMonth());
             if (idx >= 0) {
                 scrollMonthToPage(idx, false);
+            } else {
+                scrollMonthToPage(
+                    new Date(selectedDate + 'T00:00:00') < new Date(monthPages[0].year, monthPages[0].month, 1)
+                        ? 0
+                        : monthPages.length - 1,
+                    false,
+                );
             }
         } else {
             // Sync strip to selected date when collapsing
             setTimeout(() => {
-                const idx = stripDates.indexOf(selectedDate);
-                if (idx >= 3) {
-                    stripRef.current?.scrollToIndex({ index: idx - 3, animated: false, viewPosition: 0 });
-                }
+                scrollStripToDate(selectedDate, false);
             }, 50);
         }
 
-        Animated.spring(expandAnim, {
-            toValue,
-            useNativeDriver: false,
-            tension: 65,
-            friction: 12,
-        }).start();
+        progressMirror.current = toValue;
+        expandProgress.value = withSpring(toValue, EXPAND_SPRING);
     };
 
     // ── PanResponder — vertical only (expand/collapse) ──
@@ -416,20 +455,25 @@ export default function InlineCalendar({
                 const base = isExpandedRef.current ? 1 : 0;
                 const range = CAL_MONTH_H - CAL_WEEK_H;
                 const next = Math.max(0, Math.min(1, base + gs.dy / range));
-                expandAnim.setValue(next);
+                progressMirror.current = next;
+                expandProgress.value = next;
             },
             onPanResponderRelease: (_, gs) => {
-                const current = expandAnimValue.current;
+                const current = progressMirror.current;
                 const shouldExpand = Math.abs(gs.vy) > 0.3 ? gs.vy > 0 : current > 0.5;
                 animateToRef.current(shouldExpand ? 1 : 0);
             },
         }),
     ).current;
 
+    // Tap alternative to the pan gesture (discoverability + VoiceOver)
+    const toggleExpanded = useCallback(() => {
+        animateToRef.current(isExpandedRef.current ? 0 : 1);
+    }, []);
+
     // ── Month grid arrow navigation ──
     const navigateMonth = (delta: number) => {
-        const nextIdx = visiblePageIdx.current + delta;
-        scrollMonthToPage(nextIdx);
+        scrollMonthToPage(visiblePageIdx.current + delta);
     };
 
     // ── Month grid scroll → update label ──
@@ -441,11 +485,7 @@ export default function InlineCalendar({
             if (clamped !== visiblePageIdx.current) {
                 visiblePageIdx.current = clamped;
                 const page = monthPages[clamped];
-                const label = new Date(page.year, page.month, 1).toLocaleDateString('en-SG', {
-                    month: 'long',
-                    year: 'numeric',
-                });
-                setMonthLabel(label);
+                setMonthLabel(monthYearLabel(page.year, page.month));
                 setTodayMonthVisible(clamped === todayPageIdx);
             }
         },
@@ -458,17 +498,17 @@ export default function InlineCalendar({
             const offsetX = e.nativeEvent.contentOffset.x;
             const firstVisibleIdx = Math.round(offsetX / CELL_W);
             const centerIdx = firstVisibleIdx + 3;
-            const clamped = Math.max(0, Math.min(centerIdx, stripDates.length - 1));
-            const dateStr = stripDates[clamped];
-            if (dateStr) {
-                const d = new Date(dateStr + 'T00:00:00');
-                const label = d.toLocaleDateString('en-SG', { month: 'long', year: 'numeric' });
+            const clamped = Math.max(0, Math.min(centerIdx, stripDays.length - 1));
+            const day = stripDays[clamped];
+            if (day) {
+                const d = new Date(day.dateStr + 'T00:00:00');
+                const label = monthYearLabel(d.getFullYear(), d.getMonth());
                 setWeekMonthLabel((prev) => (prev === label ? prev : label));
             }
             const isVisible = todayIdx >= firstVisibleIdx && todayIdx < firstVisibleIdx + 7;
             setTodayVisible(isVisible);
         },
-        [stripDates, todayIdx],
+        [stripDays, todayIdx],
     );
 
     // ── Stable press handler for strip cells (no selectedDate dependency) ──
@@ -482,12 +522,12 @@ export default function InlineCalendar({
 
     // ── Render strip day cell (delegates to memoized component) ──
     const renderStripDay = useCallback(
-        ({ item: dateStr }: { item: string }) => (
+        ({ item: day }: { item: StripDay }) => (
             <StripDayCell
-                dateStr={dateStr}
-                isSelected={dateStr === selectedDate}
-                isToday={dateStr === today}
-                hasEvent={eventDates.has(dateStr)}
+                day={day}
+                isSelected={day.dateStr === selectedDate}
+                isToday={day.dateStr === today}
+                hasEvent={eventDates.has(day.dateStr)}
                 colors={colors}
                 onPress={handleStripDayPress}
             />
@@ -509,7 +549,7 @@ export default function InlineCalendar({
             <View style={{ width: SCREEN_W }}>
                 {/* Day-of-week initials */}
                 <View style={calStyles.dayLabels}>
-                    {DOW_LETTERS.map((lbl, i) => (
+                    {DOW_LABELS.map((lbl, i) => (
                         <View key={i} style={calStyles.dayLabelCell}>
                             <Text style={[calStyles.dayLabelText, { color: colors.textTertiary }]}>{lbl}</Text>
                         </View>
@@ -518,20 +558,16 @@ export default function InlineCalendar({
 
                 {page.grid.map((week, wi) => (
                     <View key={wi} style={calStyles.gridRow}>
-                        {week.map((date, di) => {
-                            if (!date) return <View key={di} style={calStyles.gridCell} />;
-
-                            const ds = toDateStr(date);
+                        {week.map((cell, di) => {
+                            if (!cell) return <View key={di} style={calStyles.gridCell} />;
 
                             return (
                                 <GridDayCell
                                     key={di}
-                                    dateStr={ds}
-                                    dayNum={date.getDate()}
-                                    isSelected={ds === selectedDate}
-                                    isToday={ds === today}
-                                    hasEvent={eventDates.has(ds)}
-                                    isOtherMonth={date.getMonth() !== page.month}
+                                    cell={cell}
+                                    isSelected={cell.dateStr === selectedDate}
+                                    isToday={cell.dateStr === today}
+                                    hasEvent={eventDates.has(cell.dateStr)}
                                     colors={colors}
                                     onPress={handleGridDayPress}
                                 />
@@ -567,21 +603,23 @@ export default function InlineCalendar({
         const d = new Date(selectedDate + 'T00:00:00');
         const idx = monthPages.findIndex((p) => p.year === d.getFullYear() && p.month === d.getMonth());
         return idx >= 0 ? idx : todayPageIdx;
+        // eslint-disable-next-line react-hooks/exhaustive-deps
     }, []); // only on mount
 
     return (
-        <Animated.View
+        <Reanimated.View
             style={[
                 calStyles.container,
-                { backgroundColor: colors.cardBackground, height: calHeight, borderBottomColor: colors.border },
+                { backgroundColor: colors.cardBackground, borderBottomColor: colors.border },
+                containerAnimStyle,
             ]}
             {...panResponder.panHandlers}
         >
             {/* ── Header ── */}
             <View style={calStyles.header}>
                 {/* Week mode — month label + Today button */}
-                <Animated.View
-                    style={[calStyles.headerRow, { opacity: weekLabelOpacity }]}
+                <Reanimated.View
+                    style={[calStyles.headerRow, stripAnimStyle]}
                     pointerEvents={isExpanded ? 'none' : 'auto'}
                 >
                     <Text style={[calStyles.monthText, { color: colors.textPrimary }]}>{weekMonthLabel}</Text>
@@ -593,23 +631,35 @@ export default function InlineCalendar({
                             }}
                             style={[calStyles.todayBtn, { borderColor: colors.accent }]}
                             hitSlop={HIT}
+                            accessibilityRole="button"
+                            accessibilityLabel="Jump to today"
                         >
                             <Text style={[calStyles.todayBtnText, { color: colors.accent }]}>Today</Text>
                         </TouchableOpacity>
                     )}
-                </Animated.View>
+                </Reanimated.View>
 
                 {/* Month mode — arrows + label + Today button */}
-                <Animated.View
-                    style={[calStyles.headerRow, calStyles.headerOverlay, { opacity: monthLabelOpacity }]}
+                <Reanimated.View
+                    style={[calStyles.headerRow, calStyles.headerOverlay, gridAnimStyle]}
                     pointerEvents={isExpanded ? 'auto' : 'none'}
                 >
                     <View style={calStyles.monthNavRow}>
-                        <TouchableOpacity onPress={() => navigateMonth(-1)} hitSlop={HIT}>
+                        <TouchableOpacity
+                            onPress={() => navigateMonth(-1)}
+                            hitSlop={HIT}
+                            accessibilityRole="button"
+                            accessibilityLabel="Previous month"
+                        >
                             <Ionicons name="chevron-back" size={20} color={colors.textSecondary} />
                         </TouchableOpacity>
                         <Text style={[calStyles.monthText, { color: colors.textPrimary }]}>{monthLabel}</Text>
-                        <TouchableOpacity onPress={() => navigateMonth(1)} hitSlop={HIT}>
+                        <TouchableOpacity
+                            onPress={() => navigateMonth(1)}
+                            hitSlop={HIT}
+                            accessibilityRole="button"
+                            accessibilityLabel="Next month"
+                        >
                             <Ionicons name="chevron-forward" size={20} color={colors.textSecondary} />
                         </TouchableOpacity>
                     </View>
@@ -621,43 +671,47 @@ export default function InlineCalendar({
                             }}
                             style={[calStyles.todayBtn, { borderColor: colors.accent }]}
                             hitSlop={HIT}
+                            accessibilityRole="button"
+                            accessibilityLabel="Jump to today"
                         >
                             <Text style={[calStyles.todayBtnText, { color: colors.accent }]}>Today</Text>
                         </TouchableOpacity>
                     )}
-                </Animated.View>
+                </Reanimated.View>
             </View>
 
             {/* ── Content area (cross-fades between strip and month grid) ── */}
-            <Animated.View style={{ height: contentH, overflow: 'hidden' }}>
+            <Reanimated.View style={[calStyles.contentClip, contentAnimStyle]}>
                 {/* Week strip — horizontal scroll */}
-                <Animated.View
-                    style={{ height: STRIP_H, opacity: stripOpacity }}
+                <Reanimated.View
+                    style={[{ height: STRIP_H }, stripAnimStyle]}
                     pointerEvents={isExpanded ? 'none' : 'auto'}
                 >
                     <FlatList
                         ref={stripRef}
-                        data={stripDates}
-                        keyExtractor={(item) => item}
+                        data={stripDays}
+                        keyExtractor={(item) => item.dateStr}
                         horizontal
                         showsHorizontalScrollIndicator={false}
                         decelerationRate="fast"
+                        snapToInterval={CELL_W}
+                        snapToAlignment="start"
                         getItemLayout={getStripItemLayout}
                         initialScrollIndex={initialIdx}
                         onScrollToIndexFailed={() => {}}
                         onLayout={() => requestAnimationFrame(() => scrollStripToDate(today, false))}
                         renderItem={renderStripDay}
                         onScroll={onStripScroll}
-                        scrollEventThrottle={100}
+                        scrollEventThrottle={32}
                         extraData={selectedDate}
                         windowSize={5}
                         maxToRenderPerBatch={14}
                     />
-                </Animated.View>
+                </Reanimated.View>
 
                 {/* Month grid — paging horizontal FlatList */}
-                <Animated.View
-                    style={[calStyles.gridOverlay, { opacity: gridOpacity }]}
+                <Reanimated.View
+                    style={[calStyles.gridOverlay, gridAnimStyle]}
                     pointerEvents={isExpanded ? 'auto' : 'none'}
                 >
                     <FlatList
@@ -674,15 +728,26 @@ export default function InlineCalendar({
                         onScroll={onMonthGridScroll}
                         scrollEventThrottle={16}
                         extraData={selectedDate}
+                        windowSize={5}
+                        initialNumToRender={2}
+                        maxToRenderPerBatch={3}
                     />
-                </Animated.View>
-            </Animated.View>
+                </Reanimated.View>
+            </Reanimated.View>
 
-            {/* ── Drag handle ── */}
-            <View style={calStyles.handleArea}>
+            {/* ── Drag handle (also a tap target: gesture-free expand/collapse) ── */}
+            <Pressable
+                testID="calendar-expand-handle"
+                style={calStyles.handleArea}
+                onPress={toggleExpanded}
+                hitSlop={{ top: 4, bottom: 8, left: 40, right: 40 }}
+                accessibilityRole="button"
+                accessibilityLabel={isExpanded ? 'Collapse calendar' : 'Expand calendar'}
+                accessibilityHint={isExpanded ? 'Shows the week strip' : 'Shows the full month'}
+            >
                 <View style={[calStyles.handlePill, { backgroundColor: colors.divider }]} />
-            </View>
-        </Animated.View>
+            </Pressable>
+        </Reanimated.View>
     );
 }
 
@@ -725,6 +790,9 @@ const calStyles = StyleSheet.create({
     todayBtnText: {
         fontSize: 12,
         fontWeight: '700',
+    },
+    contentClip: {
+        overflow: 'hidden',
     },
     // Week strip
     stripCell: {
