@@ -9,6 +9,10 @@ on:
 jobs:
   lint-and-test:
     runs-on: ubuntu-latest
+    env:
+      # All users and dev machines run in SGT. UTC runners masked a real
+      # date-shift bug (dateRange, fixed 2026-07); CI must mirror production TZ.
+      TZ: Asia/Singapore
     steps:
       - uses: actions/checkout@v4
 

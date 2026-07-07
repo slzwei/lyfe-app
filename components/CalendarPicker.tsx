@@ -18,6 +18,8 @@ interface SinglePickerProps {
     onClose: () => void;
     colors: ThemeColors;
     title?: string;
+    /** Days before this YYYY-MM-DD render disabled and ignore taps */
+    minDate?: string;
 }
 
 interface RangePickerProps {
@@ -29,6 +31,8 @@ interface RangePickerProps {
     onClose: () => void;
     colors: ThemeColors;
     title?: string;
+    /** Days before this YYYY-MM-DD render disabled and ignore taps */
+    minDate?: string;
 }
 
 type CalendarPickerProps = SinglePickerProps | RangePickerProps;
@@ -52,14 +56,16 @@ function buildGrid(year: number, month: number): Date[][] {
 }
 
 export default function CalendarPicker(props: CalendarPickerProps) {
-    const { visible, onClose, colors, title } = props;
+    const { visible, onClose, colors, title, minDate } = props;
     const isRange = props.mode === 'range';
 
     const slideAnim = useRef(new Animated.Value(0)).current;
     const [isRendered, setIsRendered] = useState(false);
     const sheetPaddingBottom = useBottomSheetSafeBottom(36);
 
-    // Range mode local state — not committed until Done
+    // Range mode local state — not committed until Done.
+    // rangeEnd === null means an end date is still being chosen (tapCount 1);
+    // Done never commits a half-finished range.
     const [rangeStart, setRangeStart] = useState<string | null>(null);
     const [rangeEnd, setRangeEnd] = useState<string | null>(null);
     const [tapCount, setTapCount] = useState(0);
@@ -105,54 +111,50 @@ export default function CalendarPicker(props: CalendarPickerProps) {
         });
     }, []);
 
+    // Backdrop / swipe-down / hardware back = CANCEL: discard edits.
+    // (Previously this committed the range — one stray tap silently
+    // overwrote the previous selection with a same-day range.)
     const handleClose = useCallback(() => {
-        if (isRange && rangeStart && rangeEnd) {
-            // Confirm the range on close too
-            const [s, e] = rangeStart <= rangeEnd ? [rangeStart, rangeEnd] : [rangeEnd, rangeStart];
-            animateOut(() => (props as RangePickerProps).onConfirm(s, e));
-        } else {
-            animateOut(onClose);
-        }
-    }, [isRange, rangeStart, rangeEnd, onClose, animateOut]);
+        animateOut(onClose);
+    }, [onClose, animateOut]);
 
+    // Done = COMMIT, but only a confirmed range (never mid-selection).
     const handleDone = useCallback(() => {
-        if (isRange && rangeStart && rangeEnd) {
+        if (isRange && tapCount === 0 && rangeStart && rangeEnd) {
             const [s, e] = rangeStart <= rangeEnd ? [rangeStart, rangeEnd] : [rangeEnd, rangeStart];
             animateOut(() => (props as RangePickerProps).onConfirm(s, e));
         } else {
             animateOut(onClose);
         }
-    }, [isRange, rangeStart, rangeEnd, onClose, animateOut]);
+    }, [isRange, tapCount, rangeStart, rangeEnd, onClose, animateOut]);
 
     const handleDayPress = useCallback(
         (date: Date) => {
             const ds = toDateStr(date);
+            if (minDate && ds < minDate) return;
             if (!isRange) {
                 (props as SinglePickerProps).onSelect(ds);
                 animateOut(onClose);
                 return;
             }
-            // Range mode: first tap = start, second tap = end
+            // Range mode: first tap = start, second tap = end.
+            // A tap earlier than the current start restarts the range there
+            // and keeps waiting for an end date (same-day needs an explicit
+            // second tap on the same day).
             if (tapCount === 0) {
                 setRangeStart(ds);
-                setRangeEnd(ds);
+                setRangeEnd(null);
                 setTapCount(1);
+            } else if (rangeStart && ds < rangeStart) {
+                setRangeStart(ds);
+                setRangeEnd(null);
+                // stay at tapCount 1 — user still needs to pick end
             } else {
-                // Second tap — if before start, reset start and wait for new end
-                if (rangeStart && ds < rangeStart) {
-                    setRangeStart(ds);
-                    setRangeEnd(ds);
-                    // stay at tapCount 1 — user still needs to pick end
-                } else if (ds === rangeStart) {
-                    // Same date tapped — single-day range, done
-                    setTapCount(0);
-                } else {
-                    setRangeEnd(ds);
-                    setTapCount(0);
-                }
+                setRangeEnd(ds);
+                setTapCount(0);
             }
         },
-        [isRange, tapCount, rangeStart, onClose, animateOut],
+        [isRange, tapCount, rangeStart, minDate, onClose, animateOut, props],
     );
 
     const grid = useMemo(
@@ -174,9 +176,10 @@ export default function CalendarPicker(props: CalendarPickerProps) {
         });
     };
 
-    // Computed range boundaries (sorted)
-    const rS = rangeStart && rangeEnd ? (rangeStart <= rangeEnd ? rangeStart : rangeEnd) : null;
-    const rE = rangeStart && rangeEnd ? (rangeStart <= rangeEnd ? rangeEnd : rangeStart) : null;
+    // Computed range boundaries (sorted). A pending selection (rangeEnd null)
+    // renders as a single filled start pill with no band.
+    const rS = rangeStart && rangeEnd ? (rangeStart <= rangeEnd ? rangeStart : rangeEnd) : rangeStart;
+    const rE = rangeStart && rangeEnd ? (rangeStart <= rangeEnd ? rangeEnd : rangeStart) : rangeStart;
     const selectedSingle = !isRange ? (props as SinglePickerProps).selectedDate : null;
 
     const translateY = slideAnim.interpolate({
@@ -244,7 +247,10 @@ export default function CalendarPicker(props: CalendarPickerProps) {
                             {tapCount === 1 ? (
                                 <Text style={[s.rangeHint, { color: colors.textTertiary }]}>Now tap the end date</Text>
                             ) : rangeSummary ? (
-                                <Text style={[s.rangeHint, { color: colors.accent }]}>{rangeSummary}</Text>
+                                <Text style={[s.rangeHint, { color: colors.accent }]}>
+                                    {rangeSummary}
+                                    <Text style={{ color: colors.textTertiary }}> · tap Done to confirm</Text>
+                                </Text>
                             ) : null}
                         </View>
                     )}
@@ -287,6 +293,7 @@ export default function CalendarPicker(props: CalendarPickerProps) {
                                     const ds = toDateStr(date);
                                     const isCurrentMonth = date.getMonth() === displayMonth.month;
                                     const isToday = ds === todayStr;
+                                    const isDisabled = !!minDate && ds < minDate;
 
                                     // Range highlighting
                                     const isStart = isRange && ds === rS;
@@ -302,8 +309,10 @@ export default function CalendarPicker(props: CalendarPickerProps) {
                                             key={di}
                                             style={[s.dayCell, { width: DAY_SIZE }]}
                                             onPress={() => handleDayPress(date)}
-                                            activeOpacity={0.6}
+                                            activeOpacity={isDisabled ? 1 : 0.6}
+                                            disabled={isDisabled}
                                             accessibilityRole="button"
+                                            accessibilityState={{ disabled: isDisabled }}
                                             accessibilityLabel={`${date.getDate()} ${date.toLocaleDateString('en-SG', { month: 'long', year: 'numeric' })}`}
                                         >
                                             {/* Range band — full width for mid-range cells */}
@@ -357,12 +366,14 @@ export default function CalendarPicker(props: CalendarPickerProps) {
                                                         {
                                                             color:
                                                                 isEndpoint || isSingleSelected
-                                                                    ? '#FFFFFF'
-                                                                    : isToday
-                                                                      ? colors.accent
-                                                                      : isCurrentMonth
-                                                                        ? colors.textPrimary
-                                                                        : colors.textTertiary + '60',
+                                                                    ? colors.textInverse
+                                                                    : isDisabled
+                                                                      ? colors.textTertiary + '40'
+                                                                      : isToday
+                                                                        ? colors.accent
+                                                                        : isCurrentMonth
+                                                                          ? colors.textPrimary
+                                                                          : colors.textTertiary + '60',
                                                             fontWeight:
                                                                 isEndpoint || isSingleSelected || isToday
                                                                     ? '700'

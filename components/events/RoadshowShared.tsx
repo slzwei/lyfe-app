@@ -98,7 +98,7 @@ function RoadshowActivityFeedInner({ colors, activities }: RoadshowActivityFeedP
                     <Text style={[styles.feedName, { color: colors.textPrimary }]} numberOfLines={1}>
                         {act.full_name}
                     </Text>
-                    <Text style={[styles.feedType, { color: activityTypeColor(act.type, colors.textSecondary) }]}>
+                    <Text style={[styles.feedType, { color: activityTypeColor(act.type, colors) }]}>
                         {act.type === 'case_closed' && act.afyc_amount != null && act.afyc_amount > 0
                             ? `Closed $${act.afyc_amount.toLocaleString()} AFYC`
                             : activityLabel(act.type)}

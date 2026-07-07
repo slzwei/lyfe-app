@@ -10,6 +10,7 @@
  * roadshow constants, pledged defaults) are defined in this file.
  */
 import type { AttendeeRole } from '@/types/event';
+import type { ThemeColors } from '@/types/theme';
 
 import { ACTIVITY_TYPE_CONFIG } from './displayConfigs';
 import type { RoadshowActivityType } from '@/types/event';
@@ -113,6 +114,7 @@ export function activityLabel(type: string): string {
     return ACTIVITY_TYPE_CONFIG[type as RoadshowActivityType]?.label ?? type;
 }
 
-export function activityTypeColor(type: string, fallback: string): string {
-    return ACTIVITY_TYPE_CONFIG[type as RoadshowActivityType]?.color ?? fallback;
+/** Theme-aware activity accent; unknown types fall back to secondary text. */
+export function activityTypeColor(type: string, colors: ThemeColors): string {
+    return colors.activityType[type as RoadshowActivityType] ?? colors.textSecondary;
 }

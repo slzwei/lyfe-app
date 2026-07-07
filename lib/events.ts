@@ -3,6 +3,7 @@
  */
 import type { AgencyEvent, CreateEventInput, EventAttendee, EventType, ExternalAttendee } from '@/types/event';
 import type { Json } from '@/types/shared/database.types';
+import { formatDateLabel, formatTime, timeRangesOverlap, toDateStr, todayLocalStr } from './dateTime';
 import { applyPageRange, resolvePage } from './pagination';
 import { supabase } from './supabase';
 import { queueMutation } from './offline';
@@ -20,57 +21,119 @@ export interface SimpleUser {
 const EVENT_SELECT =
     '*, creator_user:users!created_by(full_name), event_attendees(id, event_id, user_id, attendee_role, users(full_name, avatar_url))';
 
+// Attendance-scoped variant: the aliased !inner embed filters server-side
+// without disturbing the display embed above.
+const EVENT_SELECT_ATTENDING = `${EVENT_SELECT}, attendee_filter:event_attendees!inner(user_id)`;
+
+/** How far back the mobile calendar loads history. Older events stay in the DB/web. */
+export const EVENTS_HISTORY_MONTHS = 6;
+
+/** YYYY-MM-DD lower bound for calendar queries — local time, never toISOString. */
+export function eventsWindowStart(now: Date = new Date()): string {
+    const d = new Date(now);
+    d.setMonth(d.getMonth() - EVENTS_HISTORY_MONTHS);
+    return toDateStr(d);
+}
+
+function sortEvents(list: AgencyEvent[]): AgencyEvent[] {
+    return list.sort((a, b) =>
+        a.event_date === b.event_date
+            ? a.start_time.localeCompare(b.start_time)
+            : a.event_date.localeCompare(b.event_date),
+    );
+}
+
+function mergeDedupEvents(a: AgencyEvent[], b: AgencyEvent[]): AgencyEvent[] {
+    const seen = new Map<string, AgencyEvent>();
+    for (const e of [...a, ...b]) {
+        if (!seen.has(e.id)) seen.set(e.id, e);
+    }
+    return sortEvents([...seen.values()]);
+}
+
+interface UserEventsFilter {
+    /** event_date >= (YYYY-MM-DD) */
+    dateGte?: string;
+    /** event_date == (YYYY-MM-DD) */
+    dateEq?: string;
+    /** Per-branch row cap; callers must slice the merged result themselves */
+    limit?: number;
+}
+
 /**
- * Fetch event IDs where the user is an attendee or creator.
+ * Events the user created + events they attend, as two parallel bounded
+ * queries merged client-side (PostgREST can't OR a plain column filter with
+ * an embedded-table filter). Replaces the old fetch-all-ids + `.in(ids)`
+ * pattern whose URL grew with every attendance row.
  */
-async function getUserEventIds(userId: string): Promise<{ ids: string[]; error: string | null }> {
-    const [{ data: attendeeRows, error: attendeeError }, { data: createdRows, error: createdError }] =
-        await Promise.all([
-            supabase.from('event_attendees').select('event_id').eq('user_id', userId),
-            supabase.from('events').select('id').eq('created_by', userId),
-        ]);
+async function queryUserEvents(
+    userId: string,
+    filter: UserEventsFilter,
+): Promise<{ data: AgencyEvent[]; error: string | null }> {
+    let createdQ = supabase.from('events').select(EVENT_SELECT).eq('created_by', userId);
+    let attendingQ = supabase.from('events').select(EVENT_SELECT_ATTENDING).eq('attendee_filter.user_id', userId);
 
-    if (attendeeError) return { ids: [], error: attendeeError.message };
-    if (createdError) return { ids: [], error: createdError.message };
+    if (filter.dateGte !== undefined) {
+        createdQ = createdQ.gte('event_date', filter.dateGte);
+        attendingQ = attendingQ.gte('event_date', filter.dateGte);
+    }
+    if (filter.dateEq !== undefined) {
+        createdQ = createdQ.eq('event_date', filter.dateEq);
+        attendingQ = attendingQ.eq('event_date', filter.dateEq);
+    }
 
-    const attendeeIds = (attendeeRows || []).map((r: { event_id: string }) => r.event_id);
-    const createdIds = (createdRows || []).map((r: { id: string }) => r.id);
-    return { ids: [...new Set([...attendeeIds, ...createdIds])], error: null };
+    createdQ = createdQ.order('event_date', { ascending: true }).order('start_time', { ascending: true });
+    attendingQ = attendingQ.order('event_date', { ascending: true }).order('start_time', { ascending: true });
+
+    if (filter.limit !== undefined) {
+        createdQ = createdQ.limit(filter.limit);
+        attendingQ = attendingQ.limit(filter.limit);
+    }
+
+    const [created, attending] = await Promise.all([createdQ, attendingQ]);
+    if (created.error) return { data: [], error: created.error.message };
+    if (attending.error) return { data: [], error: attending.error.message };
+
+    return {
+        data: mergeDedupEvents(
+            mapEvents((created.data || []) as EventRow[]),
+            mapEvents((attending.data || []) as EventRow[]),
+        ),
+        error: null,
+    };
 }
 
 // ── Public event queries ─────────────────────────────────────
 
 /**
- * Fetch events where the user is an attendee or creator, ordered by date ascending.
+ * Fetch events where the user is an attendee or creator, ordered by date
+ * ascending. History is bounded to `windowStart` (default: 6 months back).
  */
-export async function fetchEvents(userId: string): Promise<{ data: AgencyEvent[]; error: string | null }> {
-    const { ids, error: idsError } = await getUserEventIds(userId);
-    if (idsError) return { data: [], error: idsError };
-    if (ids.length === 0) return { data: [], error: null };
-
-    const { data, error } = await supabase
-        .from('events')
-        .select(EVENT_SELECT)
-        .in('id', ids)
-        .order('event_date', { ascending: true })
-        .order('start_time', { ascending: true });
-
-    if (error) return { data: [], error: error.message };
-    return { data: mapEvents((data || []) as EventRow[]), error: null };
+export async function fetchEvents(
+    userId: string,
+    windowStart: string = eventsWindowStart(),
+): Promise<{ data: AgencyEvent[]; error: string | null }> {
+    return queryUserEvents(userId, { dateGte: windowStart });
 }
 
 /**
- * Fetch all events (PA use), ordered by date ascending.
+ * Fetch all events (PA/RO/admin use), ordered by date ascending.
+ * Pass `windowStart` to bound history (the calendar does); default unbounded.
  */
 export async function fetchAllEvents(
     page?: number,
     pageSize: number = 50,
+    windowStart?: string,
 ): Promise<{ data: AgencyEvent[]; error: string | null; hasMore: boolean }> {
     let query = supabase
         .from('events')
         .select(EVENT_SELECT)
         .order('event_date', { ascending: true })
         .order('start_time', { ascending: true });
+
+    if (windowStart !== undefined) {
+        query = query.gte('event_date', windowStart);
+    }
 
     query = applyPageRange(query, page, pageSize);
 
@@ -83,30 +146,163 @@ export async function fetchAllEvents(
 }
 
 /**
- * Fetch the next N upcoming events for a user.
- * Filters server-side by event_date >= today and limits to `limit` rows.
+ * Fetch the next N upcoming events for a user (event_date >= today, local
+ * time — the old toISOString cutoff put "today" in UTC, so before 8am SGT
+ * yesterday's events counted as upcoming).
  */
 export async function fetchUpcomingEvents(
     userId: string,
     limit = 5,
 ): Promise<{ data: AgencyEvent[]; error: string | null }> {
-    const today = new Date().toISOString().split('T')[0];
+    const res = await queryUserEvents(userId, { dateGte: todayLocalStr(), limit });
+    if (res.error) return res;
+    return { data: res.data.slice(0, limit), error: null };
+}
 
-    const { ids, error: idsError } = await getUserEventIds(userId);
-    if (idsError) return { data: [], error: idsError };
-    if (ids.length === 0) return { data: [], error: null };
+/**
+ * Today's events for the user — cheap enough for the live bar to poll.
+ */
+export async function fetchTodayEvents(userId: string): Promise<{ data: AgencyEvent[]; error: string | null }> {
+    return queryUserEvents(userId, { dateEq: todayLocalStr() });
+}
 
-    const { data, error } = await supabase
+// ── Team calendar (manager/director "Team" scope) ────────────
+
+/**
+ * Resolve the ids of a manager's direct reports, or a director's
+ * managers + their agents — the same reports_to scoping as
+ * lib/team.ts fetchTeamMembers, without the stats fan-out.
+ */
+async function resolveTeamMemberIds(userId: string, role: string): Promise<{ ids: string[]; error: string | null }> {
+    const teamDataScope = await resolveTeamDataScope(userId);
+
+    if (role === 'manager') {
+        const { data, error } = await supabase
+            .from('users')
+            .select('id')
+            .in('role', ['manager', 'agent'])
+            .eq('reports_to', userId)
+            .eq('is_test_data', teamDataScope);
+        if (error) return { ids: [], error: error.message };
+        return { ids: (data || []).map((r: { id: string }) => r.id), error: null };
+    }
+
+    // Director: managers reporting to them + agents reporting to those managers
+    const { data: managers, error: mErr } = await supabase
+        .from('users')
+        .select('id')
+        .eq('role', 'manager')
+        .eq('reports_to', userId)
+        .eq('is_test_data', teamDataScope);
+    if (mErr) return { ids: [], error: mErr.message };
+
+    const managerIds = (managers || []).map((r: { id: string }) => r.id);
+    if (managerIds.length === 0) return { ids: [], error: null };
+
+    const { data: agents, error: aErr } = await supabase
+        .from('users')
+        .select('id')
+        .in('reports_to', managerIds)
+        .eq('is_test_data', teamDataScope);
+    if (aErr) return { ids: [], error: aErr.message };
+
+    return { ids: [...managerIds, ...(agents || []).map((r: { id: string }) => r.id)], error: null };
+}
+
+/**
+ * Events created by OR attended by anyone on the user's team, bounded to
+ * the calendar window. Two-query merge — a single query would AND the
+ * created_by and attendee filters (review-caught).
+ */
+export async function fetchTeamEvents(
+    userId: string,
+    role: string,
+    windowStart: string = eventsWindowStart(),
+): Promise<{ data: AgencyEvent[]; error: string | null }> {
+    const team = await resolveTeamMemberIds(userId, role);
+    if (team.error) return { data: [], error: team.error };
+    if (team.ids.length === 0) return { data: [], error: null };
+
+    const createdQ = supabase
         .from('events')
         .select(EVENT_SELECT)
-        .in('id', ids)
-        .gte('event_date', today)
+        .in('created_by', team.ids)
+        .gte('event_date', windowStart)
         .order('event_date', { ascending: true })
-        .order('start_time', { ascending: true })
-        .limit(limit);
+        .order('start_time', { ascending: true });
+    const attendingQ = supabase
+        .from('events')
+        .select(EVENT_SELECT_ATTENDING)
+        .in('attendee_filter.user_id', team.ids)
+        .gte('event_date', windowStart)
+        .order('event_date', { ascending: true })
+        .order('start_time', { ascending: true });
 
+    const [created, attending] = await Promise.all([createdQ, attendingQ]);
+    if (created.error) return { data: [], error: created.error.message };
+    if (attending.error) return { data: [], error: attending.error.message };
+
+    return {
+        data: mergeDedupEvents(
+            mapEvents((created.data || []) as EventRow[]),
+            mapEvents((attending.data || []) as EventRow[]),
+        ),
+        error: null,
+    };
+}
+
+// ── Conflict detection ───────────────────────────────────────
+
+export interface EventConflict {
+    attendeeName: string;
+    eventTitle: string;
+    eventDate: string;
+    timeRange: string;
+}
+
+/**
+ * Find existing events that overlap the proposed slot for any of the
+ * selected attendees. One bounded query; overlap resolved client-side.
+ * Callers treat this as advisory (warn, never block) and must fail open
+ * if the query errors.
+ */
+export async function findEventConflicts(params: {
+    dates: string[];
+    startTime: string;
+    endTime: string | null;
+    attendeeIds: string[];
+    excludeEventId?: string;
+}): Promise<{ data: EventConflict[]; error: string | null }> {
+    const { dates, startTime, endTime, attendeeIds, excludeEventId } = params;
+    if (dates.length === 0 || attendeeIds.length === 0) return { data: [], error: null };
+
+    let query = supabase
+        .from('events')
+        .select(EVENT_SELECT_ATTENDING)
+        .in('event_date', dates)
+        .in('attendee_filter.user_id', attendeeIds);
+    if (excludeEventId) {
+        query = query.neq('id', excludeEventId);
+    }
+
+    const { data, error } = await query;
     if (error) return { data: [], error: error.message };
-    return { data: mapEvents((data || []) as EventRow[]), error: null };
+
+    const idSet = new Set(attendeeIds);
+    const conflicts: EventConflict[] = [];
+    for (const ev of mapEvents((data || []) as EventRow[])) {
+        if (!timeRangesOverlap(startTime, endTime, ev.start_time, ev.end_time)) continue;
+        for (const att of ev.attendees) {
+            if (!idSet.has(att.user_id)) continue;
+            conflicts.push({
+                attendeeName: att.full_name || 'An attendee',
+                eventTitle: ev.title,
+                eventDate: formatDateLabel(ev.event_date),
+                timeRange: `${formatTime(ev.start_time)}${ev.end_time ? ` – ${formatTime(ev.end_time)}` : ''}`,
+            });
+        }
+    }
+    return { data: conflicts, error: null };
 }
 
 /**

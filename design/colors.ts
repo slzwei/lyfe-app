@@ -93,6 +93,27 @@ export const Colors = {
         hairline: '#EFEADB',
 
         whatsappGreen: '#4A9E6F',
+
+        // Event-type accents (calendar time bars, type badges, selectors).
+        // Deliberately reuse the semantic tokens above so event colors read
+        // as the same language as lead-status pills — no one-off hues.
+        eventType: {
+            team_meeting: '#5C7A9E', // info / dusty slate
+            training: '#C89B3C', // warning / ochre
+            agency_event: '#B27AAE', // statusProposed / plum
+            roadshow: '#D6552B', // accent / terracotta — the signature activity
+            exam: '#B33A2E', // danger / warm red
+            other: '#8B857A', // textTertiary / warm gray
+        },
+
+        // Roadshow activity-feed accents (live booth feed rows).
+        activityType: {
+            sitdown: '#5C7A9E', // slate — a calm conversation
+            pitch: '#C89B3C', // ochre — energy
+            case_closed: '#7A8C6B', // sage — a win
+            check_in: '#D6552B', // terracotta — arrival
+            departure: '#8B857A', // warm gray — leaving quietly
+        },
     },
 
     dark: {
@@ -167,6 +188,26 @@ export const Colors = {
         hairline: '#24211B',
 
         whatsappGreen: '#6AB88A',
+
+        // Event-type accents — brightened counterparts of the light set
+        // (same mapping as the dark semantic tokens above).
+        eventType: {
+            team_meeting: '#87A3C4', // info
+            training: '#E5B858', // warning
+            agency_event: '#C79BC3', // statusProposed
+            roadshow: '#E27A4E', // accent
+            exam: '#D85547', // danger
+            other: '#9A9488', // warm gray (lifted for dark bg)
+        },
+
+        // Roadshow activity-feed accents — brightened counterparts.
+        activityType: {
+            sitdown: '#87A3C4',
+            pitch: '#E5B858',
+            case_closed: '#9CAE8C',
+            check_in: '#E27A4E',
+            departure: '#9A9488',
+        },
     },
 };
 

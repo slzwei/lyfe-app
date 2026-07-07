@@ -7,7 +7,7 @@ import { useAttendeePicker } from '@/hooks/useAttendeePicker';
 import { useRoadshowConfig } from '@/hooks/useRoadshowConfig';
 import { useTimePicker } from '@/hooks/useTimePicker';
 import { dateDiffDays, dateRange, isValidDate, todayLocalStr } from '@/lib/dateTime';
-import { createEvent, fetchEventById, updateEvent } from '@/lib/events';
+import { createEvent, fetchEventById, findEventConflicts, updateEvent, type EventConflict } from '@/lib/events';
 import { createRoadshowBulk, fetchRoadshowConfig, saveRoadshowConfig, type RoadshowConfigInput } from '@/lib/roadshow';
 import { supabase } from '@/lib/supabase';
 import type { CreateEventInput, EventType } from '@/types/event';
@@ -121,6 +121,7 @@ export function useEventForm() {
         if (!title.trim()) e.title = 'Title is required';
         if (eventType === 'roadshow') {
             if (!isValidDate(rsStartDate)) e.rsStartDate = 'Enter a valid start date (YYYY-MM-DD)';
+            else if (!isEditing && rsStartDate < todayLocalStr()) e.rsStartDate = 'Start date cannot be in the past';
             if (!isValidDate(rsEndDate)) e.rsEndDate = 'Enter a valid end date (YYYY-MM-DD)';
             if (rsStartDate && rsEndDate && rsEndDate < rsStartDate)
                 e.rsEndDate = 'End date must be on or after start date';
@@ -131,6 +132,7 @@ export function useEventForm() {
             if (rsSlots < 1) e.rsSlots = 'Slots must be at least 1';
         } else {
             if (!isValidDate(eventDate)) e.eventDate = 'Enter a valid date (YYYY-MM-DD)';
+            else if (!isEditing && eventDate < todayLocalStr()) e.eventDate = 'Date cannot be in the past';
         }
         if (hasEndTime && toStartTimeStr() >= toEndTimeStr()!) {
             e.endTime = 'End time must be after start time';
@@ -167,6 +169,43 @@ export function useEventForm() {
         const endTime = toEndTimeStr();
 
         setSubmitting(true);
+
+        // Conflict pre-flight — advisory only. Warn about double-booked
+        // attendees, never block, and fail open if the check itself errors.
+        if (selectedAttendees.length > 0) {
+            try {
+                const conflictDates =
+                    eventType === 'roadshow' && !isEditing ? dateRange(rsStartDate, rsEndDate) : [eventDate];
+                const { data: conflicts } = await findEventConflicts({
+                    dates: conflictDates,
+                    startTime,
+                    endTime,
+                    attendeeIds: selectedAttendees.map((a) => a.user_id),
+                    excludeEventId: isEditing ? eventId : undefined,
+                });
+                if (conflicts.length > 0) {
+                    const lines = conflicts
+                        .slice(0, 3)
+                        .map(
+                            (c: EventConflict) =>
+                                `• ${c.attendeeName} — "${c.eventTitle}", ${c.eventDate}, ${c.timeRange}`,
+                        );
+                    if (conflicts.length > 3) lines.push(`…and ${conflicts.length - 3} more`);
+                    const proceed = await new Promise<boolean>((resolve) =>
+                        Alert.alert('Schedule conflict', `Already booked at this time:\n${lines.join('\n')}`, [
+                            { text: 'Cancel', onPress: () => resolve(false), style: 'cancel' },
+                            { text: isEditing ? 'Save anyway' : 'Create anyway', onPress: () => resolve(true) },
+                        ]),
+                    );
+                    if (!proceed) {
+                        setSubmitting(false);
+                        return;
+                    }
+                }
+            } catch {
+                // fail open — a broken conflict check must never stop scheduling
+            }
+        }
 
         // Roadshow bulk create
         if (eventType === 'roadshow' && !isEditing) {

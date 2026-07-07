@@ -15,7 +15,19 @@ import {
     timeAgo,
     getRoadshowStatus,
     isEventLive,
+    timeRangesOverlap,
 } from '@/lib/dateTime';
+
+// ── CI timezone canary ──
+// The CI workflow pins TZ=Asia/Singapore (all users + dev machines run SGT).
+// If this fails on CI the pin was lost and UTC runners will silently mask
+// local-vs-UTC date bugs again (see dateRange, fixed 2026-07).
+describe('test environment', () => {
+    it('runs in SGT on CI', () => {
+        if (!process.env.CI) return;
+        expect(new Date().getTimezoneOffset()).toBe(-480);
+    });
+});
 
 // ── formatTime ──
 
@@ -176,15 +188,22 @@ describe('dateDiffDays', () => {
 // ── dateRange ──
 
 describe('dateRange', () => {
+    // Exact-match assertions on purpose: the old tolerant version
+    // ("dates are consecutive, may be offset by TZ") let a UTC off-by-one
+    // slip through — in SGT every roadshow was created one day early.
     it('returns single date for same start/end', () => {
-        const result = dateRange('2026-03-08', '2026-03-08');
-        expect(result).toHaveLength(1);
+        expect(dateRange('2026-03-08', '2026-03-08')).toEqual(['2026-03-08']);
     });
 
-    it('returns correct number of dates inclusive', () => {
-        const result = dateRange('2026-03-06', '2026-03-08');
-        expect(result).toHaveLength(3);
-        // Dates are consecutive (may be offset by TZ due to toISOString in source)
+    it('returns exact inclusive dates', () => {
+        expect(dateRange('2026-03-06', '2026-03-08')).toEqual(['2026-03-06', '2026-03-07', '2026-03-08']);
+    });
+
+    it('boundaries always equal the inputs', () => {
+        const result = dateRange('2026-05-11', '2026-05-24');
+        expect(result).toHaveLength(14);
+        expect(result[0]).toBe('2026-05-11');
+        expect(result[result.length - 1]).toBe('2026-05-24');
         for (let i = 1; i < result.length; i++) {
             expect(dateDiffDays(result[i - 1], result[i])).toBe(1);
         }
@@ -195,12 +214,11 @@ describe('dateRange', () => {
     });
 
     it('works across month boundary', () => {
-        const result = dateRange('2026-02-27', '2026-03-02');
-        expect(result).toHaveLength(4);
-        // Verify consecutive days
-        for (let i = 1; i < result.length; i++) {
-            expect(dateDiffDays(result[i - 1], result[i])).toBe(1);
-        }
+        expect(dateRange('2026-02-27', '2026-03-02')).toEqual(['2026-02-27', '2026-02-28', '2026-03-01', '2026-03-02']);
+    });
+
+    it('works across a year boundary', () => {
+        expect(dateRange('2026-12-30', '2027-01-02')).toEqual(['2026-12-30', '2026-12-31', '2027-01-01', '2027-01-02']);
     });
 });
 
@@ -343,5 +361,37 @@ describe('isEventLive', () => {
 
     it('returns false when event date is in the future', () => {
         expect(isEventLive('2026-03-09', '09:00', '17:00', at(12, 0))).toBe(false);
+    });
+});
+
+// ── timeRangesOverlap ──
+
+describe('timeRangesOverlap', () => {
+    it('detects plain overlap', () => {
+        expect(timeRangesOverlap('09:00', '11:00', '10:00', '12:00')).toBe(true);
+        expect(timeRangesOverlap('10:00', '12:00', '09:00', '11:00')).toBe(true);
+    });
+
+    it('containment counts as overlap', () => {
+        expect(timeRangesOverlap('09:00', '17:00', '10:00', '11:00')).toBe(true);
+    });
+
+    it('touching edges do not overlap (half-open intervals)', () => {
+        expect(timeRangesOverlap('09:00', '10:00', '10:00', '11:00')).toBe(false);
+        expect(timeRangesOverlap('10:00', '11:00', '09:00', '10:00')).toBe(false);
+    });
+
+    it('disjoint ranges do not overlap', () => {
+        expect(timeRangesOverlap('09:00', '10:00', '14:00', '15:00')).toBe(false);
+    });
+
+    it('treats a null end as a one-hour block', () => {
+        expect(timeRangesOverlap('09:00', null, '09:30', '10:30')).toBe(true);
+        expect(timeRangesOverlap('09:00', null, '10:00', '11:00')).toBe(false);
+        expect(timeRangesOverlap('09:30', '10:30', '09:00', null)).toBe(true);
+    });
+
+    it('handles HH:MM:SS database strings', () => {
+        expect(timeRangesOverlap('09:00:00', '11:00:00', '10:30:00', '12:00:00')).toBe(true);
     });
 });

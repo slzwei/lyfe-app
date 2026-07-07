@@ -26,6 +26,8 @@ interface SingleProps {
     selectedDate: string | null;
     onSelect: (date: string) => void;
     colors: ThemeColors;
+    /** Days before this YYYY-MM-DD render disabled and ignore taps */
+    minDate?: string;
 }
 
 interface RangeProps {
@@ -34,6 +36,8 @@ interface RangeProps {
     endDate: string | null;
     onRangeChange: (start: string, end: string) => void;
     colors: ThemeColors;
+    /** Days before this YYYY-MM-DD render disabled and ignore taps */
+    minDate?: string;
 }
 
 type Props = SingleProps | RangeProps;
@@ -87,6 +91,7 @@ export default function InlineCalendar(props: Props) {
     };
 
     const handlePress = (ds: string) => {
+        if (props.minDate && ds < props.minDate) return;
         if (!isRange) {
             (props as SingleProps).onSelect(ds);
             return;
@@ -99,14 +104,16 @@ export default function InlineCalendar(props: Props) {
             setTapCount(1);
             return;
         }
-        // Second tap — lock in the range. If the tap is before the current start,
-        // swap to maintain start <= end.
+        // Second tap. Earlier than the current start → restart the range there
+        // and keep waiting for an end date (matches CalendarPicker — no
+        // accidental instant-commit). Otherwise lock in the range; a same-day
+        // range comes from an explicit second tap on the start date.
         const start = rp.startDate ?? ds;
         if (ds < start) {
-            rp.onRangeChange(ds, start);
-        } else {
-            rp.onRangeChange(start, ds);
+            rp.onRangeChange(ds, ds);
+            return; // stay at tapCount 1 — user still needs to pick end
         }
+        rp.onRangeChange(start, ds);
         setTapCount(0);
     };
 
@@ -159,6 +166,7 @@ export default function InlineCalendar(props: Props) {
                             const ds = toDateStr(date);
                             const isCurrentMonth = date.getMonth() === displayMonth.month;
                             const isToday = ds === todayStr;
+                            const isDisabled = !!props.minDate && ds < props.minDate;
 
                             const isStart = isRange && ds === sortedStart;
                             const isEnd = isRange && ds === sortedEnd && sortedStart !== sortedEnd;
@@ -180,7 +188,10 @@ export default function InlineCalendar(props: Props) {
                                     key={di}
                                     style={[styles.dayCell, { width: DAY_SIZE }]}
                                     onPress={() => handlePress(ds)}
-                                    activeOpacity={0.6}
+                                    activeOpacity={isDisabled ? 1 : 0.6}
+                                    disabled={isDisabled}
+                                    accessibilityRole="button"
+                                    accessibilityState={{ disabled: isDisabled }}
                                     accessibilityLabel={`${date.getDate()} ${monthLabel}`}
                                     testID={`inline-calendar-day-${ds}`}
                                 >
@@ -227,12 +238,14 @@ export default function InlineCalendar(props: Props) {
                                                 styles.dayText,
                                                 {
                                                     color: filled
-                                                        ? '#FFFFFF'
-                                                        : isToday
-                                                          ? colors.accent
-                                                          : isCurrentMonth
-                                                            ? colors.textPrimary
-                                                            : colors.textTertiary + '60',
+                                                        ? colors.textInverse
+                                                        : isDisabled
+                                                          ? colors.textTertiary + '40'
+                                                          : isToday
+                                                            ? colors.accent
+                                                            : isCurrentMonth
+                                                              ? colors.textPrimary
+                                                              : colors.textTertiary + '60',
                                                     fontWeight: filled || isToday ? '700' : '400',
                                                 },
                                             ]}

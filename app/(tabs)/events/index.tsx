@@ -1,3 +1,4 @@
+import EmptyState from '@/components/EmptyState';
 import ErrorBanner from '@/components/ErrorBanner';
 import EventCard from '@/components/events/EventCard';
 import InlineCalendar from '@/components/events/InlineCalendar';
@@ -8,8 +9,9 @@ import { getRoadshowColors } from '@/constants/roadshow/tokens';
 import { RoadshowType, TropicFonts } from '@/constants/roadshow/typography';
 import { useAuth } from '@/contexts/AuthContext';
 import { useTheme } from '@/contexts/ThemeContext';
-import { fetchAllEvents, fetchEvents } from '@/lib/events';
-import { toDateStr, isEventLive } from '@/lib/dateTime';
+import { useViewMode } from '@/contexts/ViewModeContext';
+import { eventsWindowStart, fetchAllEvents, fetchEvents, fetchTeamEvents } from '@/lib/events';
+import { formatTime, toDateStr, isEventLive } from '@/lib/dateTime';
 import type { AgencyEvent } from '@/types/event';
 import { useFocusEffect, useNavigation, useRouter } from 'expo-router';
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
@@ -84,19 +86,21 @@ export default function EventsScreen() {
 
     const scrollToTodayRef = useRef<(() => void) | null>(null);
 
-    // Scroll to today when switching to Events tab
-    useFocusEffect(
-        useCallback(() => {
-            scrollToTodayRef.current?.();
-        }, []),
-    );
-
-    // Scroll to today when re-tapping the already-active Events tab
+    // Jump to today ONLY when the user re-taps the Events tab while already
+    // on it (the iOS-native pattern). tabPress fires before navigation, from
+    // a navigator-level listener, for EVERY tab's button — including when
+    // switching into or away from Events — so both checks below matter.
+    // Back-nav from event detail and tab switches preserve browsing position.
     useEffect(() => {
         const parent = navigation.getParent();
         if (!parent) return;
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        const unsubscribe = (parent as any).addListener('tabPress', () => {
+        const unsubscribe = (parent as any).addListener('tabPress', (e: { target?: string }) => {
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
+            const state = (parent as any).getState?.();
+            const focused = state?.routes?.[state.index];
+            if (focused?.name !== 'events') return; // not on Events → switching in, keep position
+            if (e?.target !== focused.key) return; // on Events but pressed another tab
             scrollToTodayRef.current?.();
         });
         return unsubscribe;
@@ -108,8 +112,17 @@ export default function EventsScreen() {
     const [refreshing, setRefreshing] = useState(false);
     const [isLoading, setIsLoading] = useState(true);
 
-    const isPA = user?.role === 'pa' || user?.role === 'ro' || user?.role === 'admin';
+    const canSeeAllEvents = user?.role === 'pa' || user?.role === 'ro' || user?.role === 'admin';
     const canCreateEvents = user?.role && ['admin', 'director', 'manager', 'pa', 'ro'].includes(user.role);
+
+    // Managers/directors (in manager view) can flip between their own
+    // calendar and their team's. PA/RO/admin already see everything.
+    const { viewMode } = useViewMode();
+    const canToggleTeam = (user?.role === 'manager' || user?.role === 'director') && viewMode === 'manager';
+    const [calendarScope, setCalendarScope] = useState<'mine' | 'team'>('mine');
+    useEffect(() => {
+        if (!canToggleTeam) setCalendarScope('mine');
+    }, [canToggleTeam]);
 
     const [eventError, setEventError] = useState<string | null>(null);
 
@@ -117,7 +130,12 @@ export default function EventsScreen() {
         if (!user?.id) return;
         setEventError(null);
         try {
-            const { data, error } = isPA ? await fetchAllEvents() : await fetchEvents(user.id);
+            const { data, error } =
+                canToggleTeam && calendarScope === 'team'
+                    ? await fetchTeamEvents(user.id, user.role)
+                    : canSeeAllEvents
+                      ? await fetchAllEvents(undefined, 50, eventsWindowStart())
+                      : await fetchEvents(user.id);
             if (error) {
                 setEventError(error);
             } else {
@@ -128,7 +146,7 @@ export default function EventsScreen() {
         } finally {
             setIsLoading(false);
         }
-    }, [user?.id, isPA]);
+    }, [user?.id, user?.role, canSeeAllEvents, canToggleTeam, calendarScope]);
 
     useFocusEffect(
         useCallback(() => {
@@ -299,6 +317,40 @@ export default function EventsScreen() {
         </View>
     );
 
+    const renderScopeToggle = () => {
+        if (!canToggleTeam) return null;
+        return (
+            <View style={styles.scopeRow}>
+                {(['mine', 'team'] as const).map((scope) => {
+                    const active = calendarScope === scope;
+                    return (
+                        <Pressable
+                            key={scope}
+                            testID={`events-scope-${scope}`}
+                            onPress={() => setCalendarScope(scope)}
+                            style={[
+                                styles.scopeChip,
+                                {
+                                    borderColor: active ? colors.accent : colors.border,
+                                    backgroundColor: active ? colors.accent + '14' : 'transparent',
+                                },
+                            ]}
+                            accessibilityRole="button"
+                            accessibilityState={{ selected: active }}
+                            accessibilityLabel={scope === 'mine' ? 'My calendar' : "Team's calendar"}
+                        >
+                            <Text
+                                style={[styles.scopeChipText, { color: active ? colors.accent : colors.textTertiary }]}
+                            >
+                                {scope === 'mine' ? 'Mine' : 'Team'}
+                            </Text>
+                        </Pressable>
+                    );
+                })}
+            </View>
+        );
+    };
+
     const renderLiveBanner = () => {
         if (!liveRoadshow) return null;
         const { place, sub } = splitTitle(liveRoadshow.title);
@@ -320,8 +372,8 @@ export default function EventsScreen() {
                         ) : null}
                     </Text>
                     <Text style={[styles.liveMeta, { color: 'rgba(244,238,225,0.6)' }]}>
-                        {liveRoadshow.start_time}
-                        {liveRoadshow.end_time ? ` – ${liveRoadshow.end_time}` : ''} · tap to open
+                        {formatTime(liveRoadshow.start_time)}
+                        {liveRoadshow.end_time ? ` – ${formatTime(liveRoadshow.end_time)}` : ''} · tap to open
                     </Text>
                 </DarkHeroCard>
             </Pressable>
@@ -337,9 +389,36 @@ export default function EventsScreen() {
         );
     }
 
+    // First-run empty state teaches the screen instead of three bare
+    // "No Events" header rows.
+    if (allEvents.length === 0 && !eventError) {
+        const teamScope = calendarScope === 'team';
+        return (
+            <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]} edges={['top']}>
+                {renderEditorialHeader()}
+                {renderScopeToggle()}
+                <EmptyState
+                    icon="calendar-outline"
+                    title={teamScope ? 'Nothing on for your team' : 'No events yet'}
+                    subtitle={
+                        teamScope
+                            ? "Events your team members create or attend will show up here once they're scheduled."
+                            : canCreateEvents
+                              ? 'Roadshows, meetings and exam sittings you schedule will all land here, laid out day by day.'
+                              : "When you're added to a roadshow, meeting or exam sitting, it'll show up here so you always know what's on."
+                    }
+                    actionLabel={!teamScope && canCreateEvents ? 'Create an event' : undefined}
+                    onAction={!teamScope && canCreateEvents ? () => router.push('/(tabs)/events/create') : undefined}
+                />
+            </SafeAreaView>
+        );
+    }
+
     return (
         <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]} edges={['top']}>
             {renderEditorialHeader()}
+
+            {renderScopeToggle()}
 
             {eventError && <ErrorBanner message={eventError} onRetry={loadEvents} />}
 
@@ -447,6 +526,20 @@ const styles = StyleSheet.create({
         borderWidth: 1,
     },
     newPillText: { fontSize: 11, fontFamily: TropicFonts.uiSemiBold },
+
+    scopeRow: {
+        flexDirection: 'row',
+        gap: 8,
+        paddingHorizontal: 20,
+        paddingBottom: 8,
+    },
+    scopeChip: {
+        paddingHorizontal: 14,
+        paddingVertical: 5,
+        borderRadius: 14,
+        borderWidth: 1,
+    },
+    scopeChipText: { fontSize: 12, fontFamily: TropicFonts.uiSemiBold },
 
     liveBannerWrap: {
         paddingHorizontal: 18,

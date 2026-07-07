@@ -14,6 +14,8 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 
 /** Human-readable subtitle for each notification type */
 const TYPE_SUBTITLES: Partial<Record<NotificationType, string>> = {
+    event_invite: "Events and roadshows you're added to",
+    event_cancelled: 'Upcoming events that get called off',
     event_reminder: 'Upcoming events and roadshow check-ins',
     candidate_update: 'Candidate status changes',
     lead_milestone: 'Won and lost deals',

@@ -11,12 +11,14 @@ const mockCreateRoadshowBulk = jest.fn();
 const mockFetchEventById = jest.fn();
 const mockFetchRoadshowConfig = jest.fn();
 const mockSaveRoadshowConfig = jest.fn();
+const mockFindEventConflicts = jest.fn().mockResolvedValue({ data: [], error: null });
 
 jest.mock('@/lib/events', () => ({
     createEvent: (...args: any[]) => mockCreateEvent(...args),
     updateEvent: (...args: any[]) => mockUpdateEvent(...args),
     fetchEventById: (...args: any[]) => mockFetchEventById(...args),
     fetchAllUsers: jest.fn().mockResolvedValue({ data: [], error: null }),
+    findEventConflicts: (...args: any[]) => mockFindEventConflicts(...args),
 }));
 
 jest.mock('@/lib/roadshow', () => ({
@@ -25,24 +27,12 @@ jest.mock('@/lib/roadshow', () => ({
     saveRoadshowConfig: (...args: any[]) => mockSaveRoadshowConfig(...args),
 }));
 
+// Real pure helpers on purpose — a hand-rolled dateRange mock once
+// reimplemented the same UTC bug the real one had, hiding it from this
+// suite. Only the clock-dependent todayLocalStr stays stubbed.
 jest.mock('@/lib/dateTime', () => ({
+    ...jest.requireActual('@/lib/dateTime'),
     todayLocalStr: () => '2026-03-09',
-    isValidDate: (d: string) => /^\d{4}-\d{2}-\d{2}$/.test(d),
-    dateDiffDays: (a: string, b: string) => {
-        const da = new Date(a);
-        const db = new Date(b);
-        return Math.round((db.getTime() - da.getTime()) / (1000 * 60 * 60 * 24));
-    },
-    dateRange: (start: string, end: string) => {
-        const dates: string[] = [];
-        const d = new Date(start);
-        const e = new Date(end);
-        while (d <= e) {
-            dates.push(d.toISOString().slice(0, 10));
-            d.setDate(d.getDate() + 1);
-        }
-        return dates;
-    },
 }));
 
 jest.mock('@/constants/ui', () => ({
@@ -270,6 +260,39 @@ describe('useEventForm', () => {
         expect(result.current.errors.eventDate).toBe('Enter a valid date (YYYY-MM-DD)');
     });
 
+    it('validate rejects past dates when creating', async () => {
+        const { result } = renderHook(() => useEventForm());
+
+        act(() => {
+            result.current.setTitle('Valid Title');
+            result.current.setEventDate('2026-03-01'); // mocked today is 2026-03-09
+        });
+
+        await act(async () => {
+            await result.current.handleSubmit();
+        });
+
+        expect(result.current.errors.eventDate).toBe('Date cannot be in the past');
+    });
+
+    it('validate rejects past roadshow start dates when creating', async () => {
+        const { result } = renderHook(() => useEventForm());
+
+        act(() => {
+            result.current.setTitle('Roadshow');
+            result.current.setEventType('roadshow');
+            result.current.roadshowCfg.setRsStartDate('2026-03-01');
+            result.current.roadshowCfg.setRsEndDate('2026-03-12');
+            result.current.roadshowCfg.setRsWeeklyCost('500');
+        });
+
+        await act(async () => {
+            await result.current.handleSubmit();
+        });
+
+        expect(result.current.errors.rsStartDate).toBe('Start date cannot be in the past');
+    });
+
     it('validate catches roadshow validation errors', async () => {
         const { result } = renderHook(() => useEventForm());
 
@@ -406,8 +429,10 @@ describe('useEventForm', () => {
         });
 
         act(() => {
-            result.current.roadshowCfg.setRsStartDate('2026-03-01');
-            result.current.roadshowCfg.setRsEndDate('2026-03-20');
+            // Future-dated relative to the mocked today (2026-03-09) — past
+            // start dates are rejected by validate() on create.
+            result.current.roadshowCfg.setRsStartDate('2026-03-10');
+            result.current.roadshowCfg.setRsEndDate('2026-03-29');
             result.current.roadshowCfg.setRsWeeklyCost('500');
         });
 
@@ -703,5 +728,72 @@ describe('useEventForm', () => {
             }),
             'user-1',
         );
+    });
+
+    // ── Conflict pre-flight (warn, never block) ──
+
+    it('warns about double-booked attendees and cancels when asked', async () => {
+        mockFindEventConflicts.mockResolvedValueOnce({
+            data: [
+                {
+                    attendeeName: 'Siti Rahman',
+                    eventTitle: 'AMK Roadshow',
+                    eventDate: 'Wed 15 Jul',
+                    timeRange: '2:00 PM – 4:00 PM',
+                },
+            ],
+            error: null,
+        });
+        const alertSpy = jest.spyOn(Alert, 'alert').mockImplementation((_t: string, _m?: string, buttons?: any[]) => {
+            const cancel = buttons?.find((b: any) => b.text === 'Cancel');
+            cancel?.onPress?.();
+        });
+
+        const { result } = renderHook(() => useEventForm());
+        act(() => {
+            result.current.setTitle('New Meeting');
+            result.current.attendeePicker.toggleAttendee({
+                id: 'user-9',
+                full_name: 'Siti Rahman',
+                role: 'agent',
+                avatar_url: null,
+            } as any);
+        });
+
+        await act(async () => {
+            await result.current.handleSubmit();
+        });
+
+        expect(alertSpy).toHaveBeenCalledWith(
+            'Schedule conflict',
+            expect.stringContaining('Siti Rahman'),
+            expect.any(Array),
+        );
+        expect(mockCreateEvent).not.toHaveBeenCalled();
+        expect(result.current.submitting).toBe(false);
+        alertSpy.mockRestore();
+    });
+
+    it('proceeds past conflicts on Create anyway and fails open on checker errors', async () => {
+        mockFindEventConflicts.mockRejectedValueOnce(new Error('boom'));
+        mockCreateEvent.mockResolvedValue({ data: { id: 'evt-new' }, error: null });
+
+        const { result } = renderHook(() => useEventForm());
+        act(() => {
+            result.current.setTitle('New Meeting');
+            result.current.attendeePicker.toggleAttendee({
+                id: 'user-9',
+                full_name: 'Siti Rahman',
+                role: 'agent',
+                avatar_url: null,
+            } as any);
+        });
+
+        await act(async () => {
+            await result.current.handleSubmit();
+        });
+
+        // Broken conflict check must never stop scheduling
+        expect(mockCreateEvent).toHaveBeenCalled();
     });
 });

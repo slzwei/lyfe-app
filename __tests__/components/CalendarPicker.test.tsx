@@ -47,6 +47,7 @@ const mockColors = {
     textPrimary: '#000',
     textSecondary: '#666',
     textTertiary: '#999',
+    textInverse: '#FBF7EE',
     accent: '#FF7600',
     inputBackground: '#F5F5F5',
     inputBorder: '#DDD',
@@ -247,11 +248,11 @@ describe('CalendarPicker', () => {
             <CalendarPicker {...defaultRangeProps} startDate="2026-03-01" endDate="2026-03-01" onConfirm={onConfirm} />,
         );
 
-        // Tap 20th first (becomes tentative start), then tap 5th
-        // 5th < 20th so the component resets start to 5th (tapCount stays at 1)
+        // Tap 20th as start, then March 25th as end.
+        // (March 2026 starts on a Sunday, so the grid's leading cells are
+        // Feb 23–28 — getAllByText('25')[0] is FEBRUARY 25; [1] is March.)
         fireEvent.press(getAllByText('20')[0]);
-        // Tap 25th as end date
-        fireEvent.press(getAllByText('25')[0]);
+        fireEvent.press(getAllByText('25')[1]);
 
         fireEvent.press(getByText('Done'));
 
@@ -260,8 +261,10 @@ describe('CalendarPicker', () => {
         });
 
         // Regardless of tap order, result must be (start <= end)
+        expect(onConfirm).toHaveBeenCalledTimes(1);
         const [start, end]: [string, string] = onConfirm.mock.calls[0];
         expect(start <= end).toBe(true);
+        expect(onConfirm).toHaveBeenCalledWith('2026-03-20', '2026-03-25');
     });
 
     // ── Grid completeness ─────────────────────────────────────────────────────
@@ -412,5 +415,107 @@ describe('CalendarPicker', () => {
         rerender(<CalendarPicker {...defaultSingleProps} visible={true} />);
 
         expect(getByText('Select Date')).toBeTruthy();
+    });
+
+    // ── Cancellable range editing (backdrop = discard, Done = commit) ─────────
+
+    it('backdrop tap discards range edits instead of committing them', () => {
+        jest.useFakeTimers();
+        const onConfirm = jest.fn();
+        const onClose = jest.fn();
+
+        const { getAllByText, UNSAFE_getAllByType } = render(
+            <CalendarPicker
+                {...defaultRangeProps}
+                startDate="2026-03-01"
+                endDate="2026-03-04"
+                onConfirm={onConfirm}
+                onClose={onClose}
+            />,
+        );
+
+        // One stray tap starts a new range…
+        fireEvent.press(getAllByText('5')[0]);
+        // …but tapping the backdrop cancels the edit entirely
+        fireEvent.press(UNSAFE_getAllByType(TouchableOpacity)[IDX_BACKDROP]);
+
+        act(() => {
+            jest.runAllTimers();
+        });
+
+        expect(onConfirm).not.toHaveBeenCalled();
+        expect(onClose).toHaveBeenCalledTimes(1);
+    });
+
+    it('Done mid-selection (no end date yet) closes without committing', () => {
+        jest.useFakeTimers();
+        const onConfirm = jest.fn();
+        const onClose = jest.fn();
+
+        const { getAllByText, getByText } = render(
+            <CalendarPicker
+                {...defaultRangeProps}
+                startDate="2026-03-01"
+                endDate="2026-03-04"
+                onConfirm={onConfirm}
+                onClose={onClose}
+            />,
+        );
+
+        fireEvent.press(getAllByText('5')[0]);
+        fireEvent.press(getByText('Done'));
+
+        act(() => {
+            jest.runAllTimers();
+        });
+
+        expect(onConfirm).not.toHaveBeenCalled();
+        expect(onClose).toHaveBeenCalledTimes(1);
+    });
+
+    it('a tap earlier than the start restarts the range and keeps waiting for an end', () => {
+        jest.useFakeTimers();
+        const onConfirm = jest.fn();
+
+        const { getAllByText, getByText } = render(
+            <CalendarPicker {...defaultRangeProps} startDate="2026-03-01" endDate="2026-03-01" onConfirm={onConfirm} />,
+        );
+
+        fireEvent.press(getAllByText('20')[0]);
+        // Earlier tap → restart at the 5th, still waiting for the end date
+        fireEvent.press(getAllByText('5')[0]);
+        expect(getByText('Now tap the end date')).toBeTruthy();
+
+        fireEvent.press(getAllByText('12')[0]);
+        fireEvent.press(getByText('Done'));
+
+        act(() => {
+            jest.runAllTimers();
+        });
+
+        expect(onConfirm).toHaveBeenCalledWith('2026-03-05', '2026-03-12');
+    });
+
+    // ── minDate guard ─────────────────────────────────────────────────────────
+
+    it('ignores taps on days before minDate in single mode', () => {
+        const onSelect = jest.fn();
+
+        const { getAllByText } = render(
+            <CalendarPicker
+                {...defaultSingleProps}
+                selectedDate="2026-03-10"
+                onSelect={onSelect}
+                minDate="2026-03-10"
+            />,
+        );
+
+        // The 5th is before minDate — tap must be a no-op
+        fireEvent.press(getAllByText('5')[0]);
+        expect(onSelect).not.toHaveBeenCalled();
+
+        // The 15th is allowed
+        fireEvent.press(getAllByText('15')[0]);
+        expect(onSelect).toHaveBeenCalledWith('2026-03-15');
     });
 });

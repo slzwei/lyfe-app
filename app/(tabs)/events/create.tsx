@@ -9,8 +9,9 @@ import { TropicFonts } from '@/constants/roadshow/typography';
 import { ERROR_BG, ERROR_TEXT } from '@/constants/ui';
 import { useTheme } from '@/contexts/ThemeContext';
 import { useEventForm } from '@/hooks/useEventForm';
+import { useRequireRole } from '@/hooks/useRequireRole';
 import { useSubmitGuard } from '@/hooks/useSubmitGuard';
-import { dateDiffDays, formatDateLabel, isValidDate } from '@/lib/dateTime';
+import { dateDiffDays, formatDateLabel, isValidDate, todayLocalStr } from '@/lib/dateTime';
 import { Ionicons } from '@expo/vector-icons';
 import React, { useCallback, useState } from 'react';
 import { ActivityIndicator, Pressable, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
@@ -20,6 +21,10 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 export default function CreateEventScreen() {
     const { colors, resolved } = useTheme();
     const stage = getRoadshowColors(resolved);
+    // The "+ New" button is role-gated in the UI, but the route is
+    // deep-linkable — guard it like the leads/candidates layouts do
+    // (TRACKER #36, route-guard half).
+    const authorized = useRequireRole('admin', 'director', 'manager', 'pa', 'ro');
     const { isSubmitting: isGuardSubmitting, guard } = useSubmitGuard();
     const form = useEventForm();
     const [showMapPicker, setShowMapPicker] = useState(false);
@@ -192,6 +197,8 @@ export default function CreateEventScreen() {
             </TouchableOpacity>
         </View>
     );
+
+    if (!authorized) return null;
 
     if (loadingEvent) {
         return (
@@ -581,6 +588,7 @@ export default function CreateEventScreen() {
                 onClose={() => setShowDatePicker(null)}
                 colors={colors}
                 title="Event Date"
+                minDate={isEditing ? undefined : todayLocalStr()}
             />
             <CalendarPicker
                 mode="range"
@@ -597,6 +605,7 @@ export default function CreateEventScreen() {
                 onClose={() => setShowDatePicker(null)}
                 colors={colors}
                 title="Date Range"
+                minDate={isEditing ? undefined : todayLocalStr()}
             />
 
             <AttendeePickerModal

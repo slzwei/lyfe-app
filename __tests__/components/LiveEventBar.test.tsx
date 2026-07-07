@@ -1,14 +1,15 @@
 import React from 'react';
+import { StyleSheet } from 'react-native';
 import { render, fireEvent, waitFor, act } from '@testing-library/react-native';
 import LiveEventBar from '@/components/LiveEventBar';
-import { fetchEvents } from '@/lib/events';
+import { fetchTodayEvents } from '@/lib/events';
 import { useAuth } from '@/contexts/AuthContext';
 import { useTheme } from '@/contexts/ThemeContext';
 import { useTypedRouter } from '@/hooks/useTypedRouter';
 import type { AgencyEvent } from '@/types/event';
 
 jest.mock('@/lib/events', () => ({
-    fetchEvents: jest.fn(),
+    fetchTodayEvents: jest.fn(),
 }));
 
 jest.mock('@/contexts/AuthContext', () => ({
@@ -41,6 +42,7 @@ const COLORS = {
     textTertiary: '#999999',
     accent: '#007AFF',
     borderLight: '#E5E5E5',
+    statusLive: '#7A8C6B',
 };
 
 const mockPush = jest.fn();
@@ -77,29 +79,40 @@ beforeEach(() => {
     (useAuth as jest.Mock).mockReturnValue({ user: { id: 'user-1', role: 'agent' } });
     (useTheme as jest.Mock).mockReturnValue({ colors: COLORS });
     (useTypedRouter as jest.Mock).mockReturnValue({ push: mockPush, replace: jest.fn(), back: jest.fn() });
-    (fetchEvents as jest.Mock).mockResolvedValue({ data: [], error: null });
+    (fetchTodayEvents as jest.Mock).mockResolvedValue({ data: [], error: null });
 });
 
 describe('LiveEventBar', () => {
     it('renders nothing when no live events', async () => {
-        (fetchEvents as jest.Mock).mockResolvedValue({ data: [], error: null });
+        (fetchTodayEvents as jest.Mock).mockResolvedValue({ data: [], error: null });
         const { queryByText } = render(<LiveEventBar />);
-        await waitFor(() => expect(fetchEvents).toHaveBeenCalled());
+        await waitFor(() => expect(fetchTodayEvents).toHaveBeenCalled());
         expect(queryByText('LIVE')).toBeNull();
     });
 
     it('renders live event when one is happening now', async () => {
         const liveEvent = makeLiveEvent();
-        (fetchEvents as jest.Mock).mockResolvedValue({ data: [liveEvent], error: null });
+        (fetchTodayEvents as jest.Mock).mockResolvedValue({ data: [liveEvent], error: null });
 
         const { getByText } = render(<LiveEventBar />);
         await waitFor(() => expect(getByText('Live Roadshow')).toBeTruthy());
         expect(getByText('LIVE')).toBeTruthy();
     });
 
+    it('tints the LIVE chip from the theme (no hardcoded green)', async () => {
+        const liveEvent = makeLiveEvent();
+        (fetchTodayEvents as jest.Mock).mockResolvedValue({ data: [liveEvent], error: null });
+
+        const { getByTestId, getByText } = render(<LiveEventBar />);
+        await waitFor(() => expect(getByText('LIVE')).toBeTruthy());
+
+        const chipStyle = StyleSheet.flatten(getByTestId('live-event-bar-chip').props.style);
+        expect(chipStyle.backgroundColor).toBe(COLORS.statusLive + '18');
+    });
+
     it('shows location in meta text', async () => {
         const liveEvent = makeLiveEvent({ location: 'Hillion Mall' });
-        (fetchEvents as jest.Mock).mockResolvedValue({ data: [liveEvent], error: null });
+        (fetchTodayEvents as jest.Mock).mockResolvedValue({ data: [liveEvent], error: null });
 
         const { getByText } = render(<LiveEventBar />);
         await waitFor(() => expect(getByText(/Hillion Mall/)).toBeTruthy());
@@ -113,25 +126,25 @@ describe('LiveEventBar', () => {
             start_time: '09:00',
             end_time: '17:00',
         });
-        (fetchEvents as jest.Mock).mockResolvedValue({ data: [futureEvent], error: null });
+        (fetchTodayEvents as jest.Mock).mockResolvedValue({ data: [futureEvent], error: null });
 
         const { queryByText } = render(<LiveEventBar />);
-        await waitFor(() => expect(fetchEvents).toHaveBeenCalled());
+        await waitFor(() => expect(fetchTodayEvents).toHaveBeenCalled());
         expect(queryByText('Future Event')).toBeNull();
     });
 
     it('does not show events with null end_time', async () => {
         const noEndEvent = makeLiveEvent({ id: 'evt-noend', title: 'No End', end_time: null });
-        (fetchEvents as jest.Mock).mockResolvedValue({ data: [noEndEvent], error: null });
+        (fetchTodayEvents as jest.Mock).mockResolvedValue({ data: [noEndEvent], error: null });
 
         const { queryByText } = render(<LiveEventBar />);
-        await waitFor(() => expect(fetchEvents).toHaveBeenCalled());
+        await waitFor(() => expect(fetchTodayEvents).toHaveBeenCalled());
         expect(queryByText('No End')).toBeNull();
     });
 
     it('dismisses all live events on X tap', async () => {
         const liveEvent = makeLiveEvent();
-        (fetchEvents as jest.Mock).mockResolvedValue({ data: [liveEvent], error: null });
+        (fetchTodayEvents as jest.Mock).mockResolvedValue({ data: [liveEvent], error: null });
 
         const { getByText, getByLabelText, queryByText } = render(<LiveEventBar />);
         await waitFor(() => expect(getByText('Live Roadshow')).toBeTruthy());
@@ -142,7 +155,7 @@ describe('LiveEventBar', () => {
 
     it('navigates to event detail on tap (agent)', async () => {
         const liveEvent = makeLiveEvent({ id: 'evt-42' });
-        (fetchEvents as jest.Mock).mockResolvedValue({ data: [liveEvent], error: null });
+        (fetchTodayEvents as jest.Mock).mockResolvedValue({ data: [liveEvent], error: null });
 
         const { getByLabelText } = render(<LiveEventBar />);
         await waitFor(() => expect(getByLabelText(/Live Roadshow/)).toBeTruthy());
@@ -164,7 +177,7 @@ describe('LiveEventBar', () => {
     it('navigates to PA event route for PA role', async () => {
         (useAuth as jest.Mock).mockReturnValue({ user: { id: 'user-1', role: 'pa' } });
         const liveEvent = makeLiveEvent({ id: 'evt-42' });
-        (fetchEvents as jest.Mock).mockResolvedValue({ data: [liveEvent], error: null });
+        (fetchTodayEvents as jest.Mock).mockResolvedValue({ data: [liveEvent], error: null });
 
         const { getByLabelText } = render(<LiveEventBar />);
         await waitFor(() => expect(getByLabelText(/Live Roadshow/)).toBeTruthy());
@@ -176,10 +189,10 @@ describe('LiveEventBar', () => {
     it('hides on events tab (animated off-screen, pointer events disabled)', async () => {
         mockUsePathname.mockReturnValue('/events');
         const liveEvent = makeLiveEvent();
-        (fetchEvents as jest.Mock).mockResolvedValue({ data: [liveEvent], error: null });
+        (fetchTodayEvents as jest.Mock).mockResolvedValue({ data: [liveEvent], error: null });
 
         const { getByTestId } = render(<LiveEventBar />);
-        await waitFor(() => expect(fetchEvents).toHaveBeenCalled());
+        await waitFor(() => expect(fetchTodayEvents).toHaveBeenCalled());
         // Bar stays mounted for exit animation but is non-interactive
         expect(getByTestId('live-event-bar').props.pointerEvents).toBe('none');
     });
@@ -187,7 +200,7 @@ describe('LiveEventBar', () => {
     it('renders dot indicators for multiple live events', async () => {
         const event1 = makeLiveEvent({ id: 'evt-1', title: 'Event 1' });
         const event2 = makeLiveEvent({ id: 'evt-2', title: 'Event 2' });
-        (fetchEvents as jest.Mock).mockResolvedValue({ data: [event1, event2], error: null });
+        (fetchTodayEvents as jest.Mock).mockResolvedValue({ data: [event1, event2], error: null });
 
         const { getByText, queryByText } = render(<LiveEventBar />);
         // Cross-fade shows one event at a time, starting with the first
@@ -199,7 +212,7 @@ describe('LiveEventBar', () => {
         jest.useFakeTimers();
         const event1 = makeLiveEvent({ id: 'evt-1', title: 'Event 1' });
         const event2 = makeLiveEvent({ id: 'evt-2', title: 'Event 2' });
-        (fetchEvents as jest.Mock).mockResolvedValue({ data: [event1, event2], error: null });
+        (fetchTodayEvents as jest.Mock).mockResolvedValue({ data: [event1, event2], error: null });
 
         const { getByText, queryByText } = render(<LiveEventBar />);
 
@@ -221,7 +234,7 @@ describe('LiveEventBar', () => {
 
     it('dismiss state resets on remount (app restart)', async () => {
         const liveEvent = makeLiveEvent();
-        (fetchEvents as jest.Mock).mockResolvedValue({ data: [liveEvent], error: null });
+        (fetchTodayEvents as jest.Mock).mockResolvedValue({ data: [liveEvent], error: null });
 
         const { getByText, getByLabelText, queryByText, unmount } = render(<LiveEventBar />);
         await waitFor(() => expect(getByText('Live Roadshow')).toBeTruthy());

@@ -88,7 +88,9 @@ export function dateRange(start: string, end: string): string[] {
     const cur = new Date(start + 'T00:00:00');
     const last = new Date(end + 'T00:00:00');
     while (cur <= last) {
-        dates.push(cur.toISOString().split('T')[0]);
+        // toDateStr (local), never toISOString (UTC): east-of-UTC timezones
+        // would shift every date -1 day (roadshows landed a day early).
+        dates.push(toDateStr(cur));
         cur.setDate(cur.getDate() + 1);
     }
     return dates;
@@ -135,6 +137,22 @@ export function getRoadshowStatus(
 export function isEventLive(eventDate: string, startTime: string | null, endTime: string | null, now?: Date): boolean {
     if (!startTime || !endTime) return false;
     return getRoadshowStatus(eventDate, startTime, endTime, now) === 'live';
+}
+
+/**
+ * Half-open [start, end) overlap check on HH:MM(:SS) time strings.
+ * A null end is treated as a 1-hour block (events without end times).
+ */
+export function timeRangesOverlap(aStart: string, aEnd: string | null, bStart: string, bEnd: string | null): boolean {
+    const mins = (t: string) => {
+        const [h, m] = t.split(':').map(Number);
+        return h * 60 + m;
+    };
+    const aS = mins(aStart);
+    const aE = aEnd ? mins(aEnd) : aS + 60;
+    const bS = mins(bStart);
+    const bE = bEnd ? mins(bEnd) : bS + 60;
+    return aS < bE && bS < aE;
 }
 
 /** Format ISO timestamp as relative time (e.g. "now", "5m ago", "2h ago", "3d ago") */

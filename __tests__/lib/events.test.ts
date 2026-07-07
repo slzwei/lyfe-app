@@ -6,6 +6,9 @@ import {
     fetchEvents,
     fetchAllEvents,
     fetchUpcomingEvents,
+    fetchTodayEvents,
+    fetchTeamEvents,
+    findEventConflicts,
     fetchEventById,
     createEvent,
     fetchAllUsers,
@@ -67,10 +70,7 @@ beforeEach(() => {
 // ── fetchEvents ──
 
 describe('fetchEvents', () => {
-    it('returns empty array when no event IDs found', async () => {
-        const attendeeChain = mockSupa.__getChain('event_attendees');
-        mockResolve(attendeeChain, { data: [], error: null });
-
+    it('returns empty array when the user has no events', async () => {
         const eventsChain = mockSupa.__getChain('events');
         mockResolve(eventsChain, { data: [], error: null });
 
@@ -79,13 +79,79 @@ describe('fetchEvents', () => {
         expect(result.error).toBeNull();
     });
 
-    it('returns error when attendee query fails', async () => {
-        const attendeeChain = mockSupa.__getChain('event_attendees');
-        mockResolve(attendeeChain, { data: null, error: { message: 'Network error' } });
+    it('merges created + attending branches and dedups by id', async () => {
+        // Both parallel branches share the per-table mock chain, so each
+        // resolves with the same row — dedup must collapse them to one.
+        const eventsChain = mockSupa.__getChain('events');
+        mockResolve(eventsChain, { data: [EVENT_ROW], error: null });
+
+        const result = await fetchEvents('user-1');
+        expect(result.error).toBeNull();
+        expect(result.data).toHaveLength(1);
+        expect(result.data[0].id).toBe('evt-1');
+        expect(result.data[0].creator_name).toBe('Alice Tan');
+    });
+
+    it('scopes both branches: created_by, attendee join filter, and history window', async () => {
+        const eventsChain = mockSupa.__getChain('events');
+        mockResolve(eventsChain, { data: [], error: null });
+
+        await fetchEvents('user-1', '2026-01-08');
+
+        expect(eventsChain.__calls).toContainEqual({ method: 'eq', args: ['created_by', 'user-1'] });
+        expect(eventsChain.__calls).toContainEqual({ method: 'eq', args: ['attendee_filter.user_id', 'user-1'] });
+        const gteCalls = eventsChain.__calls.filter((c: { method: string }) => c.method === 'gte');
+        expect(gteCalls).toEqual([
+            { method: 'gte', args: ['event_date', '2026-01-08'] },
+            { method: 'gte', args: ['event_date', '2026-01-08'] },
+        ]);
+        // No unbounded .in(ids) queries anymore
+        expect(eventsChain.__calls.some((c: { method: string }) => c.method === 'in')).toBe(false);
+    });
+
+    it('returns error when the query fails', async () => {
+        const eventsChain = mockSupa.__getChain('events');
+        mockResolve(eventsChain, { data: null, error: { message: 'Network error' } });
 
         const result = await fetchEvents('user-1');
         expect(result.error).toBe('Network error');
         expect(result.data).toEqual([]);
+    });
+});
+
+// ── fetchUpcomingEvents / fetchTodayEvents ──
+
+describe('fetchUpcomingEvents', () => {
+    it('bounds to local today, caps per branch, and slices the merge to limit', async () => {
+        const eventsChain = mockSupa.__getChain('events');
+        mockResolve(eventsChain, { data: [EVENT_ROW], error: null });
+
+        const result = await fetchUpcomingEvents('user-1', 3);
+
+        expect(result.error).toBeNull();
+        expect(result.data.length).toBeLessThanOrEqual(3);
+        // Local-time cutoff (the old toISOString version used UTC "today")
+        const gte = eventsChain.__calls.find((c: { method: string }) => c.method === 'gte');
+        expect(gte.args[0]).toBe('event_date');
+        expect(gte.args[1]).toBe(new Date().toLocaleDateString('en-CA'));
+        expect(eventsChain.__calls).toContainEqual({ method: 'limit', args: [3] });
+    });
+});
+
+describe('fetchTodayEvents', () => {
+    it("filters both branches to local today's date", async () => {
+        const eventsChain = mockSupa.__getChain('events');
+        mockResolve(eventsChain, { data: [], error: null });
+
+        await fetchTodayEvents('user-1');
+
+        const today = new Date().toLocaleDateString('en-CA');
+        const dateEqCalls = eventsChain.__calls.filter(
+            (c: { method: string; args: unknown[] }) => c.method === 'eq' && c.args[0] === 'event_date',
+        );
+        expect(dateEqCalls).toHaveLength(2);
+        expect(dateEqCalls[0].args[1]).toBe(today);
+        expect(dateEqCalls[1].args[1]).toBe(today);
     });
 });
 
@@ -129,6 +195,17 @@ describe('fetchAllEvents', () => {
         const result = await fetchAllEvents();
         expect(result.hasMore).toBe(false);
         expect(result.data).toHaveLength(1);
+    });
+
+    it('stays unbounded by default but applies windowStart when given', async () => {
+        const chain = mockSupa.__getChain('events');
+        mockResolve(chain, { data: [], error: null });
+
+        await fetchAllEvents();
+        expect(chain.__calls.some((c: { method: string }) => c.method === 'gte')).toBe(false);
+
+        await fetchAllEvents(undefined, 50, '2026-01-08');
+        expect(chain.__calls).toContainEqual({ method: 'gte', args: ['event_date', '2026-01-08'] });
     });
 
     it('returns hasMore=true when more data exists with pagination', async () => {
@@ -839,5 +916,108 @@ describe('updateEvent', () => {
         });
 
         expect(result.error).toBe('Upsert failed');
+    });
+});
+
+// ── fetchTeamEvents ──
+
+describe('fetchTeamEvents', () => {
+    it('returns empty without querying events when the team is empty', async () => {
+        const usersChain = mockSupa.__getChain('users');
+        mockResolve(usersChain, { data: [], error: null });
+
+        const result = await fetchTeamEvents('mgr-1', 'manager');
+
+        expect(result).toEqual({ data: [], error: null });
+        expect(usersChain.__calls).toContainEqual({ method: 'eq', args: ['reports_to', 'mgr-1'] });
+    });
+
+    it('scopes event branches to team member ids (created OR attending)', async () => {
+        const usersChain = mockSupa.__getChain('users');
+        mockResolve(usersChain, { data: [{ id: 'agent-1' }, { id: 'agent-2' }], error: null });
+        const eventsChain = mockSupa.__getChain('events');
+        mockResolve(eventsChain, { data: [EVENT_ROW], error: null });
+
+        const result = await fetchTeamEvents('mgr-1', 'manager', '2026-01-08');
+
+        expect(result.error).toBeNull();
+        expect(result.data).toHaveLength(1);
+        expect(eventsChain.__calls).toContainEqual({ method: 'in', args: ['created_by', ['agent-1', 'agent-2']] });
+        expect(eventsChain.__calls).toContainEqual({
+            method: 'in',
+            args: ['attendee_filter.user_id', ['agent-1', 'agent-2']],
+        });
+        expect(eventsChain.__calls).toContainEqual({ method: 'gte', args: ['event_date', '2026-01-08'] });
+    });
+});
+
+// ── findEventConflicts ──
+
+describe('findEventConflicts', () => {
+    const CONFLICT_ROW = {
+        ...EVENT_ROW,
+        start_time: '09:00',
+        end_time: '11:00',
+    };
+
+    it('short-circuits without a query when dates or attendees are empty', async () => {
+        const eventsChain = mockSupa.__getChain('events');
+
+        const a = await findEventConflicts({
+            dates: [],
+            startTime: '09:00',
+            endTime: '10:00',
+            attendeeIds: ['user-2'],
+        });
+        const b = await findEventConflicts({
+            dates: ['2026-03-15'],
+            startTime: '09:00',
+            endTime: '10:00',
+            attendeeIds: [],
+        });
+
+        expect(a).toEqual({ data: [], error: null });
+        expect(b).toEqual({ data: [], error: null });
+        expect(eventsChain.__calls).toHaveLength(0);
+    });
+
+    it('reports overlapping attendees with title, date and time range', async () => {
+        const eventsChain = mockSupa.__getChain('events');
+        mockResolve(eventsChain, { data: [CONFLICT_ROW], error: null });
+
+        const { data, error } = await findEventConflicts({
+            dates: ['2026-03-15'],
+            startTime: '10:00',
+            endTime: '12:00',
+            attendeeIds: ['user-2'],
+        });
+
+        expect(error).toBeNull();
+        expect(data).toHaveLength(1);
+        expect(data[0].attendeeName).toBe('Bob Lim');
+        expect(data[0].eventTitle).toBe('Team Standup');
+        expect(data[0].timeRange).toBe('9:00 AM – 11:00 AM');
+    });
+
+    it('ignores non-overlapping times and excluded events', async () => {
+        const eventsChain = mockSupa.__getChain('events');
+        mockResolve(eventsChain, { data: [CONFLICT_ROW], error: null });
+
+        const noOverlap = await findEventConflicts({
+            dates: ['2026-03-15'],
+            startTime: '14:00',
+            endTime: '15:00',
+            attendeeIds: ['user-2'],
+        });
+        expect(noOverlap.data).toEqual([]);
+
+        await findEventConflicts({
+            dates: ['2026-03-15'],
+            startTime: '10:00',
+            endTime: '12:00',
+            attendeeIds: ['user-2'],
+            excludeEventId: 'evt-1',
+        });
+        expect(eventsChain.__calls).toContainEqual({ method: 'neq', args: ['id', 'evt-1'] });
     });
 });
