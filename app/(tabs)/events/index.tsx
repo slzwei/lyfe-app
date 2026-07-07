@@ -9,7 +9,7 @@ import { RoadshowType, TropicFonts } from '@/constants/roadshow/typography';
 import { useAuth } from '@/contexts/AuthContext';
 import { useTheme } from '@/contexts/ThemeContext';
 import { fetchAllEvents, fetchEvents } from '@/lib/events';
-import { toDateStr, isEventLive } from '@/lib/dateTime';
+import { formatTime, toDateStr, isEventLive } from '@/lib/dateTime';
 import type { AgencyEvent } from '@/types/event';
 import { useFocusEffect, useNavigation, useRouter } from 'expo-router';
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
@@ -84,19 +84,21 @@ export default function EventsScreen() {
 
     const scrollToTodayRef = useRef<(() => void) | null>(null);
 
-    // Scroll to today when switching to Events tab
-    useFocusEffect(
-        useCallback(() => {
-            scrollToTodayRef.current?.();
-        }, []),
-    );
-
-    // Scroll to today when re-tapping the already-active Events tab
+    // Jump to today ONLY when the user re-taps the Events tab while already
+    // on it (the iOS-native pattern). tabPress fires before navigation, from
+    // a navigator-level listener, for EVERY tab's button — including when
+    // switching into or away from Events — so both checks below matter.
+    // Back-nav from event detail and tab switches preserve browsing position.
     useEffect(() => {
         const parent = navigation.getParent();
         if (!parent) return;
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        const unsubscribe = (parent as any).addListener('tabPress', () => {
+        const unsubscribe = (parent as any).addListener('tabPress', (e: { target?: string }) => {
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
+            const state = (parent as any).getState?.();
+            const focused = state?.routes?.[state.index];
+            if (focused?.name !== 'events') return; // not on Events → switching in, keep position
+            if (e?.target !== focused.key) return; // on Events but pressed another tab
             scrollToTodayRef.current?.();
         });
         return unsubscribe;
@@ -108,7 +110,7 @@ export default function EventsScreen() {
     const [refreshing, setRefreshing] = useState(false);
     const [isLoading, setIsLoading] = useState(true);
 
-    const isPA = user?.role === 'pa' || user?.role === 'ro' || user?.role === 'admin';
+    const canSeeAllEvents = user?.role === 'pa' || user?.role === 'ro' || user?.role === 'admin';
     const canCreateEvents = user?.role && ['admin', 'director', 'manager', 'pa', 'ro'].includes(user.role);
 
     const [eventError, setEventError] = useState<string | null>(null);
@@ -117,7 +119,7 @@ export default function EventsScreen() {
         if (!user?.id) return;
         setEventError(null);
         try {
-            const { data, error } = isPA ? await fetchAllEvents() : await fetchEvents(user.id);
+            const { data, error } = canSeeAllEvents ? await fetchAllEvents() : await fetchEvents(user.id);
             if (error) {
                 setEventError(error);
             } else {
@@ -128,7 +130,7 @@ export default function EventsScreen() {
         } finally {
             setIsLoading(false);
         }
-    }, [user?.id, isPA]);
+    }, [user?.id, canSeeAllEvents]);
 
     useFocusEffect(
         useCallback(() => {
@@ -320,8 +322,8 @@ export default function EventsScreen() {
                         ) : null}
                     </Text>
                     <Text style={[styles.liveMeta, { color: 'rgba(244,238,225,0.6)' }]}>
-                        {liveRoadshow.start_time}
-                        {liveRoadshow.end_time ? ` – ${liveRoadshow.end_time}` : ''} · tap to open
+                        {formatTime(liveRoadshow.start_time)}
+                        {liveRoadshow.end_time ? ` – ${formatTime(liveRoadshow.end_time)}` : ''} · tap to open
                     </Text>
                 </DarkHeroCard>
             </Pressable>

@@ -264,8 +264,10 @@ export default memo(function LiveEventBar() {
                         accessibilityRole="button"
                         accessibilityLabel={`${currentEvent.title}, live now at ${currentEvent.location || 'unknown location'}`}
                     >
-                        <View style={styles.liveChip}>
-                            {/* Live pulse dot in theme success (sage, was generic tailwind green #22C55E) */}
+                        <View
+                            testID="live-event-bar-chip"
+                            style={[styles.liveChip, { backgroundColor: colors.statusLive + '18' }]}
+                        >
                             <Animated.View
                                 style={[styles.liveDot, { backgroundColor: colors.statusLive, opacity: pulseAnim }]}
                             />
@@ -348,13 +350,11 @@ const styles = StyleSheet.create({
     liveChip: {
         flexDirection: 'row',
         alignItems: 'center',
-        backgroundColor: 'rgba(34, 197, 94, 0.12)',
         borderRadius: 6,
         paddingHorizontal: 6,
         paddingVertical: 3,
         gap: 4,
     },
-    // backgroundColor + color applied inline from theme (colors.statusLive — sage)
     liveDot: {
         width: 6,
         height: 6,

@@ -11,15 +11,22 @@ jest.mock('@/components/events/InlineCalendar', () => {
     const { View, Text, TouchableOpacity } = require('react-native');
     return {
         __esModule: true,
-        default: ({ selectedDate, onSelectDate }: any) => (
-            <View testID="inline-calendar">
-                <Text testID="selected-date">{selectedDate}</Text>
-                <TouchableOpacity testID="select-apr9" onPress={() => onSelectDate('2026-04-09')} />
-                <TouchableOpacity testID="select-apr17" onPress={() => onSelectDate('2026-04-17')} />
-                <TouchableOpacity testID="select-apr23" onPress={() => onSelectDate('2026-04-23')} />
-                <TouchableOpacity testID="select-may27" onPress={() => onSelectDate('2026-05-27')} />
-            </View>
-        ),
+        default: ({ selectedDate, onSelectDate, scrollToTodayRef }: any) => {
+            // Mirror the real component's contract: expose a jump-to-today
+            // callback through the ref so tab re-press behavior is testable.
+            if (scrollToTodayRef) {
+                scrollToTodayRef.current = () => onSelectDate(new Date().toLocaleDateString('en-CA'));
+            }
+            return (
+                <View testID="inline-calendar">
+                    <Text testID="selected-date">{selectedDate}</Text>
+                    <TouchableOpacity testID="select-apr9" onPress={() => onSelectDate('2026-04-09')} />
+                    <TouchableOpacity testID="select-apr17" onPress={() => onSelectDate('2026-04-17')} />
+                    <TouchableOpacity testID="select-apr23" onPress={() => onSelectDate('2026-04-23')} />
+                    <TouchableOpacity testID="select-may27" onPress={() => onSelectDate('2026-05-27')} />
+                </View>
+            );
+        },
     };
 });
 jest.mock('@/components/events/EventCard', () => {
@@ -62,9 +69,24 @@ jest.mock('@/contexts/ThemeContext', () => ({
         setMode: jest.fn(),
     }),
 }));
+// Tab navigator stub: captures tabPress handlers and serves a configurable
+// navigation state so the re-press-only jump-to-today logic is testable.
+const mockTabPressHandlers: ((e: { target?: string }) => void)[] = [];
+const EVENTS_ROUTE = { key: 'events-key-1', name: 'events' };
+const HOME_ROUTE = { key: 'home-key-1', name: 'home' };
+let mockParentState: { index: number; routes: { key: string; name: string }[] };
+
 jest.mock('expo-router', () => ({
     useRouter: () => ({ push: jest.fn() }),
-    useNavigation: () => ({ getParent: () => null }),
+    useNavigation: () => ({
+        getParent: () => ({
+            addListener: (type: string, cb: (e: { target?: string }) => void) => {
+                if (type === 'tabPress') mockTabPressHandlers.push(cb);
+                return () => {};
+            },
+            getState: () => mockParentState,
+        }),
+    }),
     useFocusEffect: (cb: () => void) => {
         const React = require('react');
         React.useEffect(() => {
@@ -110,6 +132,8 @@ const mockedFetchEvents = fetchEvents as jest.MockedFunction<typeof fetchEvents>
 
 beforeEach(() => {
     jest.clearAllMocks();
+    mockTabPressHandlers.length = 0;
+    mockParentState = { index: 0, routes: [EVENTS_ROUTE] };
     mockedFetchEvents.mockResolvedValue({ data: mockEvents as any, error: null });
 });
 
@@ -196,5 +220,78 @@ describe('EventsScreen', () => {
         expect(getAllByText('9/4/26')).toHaveLength(1);
         // 23/4/26 should appear exactly once
         expect(getAllByText('23/4/26')).toHaveLength(1);
+    });
+});
+
+// ── Tab re-press → jump to today ───────────────────────────────
+describe('EventsScreen tab-press behavior', () => {
+    const todayStr = new Date().toLocaleDateString('en-CA');
+
+    async function renderBrowsedAwayFromToday() {
+        const utils = render(<EventsScreen />);
+        await waitFor(() => expect(utils.getByTestId('inline-calendar')).toBeTruthy());
+        fireEvent.press(utils.getByTestId('select-apr9'));
+        expect(utils.getByTestId('selected-date').props.children).toBe('2026-04-09');
+        return utils;
+    }
+
+    it('re-pressing the Events tab while focused jumps to today', async () => {
+        const utils = await renderBrowsedAwayFromToday();
+
+        act(() => {
+            mockTabPressHandlers.forEach((h) => h({ target: EVENTS_ROUTE.key }));
+        });
+
+        expect(utils.getByTestId('selected-date').props.children).toBe(todayStr);
+    });
+
+    it('pressing a different tab while on Events preserves the position', async () => {
+        const utils = await renderBrowsedAwayFromToday();
+
+        act(() => {
+            mockTabPressHandlers.forEach((h) => h({ target: HOME_ROUTE.key }));
+        });
+
+        expect(utils.getByTestId('selected-date').props.children).toBe('2026-04-09');
+    });
+
+    it('switching into Events from another tab preserves the position', async () => {
+        const utils = await renderBrowsedAwayFromToday();
+
+        // Home is focused at press time (tabPress fires before navigation)
+        mockParentState = { index: 0, routes: [HOME_ROUTE, EVENTS_ROUTE] };
+        act(() => {
+            mockTabPressHandlers.forEach((h) => h({ target: EVENTS_ROUTE.key }));
+        });
+
+        expect(utils.getByTestId('selected-date').props.children).toBe('2026-04-09');
+    });
+});
+
+// ── Live banner formatting ─────────────────────────────────────
+describe('EventsScreen live banner', () => {
+    it('formats DB times (HH:MM:SS) as 12-hour on the live banner', async () => {
+        const today = new Date().toLocaleDateString('en-CA');
+        mockedFetchEvents.mockResolvedValue({
+            data: [
+                {
+                    id: 'evt-live',
+                    title: 'AMK Hub, Atrium',
+                    event_date: today,
+                    start_time: '00:00:00',
+                    end_time: '23:59:00',
+                    event_type: 'roadshow',
+                    location: 'AMK Hub',
+                    created_by: 'user-1',
+                    attendees: [],
+                },
+            ] as any,
+            error: null,
+        });
+
+        const { getByText, queryByText } = render(<EventsScreen />);
+
+        await waitFor(() => expect(getByText(/12:00 AM – 11:59 PM · tap to open/)).toBeTruthy());
+        expect(queryByText(/00:00:00/)).toBeNull();
     });
 });

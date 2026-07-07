@@ -1,4 +1,5 @@
 import React from 'react';
+import { StyleSheet } from 'react-native';
 import { render, fireEvent, waitFor, act } from '@testing-library/react-native';
 import LiveEventBar from '@/components/LiveEventBar';
 import { fetchEvents } from '@/lib/events';
@@ -41,6 +42,7 @@ const COLORS = {
     textTertiary: '#999999',
     accent: '#007AFF',
     borderLight: '#E5E5E5',
+    statusLive: '#7A8C6B',
 };
 
 const mockPush = jest.fn();
@@ -95,6 +97,17 @@ describe('LiveEventBar', () => {
         const { getByText } = render(<LiveEventBar />);
         await waitFor(() => expect(getByText('Live Roadshow')).toBeTruthy());
         expect(getByText('LIVE')).toBeTruthy();
+    });
+
+    it('tints the LIVE chip from the theme (no hardcoded green)', async () => {
+        const liveEvent = makeLiveEvent();
+        (fetchEvents as jest.Mock).mockResolvedValue({ data: [liveEvent], error: null });
+
+        const { getByTestId, getByText } = render(<LiveEventBar />);
+        await waitFor(() => expect(getByText('LIVE')).toBeTruthy());
+
+        const chipStyle = StyleSheet.flatten(getByTestId('live-event-bar-chip').props.style);
+        expect(chipStyle.backgroundColor).toBe(COLORS.statusLive + '18');
     });
 
     it('shows location in meta text', async () => {
