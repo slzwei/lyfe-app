@@ -1,7 +1,7 @@
 import { TropicFonts } from '@/constants/roadshow/typography';
 import { useTheme } from '@/contexts/ThemeContext';
 import type { EventType } from '@/types/event';
-import { EVENT_TYPE_CONFIG } from '@/constants/displayConfigs';
+import { EVENT_TYPE_CONFIG, getEventTypeColor } from '@/constants/displayConfigs';
 import React from 'react';
 import { StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 
@@ -22,7 +22,7 @@ export default function EventTypeSelector({ eventType, onSelect, disabled }: Eve
             <View style={styles.typeRow}>
                 {EVENT_TYPES.map((t) => {
                     const isActive = eventType === t;
-                    const color = EVENT_TYPE_CONFIG[t].color;
+                    const color = getEventTypeColor(t, colors);
                     return (
                         <TouchableOpacity
                             key={t}

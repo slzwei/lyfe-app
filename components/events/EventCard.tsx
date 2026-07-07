@@ -4,7 +4,7 @@ import { letterSpacing } from '@/constants/platform';
 import { formatTime, getRoadshowStatus } from '@/lib/dateTime';
 import type { AgencyEvent } from '@/types/event';
 import { EVENT_TYPE_LABELS } from '@/types/event';
-import { EVENT_TYPE_CONFIG } from '@/constants/displayConfigs';
+import { EVENT_TYPE_CONFIG, getEventTypeColor } from '@/constants/displayConfigs';
 import type { ThemeColors } from '@/types/theme';
 import { Ionicons } from '@expo/vector-icons';
 import React, { useEffect, useRef } from 'react';
@@ -17,7 +17,7 @@ export interface EventCardProps {
 }
 
 export default function EventCard({ event, onPress, colors }: EventCardProps) {
-    const typeColor = EVENT_TYPE_CONFIG[event.event_type].color;
+    const typeColor = getEventTypeColor(event.event_type, colors);
     const isLiveRoadshow =
         event.event_type === 'roadshow' &&
         getRoadshowStatus(event.event_date, event.start_time, event.end_time) === 'live';

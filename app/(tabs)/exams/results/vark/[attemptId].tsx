@@ -3,6 +3,7 @@ import { fetchExamResult } from '@/lib/exams';
 import { getPreferenceLabel } from '@/lib/vark';
 import { displayWeight, letterSpacing } from '@/constants/platform';
 import type { VarkType, VarkResults, VarkPreference } from '@/constants/vark';
+import type { ThemeColors } from '@/types/theme';
 import { VARK_TYPE_INFO, VARK_CHART_COLORS, VARK_MIN_ANSWERED } from '@/constants/vark';
 import { Ionicons } from '@expo/vector-icons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
@@ -311,9 +312,10 @@ export default function VarkResultsScreen() {
 }
 
 /** Get bar color from theme, falling back to the static fallback */
-function getBarColor(type: VarkType, colors: Record<string, string>): string {
+function getBarColor(type: VarkType, colors: ThemeColors): string {
     const config = VARK_CHART_COLORS[type];
-    return (colors as Record<string, string>)[config.colorKey] || config.fallback;
+    const value = colors[config.colorKey as keyof ThemeColors];
+    return typeof value === 'string' ? value : config.fallback;
 }
 
 const styles = StyleSheet.create({

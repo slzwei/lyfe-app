@@ -15,7 +15,7 @@ import { formatCreatedAt, formatDateLong, formatTime, getRoadshowStatus } from '
 import type { AttendeeRole, EventAttendee } from '@/types/event';
 import { useViewMode } from '@/contexts/ViewModeContext';
 import { letterSpacing } from '@/constants/platform';
-import { EVENT_TYPE_CONFIG } from '@/constants/displayConfigs';
+import { EVENT_TYPE_CONFIG, getEventTypeColor } from '@/constants/displayConfigs';
 import { EVENT_TYPE_LABELS } from '@/types/event';
 import { Ionicons } from '@expo/vector-icons';
 import { useLocalSearchParams, useSegments } from 'expo-router';
@@ -328,7 +328,7 @@ export default function EventDetailScreen() {
         );
     }
 
-    const typeColor = EVENT_TYPE_CONFIG[event.event_type].color;
+    const typeColor = getEventTypeColor(event.event_type, colors);
     const canEdit =
         !!user &&
         (user.id === event.created_by ||
