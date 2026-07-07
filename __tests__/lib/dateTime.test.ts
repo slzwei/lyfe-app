@@ -17,6 +17,17 @@ import {
     isEventLive,
 } from '@/lib/dateTime';
 
+// ── CI timezone canary ──
+// The CI workflow pins TZ=Asia/Singapore (all users + dev machines run SGT).
+// If this fails on CI the pin was lost and UTC runners will silently mask
+// local-vs-UTC date bugs again (see dateRange, fixed 2026-07).
+describe('test environment', () => {
+    it('runs in SGT on CI', () => {
+        if (!process.env.CI) return;
+        expect(new Date().getTimezoneOffset()).toBe(-480);
+    });
+});
+
 // ── formatTime ──
 
 describe('formatTime', () => {
