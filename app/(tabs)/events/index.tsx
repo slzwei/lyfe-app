@@ -9,7 +9,7 @@ import { getRoadshowColors } from '@/constants/roadshow/tokens';
 import { RoadshowType, TropicFonts } from '@/constants/roadshow/typography';
 import { useAuth } from '@/contexts/AuthContext';
 import { useTheme } from '@/contexts/ThemeContext';
-import { fetchAllEvents, fetchEvents } from '@/lib/events';
+import { eventsWindowStart, fetchAllEvents, fetchEvents } from '@/lib/events';
 import { formatTime, toDateStr, isEventLive } from '@/lib/dateTime';
 import type { AgencyEvent } from '@/types/event';
 import { useFocusEffect, useNavigation, useRouter } from 'expo-router';
@@ -120,7 +120,9 @@ export default function EventsScreen() {
         if (!user?.id) return;
         setEventError(null);
         try {
-            const { data, error } = canSeeAllEvents ? await fetchAllEvents() : await fetchEvents(user.id);
+            const { data, error } = canSeeAllEvents
+                ? await fetchAllEvents(undefined, 50, eventsWindowStart())
+                : await fetchEvents(user.id);
             if (error) {
                 setEventError(error);
             } else {

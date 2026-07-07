@@ -3,7 +3,7 @@ import { useAuth } from '@/contexts/AuthContext';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useTheme } from '@/contexts/ThemeContext';
 import { formatTime, isEventLive } from '@/lib/dateTime';
-import { fetchEvents } from '@/lib/events';
+import { fetchTodayEvents } from '@/lib/events';
 import type { AgencyEvent } from '@/types/event';
 import { useTypedRouter } from '@/hooks/useTypedRouter';
 import { Ionicons } from '@expo/vector-icons';
@@ -61,10 +61,12 @@ export default memo(function LiveEventBar() {
         return () => sub.remove();
     }, []);
 
-    // Fetch events (separate from any screen-level data)
+    // Fetch today's events (separate from any screen-level data). The
+    // query recomputes "today" on every call, so the bar survives midnight
+    // and picks up events created after mount.
     const loadEvents = useCallback(async () => {
         if (!user?.id) return;
-        const result = await fetchEvents(user.id);
+        const result = await fetchTodayEvents(user.id);
         if (result?.data) setAllEvents(result.data);
     }, [user?.id]);
 
@@ -72,13 +74,14 @@ export default memo(function LiveEventBar() {
         loadEvents();
     }, [loadEvents]);
 
-    // Re-check live status every 60s
+    // Refetch every 60s — re-evaluates liveness AND catches new events
+    // (the old interval only re-mapped the stale first fetch).
     useEffect(() => {
         const interval = setInterval(() => {
-            setAllEvents((prev) => [...prev]);
+            loadEvents();
         }, RECHECK_INTERVAL);
         return () => clearInterval(interval);
-    }, []);
+    }, [loadEvents]);
 
     // Filter to currently live, non-dismissed events
     const liveEvents = useMemo(

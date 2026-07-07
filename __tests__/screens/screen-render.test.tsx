@@ -252,22 +252,24 @@ jest.mock('@/components/profile/PersonalityQuizzesCard', () => {
 });
 
 jest.mock('react-native-reanimated', () => {
-    const { View } = require('react-native');
+    const { View, Text } = require('react-native');
     return {
         __esModule: true,
-        default: { createAnimatedComponent: (c: any) => c },
+        // Default export doubles as the Animated namespace (Reanimated.View)
+        default: { createAnimatedComponent: (c: any) => c, View, Text },
         useReducedMotion: () => false,
         useAnimatedStyle: () => ({}),
         useSharedValue: (v: any) => ({ value: v }),
         withTiming: (v: any) => v,
         withSpring: (v: any) => v,
+        interpolate: (v: any) => v,
         FadeIn: { duration: () => ({ build: () => ({}) }) },
         FadeOut: { duration: () => ({ build: () => ({}) }) },
         Layout: { duration: () => ({ build: () => ({}) }) },
         SlideInDown: { duration: () => ({ build: () => ({}) }) },
         SlideOutDown: { duration: () => ({ build: () => ({}) }) },
         createAnimatedComponent: (c: any) => c,
-        Animated: { View, Text: require('react-native').Text },
+        Animated: { View, Text },
     };
 });
 
