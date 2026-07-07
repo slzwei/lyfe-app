@@ -3,7 +3,7 @@
  */
 import type { AgencyEvent, CreateEventInput, EventAttendee, EventType, ExternalAttendee } from '@/types/event';
 import type { Json } from '@/types/shared/database.types';
-import { toDateStr, todayLocalStr } from './dateTime';
+import { formatDateLabel, formatTime, timeRangesOverlap, toDateStr, todayLocalStr } from './dateTime';
 import { applyPageRange, resolvePage } from './pagination';
 import { supabase } from './supabase';
 import { queueMutation } from './offline';
@@ -164,6 +164,145 @@ export async function fetchUpcomingEvents(
  */
 export async function fetchTodayEvents(userId: string): Promise<{ data: AgencyEvent[]; error: string | null }> {
     return queryUserEvents(userId, { dateEq: todayLocalStr() });
+}
+
+// ── Team calendar (manager/director "Team" scope) ────────────
+
+/**
+ * Resolve the ids of a manager's direct reports, or a director's
+ * managers + their agents — the same reports_to scoping as
+ * lib/team.ts fetchTeamMembers, without the stats fan-out.
+ */
+async function resolveTeamMemberIds(userId: string, role: string): Promise<{ ids: string[]; error: string | null }> {
+    const teamDataScope = await resolveTeamDataScope(userId);
+
+    if (role === 'manager') {
+        const { data, error } = await supabase
+            .from('users')
+            .select('id')
+            .in('role', ['manager', 'agent'])
+            .eq('reports_to', userId)
+            .eq('is_test_data', teamDataScope);
+        if (error) return { ids: [], error: error.message };
+        return { ids: (data || []).map((r: { id: string }) => r.id), error: null };
+    }
+
+    // Director: managers reporting to them + agents reporting to those managers
+    const { data: managers, error: mErr } = await supabase
+        .from('users')
+        .select('id')
+        .eq('role', 'manager')
+        .eq('reports_to', userId)
+        .eq('is_test_data', teamDataScope);
+    if (mErr) return { ids: [], error: mErr.message };
+
+    const managerIds = (managers || []).map((r: { id: string }) => r.id);
+    if (managerIds.length === 0) return { ids: [], error: null };
+
+    const { data: agents, error: aErr } = await supabase
+        .from('users')
+        .select('id')
+        .in('reports_to', managerIds)
+        .eq('is_test_data', teamDataScope);
+    if (aErr) return { ids: [], error: aErr.message };
+
+    return { ids: [...managerIds, ...(agents || []).map((r: { id: string }) => r.id)], error: null };
+}
+
+/**
+ * Events created by OR attended by anyone on the user's team, bounded to
+ * the calendar window. Two-query merge — a single query would AND the
+ * created_by and attendee filters (review-caught).
+ */
+export async function fetchTeamEvents(
+    userId: string,
+    role: string,
+    windowStart: string = eventsWindowStart(),
+): Promise<{ data: AgencyEvent[]; error: string | null }> {
+    const team = await resolveTeamMemberIds(userId, role);
+    if (team.error) return { data: [], error: team.error };
+    if (team.ids.length === 0) return { data: [], error: null };
+
+    const createdQ = supabase
+        .from('events')
+        .select(EVENT_SELECT)
+        .in('created_by', team.ids)
+        .gte('event_date', windowStart)
+        .order('event_date', { ascending: true })
+        .order('start_time', { ascending: true });
+    const attendingQ = supabase
+        .from('events')
+        .select(EVENT_SELECT_ATTENDING)
+        .in('attendee_filter.user_id', team.ids)
+        .gte('event_date', windowStart)
+        .order('event_date', { ascending: true })
+        .order('start_time', { ascending: true });
+
+    const [created, attending] = await Promise.all([createdQ, attendingQ]);
+    if (created.error) return { data: [], error: created.error.message };
+    if (attending.error) return { data: [], error: attending.error.message };
+
+    return {
+        data: mergeDedupEvents(
+            mapEvents((created.data || []) as EventRow[]),
+            mapEvents((attending.data || []) as EventRow[]),
+        ),
+        error: null,
+    };
+}
+
+// ── Conflict detection ───────────────────────────────────────
+
+export interface EventConflict {
+    attendeeName: string;
+    eventTitle: string;
+    eventDate: string;
+    timeRange: string;
+}
+
+/**
+ * Find existing events that overlap the proposed slot for any of the
+ * selected attendees. One bounded query; overlap resolved client-side.
+ * Callers treat this as advisory (warn, never block) and must fail open
+ * if the query errors.
+ */
+export async function findEventConflicts(params: {
+    dates: string[];
+    startTime: string;
+    endTime: string | null;
+    attendeeIds: string[];
+    excludeEventId?: string;
+}): Promise<{ data: EventConflict[]; error: string | null }> {
+    const { dates, startTime, endTime, attendeeIds, excludeEventId } = params;
+    if (dates.length === 0 || attendeeIds.length === 0) return { data: [], error: null };
+
+    let query = supabase
+        .from('events')
+        .select(EVENT_SELECT_ATTENDING)
+        .in('event_date', dates)
+        .in('attendee_filter.user_id', attendeeIds);
+    if (excludeEventId) {
+        query = query.neq('id', excludeEventId);
+    }
+
+    const { data, error } = await query;
+    if (error) return { data: [], error: error.message };
+
+    const idSet = new Set(attendeeIds);
+    const conflicts: EventConflict[] = [];
+    for (const ev of mapEvents((data || []) as EventRow[])) {
+        if (!timeRangesOverlap(startTime, endTime, ev.start_time, ev.end_time)) continue;
+        for (const att of ev.attendees) {
+            if (!idSet.has(att.user_id)) continue;
+            conflicts.push({
+                attendeeName: att.full_name || 'An attendee',
+                eventTitle: ev.title,
+                eventDate: formatDateLabel(ev.event_date),
+                timeRange: `${formatTime(ev.start_time)}${ev.end_time ? ` – ${formatTime(ev.end_time)}` : ''}`,
+            });
+        }
+    }
+    return { data: conflicts, error: null };
 }
 
 /**

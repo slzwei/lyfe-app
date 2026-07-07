@@ -16,6 +16,7 @@ import type { AttendeeRole, EventAttendee } from '@/types/event';
 import { useViewMode } from '@/contexts/ViewModeContext';
 import { letterSpacing } from '@/constants/platform';
 import { EVENT_TYPE_CONFIG, getEventTypeColor } from '@/constants/displayConfigs';
+import AddToCalendarRow from '@/components/events/AddToCalendarRow';
 import { EVENT_TYPE_LABELS } from '@/types/event';
 import { Ionicons } from '@expo/vector-icons';
 import { useLocalSearchParams, useSegments } from 'expo-router';
@@ -490,6 +491,7 @@ export default function EventDetailScreen() {
                                 colors,
                             })}
                         </View>
+                        <AddToCalendarRow event={event} colors={colors} />
                     </View>
 
                     {/* Description */}

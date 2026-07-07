@@ -15,6 +15,7 @@ import {
     timeAgo,
     getRoadshowStatus,
     isEventLive,
+    timeRangesOverlap,
 } from '@/lib/dateTime';
 
 // ── CI timezone canary ──
@@ -360,5 +361,37 @@ describe('isEventLive', () => {
 
     it('returns false when event date is in the future', () => {
         expect(isEventLive('2026-03-09', '09:00', '17:00', at(12, 0))).toBe(false);
+    });
+});
+
+// ── timeRangesOverlap ──
+
+describe('timeRangesOverlap', () => {
+    it('detects plain overlap', () => {
+        expect(timeRangesOverlap('09:00', '11:00', '10:00', '12:00')).toBe(true);
+        expect(timeRangesOverlap('10:00', '12:00', '09:00', '11:00')).toBe(true);
+    });
+
+    it('containment counts as overlap', () => {
+        expect(timeRangesOverlap('09:00', '17:00', '10:00', '11:00')).toBe(true);
+    });
+
+    it('touching edges do not overlap (half-open intervals)', () => {
+        expect(timeRangesOverlap('09:00', '10:00', '10:00', '11:00')).toBe(false);
+        expect(timeRangesOverlap('10:00', '11:00', '09:00', '10:00')).toBe(false);
+    });
+
+    it('disjoint ranges do not overlap', () => {
+        expect(timeRangesOverlap('09:00', '10:00', '14:00', '15:00')).toBe(false);
+    });
+
+    it('treats a null end as a one-hour block', () => {
+        expect(timeRangesOverlap('09:00', null, '09:30', '10:30')).toBe(true);
+        expect(timeRangesOverlap('09:00', null, '10:00', '11:00')).toBe(false);
+        expect(timeRangesOverlap('09:30', '10:30', '09:00', null)).toBe(true);
+    });
+
+    it('handles HH:MM:SS database strings', () => {
+        expect(timeRangesOverlap('09:00:00', '11:00:00', '10:30:00', '12:00:00')).toBe(true);
     });
 });

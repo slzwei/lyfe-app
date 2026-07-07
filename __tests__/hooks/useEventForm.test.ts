@@ -11,12 +11,14 @@ const mockCreateRoadshowBulk = jest.fn();
 const mockFetchEventById = jest.fn();
 const mockFetchRoadshowConfig = jest.fn();
 const mockSaveRoadshowConfig = jest.fn();
+const mockFindEventConflicts = jest.fn().mockResolvedValue({ data: [], error: null });
 
 jest.mock('@/lib/events', () => ({
     createEvent: (...args: any[]) => mockCreateEvent(...args),
     updateEvent: (...args: any[]) => mockUpdateEvent(...args),
     fetchEventById: (...args: any[]) => mockFetchEventById(...args),
     fetchAllUsers: jest.fn().mockResolvedValue({ data: [], error: null }),
+    findEventConflicts: (...args: any[]) => mockFindEventConflicts(...args),
 }));
 
 jest.mock('@/lib/roadshow', () => ({
@@ -726,5 +728,72 @@ describe('useEventForm', () => {
             }),
             'user-1',
         );
+    });
+
+    // ── Conflict pre-flight (warn, never block) ──
+
+    it('warns about double-booked attendees and cancels when asked', async () => {
+        mockFindEventConflicts.mockResolvedValueOnce({
+            data: [
+                {
+                    attendeeName: 'Siti Rahman',
+                    eventTitle: 'AMK Roadshow',
+                    eventDate: 'Wed 15 Jul',
+                    timeRange: '2:00 PM – 4:00 PM',
+                },
+            ],
+            error: null,
+        });
+        const alertSpy = jest.spyOn(Alert, 'alert').mockImplementation((_t: string, _m?: string, buttons?: any[]) => {
+            const cancel = buttons?.find((b: any) => b.text === 'Cancel');
+            cancel?.onPress?.();
+        });
+
+        const { result } = renderHook(() => useEventForm());
+        act(() => {
+            result.current.setTitle('New Meeting');
+            result.current.attendeePicker.toggleAttendee({
+                id: 'user-9',
+                full_name: 'Siti Rahman',
+                role: 'agent',
+                avatar_url: null,
+            } as any);
+        });
+
+        await act(async () => {
+            await result.current.handleSubmit();
+        });
+
+        expect(alertSpy).toHaveBeenCalledWith(
+            'Schedule conflict',
+            expect.stringContaining('Siti Rahman'),
+            expect.any(Array),
+        );
+        expect(mockCreateEvent).not.toHaveBeenCalled();
+        expect(result.current.submitting).toBe(false);
+        alertSpy.mockRestore();
+    });
+
+    it('proceeds past conflicts on Create anyway and fails open on checker errors', async () => {
+        mockFindEventConflicts.mockRejectedValueOnce(new Error('boom'));
+        mockCreateEvent.mockResolvedValue({ data: { id: 'evt-new' }, error: null });
+
+        const { result } = renderHook(() => useEventForm());
+        act(() => {
+            result.current.setTitle('New Meeting');
+            result.current.attendeePicker.toggleAttendee({
+                id: 'user-9',
+                full_name: 'Siti Rahman',
+                role: 'agent',
+                avatar_url: null,
+            } as any);
+        });
+
+        await act(async () => {
+            await result.current.handleSubmit();
+        });
+
+        // Broken conflict check must never stop scheduling
+        expect(mockCreateEvent).toHaveBeenCalled();
     });
 });

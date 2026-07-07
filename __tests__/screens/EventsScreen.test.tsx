@@ -1,7 +1,7 @@
 import React from 'react';
 import { render, act, waitFor, fireEvent } from '@testing-library/react-native';
 import EventsScreen from '@/app/(tabs)/events/index';
-import { fetchEvents } from '@/lib/events';
+import { fetchEvents, fetchTeamEvents } from '@/lib/events';
 
 // ── Mocks ──────────────────────────────────────────────────────
 jest.mock('@/lib/supabase');
@@ -55,10 +55,15 @@ jest.mock('@/components/ScreenHeader', () => {
         ),
     };
 });
+let mockRole = 'agent';
 jest.mock('@/contexts/AuthContext', () => ({
     useAuth: () => ({
-        user: { id: 'user-1', role: 'agent', full_name: 'Kevin' },
+        user: { id: 'user-1', role: mockRole, full_name: 'Kevin' },
     }),
+}));
+let mockViewMode = 'agent';
+jest.mock('@/contexts/ViewModeContext', () => ({
+    useViewMode: () => ({ viewMode: mockViewMode, canToggle: false, setViewMode: jest.fn() }),
 }));
 jest.mock('@/contexts/ThemeContext', () => ({
     useTheme: () => ({
@@ -87,11 +92,13 @@ jest.mock('expo-router', () => ({
             getState: () => mockParentState,
         }),
     }),
+    // Real useFocusEffect re-runs while focused whenever the callback
+    // identity changes — mirror that so scope switches refetch.
     useFocusEffect: (cb: () => void) => {
         const React = require('react');
         React.useEffect(() => {
             cb();
-        }, []);
+        }, [cb]);
     },
 }));
 jest.mock('react-native-safe-area-context', () => ({
@@ -129,12 +136,16 @@ const mockEvents = [
 ];
 
 const mockedFetchEvents = fetchEvents as jest.MockedFunction<typeof fetchEvents>;
+const mockedFetchTeamEvents = fetchTeamEvents as jest.MockedFunction<typeof fetchTeamEvents>;
 
 beforeEach(() => {
     jest.clearAllMocks();
+    mockRole = 'agent';
+    mockViewMode = 'agent';
     mockTabPressHandlers.length = 0;
     mockParentState = { index: 0, routes: [EVENTS_ROUTE] };
     mockedFetchEvents.mockResolvedValue({ data: mockEvents as any, error: null });
+    mockedFetchTeamEvents.mockResolvedValue({ data: mockEvents as any, error: null });
 });
 
 describe('EventsScreen', () => {
@@ -295,5 +306,39 @@ describe('EventsScreen live banner', () => {
 
         await waitFor(() => expect(getByText(/12:00 AM – 11:59 PM · tap to open/)).toBeTruthy());
         expect(queryByText(/00:00:00/)).toBeNull();
+    });
+});
+
+// ── Team scope toggle (manager/director in manager view) ───────
+describe('EventsScreen team scope', () => {
+    it('shows no Mine/Team toggle for agents', async () => {
+        const { queryByTestId, getByTestId } = render(<EventsScreen />);
+        await waitFor(() => expect(getByTestId('inline-calendar')).toBeTruthy());
+        expect(queryByTestId('events-scope-team')).toBeNull();
+    });
+
+    it('manager in manager view can switch to the team calendar', async () => {
+        mockRole = 'manager';
+        mockViewMode = 'manager';
+
+        const { getByTestId } = render(<EventsScreen />);
+        await waitFor(() => expect(getByTestId('events-scope-team')).toBeTruthy());
+        expect(mockedFetchTeamEvents).not.toHaveBeenCalled();
+
+        await act(async () => {
+            fireEvent.press(getByTestId('events-scope-team'));
+        });
+
+        await waitFor(() => expect(mockedFetchTeamEvents).toHaveBeenCalledWith('user-1', 'manager'));
+    });
+
+    it('manager browsing in agent view keeps the personal calendar (no toggle)', async () => {
+        mockRole = 'manager';
+        mockViewMode = 'agent';
+
+        const { queryByTestId, getByTestId } = render(<EventsScreen />);
+        await waitFor(() => expect(getByTestId('inline-calendar')).toBeTruthy());
+        expect(queryByTestId('events-scope-team')).toBeNull();
+        expect(mockedFetchTeamEvents).not.toHaveBeenCalled();
     });
 });

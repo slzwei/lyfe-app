@@ -7,7 +7,7 @@ import { useAttendeePicker } from '@/hooks/useAttendeePicker';
 import { useRoadshowConfig } from '@/hooks/useRoadshowConfig';
 import { useTimePicker } from '@/hooks/useTimePicker';
 import { dateDiffDays, dateRange, isValidDate, todayLocalStr } from '@/lib/dateTime';
-import { createEvent, fetchEventById, updateEvent } from '@/lib/events';
+import { createEvent, fetchEventById, findEventConflicts, updateEvent, type EventConflict } from '@/lib/events';
 import { createRoadshowBulk, fetchRoadshowConfig, saveRoadshowConfig, type RoadshowConfigInput } from '@/lib/roadshow';
 import { supabase } from '@/lib/supabase';
 import type { CreateEventInput, EventType } from '@/types/event';
@@ -169,6 +169,43 @@ export function useEventForm() {
         const endTime = toEndTimeStr();
 
         setSubmitting(true);
+
+        // Conflict pre-flight — advisory only. Warn about double-booked
+        // attendees, never block, and fail open if the check itself errors.
+        if (selectedAttendees.length > 0) {
+            try {
+                const conflictDates =
+                    eventType === 'roadshow' && !isEditing ? dateRange(rsStartDate, rsEndDate) : [eventDate];
+                const { data: conflicts } = await findEventConflicts({
+                    dates: conflictDates,
+                    startTime,
+                    endTime,
+                    attendeeIds: selectedAttendees.map((a) => a.user_id),
+                    excludeEventId: isEditing ? eventId : undefined,
+                });
+                if (conflicts.length > 0) {
+                    const lines = conflicts
+                        .slice(0, 3)
+                        .map(
+                            (c: EventConflict) =>
+                                `• ${c.attendeeName} — "${c.eventTitle}", ${c.eventDate}, ${c.timeRange}`,
+                        );
+                    if (conflicts.length > 3) lines.push(`…and ${conflicts.length - 3} more`);
+                    const proceed = await new Promise<boolean>((resolve) =>
+                        Alert.alert('Schedule conflict', `Already booked at this time:\n${lines.join('\n')}`, [
+                            { text: 'Cancel', onPress: () => resolve(false), style: 'cancel' },
+                            { text: isEditing ? 'Save anyway' : 'Create anyway', onPress: () => resolve(true) },
+                        ]),
+                    );
+                    if (!proceed) {
+                        setSubmitting(false);
+                        return;
+                    }
+                }
+            } catch {
+                // fail open — a broken conflict check must never stop scheduling
+            }
+        }
 
         // Roadshow bulk create
         if (eventType === 'roadshow' && !isEditing) {

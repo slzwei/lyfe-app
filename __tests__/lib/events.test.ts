@@ -7,6 +7,8 @@ import {
     fetchAllEvents,
     fetchUpcomingEvents,
     fetchTodayEvents,
+    fetchTeamEvents,
+    findEventConflicts,
     fetchEventById,
     createEvent,
     fetchAllUsers,
@@ -914,5 +916,108 @@ describe('updateEvent', () => {
         });
 
         expect(result.error).toBe('Upsert failed');
+    });
+});
+
+// ── fetchTeamEvents ──
+
+describe('fetchTeamEvents', () => {
+    it('returns empty without querying events when the team is empty', async () => {
+        const usersChain = mockSupa.__getChain('users');
+        mockResolve(usersChain, { data: [], error: null });
+
+        const result = await fetchTeamEvents('mgr-1', 'manager');
+
+        expect(result).toEqual({ data: [], error: null });
+        expect(usersChain.__calls).toContainEqual({ method: 'eq', args: ['reports_to', 'mgr-1'] });
+    });
+
+    it('scopes event branches to team member ids (created OR attending)', async () => {
+        const usersChain = mockSupa.__getChain('users');
+        mockResolve(usersChain, { data: [{ id: 'agent-1' }, { id: 'agent-2' }], error: null });
+        const eventsChain = mockSupa.__getChain('events');
+        mockResolve(eventsChain, { data: [EVENT_ROW], error: null });
+
+        const result = await fetchTeamEvents('mgr-1', 'manager', '2026-01-08');
+
+        expect(result.error).toBeNull();
+        expect(result.data).toHaveLength(1);
+        expect(eventsChain.__calls).toContainEqual({ method: 'in', args: ['created_by', ['agent-1', 'agent-2']] });
+        expect(eventsChain.__calls).toContainEqual({
+            method: 'in',
+            args: ['attendee_filter.user_id', ['agent-1', 'agent-2']],
+        });
+        expect(eventsChain.__calls).toContainEqual({ method: 'gte', args: ['event_date', '2026-01-08'] });
+    });
+});
+
+// ── findEventConflicts ──
+
+describe('findEventConflicts', () => {
+    const CONFLICT_ROW = {
+        ...EVENT_ROW,
+        start_time: '09:00',
+        end_time: '11:00',
+    };
+
+    it('short-circuits without a query when dates or attendees are empty', async () => {
+        const eventsChain = mockSupa.__getChain('events');
+
+        const a = await findEventConflicts({
+            dates: [],
+            startTime: '09:00',
+            endTime: '10:00',
+            attendeeIds: ['user-2'],
+        });
+        const b = await findEventConflicts({
+            dates: ['2026-03-15'],
+            startTime: '09:00',
+            endTime: '10:00',
+            attendeeIds: [],
+        });
+
+        expect(a).toEqual({ data: [], error: null });
+        expect(b).toEqual({ data: [], error: null });
+        expect(eventsChain.__calls).toHaveLength(0);
+    });
+
+    it('reports overlapping attendees with title, date and time range', async () => {
+        const eventsChain = mockSupa.__getChain('events');
+        mockResolve(eventsChain, { data: [CONFLICT_ROW], error: null });
+
+        const { data, error } = await findEventConflicts({
+            dates: ['2026-03-15'],
+            startTime: '10:00',
+            endTime: '12:00',
+            attendeeIds: ['user-2'],
+        });
+
+        expect(error).toBeNull();
+        expect(data).toHaveLength(1);
+        expect(data[0].attendeeName).toBe('Bob Lim');
+        expect(data[0].eventTitle).toBe('Team Standup');
+        expect(data[0].timeRange).toBe('9:00 AM – 11:00 AM');
+    });
+
+    it('ignores non-overlapping times and excluded events', async () => {
+        const eventsChain = mockSupa.__getChain('events');
+        mockResolve(eventsChain, { data: [CONFLICT_ROW], error: null });
+
+        const noOverlap = await findEventConflicts({
+            dates: ['2026-03-15'],
+            startTime: '14:00',
+            endTime: '15:00',
+            attendeeIds: ['user-2'],
+        });
+        expect(noOverlap.data).toEqual([]);
+
+        await findEventConflicts({
+            dates: ['2026-03-15'],
+            startTime: '10:00',
+            endTime: '12:00',
+            attendeeIds: ['user-2'],
+            excludeEventId: 'evt-1',
+        });
+        expect(eventsChain.__calls).toContainEqual({ method: 'neq', args: ['id', 'evt-1'] });
     });
 });

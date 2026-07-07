@@ -139,6 +139,22 @@ export function isEventLive(eventDate: string, startTime: string | null, endTime
     return getRoadshowStatus(eventDate, startTime, endTime, now) === 'live';
 }
 
+/**
+ * Half-open [start, end) overlap check on HH:MM(:SS) time strings.
+ * A null end is treated as a 1-hour block (events without end times).
+ */
+export function timeRangesOverlap(aStart: string, aEnd: string | null, bStart: string, bEnd: string | null): boolean {
+    const mins = (t: string) => {
+        const [h, m] = t.split(':').map(Number);
+        return h * 60 + m;
+    };
+    const aS = mins(aStart);
+    const aE = aEnd ? mins(aEnd) : aS + 60;
+    const bS = mins(bStart);
+    const bE = bEnd ? mins(bEnd) : bS + 60;
+    return aS < bE && bS < aE;
+}
+
 /** Format ISO timestamp as relative time (e.g. "now", "5m ago", "2h ago", "3d ago") */
 export function timeAgo(dateStr: string): string {
     const diff = Date.now() - new Date(dateStr).getTime();
