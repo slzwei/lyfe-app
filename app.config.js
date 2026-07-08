@@ -34,8 +34,12 @@ module.exports = {
         },
         // Bare workflow: runtime version policies aren't supported, so this
         // must be bumped manually whenever native code or native deps change.
-        // Keep in sync with `version` above for releases that ship a new binary.
-        runtimeVersion: '1.5.0',
+        // HELD AT 1.4.0 for the calendar-crash kill-switch OTA: every deployed
+        // crashing build (old 1.4.0 builds + the 1.5.0 build 33, which shipped
+        // before the #98 runtime bump) is on runtime 1.4.0, so this emergency OTA
+        // must publish under 1.4.0 to reach them. The 1.5.1 native build re-bumps
+        // this to 1.5.1 (its own isolated OTA lane).
+        runtimeVersion: '1.4.0',
         splash: {
             image: './assets/images/splash-icon.png',
             resizeMode: 'contain',
