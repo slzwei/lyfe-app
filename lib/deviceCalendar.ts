@@ -1,11 +1,21 @@
 /**
  * Add-to-device-calendar via expo-calendar.
  *
- * OTA-safety contract (review-mandated): expo-calendar is NEVER imported at
- * module top level. The native module only exists in binaries built after
- * 2026-07; OTA-updated older binaries would crash on a static import. Every
- * entry point lazy-requires inside try/catch and callers hide the feature
- * when `isDeviceCalendarAvailable()` is false.
+ * OTA-safety + EMERGENCY KILL-SWITCH.
+ *
+ * DISABLED as of 2026-07-08: the shipped 1.5.0 iOS build (build 33) crashes at
+ * launch with a fatal ExpoCalendar.MissingCalendarPListValueException — its
+ * Info.plist is missing a required calendar usage-description key, so ANY touch of
+ * the native module is an uncatchable native fatal (Sentry APPLE-IOS-6).
+ * `CALENDAR_FEATURE_ENABLED` keeps every entry point from loading expo-calendar on
+ * ALL binaries until a fixed native build ships (1.5.1: correct Info.plist + bumped
+ * runtimeVersion). Re-enable by flipping the flag in that same build's PR.
+ *
+ * When re-enabled: expo-calendar is NEVER imported at module top level. On binaries
+ * that predate the native module, `require('expo-calendar')` native-crashes (its
+ * ExpoCalendar.js runs requireNativeModule at import), so we first probe the registry
+ * with requireOptionalNativeModule (returns null, never crashes) and only import the
+ * wrapper when the module is present.
  */
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import type { AgencyEvent } from '@/types/event';
@@ -15,20 +25,31 @@ const REMINDER_MINUTES_BEFORE = 60;
 
 type ExpoCalendarModule = typeof import('expo-calendar');
 
+// Emergency kill-switch — see file header. While false, NO code path loads or
+// touches expo-calendar on any binary (stops the MissingCalendarPListValue crash
+// on the 1.5.0 build AND the missing-module crash on 1.4.0 builds). Flip to true
+// only in the native build that ships the Info.plist fix + runtimeVersion bump.
+const CALENDAR_FEATURE_ENABLED = false;
+
 function loadModule(): ExpoCalendarModule | null {
+    if (!CALENDAR_FEATURE_ENABLED) return null;
     try {
+        // Probe the native registry WITHOUT importing the wrapper — on binaries
+        // lacking the module, require('expo-calendar') would native-crash;
+        // requireOptionalNativeModule returns null instead.
         // eslint-disable-next-line @typescript-eslint/no-var-requires
-        const mod = require('expo-calendar') as ExpoCalendarModule;
-        // Touching a constant forces the native-module lookup on some
-        // platforms, so absence surfaces here instead of mid-flow.
-        void mod.EntityTypes;
-        return mod;
+        const core = require('expo-modules-core') as {
+            requireOptionalNativeModule?: (name: string) => unknown;
+        };
+        if (!core.requireOptionalNativeModule?.('ExpoCalendar')) return null;
+        // eslint-disable-next-line @typescript-eslint/no-var-requires
+        return require('expo-calendar') as ExpoCalendarModule;
     } catch {
         return null;
     }
 }
 
-/** False on binaries that predate the expo-calendar native module. */
+/** False while the feature is disabled, or on binaries without the native module. */
 export function isDeviceCalendarAvailable(): boolean {
     return loadModule() !== null;
 }

@@ -50,41 +50,27 @@ describe('assembleEventDates', () => {
     });
 });
 
-describe('addEventToDeviceCalendar', () => {
-    it('is available when the module loads', () => {
-        expect(isDeviceCalendarAvailable()).toBe(true);
+describe('calendar feature kill-switch (disabled — see deviceCalendar header)', () => {
+    it('reports unavailable so AddToCalendarRow renders nothing', () => {
+        expect(isDeviceCalendarAvailable()).toBe(false);
     });
 
-    it('creates the native event with a 1h reminder and remembers the id', async () => {
-        const { nativeId, error } = await addEventToDeviceCalendar(BASE_EVENT);
-
-        expect(error).toBeNull();
-        expect(nativeId).toBe('native-123');
-        const [calendarId, details] = mockCreateEvent.mock.calls[0];
-        expect(calendarId).toBe('cal-1');
-        expect(details.title).toBe('AMK Roadshow');
-        expect(details.location).toBe('AMK Hub');
-        expect(details.alarms).toEqual([{ relativeOffset: -60 }]);
-    });
-
-    it('surfaces a friendly error when permission is declined', async () => {
-        mockRequestPermissions.mockResolvedValue({ status: 'denied' });
-
+    it('no-ops addEventToDeviceCalendar WITHOUT touching the native module', async () => {
+        // The whole point of the kill-switch: while disabled, expo-calendar is
+        // never loaded or called, so the native MissingCalendarPListValueException
+        // (1.5.0 build crash, Sentry APPLE-IOS-6) and the missing-module crash
+        // (1.4.0 builds) cannot happen.
         const { nativeId, error } = await addEventToDeviceCalendar(BASE_EVENT);
         expect(nativeId).toBeNull();
-        expect(error).toBe('Calendar permission was declined');
+        expect(error).toMatch(/not available/i);
+        expect(mockRequestPermissions).not.toHaveBeenCalled();
+        expect(mockGetDefaultCalendar).not.toHaveBeenCalled();
+        expect(mockGetCalendars).not.toHaveBeenCalled();
         expect(mockCreateEvent).not.toHaveBeenCalled();
     });
-
-    it('falls back to the first writable calendar when no default exists', async () => {
-        mockGetDefaultCalendar.mockRejectedValue(new Error('not supported'));
-        mockGetCalendars.mockResolvedValue([
-            { id: 'ro-cal', allowsModifications: false },
-            { id: 'rw-cal', allowsModifications: true },
-        ]);
-
-        const { nativeId } = await addEventToDeviceCalendar(BASE_EVENT);
-        expect(nativeId).toBe('native-123');
-        expect(mockCreateEvent.mock.calls[0][0]).toBe('rw-cal');
-    });
 });
+
+// NOTE: the enabled-flow tests (permission grant/deny, default-vs-writable
+// calendar selection, 1h reminder) were removed with the kill-switch. Restore
+// them in the PR that flips CALENDAR_FEATURE_ENABLED back to true alongside the
+// 1.5.1 Info.plist fix.
