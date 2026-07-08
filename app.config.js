@@ -13,7 +13,7 @@ module.exports = {
     expo: {
         name: 'Lyfe',
         slug: 'lyfe-app',
-        version: '1.5.0',
+        version: '1.5.1',
         // Lock supported platforms to mobile so `expo export --platform all`
         // (which is what eas update runs by default) doesn't try to bundle for
         // web. react-native-pdf has no web fallback and breaks the web bundle.
@@ -34,12 +34,12 @@ module.exports = {
         },
         // Bare workflow: runtime version policies aren't supported, so this
         // must be bumped manually whenever native code or native deps change.
-        // HELD AT 1.4.0 for the calendar-crash kill-switch OTA: every deployed
-        // crashing build (old 1.4.0 builds + the 1.5.0 build 33, which shipped
-        // before the #98 runtime bump) is on runtime 1.4.0, so this emergency OTA
-        // must publish under 1.4.0 to reach them. The 1.5.1 native build re-bumps
-        // this to 1.5.1 (its own isolated OTA lane).
-        runtimeVersion: '1.4.0',
+        // 1.5.1: the calendar fix ships in a NEW native build (correct Info.plist
+        // via the expo-calendar config plugin). Its own runtime lane — isolated from
+        // the poisoned runtime-1.4.0 population, so their kill-switch OTA and this
+        // build's OTAs never cross. Bump native versionName / CFBundleShortVersion
+        // to 1.5.1 too (build.gradle + iOS project) when you cut this build.
+        runtimeVersion: '1.5.1',
         splash: {
             image: './assets/images/splash-icon.png',
             resizeMode: 'contain',
@@ -117,6 +117,17 @@ module.exports = {
             ],
             './plugins/withSwiftConcurrency',
             'expo-location',
+            [
+                // Manages calendar usage-description strings (iOS) + READ/WRITE_CALENDAR
+                // (Android) on every native build. Declaring them here — not only in the
+                // hand-edited native files — is what prevents the MissingCalendarPListValue
+                // crash that shipped in 1.5.0 build 33 (Sentry APPLE-IOS-6).
+                'expo-calendar',
+                {
+                    calendarPermission:
+                        'Lyfe adds events you choose to your calendar so reminders work even when the app is closed.',
+                },
+            ],
             [
                 'expo-build-properties',
                 {

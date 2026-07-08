@@ -1,21 +1,20 @@
 /**
  * Add-to-device-calendar via expo-calendar.
  *
- * OTA-safety + EMERGENCY KILL-SWITCH.
+ * OTA-safety + feature flag.
  *
- * DISABLED as of 2026-07-08: the shipped 1.5.0 iOS build (build 33) crashes at
- * launch with a fatal ExpoCalendar.MissingCalendarPListValueException — its
- * Info.plist is missing a required calendar usage-description key, so ANY touch of
- * the native module is an uncatchable native fatal (Sentry APPLE-IOS-6).
- * `CALENDAR_FEATURE_ENABLED` keeps every entry point from loading expo-calendar on
- * ALL binaries until a fixed native build ships (1.5.1: correct Info.plist + bumped
- * runtimeVersion). Re-enable by flipping the flag in that same build's PR.
+ * expo-calendar is NEVER imported at module top level. On binaries that predate the
+ * native module (OTA'd older builds), `require('expo-calendar')` native-crashes —
+ * its ExpoCalendar.js runs requireNativeModule at import, an uncatchable fatal on the
+ * New Architecture. So we first probe the registry with requireOptionalNativeModule
+ * (returns null, never crashes) and only import the wrapper when the module is present.
  *
- * When re-enabled: expo-calendar is NEVER imported at module top level. On binaries
- * that predate the native module, `require('expo-calendar')` native-crashes (its
- * ExpoCalendar.js runs requireNativeModule at import), so we first probe the registry
- * with requireOptionalNativeModule (returns null, never crashes) and only import the
- * wrapper when the module is present.
+ * History: the 1.5.0 build (build 33) crashed at launch with
+ * ExpoCalendar.MissingCalendarPListValueException (Sentry APPLE-IOS-6) because its
+ * Info.plist lacked the calendar usage-description keys — they weren't declared in
+ * app.config.js, so a native regen dropped them. Fixed in 1.5.1 by adding the
+ * expo-calendar config plugin (app.config.js) so the plist keys + Android perms are
+ * managed on every build. CALENDAR_FEATURE_ENABLED remains as a fast OTA kill-switch.
  */
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import type { AgencyEvent } from '@/types/event';
@@ -25,11 +24,11 @@ const REMINDER_MINUTES_BEFORE = 60;
 
 type ExpoCalendarModule = typeof import('expo-calendar');
 
-// Emergency kill-switch — see file header. While false, NO code path loads or
-// touches expo-calendar on any binary (stops the MissingCalendarPListValue crash
-// on the 1.5.0 build AND the missing-module crash on 1.4.0 builds). Flip to true
-// only in the native build that ships the Info.plist fix + runtimeVersion bump.
-const CALENDAR_FEATURE_ENABLED = false;
+// Feature flag / kill-switch. When false, NO code path loads or touches
+// expo-calendar on any binary — flip to false + OTA to instantly disable the
+// feature fleet-wide (as done for the 1.5.0 crash). Enabled for 1.5.1 now that the
+// Info.plist keys are managed via the expo-calendar config plugin.
+const CALENDAR_FEATURE_ENABLED = true;
 
 function loadModule(): ExpoCalendarModule | null {
     if (!CALENDAR_FEATURE_ENABLED) return null;
