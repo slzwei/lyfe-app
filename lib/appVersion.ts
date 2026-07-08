@@ -57,7 +57,22 @@ export function formatAppVersionLabel({
 }
 
 export function buildAppVersionLabel(): string {
-    const version = Constants.expoConfig?.version ?? '1.3.1';
+    // Read the version from the NATIVE binary (Android versionName / iOS
+    // CFBundleShortVersionString) via expo-application — NOT Constants.expoConfig
+    // .version. expoConfig reflects the JS bundle / OTA manifest (app.config.js
+    // `version` at publish time), so a native build whose versionName was bumped
+    // to 1.5.0 while app.config.js still read 1.4.0 — or which pulled an OTA
+    // published under the old version — mislabels itself. nativeApplicationVersion
+    // is correct per-binary and OTA-immune (mirrors how buildNumber below reads
+    // nativeBuildVersion). Falls back to expoConfig where native is absent
+    // (Expo Go / web / tests).
+    let version = Constants.expoConfig?.version ?? '1.3.1';
+    try {
+        const nativeVersion = Application.nativeApplicationVersion;
+        if (typeof nativeVersion === 'string' && nativeVersion.length > 0) version = nativeVersion;
+    } catch {
+        // keep the expoConfig fallback
+    }
 
     let buildNumber: string | null = null;
     try {
