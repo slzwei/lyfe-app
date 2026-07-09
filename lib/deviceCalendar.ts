@@ -25,10 +25,12 @@ const REMINDER_MINUTES_BEFORE = 60;
 type ExpoCalendarModule = typeof import('expo-calendar');
 
 // Feature flag / kill-switch. When false, NO code path loads or touches
-// expo-calendar on any binary — flip to false + OTA to instantly disable the
-// feature fleet-wide (as done for the 1.5.0 crash). Enabled for 1.5.1 now that the
-// Info.plist keys are managed via the expo-calendar config plugin.
-const CALENDAR_FEATURE_ENABLED = true;
+// expo-calendar on any binary. DISABLED again 2026-07-09: the 1.5.1 build (build 34,
+// runtime 1.5.1) STILL crashed with MissingCalendarPListValueException (Sentry
+// APPLE-IOS-6) — EAS runs prebuild, so the on-disk Info.plist keys get overwritten and
+// the expo-calendar config plugin did NOT add NSCalendarsFullAccessUsageDescription
+// (iOS 17+). Re-enable only after a build proves that FullAccess key actually ships.
+const CALENDAR_FEATURE_ENABLED = false;
 
 function loadModule(): ExpoCalendarModule | null {
     if (!CALENDAR_FEATURE_ENABLED) return null;
