@@ -13,7 +13,7 @@ module.exports = {
     expo: {
         name: 'Lyfe',
         slug: 'lyfe-app',
-        version: '1.5.1',
+        version: '1.5.2',
         // Lock supported platforms to mobile so `expo export --platform all`
         // (which is what eas update runs by default) doesn't try to bundle for
         // web. react-native-pdf has no web fallback and breaks the web bundle.
@@ -39,7 +39,7 @@ module.exports = {
         // the poisoned runtime-1.4.0 population, so their kill-switch OTA and this
         // build's OTAs never cross. Bump native versionName / CFBundleShortVersion
         // to 1.5.1 too (build.gradle + iOS project) when you cut this build.
-        runtimeVersion: '1.5.1',
+        runtimeVersion: '1.5.2',
         splash: {
             image: './assets/images/splash-icon.png',
             resizeMode: 'contain',

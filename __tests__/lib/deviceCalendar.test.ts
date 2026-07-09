@@ -1,17 +1,14 @@
 import { assembleEventDates, isDeviceCalendarAvailable, addEventToDeviceCalendar } from '@/lib/deviceCalendar';
 
+// expo-calendar is mocked only so we can ASSERT it is never called while the
+// feature kill-switch is off (CALENDAR_FEATURE_ENABLED=false). Disabled after the
+// 1.5.1 build STILL crashed on iOS with MissingCalendarPListValueException — the
+// feature is compiled out until a real build proves NSCalendarsFullAccessUsageDescription
+// actually ships. Re-enable = flip the flag + restore the enabled-flow + guard tests.
 const mockRequestPermissions = jest.fn();
 const mockGetDefaultCalendar = jest.fn();
 const mockGetCalendars = jest.fn();
 const mockCreateEvent = jest.fn();
-
-// loadModule probes the native registry via requireOptionalNativeModule BEFORE
-// importing the expo-calendar wrapper (native-crash guard for OTA'd old binaries).
-// Mock it so we control whether the ExpoCalendar native module "exists".
-const mockRequireOptionalNativeModule = jest.fn();
-jest.mock('expo-modules-core', () => ({
-    requireOptionalNativeModule: (...a: unknown[]) => mockRequireOptionalNativeModule(...a),
-}));
 jest.mock('expo-calendar', () => ({
     EntityTypes: { EVENT: 'event' },
     requestCalendarPermissionsAsync: (...a: unknown[]) => mockRequestPermissions(...a),
@@ -33,30 +30,6 @@ const BASE_EVENT = {
 
 beforeEach(() => {
     jest.clearAllMocks();
-    // Default: the ExpoCalendar native module is present (post-1.5.1 binary).
-    mockRequireOptionalNativeModule.mockReturnValue({});
-    mockRequestPermissions.mockResolvedValue({ status: 'granted' });
-    mockGetDefaultCalendar.mockResolvedValue({ id: 'cal-1' });
-    mockCreateEvent.mockResolvedValue('native-123');
-});
-
-describe('isDeviceCalendarAvailable — OTA-safety on pre-expo-calendar binaries', () => {
-    it('returns false when the native ExpoCalendar module is absent (the old-binary crash scenario)', () => {
-        // OTA'd binary built before expo-calendar: native module missing. loadModule
-        // must bail via the safe probe and NOT import the wrapper (whose top-level
-        // requireNativeModule would native-crash, uncatchable, unseen by Sentry).
-        mockRequireOptionalNativeModule.mockReturnValue(null);
-        expect(isDeviceCalendarAvailable()).toBe(false);
-    });
-
-    it('probes the ExpoCalendar native module by name before touching the wrapper', () => {
-        isDeviceCalendarAvailable();
-        expect(mockRequireOptionalNativeModule).toHaveBeenCalledWith('ExpoCalendar');
-    });
-
-    it('is available when the native module is present', () => {
-        expect(isDeviceCalendarAvailable()).toBe(true);
-    });
 });
 
 describe('assembleEventDates', () => {
@@ -77,37 +50,26 @@ describe('assembleEventDates', () => {
     });
 });
 
-describe('addEventToDeviceCalendar', () => {
-    it('creates the native event with a 1h reminder and remembers the id', async () => {
-        const { nativeId, error } = await addEventToDeviceCalendar(BASE_EVENT);
-
-        expect(error).toBeNull();
-        expect(nativeId).toBe('native-123');
-        const [calendarId, details] = mockCreateEvent.mock.calls[0];
-        expect(calendarId).toBe('cal-1');
-        expect(details.title).toBe('AMK Roadshow');
-        expect(details.location).toBe('AMK Hub');
-        expect(details.alarms).toEqual([{ relativeOffset: -60 }]);
+describe('calendar feature kill-switch (disabled — see deviceCalendar header)', () => {
+    it('reports unavailable so AddToCalendarRow renders nothing', () => {
+        expect(isDeviceCalendarAvailable()).toBe(false);
     });
 
-    it('surfaces a friendly error when permission is declined', async () => {
-        mockRequestPermissions.mockResolvedValue({ status: 'denied' });
-
+    it('no-ops addEventToDeviceCalendar WITHOUT touching the native module', async () => {
+        // The whole point of the kill-switch: while disabled, expo-calendar is never
+        // loaded or called, so the native MissingCalendarPListValueException (Sentry
+        // APPLE-IOS-6 — iOS 1.5.0 build 33 + 1.5.1 build 34) cannot happen.
         const { nativeId, error } = await addEventToDeviceCalendar(BASE_EVENT);
         expect(nativeId).toBeNull();
-        expect(error).toBe('Calendar permission was declined');
+        expect(error).toMatch(/not available/i);
+        expect(mockRequestPermissions).not.toHaveBeenCalled();
+        expect(mockGetDefaultCalendar).not.toHaveBeenCalled();
+        expect(mockGetCalendars).not.toHaveBeenCalled();
         expect(mockCreateEvent).not.toHaveBeenCalled();
     });
-
-    it('falls back to the first writable calendar when no default exists', async () => {
-        mockGetDefaultCalendar.mockRejectedValue(new Error('not supported'));
-        mockGetCalendars.mockResolvedValue([
-            { id: 'ro-cal', allowsModifications: false },
-            { id: 'rw-cal', allowsModifications: true },
-        ]);
-
-        const { nativeId } = await addEventToDeviceCalendar(BASE_EVENT);
-        expect(nativeId).toBe('native-123');
-        expect(mockCreateEvent.mock.calls[0][0]).toBe('rw-cal');
-    });
 });
+
+// NOTE: the enabled-flow tests (permission grant/deny, default-vs-writable calendar,
+// 1h reminder) + the requireOptionalNativeModule guard tests were removed with the
+// kill-switch. Restore them in the PR that flips CALENDAR_FEATURE_ENABLED back to true
+// — and ONLY after a real build is verified to ship NSCalendarsFullAccessUsageDescription.
