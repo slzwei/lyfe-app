@@ -1,22 +1,9 @@
 import { assembleEventDates, isDeviceCalendarAvailable, addEventToDeviceCalendar } from '@/lib/deviceCalendar';
 
-// expo-calendar is mocked only so we can ASSERT it is never called while the
-// feature kill-switch is off (CALENDAR_FEATURE_ENABLED=false). Disabled after the
-// 1.5.1 build STILL crashed on iOS with MissingCalendarPListValueException — the
-// feature is compiled out until a real build proves NSCalendarsFullAccessUsageDescription
-// actually ships. Re-enable = flip the flag + restore the enabled-flow + guard tests.
-const mockRequestPermissions = jest.fn();
-const mockGetDefaultCalendar = jest.fn();
-const mockGetCalendars = jest.fn();
-const mockCreateEvent = jest.fn();
-jest.mock('expo-calendar', () => ({
-    EntityTypes: { EVENT: 'event' },
-    requestCalendarPermissionsAsync: (...a: unknown[]) => mockRequestPermissions(...a),
-    getDefaultCalendarAsync: (...a: unknown[]) => mockGetDefaultCalendar(...a),
-    getCalendarsAsync: (...a: unknown[]) => mockGetCalendars(...a),
-    createEventAsync: (...a: unknown[]) => mockCreateEvent(...a),
-    deleteEventAsync: jest.fn(),
-}));
+// expo-calendar was REMOVED from the app (2026-07-10): its ExpoCalendar native module
+// fatally checked NSCalendarsFullAccessUsageDescription at startup and that plist key
+// would not land in EAS builds (Sentry APPLE-IOS-6 — 1.5.0/1.5.1/1.5.2 all crash-looped).
+// The lib is now inert no-ops; these tests pin that it never touches a calendar module.
 
 const BASE_EVENT = {
     id: 'evt-1',
@@ -27,10 +14,6 @@ const BASE_EVENT = {
     end_time: '17:30:00',
     location: 'AMK Hub',
 };
-
-beforeEach(() => {
-    jest.clearAllMocks();
-});
 
 describe('assembleEventDates', () => {
     it('builds local-time start/end from date + HH:MM:SS strings', () => {
@@ -50,26 +33,14 @@ describe('assembleEventDates', () => {
     });
 });
 
-describe('calendar feature kill-switch (disabled — see deviceCalendar header)', () => {
+describe('calendar feature removed — inert no-ops', () => {
     it('reports unavailable so AddToCalendarRow renders nothing', () => {
         expect(isDeviceCalendarAvailable()).toBe(false);
     });
 
-    it('no-ops addEventToDeviceCalendar WITHOUT touching the native module', async () => {
-        // The whole point of the kill-switch: while disabled, expo-calendar is never
-        // loaded or called, so the native MissingCalendarPListValueException (Sentry
-        // APPLE-IOS-6 — iOS 1.5.0 build 33 + 1.5.1 build 34) cannot happen.
+    it('addEventToDeviceCalendar returns the not-available result (no native call)', async () => {
         const { nativeId, error } = await addEventToDeviceCalendar(BASE_EVENT);
         expect(nativeId).toBeNull();
         expect(error).toMatch(/not available/i);
-        expect(mockRequestPermissions).not.toHaveBeenCalled();
-        expect(mockGetDefaultCalendar).not.toHaveBeenCalled();
-        expect(mockGetCalendars).not.toHaveBeenCalled();
-        expect(mockCreateEvent).not.toHaveBeenCalled();
     });
 });
-
-// NOTE: the enabled-flow tests (permission grant/deny, default-vs-writable calendar,
-// 1h reminder) + the requireOptionalNativeModule guard tests were removed with the
-// kill-switch. Restore them in the PR that flips CALENDAR_FEATURE_ENABLED back to true
-// — and ONLY after a real build is verified to ship NSCalendarsFullAccessUsageDescription.
