@@ -37,6 +37,10 @@ export interface Lead {
     transcript: string | null;
     archived_at: string | null;
     archived_by_id: string | null;
+    /** MKTR suppression propagation (lead.suppressed): set = person withdrew consent. */
+    do_not_contact_at: string | null;
+    /** 'all' blocks every contact (erasure); 'marketing' blocks marketing only. */
+    do_not_contact_scope: 'marketing' | 'all' | null;
     updated_at: string;
     created_at: string;
 }

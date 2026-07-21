@@ -63,6 +63,24 @@ function LeadListCardBase({ lead, onPress }: { lead: Lead; onPress: () => void }
                             {formatSgPhone(lead.phone)}
                         </Txt>
                     ) : null}
+                    {/* Do-not-contact (MKTR suppression propagation) */}
+                    {lead.do_not_contact_at ? (
+                        <View style={styles.dncRow}>
+                            <Ionicons
+                                name="ban"
+                                size={12}
+                                color={lead.do_not_contact_scope === 'all' ? colors.danger : colors.warning}
+                            />
+                            <Txt
+                                role="body"
+                                weight="semibold"
+                                size={12}
+                                color={lead.do_not_contact_scope === 'all' ? colors.danger : colors.warning}
+                            >
+                                {lead.do_not_contact_scope === 'all' ? 'Do not contact' : 'No marketing'}
+                            </Txt>
+                        </View>
+                    ) : null}
                 </View>
 
                 <StatusChip status={lead.status} />
@@ -106,6 +124,7 @@ const makeStyles = ({ colors }: LeadsTheme) =>
         srcBadge: { position: 'absolute', right: -4, bottom: -4 },
         identity: { flex: 1, minWidth: 0 },
         phone: { marginTop: 2 },
+        dncRow: { flexDirection: 'row', alignItems: 'center', gap: 4, marginTop: 3 },
         footer: {
             flexDirection: 'row',
             alignItems: 'center',

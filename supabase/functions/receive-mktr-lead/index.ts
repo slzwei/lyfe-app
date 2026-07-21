@@ -125,7 +125,7 @@ Deno.serve(async (req) => {
         }
 
         const { event, deliveryId, data } = payload;
-        const SUPPORTED_EVENTS = ['lead.created', 'lead.assigned', 'lead.unassigned'];
+        const SUPPORTED_EVENTS = ['lead.created', 'lead.assigned', 'lead.unassigned', 'lead.suppressed'];
         if (!SUPPORTED_EVENTS.includes(event)) {
             return jsonResponse({ error: 'Unsupported event type' }, 400);
         }
@@ -199,6 +199,43 @@ Deno.serve(async (req) => {
             });
 
             return jsonResponse({ success: true, leadId: existing.id, unassigned: true });
+        }
+
+        // ── lead.suppressed (mktr tracker "propagate") ────────────
+        // "Stop contacting the person behind this lead; keep the lead."
+        // ONE atomic RPC does the monotonic merge (scope 'all' dominates,
+        // repairs never duplicate activities). Unknown lead → the RPC stores
+        // a TOMBSTONE and returns lead_found:false — deliveries are
+        // unordered, so the suppression can legitimately arrive before its
+        // lead; the insert path below consults the tombstone.
+        // Contract: mktr-platform/docs/reference/webhook-propagation-contract.md
+        if (event === 'lead.suppressed') {
+            const sup = data?.suppression as { scope?: string; reason?: string; occurredAt?: string } | undefined;
+            const scope = sup?.scope;
+            const reason = sup?.reason ?? '';
+            const occurredAt = sup?.occurredAt ? new Date(sup.occurredAt) : null;
+            if (
+                (scope !== 'marketing' && scope !== 'all') ||
+                !['unsubscribe', 'complaint', 'admin', 'erasure'].includes(reason) ||
+                !occurredAt ||
+                isNaN(occurredAt.getTime())
+            ) {
+                return jsonResponse({ error: 'Malformed suppression payload' }, 400);
+            }
+            const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+            const { data: result, error: rpcError } = await supabase.rpc('apply_mktr_lead_suppression', {
+                p_source_name: 'mktr',
+                p_external_id: lead.externalId,
+                p_scope: scope,
+                p_reason: reason,
+                p_occurred_at: occurredAt.toISOString(),
+                p_delivery_id: UUID_RE.test(String(deliveryId || '')) ? deliveryId : null,
+            });
+            if (rpcError) {
+                console.error('[receive-mktr-lead] Suppression RPC error:', rpcError);
+                return jsonResponse({ error: 'Failed to record suppression' }, 500);
+            }
+            return jsonResponse({ success: true, ...(result ?? {}) });
         }
 
         // ── Resolve agent ─────────────────────────────────────────
@@ -360,6 +397,31 @@ Deno.serve(async (req) => {
         }
 
         const leadId = newLead.id;
+
+        // ── Tombstone check (mktr tracker "propagate") ────────────
+        // A lead.suppressed for this person may have arrived BEFORE the lead
+        // (deliveries are unordered) — stamp the fresh row from the tombstone
+        // so it is born do-not-contact. Non-fatal on error (logged loudly;
+        // a suppression repair re-applies).
+        try {
+            const { data: tombstone } = await supabase
+                .from('mktr_lead_suppressions')
+                .select('scope, occurred_at')
+                .eq('source_name', 'mktr')
+                .eq('external_id', lead.externalId)
+                .maybeSingle();
+            if (tombstone) {
+                await supabase
+                    .from('leads')
+                    .update({
+                        do_not_contact_at: tombstone.occurred_at,
+                        do_not_contact_scope: tombstone.scope,
+                    })
+                    .eq('id', leadId);
+            }
+        } catch (tombstoneErr) {
+            console.error('[receive-mktr-lead] Tombstone check failed:', tombstoneErr);
+        }
 
         // ── Insert lead activity ──────────────────────────────────
         await supabase.from('lead_activities').insert({

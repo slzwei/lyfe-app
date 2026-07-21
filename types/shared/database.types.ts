@@ -1634,6 +1634,8 @@ export type Database = {
                     assigned_to: string;
                     created_at: string | null;
                     created_by: string;
+                    do_not_contact_at: string | null;
+                    do_not_contact_scope: string | null;
                     email: string | null;
                     external_id: string | null;
                     full_name: string;
@@ -1654,6 +1656,8 @@ export type Database = {
                     assigned_to: string;
                     created_at?: string | null;
                     created_by: string;
+                    do_not_contact_at?: string | null;
+                    do_not_contact_scope?: string | null;
                     email?: string | null;
                     external_id?: string | null;
                     full_name: string;
@@ -1674,6 +1678,8 @@ export type Database = {
                     assigned_to?: string;
                     created_at?: string | null;
                     created_by?: string;
+                    do_not_contact_at?: string | null;
+                    do_not_contact_scope?: string | null;
                     email?: string | null;
                     external_id?: string | null;
                     full_name?: string;
@@ -1708,6 +1714,268 @@ export type Database = {
                         columns: ['created_by'];
                         isOneToOne: false;
                         referencedRelation: 'users';
+                        referencedColumns: ['id'];
+                    },
+                ];
+            };
+            link_audit_log: {
+                Row: {
+                    action: string;
+                    actor_id: string | null;
+                    detail: Json | null;
+                    id: string;
+                    page_id: string | null;
+                    ts: string;
+                };
+                Insert: {
+                    action: string;
+                    actor_id?: string | null;
+                    detail?: Json | null;
+                    id?: string;
+                    page_id?: string | null;
+                    ts?: string;
+                };
+                Update: {
+                    action?: string;
+                    actor_id?: string | null;
+                    detail?: Json | null;
+                    id?: string;
+                    page_id?: string | null;
+                    ts?: string;
+                };
+                Relationships: [];
+            };
+            link_clicks: {
+                Row: {
+                    country: string | null;
+                    device: string | null;
+                    id: string;
+                    ip_hash: string | null;
+                    is_bot: boolean;
+                    item_id: string;
+                    page_id: string;
+                    referer: string | null;
+                    ts: string;
+                    ua: string | null;
+                };
+                Insert: {
+                    country?: string | null;
+                    device?: string | null;
+                    id?: string;
+                    ip_hash?: string | null;
+                    is_bot?: boolean;
+                    item_id: string;
+                    page_id: string;
+                    referer?: string | null;
+                    ts?: string;
+                    ua?: string | null;
+                };
+                Update: {
+                    country?: string | null;
+                    device?: string | null;
+                    id?: string;
+                    ip_hash?: string | null;
+                    is_bot?: boolean;
+                    item_id?: string;
+                    page_id?: string;
+                    referer?: string | null;
+                    ts?: string;
+                    ua?: string | null;
+                };
+                Relationships: [
+                    {
+                        foreignKeyName: 'link_clicks_item_id_fkey';
+                        columns: ['item_id'];
+                        isOneToOne: false;
+                        referencedRelation: 'link_items';
+                        referencedColumns: ['id'];
+                    },
+                ];
+            };
+            link_items: {
+                Row: {
+                    click_count: number;
+                    created_at: string;
+                    enabled: boolean;
+                    icon: string | null;
+                    id: string;
+                    kind: string;
+                    page_id: string;
+                    position: number;
+                    thumbnail_url: string | null;
+                    title: string;
+                    updated_at: string;
+                    url: string | null;
+                };
+                Insert: {
+                    click_count?: number;
+                    created_at?: string;
+                    enabled?: boolean;
+                    icon?: string | null;
+                    id?: string;
+                    kind?: string;
+                    page_id: string;
+                    position?: number;
+                    thumbnail_url?: string | null;
+                    title: string;
+                    updated_at?: string;
+                    url?: string | null;
+                };
+                Update: {
+                    click_count?: number;
+                    created_at?: string;
+                    enabled?: boolean;
+                    icon?: string | null;
+                    id?: string;
+                    kind?: string;
+                    page_id?: string;
+                    position?: number;
+                    thumbnail_url?: string | null;
+                    title?: string;
+                    updated_at?: string;
+                    url?: string | null;
+                };
+                Relationships: [
+                    {
+                        foreignKeyName: 'link_items_page_id_fkey';
+                        columns: ['page_id'];
+                        isOneToOne: false;
+                        referencedRelation: 'link_pages';
+                        referencedColumns: ['id'];
+                    },
+                ];
+            };
+            link_pages: {
+                Row: {
+                    avatar_url: string | null;
+                    campaign_ref: string | null;
+                    created_at: string;
+                    created_by: string | null;
+                    headline: string | null;
+                    host: string;
+                    id: string;
+                    owner_id: string | null;
+                    published_at: string | null;
+                    seo: Json | null;
+                    slug: string;
+                    status: string;
+                    theme: Json;
+                    title: string;
+                    updated_at: string;
+                };
+                Insert: {
+                    avatar_url?: string | null;
+                    campaign_ref?: string | null;
+                    created_at?: string;
+                    created_by?: string | null;
+                    headline?: string | null;
+                    host?: string;
+                    id?: string;
+                    owner_id?: string | null;
+                    published_at?: string | null;
+                    seo?: Json | null;
+                    slug: string;
+                    status?: string;
+                    theme?: Json;
+                    title: string;
+                    updated_at?: string;
+                };
+                Update: {
+                    avatar_url?: string | null;
+                    campaign_ref?: string | null;
+                    created_at?: string;
+                    created_by?: string | null;
+                    headline?: string | null;
+                    host?: string;
+                    id?: string;
+                    owner_id?: string | null;
+                    published_at?: string | null;
+                    seo?: Json | null;
+                    slug?: string;
+                    status?: string;
+                    theme?: Json;
+                    title?: string;
+                    updated_at?: string;
+                };
+                Relationships: [
+                    {
+                        foreignKeyName: 'link_pages_owner_id_fkey';
+                        columns: ['owner_id'];
+                        isOneToOne: false;
+                        referencedRelation: 'users';
+                        referencedColumns: ['id'];
+                    },
+                ];
+            };
+            link_preview_tokens: {
+                Row: {
+                    created_by: string | null;
+                    expires_at: string;
+                    page_id: string;
+                    token: string;
+                };
+                Insert: {
+                    created_by?: string | null;
+                    expires_at: string;
+                    page_id: string;
+                    token?: string;
+                };
+                Update: {
+                    created_by?: string | null;
+                    expires_at?: string;
+                    page_id?: string;
+                    token?: string;
+                };
+                Relationships: [
+                    {
+                        foreignKeyName: 'link_preview_tokens_page_id_fkey';
+                        columns: ['page_id'];
+                        isOneToOne: false;
+                        referencedRelation: 'link_pages';
+                        referencedColumns: ['id'];
+                    },
+                ];
+            };
+            link_views: {
+                Row: {
+                    country: string | null;
+                    device: string | null;
+                    id: string;
+                    ip_hash: string | null;
+                    is_bot: boolean;
+                    page_id: string;
+                    referer: string | null;
+                    ts: string;
+                    ua: string | null;
+                };
+                Insert: {
+                    country?: string | null;
+                    device?: string | null;
+                    id?: string;
+                    ip_hash?: string | null;
+                    is_bot?: boolean;
+                    page_id: string;
+                    referer?: string | null;
+                    ts?: string;
+                    ua?: string | null;
+                };
+                Update: {
+                    country?: string | null;
+                    device?: string | null;
+                    id?: string;
+                    ip_hash?: string | null;
+                    is_bot?: boolean;
+                    page_id?: string;
+                    referer?: string | null;
+                    ts?: string;
+                    ua?: string | null;
+                };
+                Relationships: [
+                    {
+                        foreignKeyName: 'link_views_page_id_fkey';
+                        columns: ['page_id'];
+                        isOneToOne: false;
+                        referencedRelation: 'link_pages';
                         referencedColumns: ['id'];
                     },
                 ];
@@ -1781,6 +2049,39 @@ export type Database = {
                         referencedColumns: ['id'];
                     },
                 ];
+            };
+            mktr_lead_suppressions: {
+                Row: {
+                    created_at: string;
+                    delivery_id: string | null;
+                    external_id: string;
+                    occurred_at: string;
+                    reason: string;
+                    scope: string;
+                    source_name: string;
+                    updated_at: string;
+                };
+                Insert: {
+                    created_at?: string;
+                    delivery_id?: string | null;
+                    external_id: string;
+                    occurred_at: string;
+                    reason: string;
+                    scope: string;
+                    source_name: string;
+                    updated_at?: string;
+                };
+                Update: {
+                    created_at?: string;
+                    delivery_id?: string | null;
+                    external_id?: string;
+                    occurred_at?: string;
+                    reason?: string;
+                    scope?: string;
+                    source_name?: string;
+                    updated_at?: string;
+                };
+                Relationships: [];
             };
             notifications: {
                 Row: {
@@ -2535,6 +2836,17 @@ export type Database = {
                 Args: { p_file: Json; p_invitation_id: string; p_max_files?: number };
                 Returns: Json;
             };
+            apply_mktr_lead_suppression: {
+                Args: {
+                    p_delivery_id: string;
+                    p_external_id: string;
+                    p_occurred_at: string;
+                    p_reason: string;
+                    p_scope: string;
+                    p_source_name: string;
+                };
+                Returns: Json;
+            };
             assign_lead_with_activity: {
                 Args: {
                     p_acting_user_id: string;
@@ -2578,6 +2890,10 @@ export type Database = {
                     p_user_id: string;
                 };
                 Returns: Json;
+            };
+            create_link_preview_token: {
+                Args: { p_page_id: string };
+                Returns: string;
             };
             create_roadshow_bulk: {
                 Args: {
@@ -2652,6 +2968,23 @@ export type Database = {
                       }[];
                   }
                 | { Args: { p_is_manager: boolean; p_user_id: string }; Returns: Json };
+            get_link_page_stats: {
+                Args: { p_days?: number; p_page_id: string };
+                Returns: Json;
+            };
+            get_my_candidate_schedule: {
+                Args: { p_include_past?: boolean; p_limit?: number };
+                Returns: {
+                    code: string;
+                    end_at: string;
+                    is_online: boolean;
+                    kind: string;
+                    location: string;
+                    ref_id: string;
+                    start_at: string;
+                    status: string;
+                }[];
+            };
             get_team_lead_stats: {
                 Args: { p_stale_days?: number; p_user_ids: string[] };
                 Returns: {
@@ -2664,6 +2997,11 @@ export type Database = {
                 }[];
             };
             get_team_member_ids: { Args: { superior_id: string }; Returns: string[] };
+            is_event_attendee: { Args: { p_event_id: string }; Returns: boolean };
+            link_hub_can_manage_page: {
+                Args: { p_page_id: string };
+                Returns: boolean;
+            };
             list_agents_for_reassign: {
                 Args: never;
                 Returns: {
@@ -2689,9 +3027,41 @@ export type Database = {
                 Args: { p_agent_id: string; p_new_manager_id: string };
                 Returns: undefined;
             };
+            record_link_click: {
+                Args: {
+                    p_country: string;
+                    p_device: string;
+                    p_ip_hash: string;
+                    p_is_bot: boolean;
+                    p_item_id: string;
+                    p_referer: string;
+                    p_ua: string;
+                };
+                Returns: undefined;
+            };
+            record_link_view: {
+                Args: {
+                    p_country: string;
+                    p_device: string;
+                    p_ip_hash: string;
+                    p_is_bot: boolean;
+                    p_page_id: string;
+                    p_referer: string;
+                    p_ua: string;
+                };
+                Returns: undefined;
+            };
             redact_audit_data: {
                 Args: { p_data: Json; p_table: string };
                 Returns: Json;
+            };
+            reorder_link_items: {
+                Args: { p_item_ids: string[]; p_page_id: string };
+                Returns: undefined;
+            };
+            resolve_candidate_notify_user: {
+                Args: { p_ref: string };
+                Returns: string;
             };
             set_candidate_archived: {
                 Args: { p_archived: boolean; p_candidate_id: string };
@@ -2701,6 +3071,7 @@ export type Database = {
                     candidate_id: string;
                 }[];
             };
+            sg_today: { Args: never; Returns: string };
             show_limit: { Args: never; Returns: number };
             show_trgm: { Args: { '': string }; Returns: string[] };
             submit_exam_attempt:
@@ -2792,7 +3163,8 @@ export type Database = {
                 | 'follow_up'
                 | 'whatsapp'
                 | 'unassignment'
-                | 'key_facts';
+                | 'key_facts'
+                | 'suppressed';
             lead_source: 'referral' | 'walk_in' | 'online' | 'event' | 'cold_call' | 'other';
             lead_status: 'new' | 'contacted' | 'qualified' | 'proposed' | 'won' | 'lost';
             lifecycle_stage:
@@ -2959,6 +3331,7 @@ export const Constants = {
                 'whatsapp',
                 'unassignment',
                 'key_facts',
+                'suppressed',
             ],
             lead_source: ['referral', 'walk_in', 'online', 'event', 'cold_call', 'other'],
             lead_status: ['new', 'contacted', 'qualified', 'proposed', 'won', 'lost'],

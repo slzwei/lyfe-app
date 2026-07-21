@@ -158,8 +158,13 @@ export default function LeadDetailScreen() {
         );
     }
 
+    // Do-not-contact (MKTR suppression propagation): scope 'all' = the person
+    // was erased / fully suppressed — every contact affordance hard-blocks.
+    // 'marketing' renders the advisory banner but leaves service contact open.
+    const dncBlocked = lead.do_not_contact_scope === 'all';
+
     const handleCall = () => {
-        if (!lead.phone) return;
+        if (!lead.phone || dncBlocked) return;
         hasPendingContact.current = true;
         setPendingContact({ type: 'call', phone: lead.phone });
         if (process.env.EXPO_PUBLIC_E2E_LINKING_BYPASS === '1') {
@@ -170,7 +175,7 @@ export default function LeadDetailScreen() {
     };
 
     const handleWhatsApp = () => {
-        if (!lead.phone) return;
+        if (!lead.phone || dncBlocked) return;
         hasPendingContact.current = true;
         setPendingContact({ type: 'whatsapp', phone: lead.phone });
         if (process.env.EXPO_PUBLIC_E2E_LINKING_BYPASS === '1') {
@@ -469,18 +474,42 @@ export default function LeadDetailScreen() {
                     </View>
                 ) : null}
 
+                {/* do-not-contact banner (MKTR suppression propagation) */}
+                {lead.do_not_contact_at ? (
+                    <View
+                        testID="lead-dnc-banner"
+                        style={[
+                            styles.banner,
+                            { backgroundColor: alpha(dncBlocked ? colors.danger : colors.warning, 0.12) },
+                        ]}
+                    >
+                        <Ionicons name="ban" size={15} color={dncBlocked ? colors.danger : colors.warning} />
+                        <Txt
+                            role="body"
+                            weight="semibold"
+                            size={13}
+                            color={dncBlocked ? colors.danger : colors.warning}
+                            style={{ flex: 1 }}
+                        >
+                            {dncBlocked
+                                ? 'Do not contact — this person withdrew all consent (PDPA). Calls and messages are blocked.'
+                                : 'No marketing — this person unsubscribed. Service contact about their existing case is still OK.'}
+                        </Txt>
+                    </View>
+                ) : null}
+
                 {/* CTAs */}
                 <View style={styles.ctaRow}>
                     <Pressable
                         onPress={handleCall}
-                        disabled={!lead.phone}
+                        disabled={!lead.phone || dncBlocked}
                         testID="lead-call-action"
                         accessibilityRole="button"
                         accessibilityLabel={`Call ${lead.full_name}`}
                         style={({ pressed }) => [
                             styles.cta,
                             styles.callCta,
-                            (pressed || !lead.phone) && { opacity: 0.6 },
+                            (pressed || !lead.phone || dncBlocked) && { opacity: 0.6 },
                         ]}
                     >
                         <Ionicons name="call" size={20} color={colors.textInverse} />
@@ -490,14 +519,14 @@ export default function LeadDetailScreen() {
                     </Pressable>
                     <Pressable
                         onPress={handleWhatsApp}
-                        disabled={!lead.phone}
+                        disabled={!lead.phone || dncBlocked}
                         testID="lead-whatsapp-action"
                         accessibilityRole="button"
                         accessibilityLabel={`WhatsApp ${lead.full_name}`}
                         style={({ pressed }) => [
                             styles.cta,
                             styles.waCta,
-                            (pressed || !lead.phone) && { opacity: 0.6 },
+                            (pressed || !lead.phone || dncBlocked) && { opacity: 0.6 },
                         ]}
                     >
                         <Ionicons name="logo-whatsapp" size={20} color={colors.inkOnBrand} />
