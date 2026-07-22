@@ -125,7 +125,13 @@ Deno.serve(async (req) => {
         }
 
         const { event, deliveryId, data } = payload;
-        const SUPPORTED_EVENTS = ['lead.created', 'lead.assigned', 'lead.unassigned', 'lead.suppressed'];
+        const SUPPORTED_EVENTS = [
+            'lead.created',
+            'lead.assigned',
+            'lead.unassigned',
+            'lead.suppressed',
+            'lead.unsuppressed',
+        ];
         if (!SUPPORTED_EVENTS.includes(event)) {
             return jsonResponse({ error: 'Unsupported event type' }, 400);
         }
@@ -234,6 +240,30 @@ Deno.serve(async (req) => {
             if (rpcError) {
                 console.error('[receive-mktr-lead] Suppression RPC error:', rpcError);
                 return jsonResponse({ error: 'Failed to record suppression' }, 500);
+            }
+            return jsonResponse({ success: true, ...(result ?? {}) });
+        }
+
+        // ── lead.unsuppressed (resubscribe lift, contract §6) ─────
+        // The person re-consented on the MKTR side (fresh verified agree-all).
+        // Watermarked merge lives in the RPC: strictly-newer occurredAt wins,
+        // marketing scope only — 'all' (erasure) never lifts.
+        if (event === 'lead.unsuppressed') {
+            const uns = data?.unsuppression as { scope?: string; reason?: string; occurredAt?: string } | undefined;
+            const occurredAt = uns?.occurredAt ? new Date(uns.occurredAt) : null;
+            if (uns?.scope !== 'marketing' || !occurredAt || isNaN(occurredAt.getTime())) {
+                return jsonResponse({ error: 'Malformed unsuppression payload' }, 400);
+            }
+            const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+            const { data: result, error: rpcError } = await supabase.rpc('apply_mktr_lead_unsuppression', {
+                p_source_name: 'mktr',
+                p_external_id: lead.externalId,
+                p_occurred_at: occurredAt.toISOString(),
+                p_delivery_id: UUID_RE.test(String(deliveryId || '')) ? deliveryId : null,
+            });
+            if (rpcError) {
+                console.error('[receive-mktr-lead] Unsuppression RPC error:', rpcError);
+                return jsonResponse({ error: 'Failed to record unsuppression' }, 500);
             }
             return jsonResponse({ success: true, ...(result ?? {}) });
         }
@@ -406,11 +436,13 @@ Deno.serve(async (req) => {
         try {
             const { data: tombstone } = await supabase
                 .from('mktr_lead_suppressions')
-                .select('scope, occurred_at')
+                .select('scope, occurred_at, state')
                 .eq('source_name', 'mktr')
                 .eq('external_id', lead.externalId)
                 .maybeSingle();
-            if (tombstone) {
+            // A LIFTED state row is a watermark hold, not a suppression —
+            // it must never stamp a fresh lead (contract §6 v2).
+            if (tombstone && tombstone.state === 'suppressed') {
                 await supabase
                     .from('leads')
                     .update({
