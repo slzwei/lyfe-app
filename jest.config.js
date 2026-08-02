@@ -7,6 +7,9 @@ module.exports = {
     testPathIgnorePatterns: [
         '/node_modules/',
         '/.claude/',
+        // Edge functions are DENO, not React Native — their tests run under
+        // `deno test` and import from deno.land, which Jest cannot resolve.
+        '/supabase/functions/',
         '\\.android\\.test\\.',
         // useLastSeen.ts is WIP/uncommitted — tests reference a module that
         // doesn't exist on main. Re-enable once the hook lands.

@@ -1,4 +1,7 @@
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
+// Signature verification lives in _shared so it is reachable from a test —
+// this file calls Deno.serve at module load (webhook-signature-v2-cutover).
+import { verifySignature } from '../_shared/webhookSignature.ts';
 
 // NOTE: CORS headers retained for admin dashboard compatibility. This endpoint
 // primarily serves as a machine-to-machine webhook (HMAC-authenticated).
@@ -20,48 +23,6 @@ function jsonResponse(body: Record<string, unknown>, status = 200) {
         status,
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
     });
-}
-
-/**
- * Timing-safe comparison of two strings.
- * Uses a fresh random HMAC key each call — makes offline precomputation impossible.
- */
-async function timingSafeEqual(a: string, b: string): Promise<boolean> {
-    const enc = new TextEncoder();
-    const aBuf = enc.encode(a);
-    const bBuf = enc.encode(b);
-    if (aBuf.length !== bBuf.length) return false;
-    const key = await crypto.subtle.generateKey({ name: 'HMAC', hash: 'SHA-256' }, false, ['sign']);
-    const [sigA, sigB] = await Promise.all([
-        crypto.subtle.sign('HMAC', key, aBuf),
-        crypto.subtle.sign('HMAC', key, bBuf),
-    ]);
-    const viewA = new Uint8Array(sigA);
-    const viewB = new Uint8Array(sigB);
-    let result = 0;
-    for (let i = 0; i < viewA.length; i++) {
-        result |= viewA[i] ^ viewB[i];
-    }
-    return result === 0;
-}
-
-/**
- * Verify HMAC-SHA256 signature from MKTR webhook.
- */
-async function verifySignature(rawBody: string, signatureHeader: string, secret: string): Promise<boolean> {
-    if (!signatureHeader.startsWith('sha256=')) return false;
-    const receivedHex = signatureHeader.slice(7);
-
-    const enc = new TextEncoder();
-    const key = await crypto.subtle.importKey('raw', enc.encode(secret), { name: 'HMAC', hash: 'SHA-256' }, false, [
-        'sign',
-    ]);
-    const sig = await crypto.subtle.sign('HMAC', key, enc.encode(rawBody));
-    const computedHex = Array.from(new Uint8Array(sig))
-        .map((b) => b.toString(16).padStart(2, '0'))
-        .join('');
-
-    return timingSafeEqual(receivedHex, computedHex);
 }
 
 Deno.serve(async (req) => {
@@ -95,13 +56,17 @@ Deno.serve(async (req) => {
             return jsonResponse({ error: 'Request body too large' }, 413);
         }
 
-        const valid = await verifySignature(rawBody, signatureHeader, webhookSecret);
+        // Read the timestamp BEFORE verifying — under v2 it is part of what was
+        // signed, so verification cannot happen without it.
+        const timestampHeader = req.headers.get('X-Webhook-Timestamp');
+        const signatureVersion = req.headers.get('X-Webhook-Signature-Version');
+
+        const valid = await verifySignature(rawBody, signatureHeader, webhookSecret, timestampHeader, signatureVersion);
         if (!valid) {
             return jsonResponse({ error: 'Invalid signature' }, 401);
         }
 
         // ── Replay protection (timestamp mandatory) ────────────────
-        const timestampHeader = req.headers.get('X-Webhook-Timestamp');
         if (!timestampHeader) {
             return jsonResponse({ error: 'Missing timestamp' }, 401);
         }
