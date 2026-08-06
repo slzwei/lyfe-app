@@ -88,6 +88,57 @@ export type Database = {
                     },
                 ];
             };
+            candidate_callbacks: {
+                Row: {
+                    callback_date: string;
+                    callback_time: string | null;
+                    candidate_id: string;
+                    created_at: string;
+                    id: string;
+                    logged_by_user_id: string | null;
+                    note: string | null;
+                    outcome: string;
+                    updated_at: string;
+                };
+                Insert: {
+                    callback_date: string;
+                    callback_time?: string | null;
+                    candidate_id: string;
+                    created_at?: string;
+                    id?: string;
+                    logged_by_user_id?: string | null;
+                    note?: string | null;
+                    outcome: string;
+                    updated_at?: string;
+                };
+                Update: {
+                    callback_date?: string;
+                    callback_time?: string | null;
+                    candidate_id?: string;
+                    created_at?: string;
+                    id?: string;
+                    logged_by_user_id?: string | null;
+                    note?: string | null;
+                    outcome?: string;
+                    updated_at?: string;
+                };
+                Relationships: [
+                    {
+                        foreignKeyName: 'candidate_callbacks_candidate_id_fkey';
+                        columns: ['candidate_id'];
+                        isOneToOne: false;
+                        referencedRelation: 'candidates';
+                        referencedColumns: ['id'];
+                    },
+                    {
+                        foreignKeyName: 'candidate_callbacks_logged_by_user_id_fkey';
+                        columns: ['logged_by_user_id'];
+                        isOneToOne: false;
+                        referencedRelation: 'users';
+                        referencedColumns: ['id'];
+                    },
+                ];
+            };
             candidate_documents: {
                 Row: {
                     candidate_id: string;
