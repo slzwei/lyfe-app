@@ -3163,7 +3163,7 @@ export type Database = {
                 | 'on_hold'
                 | 'rejected';
             event_type: 'team_meeting' | 'training' | 'agency_event' | 'roadshow' | 'other' | 'exam';
-            internship_status: 'joined_internship' | 'dropped_out';
+            internship_status: 'joined_internship' | 'dropped_out' | 'blacklisted';
             interview_status: 'scheduled' | 'completed' | 'cancelled' | 'rescheduled';
             interview_type: 'zoom' | 'in_person';
             item_progress_status: 'not_started' | 'in_progress' | 'completed';
@@ -3332,7 +3332,7 @@ export const Constants = {
                 'rejected',
             ],
             event_type: ['team_meeting', 'training', 'agency_event', 'roadshow', 'other', 'exam'],
-            internship_status: ['joined_internship', 'dropped_out'],
+            internship_status: ['joined_internship', 'dropped_out', 'blacklisted'],
             interview_status: ['scheduled', 'completed', 'cancelled', 'rescheduled'],
             interview_type: ['zoom', 'in_person'],
             item_progress_status: ['not_started', 'in_progress', 'completed'],
