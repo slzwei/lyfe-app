@@ -149,9 +149,9 @@ describe('ro capabilities', () => {
         expect(hasCapability('ro', 'reject_candidate')).toBe(true);
     });
 
-    it('can reassign candidates between managers (unlike PA)', () => {
+    it('can reassign candidates between managers (as can PA since 2026-08)', () => {
         expect(hasCapability('ro', 'reassign_candidates')).toBe(true);
-        expect(hasCapability('pa', 'reassign_candidates')).toBe(false);
+        expect(hasCapability('pa', 'reassign_candidates')).toBe(true);
     });
 
     it('cannot manage agents, leads, team, or admin areas', () => {
