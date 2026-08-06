@@ -677,6 +677,7 @@ export type Database = {
                     current_stage_id: string | null;
                     email: string | null;
                     id: string;
+                    internship_status: Database['public']['Enums']['internship_status'] | null;
                     invite_token: string | null;
                     job_id: string | null;
                     name: string;
@@ -702,6 +703,7 @@ export type Database = {
                     current_stage_id?: string | null;
                     email?: string | null;
                     id?: string;
+                    internship_status?: Database['public']['Enums']['internship_status'] | null;
                     invite_token?: string | null;
                     job_id?: string | null;
                     name: string;
@@ -727,6 +729,7 @@ export type Database = {
                     current_stage_id?: string | null;
                     email?: string | null;
                     id?: string;
+                    internship_status?: Database['public']['Enums']['internship_status'] | null;
                     invite_token?: string | null;
                     job_id?: string | null;
                     name?: string;
@@ -2059,6 +2062,7 @@ export type Database = {
                     reason: string;
                     scope: string;
                     source_name: string;
+                    state: string;
                     updated_at: string;
                 };
                 Insert: {
@@ -2069,6 +2073,7 @@ export type Database = {
                     reason: string;
                     scope: string;
                     source_name: string;
+                    state?: string;
                     updated_at?: string;
                 };
                 Update: {
@@ -2079,6 +2084,7 @@ export type Database = {
                     reason?: string;
                     scope?: string;
                     source_name?: string;
+                    state?: string;
                     updated_at?: string;
                 };
                 Relationships: [];
@@ -2847,6 +2853,15 @@ export type Database = {
                 };
                 Returns: Json;
             };
+            apply_mktr_lead_unsuppression: {
+                Args: {
+                    p_delivery_id: string;
+                    p_external_id: string;
+                    p_occurred_at: string;
+                    p_source_name: string;
+                };
+                Returns: Json;
+            };
             assign_lead_with_activity: {
                 Args: {
                     p_acting_user_id: string;
@@ -3148,6 +3163,7 @@ export type Database = {
                 | 'on_hold'
                 | 'rejected';
             event_type: 'team_meeting' | 'training' | 'agency_event' | 'roadshow' | 'other' | 'exam';
+            internship_status: 'joined_internship' | 'dropped_out';
             interview_status: 'scheduled' | 'completed' | 'cancelled' | 'rescheduled';
             interview_type: 'zoom' | 'in_person';
             item_progress_status: 'not_started' | 'in_progress' | 'completed';
@@ -3164,7 +3180,8 @@ export type Database = {
                 | 'whatsapp'
                 | 'unassignment'
                 | 'key_facts'
-                | 'suppressed';
+                | 'suppressed'
+                | 'resubscribed';
             lead_source: 'referral' | 'walk_in' | 'online' | 'event' | 'cold_call' | 'other';
             lead_status: 'new' | 'contacted' | 'qualified' | 'proposed' | 'won' | 'lost';
             lifecycle_stage:
@@ -3315,6 +3332,7 @@ export const Constants = {
                 'rejected',
             ],
             event_type: ['team_meeting', 'training', 'agency_event', 'roadshow', 'other', 'exam'],
+            internship_status: ['joined_internship', 'dropped_out'],
             interview_status: ['scheduled', 'completed', 'cancelled', 'rescheduled'],
             interview_type: ['zoom', 'in_person'],
             item_progress_status: ['not_started', 'in_progress', 'completed'],
@@ -3332,6 +3350,7 @@ export const Constants = {
                 'unassignment',
                 'key_facts',
                 'suppressed',
+                'resubscribed',
             ],
             lead_source: ['referral', 'walk_in', 'online', 'event', 'cold_call', 'other'],
             lead_status: ['new', 'contacted', 'qualified', 'proposed', 'won', 'lost'],
