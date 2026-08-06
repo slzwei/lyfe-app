@@ -49,6 +49,7 @@ export type Database = {
             };
             candidate_activities: {
                 Row: {
+                    callback_id: string | null;
                     candidate_id: string;
                     created_at: string | null;
                     id: string;
@@ -59,6 +60,7 @@ export type Database = {
                     user_id: string;
                 };
                 Insert: {
+                    callback_id?: string | null;
                     candidate_id: string;
                     created_at?: string | null;
                     id?: string;
@@ -69,6 +71,7 @@ export type Database = {
                     user_id: string;
                 };
                 Update: {
+                    callback_id?: string | null;
                     candidate_id?: string;
                     created_at?: string | null;
                     id?: string;
@@ -79,6 +82,13 @@ export type Database = {
                     user_id?: string;
                 };
                 Relationships: [
+                    {
+                        foreignKeyName: 'candidate_activities_callback_id_fkey';
+                        columns: ['callback_id'];
+                        isOneToOne: false;
+                        referencedRelation: 'candidate_callbacks';
+                        referencedColumns: ['id'];
+                    },
                     {
                         foreignKeyName: 'candidate_activities_candidate_id_fkey';
                         columns: ['candidate_id'];
