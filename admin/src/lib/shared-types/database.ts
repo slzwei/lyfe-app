@@ -18,3 +18,4 @@ export type Notification = Tables<'notifications'>;
 export type UserRole = Enums<'user_role'>;
 export type LifecycleStage = Enums<'lifecycle_stage'>;
 export type CandidateStatus = Enums<'candidate_status'>;
+export type InternshipStatus = Enums<'internship_status'>;

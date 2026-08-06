@@ -31,7 +31,8 @@ export type Capability =
     | 'reject_candidate'
     | 'reassign_agents'
     | 'archive_candidate'
-    | 'delete_candidate';
+    | 'delete_candidate'
+    | 'set_internship_status';
 
 export const ROLE_CAPABILITIES: Record<UserRole, Capability[]> = {
     admin: [
@@ -53,6 +54,7 @@ export const ROLE_CAPABILITIES: Record<UserRole, Capability[]> = {
         'reject_candidate',
         'archive_candidate',
         'delete_candidate',
+        'set_internship_status',
     ],
     director: [
         'hold_agents',
@@ -72,6 +74,7 @@ export const ROLE_CAPABILITIES: Record<UserRole, Capability[]> = {
         'reject_candidate',
         'archive_candidate',
         'delete_candidate',
+        'set_internship_status',
     ],
     manager: [
         'hold_agents',
@@ -90,6 +93,7 @@ export const ROLE_CAPABILITIES: Record<UserRole, Capability[]> = {
         'reject_candidate',
         'archive_candidate',
         'delete_candidate',
+        'set_internship_status',
     ],
     agent: ['view_leads'],
     pa: [
@@ -104,6 +108,7 @@ export const ROLE_CAPABILITIES: Record<UserRole, Capability[]> = {
         'reassign_agents',
         'archive_candidate',
         'delete_candidate',
+        'set_internship_status',
     ],
     ro: [
         'create_candidates',
@@ -117,6 +122,7 @@ export const ROLE_CAPABILITIES: Record<UserRole, Capability[]> = {
         'reassign_candidates',
         'archive_candidate',
         'delete_candidate',
+        'set_internship_status',
     ],
     candidate: [],
 };
@@ -195,4 +201,8 @@ export function canArchiveCandidate(role: UserRole): boolean {
 
 export function canDeleteCandidate(role: UserRole): boolean {
     return hasCapability(role, 'delete_candidate');
+}
+
+export function canSetInternshipStatus(role: UserRole): boolean {
+    return hasCapability(role, 'set_internship_status');
 }
