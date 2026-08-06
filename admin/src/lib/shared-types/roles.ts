@@ -105,6 +105,7 @@ export const ROLE_CAPABILITIES: Record<UserRole, Capability[]> = {
         'activate_agent',
         'put_on_hold',
         'reject_candidate',
+        'reassign_candidates',
         'reassign_agents',
         'archive_candidate',
         'delete_candidate',
