@@ -2227,6 +2227,113 @@ export type Database = {
                     },
                 ];
             };
+            pf_clients: {
+                Row: {
+                    adviser_id: string;
+                    created_at: string;
+                    date_of_birth: string;
+                    email: string | null;
+                    full_name: string;
+                    id: string;
+                    phone: string | null;
+                    sex: string;
+                    smoker: boolean;
+                    updated_at: string;
+                };
+                Insert: {
+                    adviser_id?: string;
+                    created_at?: string;
+                    date_of_birth: string;
+                    email?: string | null;
+                    full_name: string;
+                    id?: string;
+                    phone?: string | null;
+                    sex: string;
+                    smoker: boolean;
+                    updated_at?: string;
+                };
+                Update: {
+                    adviser_id?: string;
+                    created_at?: string;
+                    date_of_birth?: string;
+                    email?: string | null;
+                    full_name?: string;
+                    id?: string;
+                    phone?: string | null;
+                    sex?: string;
+                    smoker?: boolean;
+                    updated_at?: string;
+                };
+                Relationships: [
+                    {
+                        foreignKeyName: 'pf_clients_adviser_id_fkey';
+                        columns: ['adviser_id'];
+                        isOneToOne: false;
+                        referencedRelation: 'users';
+                        referencedColumns: ['id'];
+                    },
+                ];
+            };
+            pf_plans: {
+                Row: {
+                    adviser_id: string;
+                    client_id: string;
+                    colour_slot: number | null;
+                    created_at: string;
+                    data: Json;
+                    data_version: number;
+                    deleted_at: string | null;
+                    id: string;
+                    label: string;
+                    product_id: string;
+                    status: string;
+                    updated_at: string;
+                };
+                Insert: {
+                    adviser_id?: string;
+                    client_id: string;
+                    colour_slot?: number | null;
+                    created_at?: string;
+                    data: Json;
+                    data_version?: number;
+                    deleted_at?: string | null;
+                    id?: string;
+                    label: string;
+                    product_id: string;
+                    status: string;
+                    updated_at?: string;
+                };
+                Update: {
+                    adviser_id?: string;
+                    client_id?: string;
+                    colour_slot?: number | null;
+                    created_at?: string;
+                    data?: Json;
+                    data_version?: number;
+                    deleted_at?: string | null;
+                    id?: string;
+                    label?: string;
+                    product_id?: string;
+                    status?: string;
+                    updated_at?: string;
+                };
+                Relationships: [
+                    {
+                        foreignKeyName: 'pf_plans_adviser_id_fkey';
+                        columns: ['adviser_id'];
+                        isOneToOne: false;
+                        referencedRelation: 'users';
+                        referencedColumns: ['id'];
+                    },
+                    {
+                        foreignKeyName: 'pf_plans_client_id_fkey';
+                        columns: ['client_id'];
+                        isOneToOne: false;
+                        referencedRelation: 'pf_clients';
+                        referencedColumns: ['id'];
+                    },
+                ];
+            };
             pipeline_stages: {
                 Row: {
                     created_at: string | null;
